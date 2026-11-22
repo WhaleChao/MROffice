@@ -70,7 +70,7 @@ import {
 import { isImeCompositionActive } from "./native-document/imeCompositionGuard";
 import { useCurrentPageId } from "./PageIdContext";
 import { pageInterfaceLocale } from "../../../lib/i18n/content-locale";
-import { embedAllowsManagingComment } from "../../../lib/embed/session-access";
+import { embedAllowsManagingComment, embedShowsComment } from "../../../lib/embed/session-access";
 
 interface CommentsPanelProps {
   editor: Editor;
@@ -604,7 +604,7 @@ export default function CommentsPanel({
       const liveThread = authenticateRenderedThread(rendered);
       if (!liveThread) return;
       // An embedded session without manageComments resolves its own only.
-      if (!embedAllowsManagingComment(liveThread.comments[0]?.author, author)) return;
+      if (!embedAllowsManagingComment(liveThread.comments[0]?.author, author, "edit")) return;
       if (
         editor.commands.setCommentResolved(liveThread.id, !liveThread.resolved)
       ) {
@@ -840,7 +840,9 @@ export default function CommentsPanel({
   );
 
   const paneItems = useMemo<CommentPaneItem[]>(() => {
-    return snapshot.threads.map((thread) => {
+    // An embedded ONLYOFFICE config's commentGroups.view: the threads of
+    // other groups' people are not listed.
+    return snapshot.threads.filter((thread) => embedShowsComment(thread.comments[0]?.author, author)).map((thread) => {
       const ranges = commentRangesFor(snapshot.doc, thread.id);
       const firstRange = ranges[0];
       const excerpt = firstRange
@@ -855,7 +857,7 @@ export default function CommentsPanel({
         thread,
       };
     });
-  }, [snapshot.doc, snapshot.threads, t]);
+  }, [author, snapshot.doc, snapshot.threads, t]);
 
   const visibleItems = useMemo(() => {
     if (viewMode === "contextual") {

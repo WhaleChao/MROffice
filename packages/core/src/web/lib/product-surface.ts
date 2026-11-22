@@ -3,6 +3,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { stripLocalePrefix } from "../i18n/locales";
+
 export type ProductSurface = "note" | "office";
 
 /** The hosts MR Office is served on. */
@@ -72,6 +74,15 @@ export function officeRedirectOf(path: string, signedIn: boolean): string | null
   if (bare === "/download" || bare === "/about") return `/office${bare}`;
   if (NOTE_MARKETING_PATH.test(bare)) return "/office/about";
   return null;
+}
+
+/** On MR Office's host the root (`/`, `/<locale>`) is the visitor's notebook,
+ * served there without a redirect (proxy): its path, with the same locale
+ * prefix, or null for any other address. */
+export function officeRootNotebookPath(pathname: string): string | null {
+  const bare = pathname.replace(/\/+$/, "") || "/";
+  if (stripLocalePrefix(bare) !== "/") return null;
+  return `${bare === "/" ? "" : bare}/app/notebooks/guest`;
 }
 
 /** The surface a host serves: MR Office on its own hosts, MR Note elsewhere. */

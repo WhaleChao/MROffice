@@ -54,6 +54,7 @@ import { liftListItem as liftListItemCommand, sinkListItem as sinkListItemComman
 import type { EditorState, Selection, Transaction } from "@tiptap/pm/state";
 import { canJoin, liftTarget, ReplaceAroundStep } from "@tiptap/pm/transform";
 
+import { readDocumentNumberingMarkerFact } from "./documentNumberingLayout";
 import { explicitOrderedListLevel } from "./listDefinitionMarkers";
 import { normalizeListDefinition, type ListDefinition } from "./listLevelDefinition";
 import { indentWholeList } from "./listWholeIndent";
@@ -493,18 +494,20 @@ function sameListAttrs(a: PmNode, b: PmNode): boolean {
  */
 function decreaseSkippedLevel(tr: Transaction, range: NodeRange): boolean {
   const list = range.parent;
-  if (list.type.name !== "orderedList") return false;
-  const level = explicitOrderedListLevel(list);
-  if (level == null || range.depth < 3) return false;
-  const parent = definedListLevelAt(range.$from, range.depth - 2);
-  if (!parent || level - 1 <= parent.level) return false;
+  if (range.depth < 3 || !LIST_NODE_NAMES.has(list.type.name) || list.type.name === "taskList") return false;
+  const level = wordLevelOfList(list);
+  if (level == null) return false;
+  const defined = list.type.name === "orderedList" ? definedListLevelAt(range.$from, range.depth - 2) : null;
+  const parentLevel = defined?.level ?? wordLevelOfItem(range.$from.node(range.depth - 1), list);
+  if (parentLevel == null || level - 1 <= parentLevel) return false;
   const listPos = range.$from.before(range.depth);
   // An imported item states the indents its w:lvl resolved to; one still
   // stating its old level's takes the new level's, as Word draws a paragraph
   // whose w:ilvl changed (its own direct indent stays). Attributes only, so
-  // the positions the splits below use do not move.
+  // the positions the splits below use do not move. (A bullet list carries no
+  // definition to say them: its items keep what they state.)
   const levelIndents = (at: number): ItemIndents | null => {
-    const definition = parent.definition.levels[at];
+    const definition = defined?.definition.levels[at];
     return definition ? { left: definition.indentPt, firstLine: definition.alignAtPt - definition.indentPt } : null;
   };
   const from = levelIndents(level);
@@ -525,16 +528,86 @@ function decreaseSkippedLevel(tr: Transaction, range: NodeRange): boolean {
     }
   }
   // Split the selected items off the list (after them first, so the
-  // positions before them stay put); a list split off is a new block.
+  // positions before them stay put); a list split off is a new block. Every
+  // part states its Word level, which a bullet list read from its items'
+  // numbering did not.
   if (range.endIndex < list.childCount) {
-    tr.split(range.end, 1, [{ type: list.type, attrs: { ...list.attrs, block_id: null } }]);
+    tr.split(range.end, 1, [{ type: list.type, attrs: { ...list.attrs, block_id: null, listLevel: level } }]);
+    // The items after them keep their w:ilvl, now one deeper than the last
+    // decreased item's: in Word they are its sub-items, as the file reads
+    // back (corpus R493-D56 E14: "Tip merkezleri" and "Muayenehaneler" at
+    // ilvl 2 after "Hastaneler", 2 -> 1). The list goes into that item, after
+    // anything it held.
+    const after = tr.doc.nodeAt(range.end + 1);
+    const $last = tr.doc.resolve(range.end - 1);
+    if (after && $last.parent.type === list.child(range.endIndex - 1).type &&
+        $last.parent.canReplaceWith($last.index(), $last.index(), after.type)) {
+      tr.delete(range.end + 1, range.end + 1 + after.nodeSize);
+      tr.insert(range.end - 1, after);
+    }
   }
   if (range.startIndex > 0) {
+    tr.setNodeMarkup(listPos, undefined, { ...list.attrs, listLevel: level });
     tr.split(range.start, 1, [{ type: list.type, attrs: { ...list.attrs, block_id: null, listLevel: level - 1 } }]);
     return true;
   }
   tr.setNodeMarkup(listPos, undefined, { ...list.attrs, listLevel: level - 1 });
   return true;
+}
+
+/**
+ * The Word level (`w:ilvl`) a list's items are on: the level it states, else
+ * the one every item's imported paragraph was numbered at (one `w:numId`, one
+ * level; a bullet list states none, corpus R493-D56). Null when not known.
+ * PURE.
+ */
+function wordLevelOfList(list: PmNode): number | null {
+  const stated = explicitOrderedListLevel(list);
+  if (stated != null) return stated;
+  let found: { numId: number; level: number } | null = null;
+  let agreed = list.childCount > 0;
+  list.forEach((item) => {
+    const paragraph = item.firstChild;
+    const fact = paragraph?.isTextblock ? readDocumentNumberingMarkerFact(paragraph.attrs) : null;
+    if (!fact || (found && (found.numId !== fact.numId || found.level !== fact.level))) agreed = false;
+    else found = { numId: fact.numId, level: fact.level };
+  });
+  return agreed && found ? (found as { level: number }).level : null;
+}
+
+/** The Word level of the item holding `list`, when its paragraph was
+ * numbered by the same `w:numId` as the list's items. PURE. */
+function wordLevelOfItem(item: PmNode, list: PmNode): number | null {
+  const own = item.firstChild?.isTextblock ? readDocumentNumberingMarkerFact(item.firstChild.attrs) : null;
+  const first = list.firstChild?.firstChild;
+  const theirs = first?.isTextblock ? readDocumentNumberingMarkerFact(first.attrs) : null;
+  return own && theirs && own.numId === theirs.numId ? own.level : null;
+}
+
+/**
+ * Before a lift: the lists the lifted items hold (at any depth) whose Word
+ * level is known and not stated, with that level. ProseMirror moves them up a
+ * level with their item; in Word their paragraphs keep their w:ilvl (corpus
+ * R497-D45 E14: "Reference_Points" and "Feature_Name", ilvl 2 under the
+ * decreased ilvl 1 item, were written ilvl 1 with a new indent). Stating it
+ * keeps them where they were. PURE.
+ */
+function heldListLevels(range: NodeRange): { pos: number; level: number }[] {
+  const held: { pos: number; level: number }[] = [];
+  const $base = range.$from;
+  const contentStart = $base.start(range.depth);
+  range.parent.nodesBetween(range.start - contentStart, range.end - contentStart, (node, offset) => {
+    if (!LIST_NODE_NAMES.has(node.type.name) || node.type.name === "taskList") return true;
+    if (explicitOrderedListLevel(node) != null) return true;
+    const pos = contentStart + offset;
+    let level = wordLevelOfList(node);
+    if (level == null && node.type.name === "orderedList") {
+      level = definedListLevelAt($base.doc.resolve(pos + 1), $base.doc.resolve(pos + 1).depth)?.level ?? null;
+    }
+    if (level != null) held.push({ pos, level });
+    return true;
+  });
+  return held;
 }
 
 export function liftListItemKeepingLists(itemType: NodeType) {
@@ -549,6 +622,7 @@ export function liftListItemKeepingLists(itemType: NodeType) {
       dispatch(tr.scrollIntoView());
       return true;
     }
+    const held = heldListLevels(range);
     const end = range.end;
     const endOfList = range.$to.end(range.depth);
     let lifted = range;
@@ -564,6 +638,11 @@ export function liftListItemKeepingLists(itemType: NodeType) {
     if (canJoin(tr.doc, $after.pos) && $after.nodeBefore && $after.nodeAfter &&
         sameListAttrs($after.nodeBefore, $after.nodeAfter)) {
       tr.join($after.pos);
+    }
+    for (const { pos, level } of held) {
+      const at = tr.mapping.mapResult(pos, 1);
+      const node = at.deleted ? null : tr.doc.nodeAt(at.pos);
+      if (node && LIST_NODE_NAMES.has(node.type.name)) tr.setNodeMarkup(at.pos, undefined, { ...node.attrs, listLevel: level });
     }
     dispatch(tr.scrollIntoView());
     return true;

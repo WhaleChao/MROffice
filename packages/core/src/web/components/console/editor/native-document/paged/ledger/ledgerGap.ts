@@ -10,6 +10,9 @@ export interface GapSpacing {
   spaceBeforePx: number;
   contextualKey: string | null;
   contextualSpacing: boolean;
+  /** The block's last paragraph, where it differs from its first (a list). */
+  contextualKeyAfter?: string | null;
+  contextualSpacingAfter?: boolean;
 }
 
 export function wordParagraphGapPx(
@@ -21,23 +24,27 @@ export function wordParagraphGapPx(
   addsUp = false,
 ): number {
   const after = Math.max(0, previous.spaceAfterPx || 0);
+  // Word compares the paragraph that ends the block above with the one that
+  // opens the block below: for a list, its last item's and its first's.
+  const previousKey = previous.contextualKeyAfter !== undefined ? previous.contextualKeyAfter : previous.contextualKey;
+  const previousContextual = previous.contextualSpacingAfter ?? previous.contextualSpacing;
   // A negative space before (a Top and Bottom picture drawn up into the space
   // after the block above, ledgerAtoms' authoredMarginsPx) collapses with
   // that space as CSS margins of mixed signs do: they add up.
   const negativeBefore = Math.min(0, next.spaceBeforePx || 0);
   if (negativeBefore < 0) {
     const sameKey =
-      previous.contextualKey !== null && previous.contextualKey === next.contextualKey;
-    const painted = previous.contextualSpacing && sameKey ? 0 : after;
+      previousKey !== null && previousKey === next.contextualKey;
+    const painted = previousContextual && sameKey ? 0 : after;
     return Math.max(0, painted + negativeBefore);
   }
   const before = Math.max(0, next.spaceBeforePx || 0);
   const sameStyle =
-    previous.contextualKey !== null &&
+    previousKey !== null &&
     next.contextualKey !== null &&
-    previous.contextualKey === next.contextualKey;
+    previousKey === next.contextualKey;
   const paintedAfter =
-    previous.contextualSpacing && sameStyle ? 0 : after;
+    previousContextual && sameStyle ? 0 : after;
   const effectiveBefore = next.contextualSpacing && sameStyle ? 0 : before;
   if (addsUp) return paintedAfter + effectiveBefore;
   return paintedAfter + Math.max(0, effectiveBefore - after);

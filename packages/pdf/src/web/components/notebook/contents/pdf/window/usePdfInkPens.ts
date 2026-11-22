@@ -17,7 +17,7 @@ import {
   withOfficeInkPenAdded,
   withOfficeInkPenRemoved,
   type OfficeInkPenProfile,
-} from "@mrnote/ink/web/lib/office-ink-pens.ts";
+} from "@mrnote/core/web/lib/office-ink-pens.ts";
 import {
   PDF_INK_PEN_PROFILE_STORAGE_KEY,
   PDF_INK_PEN_SPEC,

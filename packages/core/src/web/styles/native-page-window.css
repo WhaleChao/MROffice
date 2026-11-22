@@ -525,6 +525,17 @@
   padding: 0 10px;
 }
 
+/* Under a finger the name box and the formula box are the bar's whole 44 px
+   height (the bar keeps its height: its padding goes to the boxes). */
+@media (pointer: coarse) {
+  .spreadsheet-window__formula {
+    padding-block: 0;
+  }
+  .spreadsheet-window__formula input:where(:not(.office-dialog *)) {
+    min-height: 44px;
+  }
+}
+
 /* Keyboard focus indicator for the spreadsheet text inputs — they set
    outline:none but previously had no replacement, leaving keyboard users with
    no visible focus (WCAG 2.4.7). Mirrors the accent family used across the
@@ -1443,7 +1454,8 @@
   --spreadsheet-selection-dir: 1;
 }
 
-[dir="rtl"] .spreadsheet-window__grid {
+/* An rtl sheet, not an rtl interface: <html dir="rtl"> is not the sheet's. */
+[dir="rtl"]:where(:not(html)) .spreadsheet-window__grid {
   --spreadsheet-selection-dir: -1;
 }
 
@@ -1986,7 +1998,7 @@
   box-shadow: inset -2px 0 0 0 var(--spreadsheet-selection-edge);
 }
 
-[dir="rtl"] .spreadsheet-window__split-heading[data-axis="row"][data-selection-header] {
+[dir="rtl"]:where(:not(html)) .spreadsheet-window__split-heading[data-axis="row"][data-selection-header] {
   box-shadow: inset 2px 0 0 0 var(--spreadsheet-selection-edge);
 }
 
@@ -10088,4 +10100,13 @@
 @keyframes presentation-engine-caret-blink {
   0%, 50% { opacity: 1; }
   50.01%, 100% { opacity: 0; }
+}
+
+/* An editor beside its plugin dock (components/notebook/NotebookPageEditor):
+ * the wrapper is display: contents, so the editor is still its parent's
+ * child for layout -- given here the grow a parent's `> *` rule gives it. */
+.mr-editor-extensions-host > :not([data-testid="editor-extensions-dock"]) {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
 }

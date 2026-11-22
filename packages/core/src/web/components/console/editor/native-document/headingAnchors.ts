@@ -112,12 +112,19 @@ function scheduleIdleHeadingAnchorBackfill(view: EditorView) {
     handle = null;
     if (destroyed || view.isDestroyed || attempts >= IDLE_BACKFILL_MAX_ATTEMPTS) return;
     if (!headingAnchorsMayNeedBackfill(view.state.doc)) return;
-    if (!assignMissingHeadingAnchorIds(view.state.tr, view.state.doc)) return;
+    // A busy page waits before the ids are worked out: they serialize the
+    // whole document, and a page settles for minutes after every change
+    // (a long document's print: every half second while it lays out).
+    // `window.__docsAnchorBackfillBusyFirstOff = true`: worked out first, as before.
+    const busyFirst =
+      (win as (Window & { __docsAnchorBackfillBusyFirstOff?: boolean }) | null)?.__docsAnchorBackfillBusyFirstOff !== true;
+    if (!busyFirst && !assignMissingHeadingAnchorIds(view.state.tr, view.state.doc)) return;
     if (busy()) {
       busyWaits += 1;
       if (busyWaits < IDLE_BACKFILL_MAX_BUSY_WAITS) schedule(IDLE_BACKFILL_RETRY_MS);
       return;
     }
+    if (busyFirst && !assignMissingHeadingAnchorIds(view.state.tr, view.state.doc)) return;
     view.dispatch(view.state.tr.setMeta(HEADING_ANCHOR_IDLE_BACKFILL_META, true));
     if (assignMissingHeadingAnchorIds(view.state.tr, view.state.doc)) {
       attempts += 1;
@@ -244,6 +251,11 @@ function holdsTextblock(node: ProseMirrorNode): boolean {
 
 
 
+
+function anchorCompleteWalkOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsAnchorCompleteWalkOff?: boolean }).__docsAnchorCompleteWalkOff === true;
+}
 
 /** pageRebalanceExtension's REBALANCE_META (a module this one does not load). */
 const PAGE_LEDGER_REBALANCE_META = "structuralRebalance";
@@ -376,6 +388,17 @@ export const HeadingAnchorIdExtension = Extension.create({
                 
                 uniqueAnchorId,
               );
+            // Every outline heading holding an id of its own: the ids stand
+            // as they are, found by a walk of the blocks, not by serializing
+            // the whole document. A page laid out for print sets attributes
+            // on its paragraphs many times a second, and each such
+            // transaction serialized all of it (R492-D04's 1 886 pages: 50 s
+            // of an 850 s print). `window.__docsAnchorCompleteWalkOff = true`:
+            // serialized every time, as before.
+            if (!released && !anchorCompleteWalkOff() && !headingAnchorsMayNeedBackfill(tr.doc)) {
+              completeDocuments.add(newState.doc);
+              return null;
+            }
             if (!assignMissingHeadingAnchorIds(tr, tr.doc) && !released) {
               completeDocuments.add(newState.doc);
               return null;

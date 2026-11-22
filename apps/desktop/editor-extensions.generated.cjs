@@ -50,10 +50,6 @@ module.exports = { EDITOR_EXTENSIONS: Object.freeze({
   "pdf": [
     ".pdf"
   ],
-  "ink": [
-    ".mrink",
-    ".mrink.json"
-  ],
   "docs": [
     ".mrdoc",
     ".mrdoc.json",

@@ -73,6 +73,16 @@ export interface ChartRenderRequest {
    * picture (`ChartRenderDataTable.topPx`) for the sheet and its print.
    */
   dataTableBand?: boolean;
+  
+
+
+
+
+
+
+
+
+  dataTableLayout?: "plot";
   /**
    * The editors draw the chart's texts themselves (the title and the axis
    * titles): the picture keeps their place and box but not their words, and
@@ -188,6 +198,14 @@ export interface ChartRenderDataTable {
    * (the series names left of it, X-068). Absent: the band is under the
    * picture (a deck's). */
   topPx?: number;
+  /** A deck's table laid out in its chart (`dataTableLayout: "plot"`): each
+   * row's height (the categories' row first), the names' column and the
+   * lines each series' name wraps to. */
+  rowHeightsPx?: number[];
+  nameColumnPx?: number;
+  nameLines?: number[];
+  /** The lines the longest category name takes in the header row (absent: one). */
+  headerLines?: number;
   plotLeftPx?: number;
   plotWidthPx?: number;
   /** Format Data Table > Fill (behind the values and category names only)

@@ -58,7 +58,7 @@ export function PdfSurfaceRibbonGroup({
   testId?: string;
 }) {
   const ribbon =
-    tab === "picture-format" || tab === "text-format" ? `context ${tab}` : tab;
+    tab;
   const keptCommands = usePdfRibbonGroupCommands(ribbon, children);
   const commands = eager ? children : keptCommands;
   return (

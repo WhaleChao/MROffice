@@ -213,6 +213,62 @@ export const SPREADSHEET_SHAPE_TEXT_ALIGNS: readonly SpreadsheetShapeTextAlign[]
 export const SPREADSHEET_SHAPE_TEXT_VERTICAL_ALIGNS: readonly SpreadsheetShapeTextVerticalAlign[] =
   ["top", "middle", "bottom"];
 
+/** One empty line's end mark (`SpreadsheetShapeStyle.textEmptyLines`). */
+export interface SpreadsheetShapeEmptyLine {
+  /** px */
+  size: number;
+  fontFamily?: string;
+}
+
+/** The most lines `textEmptyLines` keeps (the reader's own bound). */
+const MAX_SHAPE_EMPTY_LINES = 4000;
+
+/**
+ * A stored `textEmptyLines`, or undefined when it is not one: a list of
+ * lines, each null or `{size, fontFamily?}` (px 1..545.33, a face name).
+ */
+export function normalizeSpreadsheetShapeEmptyLines(value: unknown): (SpreadsheetShapeEmptyLine | null)[] | undefined {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_SHAPE_EMPTY_LINES) return undefined;
+  const out: (SpreadsheetShapeEmptyLine | null)[] = [];
+  for (const entry of value) {
+    if (entry === null) {
+      out.push(null);
+      continue;
+    }
+    if (!entry || typeof entry !== "object") return undefined;
+    const { size, fontFamily } = entry as { size?: unknown; fontFamily?: unknown };
+    if (typeof size !== "number" || !Number.isFinite(size) || size < 1 || size > 545.33) return undefined;
+    if (fontFamily !== undefined && (typeof fontFamily !== "string" || !fontFamily.trim() || fontFamily.length > 100)) return undefined;
+    out.push(fontFamily === undefined ? { size } : { size, fontFamily });
+  }
+  return out.some((entry) => entry !== null) ? out : undefined;
+}
+
+/** One paragraph's end mark on its last line (`SpreadsheetShapeStyle.textLineMarks`). */
+export interface SpreadsheetShapeLineMark {
+  fontFamily: string;
+}
+
+/**
+ * A stored `textLineMarks`, or undefined when it is not one: a list of
+ * lines, each null or `{fontFamily}` (a face name).
+ */
+export function normalizeSpreadsheetShapeLineMarks(value: unknown): (SpreadsheetShapeLineMark | null)[] | undefined {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_SHAPE_EMPTY_LINES) return undefined;
+  const out: (SpreadsheetShapeLineMark | null)[] = [];
+  for (const entry of value) {
+    if (entry === null) {
+      out.push(null);
+      continue;
+    }
+    if (!entry || typeof entry !== "object") return undefined;
+    const { fontFamily } = entry as { fontFamily?: unknown };
+    if (typeof fontFamily !== "string" || !fontFamily.trim() || fontFamily.length > 100) return undefined;
+    out.push({ fontFamily });
+  }
+  return out.some((entry) => entry !== null) ? out : undefined;
+}
+
 export interface SpreadsheetShapeStyle extends OfficeShapeTextFont {
   fillGradient?: OfficeShapeGradient;
   /**
@@ -250,6 +306,23 @@ export interface SpreadsheetShapeStyle extends OfficeShapeTextFont {
    * CharKerningSpace's "A V A I L" by 20 pt, X-162).
    */
   textCharacterSpacing?: number;
+  /**
+   * Each EMPTY line's own end mark (`a:endParaRPr`), one entry per line of
+   * the label as read (null for a line that holds characters): the size
+   * (px) and face Windows Excel stands that line in -- the mark's, else
+   * 11 pt in the theme's body face, never the first run's (reading row 989,
+   * xlsx backlog bl5/epr). Drawn only while the label still has as many
+   * lines and that line is still empty.
+   */
+  textEmptyLines?: (SpreadsheetShapeEmptyLine | null)[];
+  /**
+   * Each paragraph's end mark where it stands on the paragraph's last line,
+   * one entry per line of the label as read (null on any other line): the
+   * East Asian Office face Windows Excel holds that line in, at the last
+   * run's size -- a paragraph of Han in its `a:ea` HG face ends on its 游明朝
+   * mark's taller line (reading row 997, xlsx backlog bl10/lnmk).
+   */
+  textLineMarks?: (SpreadsheetShapeLineMark | null)[];
   /**
    * A `custom-geometry` shape's own outline, in the shared persisted envelope
    * every host stores (`normalizePresentationCustomPath`) — what an imported
@@ -908,6 +981,10 @@ export function normalizeShapeStyle(value: unknown): SpreadsheetShapeStyle {
   // Resize shape to fit text: the frame's own setting, kept on an empty box
   // too (Excel keeps an empty equation box's `a:bodyPr` for its words).
   if (o.textAutofit === "shape" || o.textAutofit === "none") style.textAutofit = o.textAutofit;
+  const emptyLines = normalizeSpreadsheetShapeEmptyLines(o.textEmptyLines);
+  if (emptyLines) style.textEmptyLines = emptyLines;
+  const lineMarks = normalizeSpreadsheetShapeLineMarks(o.textLineMarks);
+  if (lineMarks) style.textLineMarks = lineMarks;
   if (
     typeof o.textCharacterSpacing === "number" &&
     Number.isFinite(o.textCharacterSpacing) &&

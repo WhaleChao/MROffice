@@ -97,6 +97,7 @@ export const SPREADSHEET_TASK_PANE_EDGES = {
   "version-history": "right",
   "pivot-fields": "right",
   changes: "right",
+  thesaurus: "right",
 } as const;
 
 /** usePageWritable's reason codes: identifiers, not text a person can read. */

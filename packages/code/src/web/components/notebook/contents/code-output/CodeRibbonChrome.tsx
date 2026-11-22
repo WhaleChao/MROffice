@@ -284,7 +284,7 @@ export function CodeRibbonStrip({
   // One strip for both anatomies, so a tab change never remounts the ribbon.
   const strip = (
     <OfficeRibbonSurfaceStrip
-      surface={activeTab === "home" || activeTab === "edit" ? "home" : "insert"}
+      surface={activeTab === "home" || false ? "home" : "insert"}
       density="office"
       bandHeight={100}
       {...stripProps}

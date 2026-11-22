@@ -34,7 +34,6 @@ const NEW_FILES: readonly [string, string, string][] = [
   ["docs", "Document", "文档"],
   ["sheets", "Spreadsheet", "电子表格"],
   ["slides", "Presentation", "演示文稿"],
-  ["ink", "Handwriting", "手写"],
   ["code", "Code File", "代码文件"],
 ];
 

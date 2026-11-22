@@ -44,7 +44,12 @@ export const TRACKED_INSERTION_CARRIER_ATTR = "trackedInsertion";
 /** The atoms an insertion mark can be on (trackChanges.ts
  * TRACKED_INSERTION_INLINE_ATOM_NAMES, the API's
  * DOCUMENT_TRACK_INSERTION_INLINE_ATOM_TYPES). */
-export const TRACKED_INSERTION_CARRIER_TYPES: ReadonlySet<string> = new Set(["inlineMath", "footnoteRef", "hardBreak"]);
+export const TRACKED_INSERTION_CARRIER_TYPES: ReadonlySet<string> = new Set([
+  "inlineMath",
+  "footnoteRef",
+  "hardBreak",
+  "documentField",
+]);
 
 const CARRIED_KEYS = ["author", "timestamp", "revisionId", "moveId", "moveRole", "moveRangeId"] as const;
 

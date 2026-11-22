@@ -21,6 +21,7 @@ import {
   getTrackedChanges,
   type TrackedChangeEntry,
 } from "./native-document/trackChangesExtension";
+import { embedSelfName, onlyofficeAllowsReview } from "../../../lib/embed/onlyoffice-frame";
 import { revisionResolutionLocked } from "./native-document/documentProtection";
 import type { TrackedObjectKind } from "./native-document/trackChanges";
 import { pageInterfaceLocale } from "../../../lib/i18n/content-locale";
@@ -122,6 +123,7 @@ const OBJECT_LABEL_KEYS = {
   sectionBreak: "trackChanges.sectionBreak",
   horizontalRule: "trackChanges.horizontalRule",
   noteReference: "trackChanges.noteReference",
+  field: "trackChanges.field",
 } as const satisfies Record<TrackedObjectKind, string>;
 
 export default function TrackChangesPanel({
@@ -278,6 +280,8 @@ export default function TrackChangesPanel({
       ) {
         return;
       }
+      // An embedded ONLYOFFICE config's reviewGroups: another group's change stays.
+      if (!onlyofficeAllowsReview(change.author, embedSelfName())) return;
       editor.commands.acceptChangeAtPos(change.from);
     },
     [editor, renderedSnapshotIsCurrent],
@@ -293,6 +297,7 @@ export default function TrackChangesPanel({
       ) {
         return;
       }
+      if (!onlyofficeAllowsReview(change.author, embedSelfName())) return;
       editor.commands.rejectChangeAtPos(change.from);
     },
     [editor, renderedSnapshotIsCurrent],
@@ -307,8 +312,10 @@ export default function TrackChangesPanel({
     ) {
       return;
     }
+    // reviewGroups: all at once only when every change is this person's to resolve.
+    if (!snapshot.changes.every((change) => onlyofficeAllowsReview(change.author, embedSelfName()))) return;
     editor.commands.acceptAllChanges();
-  }, [editor, renderedSnapshotIsCurrent]);
+  }, [editor, renderedSnapshotIsCurrent, snapshot.changes]);
 
   const rejectAll = useCallback(() => {
     if (
@@ -319,8 +326,9 @@ export default function TrackChangesPanel({
     ) {
       return;
     }
+    if (!snapshot.changes.every((change) => onlyofficeAllowsReview(change.author, embedSelfName()))) return;
     editor.commands.rejectAllChanges();
-  }, [editor, renderedSnapshotIsCurrent]);
+  }, [editor, renderedSnapshotIsCurrent, snapshot.changes]);
 
   // Word's Reviewing Pane is a docked task pane (Review > Tracking >
   // Reviewing Pane, "Track changes in Word", Microsoft Support): the shared

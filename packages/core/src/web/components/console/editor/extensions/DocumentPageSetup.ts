@@ -14,8 +14,14 @@ import { wordOmitsEastAsianAutoSpace } from "../native-document/wordFarEastDefau
 import {
   documentTerminalPunctuation,
   documentTerminalPunctuationApplies,
+  firstTerminalPunctuationRect,
+  sameTerminalLine,
+  type TerminalGlyphBox,
   type TerminalPunctuationSpec,
 } from "../native-document/documentTerminalPunctuation";
+import { wordAutoSpaceLineEdges } from "../native-document/wordAutoSpaceLineEdges";
+import { clientRectInPaginationLayout, paginationTransformScale } from "../native-document/paged/paginationGeometry";
+import { measurementRange } from "../native-document/paged/measurementRange";
 import { documentNumberingMarker, type DocumentNumberingMarkerResult } from "../native-document/documentNumberingMarker";
 import { documentStyleFontSizePx, paragraphHoldsNoText } from "../native-document/documentStyleFontSize";
 import { documentLineGridPitch, offLineGridAt, sectionsOffLineGrid } from "../native-document/sectionLineGrid";
@@ -2540,12 +2546,12 @@ function gridOneSlotFootOff(): boolean {
 
 const gridBlockSpecs = new WeakMap<ProseMirrorNode, { sig: string; attrs: unknown; spec: GridBlockSpec }>();
 
-function wordGridRunLineHeightSpecs(view: EditorView): {
+function wordGridRunLineHeightSpecs(doc: ProseMirrorNode): {
   runs: WordGridRunLineHeightSpec[];
   blocks: WordGridBlockLineHeightSpec[];
   naturals: WordGridOneSlotNaturalSpec[];
 } {
-  const pitchTwips = documentLineGridPitch(view.state.doc.attrs);
+  const pitchTwips = documentLineGridPitch(doc.attrs);
   const pitchPx = pitchTwips === null ? NaN : pitchTwips / 15;
   const active = Number.isFinite(pitchPx) && pitchPx > 0;
   const runs: WordGridRunLineHeightSpec[] = [];
@@ -2553,8 +2559,8 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
   const naturals: WordGridOneSlotNaturalSpec[] = [];
   if (!active) return { runs, blocks, naturals };
   // A section with no grid of its own sets its lines unsnapped (Word).
-  const offGrid = sectionsOffLineGrid(view.state.doc);
-  const faces = wordGridRunFaces(view.state.doc);
+  const offGrid = sectionsOffLineGrid(doc);
+  const faces = wordGridRunFaces(doc);
   const slotsOf = (node: ProseMirrorNode, block: ProseMirrorNode): number | null => {
     const fontSizeMark = node.marks.find(
       (mark) => mark.type.name === "fontSize",
@@ -2567,8 +2573,8 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
     // (a 272-page book's first two chapters, 24 pages short of Word's).
     const fontSizePx = markedPx > 0
       ? markedPx
-      : documentStyleFontSizePx(view.state.doc.attrs, block) ??
-        wordCjkSpacingNumber(String(view.state.doc.attrs.defaultFontSize ?? ""));
+      : documentStyleFontSizePx(doc.attrs, block) ??
+        wordCjkSpacingNumber(String(doc.attrs.defaultFontSize ?? ""));
     if (!(fontSizePx > 0)) return null;
     const singleLinePx = fontSizePx * faces.ratio(node);
     const naturalLineHeightPx = Math.max(pitchPx, singleLinePx);
@@ -2585,7 +2591,7 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
   // is 31.2 pt at any multiple up to 2).
   const quantized = (slots: number, factor: number) =>
     Math.round(Math.max(slots, factor) * pitchPx * 1_000) / 1_000;
-  const defaultFactor = view.state.doc.attrs.defaultLineHeight;
+  const defaultFactor = doc.attrs.defaultLineHeight;
   const factorOf = (block: ProseMirrorNode): number => {
     const value = Number(block.attrs.lineHeight ?? defaultFactor);
     return Number.isFinite(value) && value > 1 ? value : 1;
@@ -2710,7 +2716,7 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
   // stylesheet, for an A/B of one build.
   const atLeastSlots = !(typeof window !== "undefined" &&
     (window as Window & { __docsGridAtLeastSlotsOff?: boolean }).__docsGridAtLeastSlotsOff === true);
-  const cellsOnGrid = atLeastSlots && view.state.doc.attrs.wordTableLinesOnGrid === true;
+  const cellsOnGrid = atLeastSlots && doc.attrs.wordTableLinesOnGrid === true;
   // `wholeLine`: a cell's paragraph, which the stylesheet's "at least" grid
   // rule does not reach, takes its one-slot line here too.
   const atLeastSpecOfBlock = (block: ProseMirrorNode, wholeLine = false): GridBlockSpec | null => {
@@ -2733,8 +2739,8 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
   // A block's specs stand while it, the grid and the document's faces do:
   // each pass of a long book read every block's runs again.
   const signature = `${pitchPx}|${String(defaultFactor)}|${atLeastSlots}`;
-  const docAttrs = view.state.doc.attrs;
-  view.state.doc.descendants((block, blockPos, parent) => {
+  const docAttrs = doc.attrs;
+  doc.descendants((block, blockPos, parent) => {
     // A table cell's paragraphs are left to the table: not walked into,
     // rather than each textblock resolving its ancestors (a resolve scans
     // every sheet before it: 1.5 s of a 272-page book's opening). Only a
@@ -3271,6 +3277,147 @@ function wordCjkDomGlyphs(
   return { status: "ready", glyphs };
 }
 
+/** Harness switch (`window.__docsAutoSpaceEdgesOff = true`): an automatic
+ * space keeps its width at the start or end of a line (A/B). */
+function wordAutoSpaceEdgesOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsAutoSpaceEdgesOff?: boolean }).__docsAutoSpaceEdgesOff === true;
+}
+
+/** The decoration attribute naming the line edge whose automatic space a
+ * glyph's spacing leaves out. */
+const WORD_AUTO_SPACE_EDGE_ATTR = "data-docs-word-cjk-edge";
+
+/**
+ * Takes the automatic East Asian/Latin space off a glyph at the start or the
+ * end of a line where Word sets none and the break cannot move for it
+ * (wordAutoSpaceLineEdges), on the lines the engine laid out now. Changes the
+ * block's spacing specs in place. Settled when the page already draws the
+ * decided edges; otherwise the owner measures again on the new lines.
+ */
+function applyWordAutoSpaceLineEdges(
+  view: EditorView,
+  element: HTMLElement,
+  glyphs: readonly WordCjkDomGlyph[],
+  specs: WordCjkSpacingSpec[],
+): { complete: boolean; settled: boolean } {
+  const done = { complete: true, settled: true };
+  // A line the model cannot add up (an object, a tab, a hard break) or a
+  // right-to-left / vertical paragraph is left as it is.
+  if (glyphs.some((glyph) => glyph.object || glyph.character === "\n" || glyph.character === "\t") ||
+      glyphs.some((glyph) => !Number.isFinite(glyph.baselineOffsetPx))) return done;
+  const style = getComputedStyle(element);
+  if (style.direction !== "ltr" || (style.writingMode && style.writingMode !== "horizontal-tb")) return done;
+  const scale = paginationTransformScale(element);
+  if (!scale) return { complete: false, settled: true };
+  const boxes = Array.from(element.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
+  if (boxes.length === 0) return { complete: false, settled: true };
+  if (boxes.length !== 1) return done;
+  const box = clientRectInPaginationLayout(boxes[0], scale);
+  const lineWidthPx = box.right - box.left -
+    wordCjkSpacingNumber(style.paddingLeft) - wordCjkSpacingNumber(style.paddingRight) -
+    wordCjkSpacingNumber(style.borderLeftWidth) - wordCjkSpacingNumber(style.borderRightWidth);
+  const firstLineWidthPx = lineWidthPx - wordCjkSpacingNumber(style.textIndent);
+  const before = getComputedStyle(element, "::before").content;
+  // A marker or widget before the paragraph's text stands on its first line.
+  // One after the text (the formatting marks' pilcrow or end-of-cell mark,
+  // children of every paragraph, drawn or not) does not: read as opaque, it
+  // kept every first line from deciding (corpus R347-D02's header cell: "2"
+  // opening line 2 kept its gap; `window.__docsAutoSpaceTrailingWidgetOff`
+  // reads every child widget as before, for an A/B of one build).
+  const firstText = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => (node as Text).data.length > 0 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP,
+  }).nextNode();
+  const trailingWidgetsOff = (window as Window & { __docsAutoSpaceTrailingWidgetOff?: boolean }).__docsAutoSpaceTrailingWidgetOff === true;
+  const firstLineOpaque = (!!before && before !== "none" && before !== "normal") ||
+    Array.from(element.querySelectorAll(":scope > .docs-list-marker, :scope > .ProseMirror-widget")).some((widget) =>
+      trailingWidgetsOff || !firstText ||
+      (widget.compareDocumentPosition(firstText) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0);
+  const doc = element.ownerDocument;
+  const rects = new Map<number, TerminalGlyphBox | null>();
+  const rect = (index: number): TerminalGlyphBox | null => {
+    if (rects.has(index)) return rects.get(index)!;
+    const glyph = glyphs[index];
+    let result: TerminalGlyphBox | null = null;
+    try {
+      const start = view.domAtPos(glyph.from, 1), end = view.domAtPos(glyph.to, -1);
+      const range = measurementRange(doc, "wordAutoSpaceEdges");
+      range.setStart(start.node, start.offset);
+      range.setEnd(end.node, end.offset);
+      const client = firstTerminalPunctuationRect(range.getClientRects());
+      const layout = client ? clientRectInPaginationLayout(client, scale) : null;
+      result = layout ? { ...layout, baseline: layout.top + glyph.baselineOffsetPx } : null;
+    } catch {
+      result = null;
+    }
+    rects.set(index, result);
+    return result;
+  };
+  const breaksBefore = (index: number): boolean | null => {
+    const previous = rect(index - 1), here = rect(index);
+    if (!previous || !here) return null;
+    return !sameTerminalLine(previous, here) && here.baseline > previous.baseline;
+  };
+  const lineStart = (index: number): number | null => {
+    const here = rect(index);
+    if (!here) return null;
+    // Lines hold consecutive glyphs: the first one on this line.
+    let low = 0, high = index;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      const box = rect(middle);
+      if (!box) return null;
+      if (sameTerminalLine(box, here)) high = middle;
+      else low = middle + 1;
+    }
+    return low;
+  };
+  const specAt = new Map(specs.map((spec) => [spec.from, spec]));
+  const advancesPx = glyphs.map((glyph) => {
+    const spec = specAt.get(glyph.from);
+    if (!spec || spec.to !== glyph.to) return glyph.widthPx;
+    return glyph.widthPx - glyph.autoSpaceBeforePx - glyph.autoSpaceAfterPx - glyph.fontAdvanceCorrectionPx +
+      spec.marginStartPx + spec.marginEndPx +
+      (spec.overrideLetterSpacing ? spec.letterSpacingPx - glyph.baseLetterSpacingPx : 0);
+  });
+  const decided = wordAutoSpaceLineEdges({
+    glyphs: glyphs.map((glyph) => ({
+      character: glyph.character,
+      autoSpaceBeforePx: glyph.autoSpaceBeforePx,
+      autoSpaceAfterPx: glyph.autoSpaceAfterPx,
+    })),
+    lines: { breaksBefore, lineStart },
+    advancesPx,
+    firstLineWidthPx,
+    lineWidthPx,
+    firstLineOpaque,
+    breakWithinWords: style.wordBreak === "break-all" || style.lineBreak === "anywhere",
+  });
+  let settled = true;
+  glyphs.forEach((glyph, index) => {
+    if (!(glyph.autoSpaceBeforePx > 0) && !(glyph.autoSpaceAfterPx > 0)) return;
+    const spec = specAt.get(glyph.from);
+    if (!spec || spec.to !== glyph.to) return;
+    const sides: string[] = [];
+    if (decided.starts.has(index)) {
+      spec.marginStartPx -= glyph.autoSpaceBeforePx;
+      sides.push("start");
+    }
+    if (decided.ends.has(index)) {
+      spec.marginEndPx -= glyph.autoSpaceAfterPx;
+      sides.push("end");
+    }
+    if (sides.length) spec.edge = sides.join(" ");
+    // What the page draws now: the edge attribute on the glyph's spacing.
+    const at = view.domAtPos(glyph.from, 1);
+    let node: Node | undefined = at.node;
+    if (node.nodeType !== 3) node = node.childNodes[at.offset];
+    while (node && node.nodeType !== 3) node = node.firstChild ?? undefined;
+    const drawn = node?.parentElement?.closest(`[${WORD_AUTO_SPACE_EDGE_ATTR}]`)?.getAttribute(WORD_AUTO_SPACE_EDGE_ATTR) ?? "";
+    if (drawn !== (spec.edge ?? "")) settled = false;
+  });
+  return { complete: decided.complete, settled };
+}
+
 function applyWordCjkAutoSpacing(
   element: HTMLElement,
   glyphs: WordCjkDomGlyph[],
@@ -3320,6 +3467,9 @@ interface WordCjkSpacingSpec {
   overrideLetterSpacing: boolean;
   /** Paragraph-final white space: hangs past the line end (pre-wrap). */
   hang?: boolean;
+  /** The automatic space this glyph opens or closes its line with, taken off
+   * (wordAutoSpaceLineEdges): "start", "end" or "start end". */
+  edge?: string;
   punctuationRole: WordCjkPunctuationRole | null;
 }
 
@@ -3611,58 +3761,7 @@ export function wordCjkSpacingProjection(
     if (marker.signature !== "none") markerSignatures.push(marker.signature);
   }
   const markerSignature = markerSignatures.join("|");
-  const gridSpecs = wordGridRunLineHeightSpecs(view);
-  const gridRunSpecs = gridSpecs.runs;
-  const gridRunSignature = [
-    ...gridRunSpecs.map(
-      (spec) =>
-        `grid:${spec.from}:${spec.to}:${spec.lineHeightPx.toFixed(3)}:${spec.slots}`,
-    ),
-    ...gridSpecs.blocks.map(
-      (spec) => `gridBlock:${spec.pos}:${spec.lineHeightPx.toFixed(3)}:${spec.slots}:${spec.naturalPx ?? ""}`,
-    ),
-    ...gridSpecs.naturals.map((spec) => `gridNatural:${spec.pos}:${spec.naturalPx}`),
-  ].join("|");
-  const gridBlockDecorations = gridSpecs.blocks.map((spec) =>
-    Decoration.node(
-      spec.pos,
-      spec.pos + (view.state.doc.nodeAt(spec.pos)?.nodeSize ?? 0),
-      {
-        "data-docs-word-grid-block-slots": String(spec.slots),
-        ...(spec.naturalPx !== undefined ? { "data-docs-word-grid-natural": String(spec.naturalPx) } : {}),
-        style: `line-height:${spec.lineHeightPx}px !important`,
-      },
-      { key: "docs-word-grid-block" },
-    ),
-  );
-  // A one-slot block's single line, for the page's foot only (no paint).
-  const gridNaturalDecorations = gridSpecs.naturals.map((spec) =>
-    Decoration.node(
-      spec.pos,
-      spec.pos + (view.state.doc.nodeAt(spec.pos)?.nodeSize ?? 0),
-      { "data-docs-word-grid-natural": String(spec.naturalPx), "data-docs-word-grid-pitch": String(Math.round(spec.pitchPx * 1_000) / 1_000) },
-      { key: "docs-word-grid-natural" },
-    ),
-  );
-  const gridRunDecorations = [...gridBlockDecorations, ...gridNaturalDecorations, ...gridRunSpecs.map((spec) =>
-    Decoration.inline(
-      spec.from,
-      spec.to,
-      {
-        class: "docs-word-grid-run",
-        "data-docs-word-grid-run-slots": String(spec.slots),
-        style: `${WORD_GRID_RUN_LINE_HEIGHT_PROPERTY}:${spec.lineHeightPx}px`,
-      },
-      {
-        inclusiveStart: false,
-        inclusiveEnd: false,
-        // ProseMirror compares decoration specs to decide whether a node
-        // must be redrawn. A key with document positions changes for every
-        // decoration after an edit, redrawing all of them on each keystroke.
-        key: "docs-word-grid-run",
-      },
-    ),
-  )];
+  const { decorations: gridRunDecorations, signature: gridRunSignature } = wordGridDecorations(view.state.doc);
   const effectiveSpacing = effectiveDocumentCharacterSpacingControl(
     view.state.doc.attrs,
   );
@@ -4191,8 +4290,14 @@ export function wordCjkSpacingProjection(
   const candidates = terminalBlocks.map((block) =>
     documentTerminalPunctuationApplies(view, block.element),
   );
+  // Blocks whose automatic spaces may stand at a line edge read their lines
+  // by the same baselines.
+  const edgeCandidates = terminalBlocks.map((block) =>
+    !wordAutoSpaceEdgesOff() &&
+    block.glyphs.some((glyph) => glyph.autoSpaceBeforePx > 0 || glyph.autoSpaceAfterPx > 0),
+  );
   const faces = [...new Set(terminalBlocks.flatMap((block, index) =>
-    candidates[index] ? block.glyphs.map((glyph) => glyph.font) : [],
+    candidates[index] || edgeCandidates[index] ? block.glyphs.map((glyph) => glyph.font) : [],
   ))].filter((font) => !baselines.has(font));
   measureOfficeGlyphBaselineOffsets(
     view.dom.ownerDocument,
@@ -4204,15 +4309,18 @@ export function wordCjkSpacingProjection(
   const freshlyKept = new Set<ProseMirrorNode>();
   terminalBlocks.forEach((block, index) => {
     let terminal = { specs: [] as readonly TerminalPunctuationSpec[], complete: true, settled: true };
-    if (candidates[index]) {
+    if (candidates[index] || edgeCandidates[index]) {
       for (const glyph of block.glyphs) glyph.baselineOffsetPx = baselines.get(glyph.font) ?? Number.NaN;
+    }
+    if (candidates[index]) {
       terminal = documentTerminalPunctuation({ view, element: block.element, glyphs: block.glyphs });
     }
-    complete &&= terminal.complete;
-    terminalReflow ||= !terminal.settled;
+    const edges = edgeCandidates[index] ? applyWordAutoSpaceLineEdges(view, block.element, block.glyphs, block.specs) : { complete: true, settled: true };
+    complete &&= terminal.complete && edges.complete;
+    terminalReflow ||= !terminal.settled || !edges.settled;
     terminalSpecs.push(...terminal.specs);
     const { cacheNode, blockContentFrom } = block;
-    if (cacheNode && cache && terminal.complete && terminal.settled) {
+    if (cacheNode && cache && terminal.complete && terminal.settled && edges.complete && edges.settled) {
       freshlyKept.add(cacheNode);
       cache.blocks.set(cacheNode, {
         key: block.cacheKey,
@@ -4250,7 +4358,7 @@ export function wordCjkSpacingProjection(
   const spacingSignature = decorationSpecs
     .map(
       (spec) =>
-        `${spec.from}:${spec.to}:${spec.marginStartPx.toFixed(3)}:${spec.marginEndPx.toFixed(3)}:${spec.overrideLetterSpacing ? spec.letterSpacingPx.toFixed(3) : "-"}:${spec.punctuationRole ?? "auto"}${spec.hang ? ":hang" : ""}`,
+        `${spec.from}:${spec.to}:${spec.marginStartPx.toFixed(3)}:${spec.marginEndPx.toFixed(3)}:${spec.overrideLetterSpacing ? spec.letterSpacingPx.toFixed(3) : "-"}:${spec.punctuationRole ?? "auto"}${spec.hang ? ":hang" : ""}${spec.edge ? `:edge ${spec.edge}` : ""}`,
     )
     .join("|");
   const spacingDecorations = decorationSpecs.map((spec) => {
@@ -4276,6 +4384,7 @@ export function wordCjkSpacingProjection(
           ? `docs-word-cjk-spacing docs-word-cjk-spacing--${spec.punctuationRole}`
           : "docs-word-cjk-spacing docs-word-cjk-spacing--auto",
         "data-docs-word-cjk-spacing": spec.punctuationRole ?? "auto",
+        ...(spec.edge ? { [WORD_AUTO_SPACE_EDGE_ATTR]: spec.edge } : {}),
         ...(spec.overrideLetterSpacing
           ? {
               "data-docs-word-cjk-base-letter-spacing":
@@ -4323,6 +4432,94 @@ export function wordCjkSpacingProjection(
   };
 }
 
+/** The keys of the Word line-grid decorations (wordGridDecorations). */
+const WORD_GRID_DECORATION_KEYS = new Set(["docs-word-grid-block", "docs-word-grid-natural", "docs-word-grid-run"]);
+
+/**
+ * The Word line-grid decorations of a document: a block's whole-slot line
+ * height, a one-slot block's single line (the page foot's credit,
+ * pageEdgeLeading) and a run's slots. Read from the document alone.
+ */
+function wordGridDecorations(doc: ProseMirrorNode): { decorations: Decoration[]; signature: string } {
+  const gridSpecs = wordGridRunLineHeightSpecs(doc);
+  const gridRunSpecs = gridSpecs.runs;
+  const gridRunSignature = [
+    ...gridRunSpecs.map(
+      (spec) =>
+        `grid:${spec.from}:${spec.to}:${spec.lineHeightPx.toFixed(3)}:${spec.slots}`,
+    ),
+    ...gridSpecs.blocks.map(
+      (spec) => `gridBlock:${spec.pos}:${spec.lineHeightPx.toFixed(3)}:${spec.slots}:${spec.naturalPx ?? ""}`,
+    ),
+    ...gridSpecs.naturals.map((spec) => `gridNatural:${spec.pos}:${spec.naturalPx}`),
+  ].join("|");
+  const gridBlockDecorations = gridSpecs.blocks.map((spec) =>
+    Decoration.node(
+      spec.pos,
+      spec.pos + (doc.nodeAt(spec.pos)?.nodeSize ?? 0),
+      {
+        "data-docs-word-grid-block-slots": String(spec.slots),
+        ...(spec.naturalPx !== undefined ? { "data-docs-word-grid-natural": String(spec.naturalPx) } : {}),
+        style: `line-height:${spec.lineHeightPx}px !important`,
+      },
+      { key: "docs-word-grid-block" },
+    ),
+  );
+  // A one-slot block's single line, for the page's foot only (no paint).
+  const gridNaturalDecorations = gridSpecs.naturals.map((spec) =>
+    Decoration.node(
+      spec.pos,
+      spec.pos + (doc.nodeAt(spec.pos)?.nodeSize ?? 0),
+      { "data-docs-word-grid-natural": String(spec.naturalPx), "data-docs-word-grid-pitch": String(Math.round(spec.pitchPx * 1_000) / 1_000) },
+      { key: "docs-word-grid-natural" },
+    ),
+  );
+  const decorations = [...gridBlockDecorations, ...gridNaturalDecorations, ...gridRunSpecs.map((spec) =>
+    Decoration.inline(
+      spec.from,
+      spec.to,
+      {
+        class: "docs-word-grid-run",
+        "data-docs-word-grid-run-slots": String(spec.slots),
+        style: `${WORD_GRID_RUN_LINE_HEIGHT_PROPERTY}:${spec.lineHeightPx}px`,
+      },
+      {
+        inclusiveStart: false,
+        inclusiveEnd: false,
+        // ProseMirror compares decoration specs to decide whether a node
+        // must be redrawn. A key with document positions changes for every
+        // decoration after an edit, redrawing all of them on each keystroke.
+        key: "docs-word-grid-run",
+      },
+    ),
+  )];
+  return { decorations, signature: gridRunSignature };
+}
+
+/** `window.__docsGridDecoRebuildOff = true` (A/B): a block split or joined
+ * waits for the next measurement to get its grid decorations back. */
+function gridDecoRebuildOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsGridDecoRebuildOff?: boolean }).__docsGridDecoRebuildOff === true;
+}
+
+/**
+ * A decoration set mapped through an edit that dropped a grid decoration
+ * (the page ledger splits a paragraph across a page seam, or joins its
+ * pieces: each piece is a new node and a node decoration does not follow
+ * it) gets the document's grid decorations back from the new document in
+ * the same transaction. Waiting for the next measurement, the pieces read
+ * no grid line for a pass: no foot credit for the one-slot line, the
+ * stylesheet's line for a whole-slot one. The ledger planned the cut with
+ * the credit, read the cut pieces without it and cut a row higher, then
+ * read them with it again: corpus R404-D02's page 1 cut its last paragraph
+ * at 509 and 406 characters, back and forth, while anyone typed.
+ */
+function withGridDecorationsRebuilt(set: DecorationSet, doc: ProseMirrorNode): DecorationSet {
+  const stale = set.find(undefined, undefined, (spec) => WORD_GRID_DECORATION_KEYS.has((spec as { key?: string })?.key ?? ""));
+  return set.remove(stale).add(doc, wordGridDecorations(doc).decorations);
+}
+
 function wordCjkSpacingProjectionPlugin(waitForSourceFontPlan = false): Plugin<WordCjkSpacingProjectionState> {
   return new Plugin<WordCjkSpacingProjectionState>({
     key: wordCjkSpacingProjectionKey,
@@ -4339,9 +4536,14 @@ function wordCjkSpacingProjectionPlugin(waitForSourceFontPlan = false): Plugin<W
         }
         if (!tr.docChanged) return current;
         let removed = false;
-        const decorations = current.decorations.map(tr.mapping, tr.doc, {
-          onRemove: () => { removed = true; },
+        let gridRemoved = false;
+        const mapped = current.decorations.map(tr.mapping, tr.doc, {
+          onRemove: (spec) => {
+            removed = true;
+            if (WORD_GRID_DECORATION_KEYS.has((spec as { key?: string })?.key ?? "")) gridRemoved = true;
+          },
         });
+        const decorations = gridRemoved && !gridDecoRebuildOff() ? withGridDecorationsRebuilt(mapped, tr.doc) : mapped;
         return {
           decorations,
           // Equal text can be replaced with new nodes by content hydration.

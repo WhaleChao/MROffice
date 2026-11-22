@@ -26,7 +26,7 @@ import { type DocumentChartAreaStyleKey } from "./DocumentChartFormatRibbon";
 import { chartSupportsDataLabels, normalizeChartBlockAttrs, validateChartBlockAttrsV2, type CategoryChartData, type ChartBlockAttrsV2, type ChartData, type ChartFamily, type ChartSubtype } from "../extensions/chartBlockShared";
 import { chartFormatWithDataLabelContents } from "../../../../lib/office-charts/chart-elements";
 import { chartPointEffectiveStyle, chartPointStyleRow, chartRowsWithPointStyle, chartStyleRowExtras, comparePresentationChartAxisStyles, normalizePresentationChartAreaStyle, normalizePresentationChartAxisStyles, presentationChartAxisStylePart, normalizePresentationChartSliceStyles, normalizePresentationChartSeriesStyles, type PresentationChartAreaPaint, type PresentationChartAreaStyle, type PresentationChartEffectPreset } from "../../../../lib/presentation-chart-area-style";
-import { normalizeDocumentChartHost } from "../extensions/documentChartHost";
+import { documentChartPreserveReasons, normalizeDocumentChartHost } from "../extensions/documentChartHost";
 import { chartWorkbookData, sameChartWorkbookDataShape, type DocumentChartWorkbook } from "../extensions/documentChartWorkbook";
 import {
   chartColorPaletteId,
@@ -70,6 +70,9 @@ export function liveDocumentChartTarget(
   if (!isChartNode(node) || doc.nodeAt(selection.from) !== node) {
     return null;
   }
+  // A Word chart drawn from the preserve-only reading takes no edit
+  // (`source.preserveReasons`): no chart command acts on it.
+  if (documentChartPreserveReasons(node.attrs.source) !== null) return null;
   const normalized = normalizeChartBlockAttrs(node.attrs);
   return {
     pos: selection.from,

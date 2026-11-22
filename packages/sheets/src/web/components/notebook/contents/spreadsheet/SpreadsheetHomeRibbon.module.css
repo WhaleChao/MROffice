@@ -4268,3 +4268,24 @@ button.tableFilterButton.tableFilterButton[data-table-filter-toggle="true"] svg 
   cursor: not-allowed;
   opacity: 0.6;
 }
+
+/* A finger's 44 px targets on the sheet bar (styles/touch-hit-area.css):
+   the bar clips what stands out of it, so under a coarse pointer its arrows,
+   list and add buttons and its sheet tabs are 44 px themselves -- the bar
+   grows to them; a mouse keeps the 35 px bar. */
+@media (pointer: coarse) {
+  .sheetTabsBar {
+    min-height: 44px;
+  }
+  .sheetTabsBar .sheetTabNavigationButton,
+  .sheetTabsBar .sheetTabAdd {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+  .sheetTabsBar .sheetTabButton {
+    height: 44px;
+    min-height: 44px;
+  }
+}

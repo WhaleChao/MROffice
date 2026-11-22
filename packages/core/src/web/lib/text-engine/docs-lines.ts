@@ -22,7 +22,7 @@
  * where they differ, the browser can be told where to break.
  */
 import { KINSOKU_EAST_ASIAN, OFFICE_KINSOKU, type KinsokuList } from "./kinsoku";
-import { lineBreakOpportunities } from "./line-break";
+import { lineBreakOpportunities, wordJoins } from "./line-break";
 import { measureText, type EngineFont } from "./measure";
 import { pageEngineFont } from "./page-adapter";
 import { wordKeepsJustifiedWord, wordTrailingPunctuationLength } from "./docs-word-rules";
@@ -207,6 +207,9 @@ export function docsHyphenationOff(): boolean {
 /** The soft hyphen the engine draws where it ends a line at an automatic
  * hyphenation point: no piece of the paragraph. */
 export const DOCS_ENGINE_HYPHEN_CLASS = "docs-engine-hyphen";
+/** The engine's word joiner (U+2060) between closing punctuation and an
+ * opening bracket Word keeps together (docsBracketJoins): read as nothing. */
+export const DOCS_ENGINE_JOINER_CLASS = "docs-engine-joiner";
 /** The hyphen the engine draws at the end of a page cut's head that ends
  * inside a hyphenated word: read as text, the last piece of its line. */
 export const DOCS_ENGINE_HEAD_HYPHEN_CLASS = "docs-engine-head-hyphen";
@@ -709,6 +712,7 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
     if (node.tagName === "IMG" && node.classList.contains("ProseMirror-separator")) return;
     // The engine's own hyphen at a line it ends inside a word.
     if (node.classList.contains(DOCS_ENGINE_HYPHEN_CLASS)) return;
+    if (node.classList.contains(DOCS_ENGINE_JOINER_CLASS)) return;
     // JustifiedLineBreaks' filler moves a manual break onto a line of its
     // own so the line before it is justified: it takes no room of a line.
     if (node.classList.contains("mrnote-justified-break-filler")) return;
@@ -1907,6 +1911,37 @@ export function docsStretchDrawnWidth(paragraph: DocsParagraph, from: number, to
     at = end;
   }
   return total;
+}
+
+/**
+ * Where the browser must be kept from breaking that the engine does not
+ * break: closing punctuation before an opening bracket ("neutrino.[6]"), a
+ * question mark or an ellipsis before what follows it, an em dash after what
+ * is before it -- which Word keeps together and Chromium breaks (wordJoins).
+ * Only in the words either side of each engine line end, where the browser
+ * would break: the index of each such bracket's piece.
+ */
+export function docsBracketJoins(paragraph: DocsParagraph, starts: readonly number[]): number[] {
+  const pieces = paragraph.pieces;
+  const out: number[] = [];
+  const letter = (at: number) => pieces[at]?.kind === "text";
+  const scan = (from: number, to: number) => {
+    for (let at = Math.max(from, 1); at < to; at += 1) {
+      if (letter(at - 1) && letter(at) && wordJoins(pieces[at - 1].text, pieces[at].text, pieces[at - 2]?.text) && !out.includes(at)) out.push(at);
+    }
+  };
+  for (let line = 1; line < starts.length; line += 1) {
+    const start = starts[line];
+    let end = start;
+    while (end > 0 && (pieces[end - 1].kind === "space" || pieces[end - 1].kind === "break")) end -= 1;
+    let wordFrom = end;
+    while (wordFrom > 0 && letter(wordFrom - 1)) wordFrom -= 1;
+    let wordTo = start;
+    while (wordTo < pieces.length && letter(wordTo)) wordTo += 1;
+    scan(wordFrom, end);
+    scan(start, wordTo);
+  }
+  return out.sort((a, b) => a - b);
 }
 
 export interface DocsLineCorrection {

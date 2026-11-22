@@ -23,7 +23,6 @@
     "@mrnote/code": "*",
     "@mrnote/core": "*",
     "@mrnote/docs": "*",
-    "@mrnote/ink": "*",
     "@mrnote/sheets": "*",
     "lucide-react": "0.577.0",
     "modern-screenshot": "4.7.0",

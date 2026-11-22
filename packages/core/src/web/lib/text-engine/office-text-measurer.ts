@@ -30,6 +30,25 @@ export const PT_PER_PX = 0.75;
 
 const SYNTHETIC_BOLD_STEP_PT = 0.12;
 const SYNTHETIC_BOLD_STEP_FROM_PT = 16;
+
+
+
+
+
+
+
+
+
+
+
+const SYNTHETIC_BOLD_STEP_FACES: ReadonlySet<string> = new Set([
+  "simsun", "宋体", "simhei", "黑体", "kaiti", "楷体", "fangsong", "仿宋",
+  "ms gothic", "ｍｓ ゴシック", "ms mincho", "ｍｓ 明朝",
+  // MS PGothic, which Windows has in regular only (msgothic.ttc): the step from 16 pt (probe t20cjk, Windows'
+  
+  // 36 / 44 pt). Meiryo, Microsoft YaHei, Malgun Gothic and Yu Gothic have bold faces on Windows: not emboldened.
+  "ms pgothic", "ｍｓ ｐゴシック",
+]);
 const SYNTHETIC_BOLD_EM_BY_FAMILY: ReadonlyMap<string, number> = new Map([
   ["batang", -0.0086],
   ["batangche", -0.0086],
@@ -67,6 +86,7 @@ export function powerPointSyntheticBoldExtraPt(stack: string, sizePt: number): n
   const family = leadingFamily(stack).trim().replace(/^["']|["']$/g, "").toLowerCase();
   const em = SYNTHETIC_BOLD_EM_BY_FAMILY.get(family);
   if (em !== undefined) return em * sizePt;
+  if (!SYNTHETIC_BOLD_STEP_FACES.has(family)) return 0;
   return sizePt >= SYNTHETIC_BOLD_STEP_FROM_PT ? SYNTHETIC_BOLD_STEP_PT : 0;
 }
 

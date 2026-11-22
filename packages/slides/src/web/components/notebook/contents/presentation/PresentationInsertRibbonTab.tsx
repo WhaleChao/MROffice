@@ -33,7 +33,7 @@ import {
   IconInsertVideo,
   IconInsertMediaSource,
   IconInsertAudio,
-} from "@mrnote/core/web/components/notebook/contents/PresentationRibbonIcons.tsx";
+} from "../PresentationRibbonIcons";
 import {
   DropdownMenu,
   DropdownMenuTrigger,

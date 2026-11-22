@@ -8,6 +8,21 @@ import table from "./office-east-asian-faces.generated.json";
 const FACES = new Map<string, number | null>(
   Object.entries((table as { faces: Record<string, number | null> }).faces),
 );
+const LINES = new Map<string, readonly [number, number]>(
+  Object.entries((table as unknown as { lines?: Record<string, readonly [number, number]> }).lines ?? {}),
+);
+
+/**
+ * An East Asian Office face's GDI ascent and descent (its file's usWinAscent
+ * and usWinDescent), em; undefined for a face the table does not hold. Windows
+ * Excel lays a worksheet shape's line of such a face out on them (the API's
+ * office_east_asian_line; xlsx backlog bl8/lnex8-9): a single line 1.3 x their
+ * sum, its baseline three quarters down less (descent - 0.175 x the sum).
+ */
+export function officeEastAsianWinLine(fontFamily: unknown): { ascent: number; descent: number } | undefined {
+  const line = LINES.get(primaryFace(fontFamily));
+  return line ? { ascent: line[0], descent: line[1] } : undefined;
+}
 
 function primaryFace(fontFamily: unknown): string {
   return typeof fontFamily === "string"

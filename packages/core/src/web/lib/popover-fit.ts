@@ -3,6 +3,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { isDocumentRtl } from "./document-direction";
+
 /** Set on a menu while it is bounded by this observer. */
 export const POPOVER_FITTED_ATTRIBUTE = "data-popover-fitted";
 
@@ -344,7 +346,11 @@ function measureAndFit(element: HTMLElement): boolean {
   if (overflowsY && after.top < top) dy = top - after.top;
   else if (overflowsY && after.bottom > bottom) dy = Math.max(top - after.top, bottom - after.bottom);
   let dx = 0;
-  if (overflowsX && after.left < left) dx = left - after.left;
+  if (isDocumentRtl()) {
+    // An rtl interface keeps a menu's right (inline-start) edge in view first.
+    if (overflowsX && after.right > right) dx = right - after.right;
+    else if (overflowsX && after.left < left) dx = Math.min(right - after.right, left - after.left);
+  } else if (overflowsX && after.left < left) dx = left - after.left;
   else if (overflowsX && after.right > right) dx = Math.max(left - after.left, right - after.right);
   // (A shift never changes the menu's size, so Radix does not re-place it in
   // answer; under touch-mode zoom its placement can itself be off.)

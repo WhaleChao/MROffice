@@ -162,6 +162,10 @@ interface SubmitPageImportBatchInput {
   signal?: AbortSignal;
   /** Test seam and UI recovery tuning; production defaults to 250 ms. */
   recoveryDelayMs?: number;
+  /** Told the batch id the PUT goes out under (a recovered or replaced id
+   * included), once, as it goes out: the page a source operation makes is
+   * named by it (the API's ``_deterministic_import_page_id``). */
+  onSubmitting?: (batchId: string) => void;
 }
 
 function protocolError(message: string): never {
@@ -1021,6 +1025,9 @@ export async function submitPageImportBatch(
     let putAttempt = 0;
     while (putAttempt < 2) {
       try {
+        if (putAttempt === 0 && input.onSubmitting) {
+          try { input.onSubmitting(effectiveBatchId); } catch { /* an observer never stops the import */ }
+        }
         const response = await apiFetchRaw(
           path,
           {

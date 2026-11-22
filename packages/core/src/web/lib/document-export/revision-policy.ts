@@ -64,6 +64,8 @@ const OBJECT_DELETION_NODE_TYPES = new Set([
   "columnBreak",
   "sectionBreak",
   "horizontalRule",
+  // A field deleted with Track Changes on (reading generation 404).
+  "documentField",
 ]);
 // Persisted editor documents use the same depth ceiling. Keep this boundary
 // independent so legacy/corrupt rows cannot reach recursive browser exporters.

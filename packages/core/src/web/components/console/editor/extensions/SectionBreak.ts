@@ -290,6 +290,20 @@ const SectionBreak = Node.create({
         // omits the attribute entirely (byte-stable for pre-existing documents).
         renderHTML: () => ({}),
       },
+      // The space after (points) of the dedicated empty paragraph an imported
+      // continuous break was read from: Word takes it off the next section's
+      // first space before (paragraphSpacingAddsUp's CARRIER_GAP_ATTR).
+      carrierSpaceAfter: {
+        default: null,
+        parseHTML: (element) => {
+          const value = Number.parseFloat(element.getAttribute("data-carrier-space-after") ?? "");
+          return Number.isFinite(value) && value >= 0 && value <= 1584 ? value : null;
+        },
+        renderHTML: (attributes) =>
+          typeof attributes.carrierSpaceAfter === "number"
+            ? { "data-carrier-space-after": String(attributes.carrierSpaceAfter) }
+            : {},
+      },
     };
   },
 

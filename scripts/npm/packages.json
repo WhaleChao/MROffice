@@ -18,7 +18,7 @@
     "sheets": {
       "name": "mroffice-sheets",
       "label": "spreadsheet editor",
-      "description": "The MR Office spreadsheet editor for React: formulas, number formats, charts, sorting and filtering, many sheets, in the browser.",
+      "description": "The MR Office spreadsheet editor for React: formulas, number formats, cell styles, tables, charts, many sheets, in the browser.",
       "keywords": ["mroffice", "spreadsheet", "excel", "grid", "editor", "react"],
       "opens": ".mrsheet (the editor's own JSON), .csv, .tsv",
       "saves": ".mrsheet, or CSV/TSV for a CSV/TSV file"
@@ -34,23 +34,15 @@
     "pdf": {
       "name": "mroffice-pdf",
       "label": "PDF editor",
-      "description": "The MR Office PDF viewer and annotator for React: pages, thumbnails, search, comments and markup, in the browser.",
+      "description": "The MR Office PDF viewer for React: pages, thumbnails, search, presenting and comments, in the browser.",
       "keywords": ["mroffice", "pdf", "pdf-viewer", "annotation", "react"],
       "opens": ".pdf",
       "saves": "the PDF as it was opened (comments stay in the page)"
     },
-    "ink": {
-      "name": "mroffice-ink",
-      "label": "handwriting editor",
-      "description": "The MR Office handwriting editor for React: pressure-sensitive pens, highlighters, erasers, lasso and ruler on paged handwriting paper.",
-      "keywords": ["mroffice", "handwriting", "ink", "drawing", "stylus", "react"],
-      "opens": ".mrink (the editor's own JSON)",
-      "saves": ".mrink"
-    },
     "code": {
       "name": "mroffice-code",
       "label": "code editor",
-      "description": "The MR Office code editor for React: CodeMirror 6 with an Office-style ribbon, outline, formatting, problems, and JavaScript/TypeScript that runs in the browser.",
+      "description": "The MR Office code editor for React: CodeMirror 6 with an Office-style ribbon, outline, quick open, find and problems, in the browser.",
       "keywords": ["mroffice", "code-editor", "codemirror", "ide", "react"],
       "opens": "source and text files (.js .ts .py .sql .go .rs .md .json ...)",
       "saves": "the file as text"

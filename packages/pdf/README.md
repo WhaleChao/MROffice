@@ -12,11 +12,9 @@ This package is generated from MR Office's own source (see the repository README
 
 | Feature | Status |
 |---|---|
-| Open a PDF from this computer and read it: pages, zoom, single / two-page and continuous views, thumbnails, outline and bookmarks, read mode | Available |
-| Search the document's text (the magnifier in the title row: every match, by page, and a jump to it) | Available |
-| Presentation (Play, full screen) and Print (the browser's print) | Available |
-| Comments and markup on selected text (highlight, underline, strikethrough, squiggly), notes and the comments panel | Available while the file is open (kept in the page, not written into the file) |
-| Copy text, read aloud (the browser's speech) | Available |
-| Save / Download | The file as it was opened. Comments and other changes are not written into the PDF |
-| Edit text, pictures and shapes in place; insert, rotate, delete or reorder pages; fill and flatten forms; compress, watermark and background, redaction, encryption, PDF/A; conversion to Word / Excel / PowerPoint, Markdown export; version history | Not included: in MR Office these run in its PDF engine on the server, which is not part of the open-source editors. Use MR Office on the web or the desktop app |
-| OCR, screenshot text, translation, AI (Copilot) | Not included |
+| Open a PDF from this computer and read it: pages, zoom, single / two-page and continuous views, rotation, thumbnails, read mode | Available, verified |
+| Search the document's text and copy it | Available |
+| Present (full screen) and Print (the browser's print) | Available |
+| Comments while the file is open (the comments panel, text comments from Insert) | Available, kept in the page |
+| Save / Download | The file as it was opened |
+| Saving PDF edits back into the file | With the MR Office desktop app (free, [download](https://github.com/XinaTian/MROffice/releases)) or MR Office on the web |

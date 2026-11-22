@@ -8,7 +8,10 @@
 import { sheetWithPostedComment, sheetWithCommentResolveToggled, applyCellCommentChange, commentMessageOwnedBy } from "../../../../lib/spreadsheet/review-buttons";
 import { useCallback, type RefObject } from "react";
 import { spreadsheetReviewCommentWriterReceiptMatches } from "../../../../lib/spreadsheet/visible-command-authority";
-import { isThreadComment, type CommentMessage, type ThreadComment, editCommentMessage, deleteCommentReply } from "@mrnote/core/web/lib/spreadsheet/comments.ts";
+import { isNoteComment, isThreadComment, type CellComment, type CommentMessage, type ThreadComment, editCommentMessage, deleteCommentReply } from "@mrnote/core/web/lib/spreadsheet/comments.ts";
+import { writeEmbedComment, type EmbedCommentRequest } from "@mrnote/core/web/lib/embed/comment-session.ts";
+import { embedAllowsManagingComment } from "@mrnote/core/web/lib/embed/session-access.ts";
+import { toast } from "@mrnote/core/web/hooks/use-toast.ts";
 import { type SheetModel } from "./spreadsheetSheetModel";
 import { type ReviewCommentMutationReceipt, type PageSetupSelectionSnapshot, type ReviewCommentDialogAuthority, type LiveReviewCommentPageAuthority } from "./spreadsheetMutationReceipts";
 import { type SheetViewMappedCellMutation, type SheetViewMappedDrawingMutation, type SheetViewMappedLineMutation, type SheetViewMappedPageMutation } from "./spreadsheetSheetViews";
@@ -34,6 +37,67 @@ export interface SpreadsheetReviewCommentCommandsInputs {
   setCommentDraft: Dispatch<SetStateAction<string>>;
   setCommentEditDraft: Dispatch<SetStateAction<string>>;
   setCommentEditingIndex: Dispatch<SetStateAction<number | null>>;
+  /** An embed comment session (lib/embed/session-access embedCommentsMediated):
+   * the page is read only, and each comment gesture goes to the session's
+   * comment route instead of changing and saving the page. */
+  reviewCommentsMediated: boolean;
+  /** Puts the thread the comment route answered into the cell on screen,
+   * without saving or dirtying the page (null: the thread was deleted). */
+  applyMediatedReviewComment: (sheetId: string, cellKey: string, comment: ThreadComment | null) => boolean;
+  /** What a refused comment write says when the server gave no words. */
+  mediatedReviewCommentRefusedText: string;
+}
+
+/** One comment gesture on a workbook cell, as the editor's controls make it. */
+export type EmbedReviewCommentGesture =
+  | { readonly kind: "post"; readonly text: string }
+  | { readonly kind: "resolveToggle" }
+  | { readonly kind: "deleteThread" }
+  | { readonly kind: "edit"; readonly messageIndex: number; readonly text: string }
+  | { readonly kind: "deleteReply"; readonly messageIndex: number };
+
+/**
+ * The comment route's request for a gesture on the cell at `row`/`col` of the
+ * sheet `sheetId`, whose comment is `comment` now; null when the gesture is
+ * not one the route takes there. The route writes threads only (a note stays
+ * as the file has it), refuses a reply to a resolved thread as the editor
+ * does, and names a message by its id, or by its place in the thread when it
+ * has none (a thread read from a file before messages had ids).
+ */
+export function embedReviewCommentRequest(
+  sheetId: string,
+  row: number,
+  col: number,
+  comment: CellComment | undefined,
+  gesture: EmbedReviewCommentGesture,
+): EmbedCommentRequest | null {
+  if (!sheetId || comment?.nativeBlocker || isNoteComment(comment)) return null;
+  const anchor = { sheet: sheetId, cell: `${row}:${col}` };
+  // A thread holding only a draft has no message yet: its first post adds it.
+  const thread = isThreadComment(comment) && comment.thread.length > 0 ? comment : null;
+  switch (gesture.kind) {
+    case "post": {
+      const text = gesture.text.trim();
+      if (!text || thread?.done) return null;
+      return thread ? { op: "reply", anchor, text } : { op: "add", anchor, text };
+    }
+    case "resolveToggle":
+      return thread ? { op: thread.done ? "reopen" : "resolve", anchor } : null;
+    case "deleteThread":
+      return thread ? { op: "delete", anchor } : null;
+    case "edit": {
+      const message = thread?.thread[gesture.messageIndex];
+      const text = gesture.text.trim();
+      if (!thread || !message || thread.done || !text) return null;
+      return { op: "edit", anchor, message: message.id ?? gesture.messageIndex, text };
+    }
+    case "deleteReply": {
+      // The root message goes only with its thread (Delete thread).
+      const message = gesture.messageIndex > 0 ? thread?.thread[gesture.messageIndex] : undefined;
+      if (!message) return null;
+      return { op: "delete", anchor, message: message.id ?? gesture.messageIndex };
+    }
+  }
 }
 
 /** Moved verbatim from SpreadsheetWindow (called at the same position, so hook order is unchanged). */
@@ -55,7 +119,37 @@ export function useSpreadsheetReviewCommentCommands({
   setCommentDraft,
   setCommentEditDraft,
   setCommentEditingIndex,
+  reviewCommentsMediated,
+  applyMediatedReviewComment,
+  mediatedReviewCommentRefusedText,
 }: SpreadsheetReviewCommentCommandsInputs) {
+  // An embed comment session's gesture: the server decides its author and
+  // writes it to the page; the cell then shows the thread as the page holds
+  // it. Ids, authors and times built here are not used. The answer comes
+  // after the gesture returns, so `onDone` runs what the gesture's surface
+  // does once the comment is written (clear the composer, close the editor).
+  const writeMediatedReviewComment = useCallback(
+    (request: EmbedCommentRequest, onDone?: () => void): void => {
+      void writeEmbedComment<ThreadComment>(request).then((answer) => {
+        if (!answer.ok) {
+          toast({
+            variant: "destructive",
+            description: answer.message || mediatedReviewCommentRefusedText,
+          });
+          return;
+        }
+        const anchor = request.anchor as { sheet: string; cell: string };
+        applyMediatedReviewComment(
+          answer.result.sheet ?? anchor.sheet,
+          answer.result.cell ?? anchor.cell,
+          answer.result.comment,
+        );
+        onDone?.();
+      });
+    },
+    [applyMediatedReviewComment, mediatedReviewCommentRefusedText],
+  );
+
   const executeReviewCommentReceiptWriter = useCallback(
     (
       expectedControlId: ReviewCommentMutationReceipt["controlId"],
@@ -118,6 +212,40 @@ export function useSpreadsheetReviewCommentCommands({
         }
         const row = liveSelection.active.row;
         const col = liveSelection.active.col;
+        if (reviewCommentsMediated) {
+          const root = isThreadComment(liveComment) ? liveComment.thread[0] : undefined;
+          // Resolving or deleting another person's thread needs the
+          // session's manageComments (the server refuses it too).
+          if (
+            expectedControlId !== "XLSCTL.REVIEW.COMMENT.POST" &&
+            root &&
+            !commentMessageOwnedBy(root, receipt.actorId, receipt.actorName) &&
+            !embedAllowsManagingComment(root.author, receipt.actorName)
+          ) {
+            return false;
+          }
+          const request = embedReviewCommentRequest(
+            liveSheet.id,
+            row,
+            col,
+            liveComment,
+            expectedControlId === "XLSCTL.REVIEW.COMMENT.POST"
+              ? { kind: "post", text: receipt.parameter }
+              : expectedControlId === "XLSCTL.REVIEW.COMMENT.RESOLVE_TOGGLE"
+                ? { kind: "resolveToggle" }
+                : { kind: "deleteThread" },
+          );
+          if (!request) return false;
+          writeMediatedReviewComment(
+            request,
+            expectedControlId === "XLSCTL.REVIEW.COMMENT.POST"
+              ? () => setCommentDraft("")
+              : expectedControlId === "XLSCTL.REVIEW.COMMENT.DELETE"
+                ? closeCellCommentSurface
+                : undefined,
+          );
+          return true;
+        }
         if (expectedControlId === "XLSCTL.REVIEW.COMMENT.POST") {
           const posted = sheetWithPostedComment(
             liveSheet,
@@ -152,7 +280,7 @@ export function useSpreadsheetReviewCommentCommands({
         reviewCommentMutationCommandRef.current = null;
       }
     },
-    [closeCellCommentSurface, readPageSetupSelectionSnapshot, replaceActiveSheet],
+    [closeCellCommentSurface, readPageSetupSelectionSnapshot, replaceActiveSheet, reviewCommentsMediated, writeMediatedReviewComment],
   );
 
   const reviewCommentMessageOwnedByActor = useCallback(
@@ -254,6 +382,23 @@ export function useSpreadsheetReviewCommentCommands({
         setCommentEditDraft("");
         return;
       }
+      if (reviewCommentsMediated) {
+        const request = embedReviewCommentRequest(
+          live.liveSheet.id,
+          live.row,
+          live.col,
+          live.comment,
+          { kind: "edit", messageIndex, text: commentEditDraft },
+        );
+        if (!request) return;
+        // The editor stays open until the server takes the edit, so a
+        // refused one keeps the words typed.
+        writeMediatedReviewComment(request, () => {
+          setCommentEditingIndex(null);
+          setCommentEditDraft("");
+        });
+        return;
+      }
       replaceActiveSheet(
         applyCellCommentChange(live.liveSheet, live.row, live.col, () =>
           nextComment,
@@ -273,6 +418,8 @@ export function useSpreadsheetReviewCommentCommands({
       replaceActiveSheet,
       resolveLiveReviewCommentMutation,
       reviewCommentMessageOwnedByActor,
+      reviewCommentsMediated,
+      writeMediatedReviewComment,
     ],
   );
 
@@ -290,6 +437,21 @@ export function useSpreadsheetReviewCommentCommands({
       }
       const nextComment = deleteCommentReply(live.comment, messageIndex);
       if (!nextComment || nextComment === live.comment) return;
+      if (reviewCommentsMediated) {
+        const request = embedReviewCommentRequest(
+          live.liveSheet.id,
+          live.row,
+          live.col,
+          live.comment,
+          { kind: "deleteReply", messageIndex },
+        );
+        if (!request) return;
+        writeMediatedReviewComment(request, () => {
+          setCommentEditingIndex(null);
+          setCommentEditDraft("");
+        });
+        return;
+      }
       replaceActiveSheet(
         applyCellCommentChange(live.liveSheet, live.row, live.col, () =>
           nextComment,
@@ -301,6 +463,8 @@ export function useSpreadsheetReviewCommentCommands({
       replaceActiveSheet,
       resolveLiveReviewCommentMutation,
       reviewCommentMessageOwnedByActor,
+      reviewCommentsMediated,
+      writeMediatedReviewComment,
     ],
   );
   return {

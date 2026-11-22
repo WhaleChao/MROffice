@@ -2433,6 +2433,20 @@ export const spreadsheetSheetSchema = z
       )
       .max(MAX_GRID_COLUMN_SIZE_OVERRIDES)
       .optional(),
+    // Reading 998 (xlsx-rounds R474-X20): which hidden rows the file writes
+    // 0 points high (ht="0"), a subset of manuallyHiddenRows. A filter that
+    // shows its rows (a criterion met, Clear, Filter off) leaves them hidden,
+    // as Windows Excel 16 does (lib/spreadsheet/filter-buttons).
+    zeroHeightRows: z
+      .array(
+        z
+          .number()
+          .int()
+          .min(0)
+          .max(MAX_GRID_ROWS - 1),
+      )
+      .max(MAX_GRID_ROW_SIZE_OVERRIDES)
+      .optional(),
     // The rows the sheet's filters hid when they were last applied, and what
     // they asked then (lib/spreadsheet/filter-result): an edited value does
     // not filter again, as in Excel.

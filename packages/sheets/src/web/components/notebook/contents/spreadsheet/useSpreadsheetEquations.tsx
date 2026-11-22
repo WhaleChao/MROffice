@@ -49,7 +49,7 @@ import type {
 } from "@mrnote/core/web/components/console/editor/extensions/visualMathEditor.ts";
 import type { EquationInputMode, EquationLayoutMode } from "@mrnote/core/web/components/console/editor/extensions/equationCatalog.ts";
 import type { EquationInPlaceCommitVia } from "@mrnote/core/web/components/office-equation/EquationInPlaceEditor.tsx";
-import type { EquationDraftCommand } from "@mrnote/core/web/components/office-equation/officeEquationDraftAdapter.ts";
+import type { EquationDraftCommand } from "@/components/office-equation/officeEquationDraftAdapter";
 import {
   OFFICE_FIELD_EQUATION_ENTER_EVENT,
   type OfficeFieldEquationEnterDetail,

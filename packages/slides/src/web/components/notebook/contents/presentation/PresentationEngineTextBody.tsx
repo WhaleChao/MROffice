@@ -24,7 +24,7 @@
  * plan, `lib/text-engine/PLAN-phase2.md`); the canvas follows with its caret.
  */
 
-import { createContext, Fragment, memo, useCallback, useContext, useEffect, useId, useMemo, useState, useSyncExternalStore, type CSSProperties, type ReactElement } from "react";
+import { createContext, Fragment, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import {
   layoutOfficeTextBody,
   type OfficeParagraphInput,
@@ -53,6 +53,7 @@ import {
   subscribeOfficeTextOutlineGlyphs,
 } from "@mrnote/core/web/lib/office-text-outline/office-text-outline-css.ts";
 import { textEngineOn } from "@mrnote/core/web/lib/text-engine/page-adapter.ts";
+import { snapEngineSvgRoot } from "@mrnote/core/web/lib/text-engine/svg-root-snap.ts";
 import type { TextRun } from "@mrnote/core/web/lib/presentation-point-runs.ts";
 import { normalizePresentationTabStops } from "../../../../lib/presentation-tab-stops";
 import { cssTextShadowParts, powerPointTextShadowParts, PRESENTATION_SCRIPT_SCALE, runStyleCss, TEXT_SHADOW_BASE_PROPERTY, type PresentationFontSizeUnit } from "../../../../lib/presentation/text-layout-css";
@@ -711,6 +712,26 @@ export const ENGINE_SVG_STYLE: CSSProperties = {
   direction: "ltr",
 };
 
+/**
+ * The engine's `<svg>` root, its drawing in an inner group that takes back the
+ * fraction of a pixel the browser's snap of the root would take from it
+ * (`snapEngineSvgRoot`): the words on screen and in print where the engine
+ * laid them.
+ */
+export function EngineSvgRoot({ children, testId }: { children: ReactNode; testId?: string }): ReactElement {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const groupRef = useRef<SVGGElement>(null);
+  // Every draw: its words or its place may have moved.
+  useLayoutEffect(() => {
+    if (svgRef.current && groupRef.current) return snapEngineSvgRoot(svgRef.current, groupRef.current);
+  });
+  return (
+    <svg ref={svgRef} data-testid={testId} style={ENGINE_SVG_STYLE}>
+      <g ref={groupRef} data-engine-snap="">{children}</g>
+    </svg>
+  );
+}
+
 
 
 
@@ -1208,12 +1229,7 @@ export function PresentationEngineTextBody({
       
       style={{ position: "relative", width: "100%", height: px(layout.height), flexShrink: 0, ...(overlay ? { userSelect: "none" as const } : {}) }}
     >
-      <svg
-        data-testid="presentation-engine-text-svg"
-        style={ENGINE_SVG_STYLE}
-      >
-        {nodes}
-      </svg>
+      <EngineSvgRoot testId="presentation-engine-text-svg">{nodes}</EngineSvgRoot>
     </div>
   );
 }

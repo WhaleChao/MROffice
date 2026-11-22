@@ -775,11 +775,28 @@ function watchNoteMarkers(editor: NodeViewProps["editor"], refresh: () => void):
   };
 }
 
+/** `window.__docsNoteRefTextOff = true` (A/B, read as a reference's view is
+ * made): the number is drawn in a <button> again, the older view. */
+function noteRefTextOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsNoteRefTextOff?: boolean }).__docsNoteRefTextOff === true;
+}
+
 /**
  * The in-text footnote marker. Paints the LIVE auto-number derived from this ref's
  * position among all footnoteRef nodes (so inserting/deleting earlier notes
  * renumbers automatically), and on click scrolls to the matching note body in the
  * list. The number is never stored — always recomputed from document order.
+ *
+ * The number is drawn as text of its line, as Word's reference mark is a run of
+ * its paragraph: Windows Word keeps "word¹.", "word¹ and", "word.¹" and an
+ * endnote's "wordⁱ." whole and takes them to the next line together, breaking
+ * only at a space ("word ¹" breaks before the mark; docx-look/brk17/probes fn1,
+ * 120 paragraphs at right indents 0-380 twips). Drawn in a <button> -- an
+ * atomic inline, which the browser and the line engine reading it break before
+ * and after -- a reference at a line's end went down alone, "production / ²³⁴ /
+ * . Nevertheless" (corpus R460-D16), and the engine read no paragraph holding
+ * one without its layout. It is still a button to the keyboard and to
+ * assistive technology.
  */
 function createFootnoteRefView({ editor, node: initial }: Pick<NodeViewProps, "editor" | "node">): NodeView {
   let node = initial;
@@ -788,8 +805,13 @@ function createFootnoteRefView({ editor, node: initial }: Pick<NodeViewProps, "e
   dom.setAttribute("data-type", "footnote-ref");
   dom.setAttribute("data-testid", "footnote-ref");
   dom.style.whiteSpace = "normal";
-  const marker = document.createElement("button");
-  marker.type = "button";
+  const asButton = noteRefTextOff();
+  const marker = document.createElement(asButton ? "button" : "span");
+  if (marker instanceof HTMLButtonElement) marker.type = "button";
+  else {
+    marker.setAttribute("role", "button");
+    marker.tabIndex = 0;
+  }
   marker.className = "mrnote-footnote-ref__marker";
   marker.contentEditable = "false";
   dom.append(marker);
@@ -812,7 +834,7 @@ function createFootnoteRefView({ editor, node: initial }: Pick<NodeViewProps, "e
   paint();
   const unwatch = watchNoteMarkers(editor, paint);
 
-  marker.addEventListener("click", () => {
+  const jump = () => {
     const id = noteId();
     if (!id) return;
     // Move focus to the note body in the list (scroll it into view).
@@ -833,7 +855,17 @@ function createFootnoteRefView({ editor, node: initial }: Pick<NodeViewProps, "e
     };
     view.addEventListener("mousedown", swallow, true);
     window.setTimeout(() => view.removeEventListener("mousedown", swallow, true), 500);
-  });
+  };
+  marker.addEventListener("click", jump);
+  // A button's own keys, for the marker drawn as text.
+  if (!asButton) {
+    marker.addEventListener("keydown", (event) => {
+      const { key } = event as KeyboardEvent;
+      if (key !== "Enter" && key !== " ") return;
+      event.preventDefault();
+      jump();
+    });
+  }
 
   return {
     dom,

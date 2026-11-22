@@ -36,6 +36,11 @@ export function OfficeChartDataTableGrid({
   plotSpan,
   openCorner = false,
   keyShapes,
+  rowHeightsPx,
+  wrapNames = false,
+  nameLines,
+  headerLines = 1,
+  keyPx = 6,
 }: {
   table: OfficeChartDataTable;
   /** Each series' legend key colour, by the series' place. */
@@ -65,8 +70,21 @@ export function OfficeChartDataTableGrid({
   /** Each series' key when it is the legend's line (and marker) rather than
    * the filled square, by the series' place. */
   keyShapes?: readonly ({ line: true; marker?: string } | undefined)[];
+  /** Each row's own height, px (the categories' row first): a deck's table,
+   * whose series rows grow by the lines a wrapped name takes. */
+  rowHeightsPx?: readonly number[];
+  /** The series names wrap in their column instead of being cut (PowerPoint). */
+  wrapNames?: boolean;
+  /** With `wrapNames`: the lines each series' name takes (a one-line name never wraps). */
+  nameLines?: readonly number[];
+  /** The lines the header row's category names may take (more than one: they wrap). */
+  headerLines?: number;
+  /** A filled legend key's side, px. */
+  keyPx?: number;
 }) {
   const rowStyle: CSSProperties = { height: rowPx };
+  const rowStyleAt = (row: number): CSSProperties =>
+    typeof rowHeightsPx?.[row] === "number" ? { height: rowHeightsPx[row] } : rowStyle;
   const rows = table.series.length + 1;
   const columns = table.categories.length + 1;
   // A table that states its frame's colour rules its cells in it too.
@@ -138,10 +156,15 @@ export function OfficeChartDataTableGrid({
           </colgroup>
         ) : null}
         <thead>
-          <tr style={rowStyle}>
+          <tr style={rowStyleAt(0)}>
             <th scope="col" style={edges(0, 0)} />
             {table.categories.map((category, index) => (
-              <th key={`${index}:${category}`} scope="col" title={category} style={edges(0, index + 1)}>
+              <th
+                key={`${index}:${category}`}
+                scope="col"
+                title={category}
+                style={{ ...edges(0, index + 1), ...(headerLines > 1 ? { whiteSpace: "normal", textOverflow: "clip" } : {}) }}
+              >
                 {filled(category)}
               </th>
             ))}
@@ -149,8 +172,18 @@ export function OfficeChartDataTableGrid({
         </thead>
         <tbody>
           {table.series.map((series, seriesIndex) => (
-            <tr key={`${seriesIndex}:${series.name}`} style={rowStyle}>
-              <th scope="row" title={series.name} style={{ ...edges(seriesIndex + 1, 0), textAlign: "left" }}>
+            <tr key={`${seriesIndex}:${series.name}`} style={rowStyleAt(seriesIndex + 1)}>
+              <th
+                scope="row"
+                title={series.name}
+                style={{
+                  ...edges(seriesIndex + 1, 0),
+                  textAlign: "left",
+                  ...(wrapNames && (nameLines?.[seriesIndex] ?? 2) > 1
+                    ? { whiteSpace: "normal", textOverflow: "clip", overflowWrap: "anywhere" }
+                    : {}),
+                }}
+              >
                 {table.legendKeys && keyShapes?.[seriesIndex]?.line ? (
                   <svg
                     aria-hidden="true"
@@ -175,8 +208,8 @@ export function OfficeChartDataTableGrid({
                     data-testid={keyTestId}
                     style={{
                       display: "inline-block",
-                      width: 6,
-                      height: 6,
+                      width: keyPx,
+                      height: keyPx,
                       marginRight: 3,
                       verticalAlign: "middle",
                       background: colors[seriesIndex] ?? "#64748b",

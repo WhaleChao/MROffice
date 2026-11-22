@@ -554,6 +554,37 @@ img.ProseMirror-separator {
   margin: 0;
 }
 
+/* An In Line with Text picture on an EXACT line: Word sets the line at its
+   value whatever the picture's height, stands the picture's bottom on the
+   line's baseline and clips it to the line -- only the part from the line's
+   top down to the baseline shows (Windows Word 16, docx-look pc8/probes/ex:
+   a 200 pt picture alone on an Exactly 18 pt line takes 18 pt and shows a
+   14.4 pt strip, 0.8 of the line; in a line of words the same; corpus
+   R472-D78: a 671 pt picture's paragraph 18 pt of its page). Its box rises
+   above the baseline by nothing, so the line keeps its strut (the engine
+   reads the same margins, docs-lines unlaidInlinePicture), and its image is
+   cut to the line's top. `--picture-box-height` is the node view's stated
+   height. */
+@property --doc-exact-line-ascent {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+.note-editor-content.note-editor-content :is(p, h1, h2, h3, h4, h5, h6)[data-line-height-pt]:not([data-line-height-rule="atLeast"])
+  .note-editor-image-resizable[data-inline-picture="true"][data-exact-line-picture] {
+  margin-top: calc(-1 * var(--page-fit-image-height, var(--picture-box-height, 0px)));
+  margin-bottom: 0;
+}
+@supports (height: 1lh) {
+  .note-editor-content :is(p, h1, h2, h3, h4, h5, h6)[data-line-height-pt]:not([data-line-height-rule="atLeast"]) {
+    --doc-exact-line-ascent: 0.8lh;
+  }
+  .note-editor-content.note-editor-content :is(p, h1, h2, h3, h4, h5, h6)[data-line-height-pt]:not([data-line-height-rule="atLeast"])
+    .note-editor-image-resizable[data-inline-picture="true"][data-exact-line-picture] > img {
+    clip-path: inset(max(0px, calc(100% - var(--doc-exact-line-ascent))) 0 0 0);
+  }
+}
+
 /* A caret PARKED beside an in-line block object (margin click, Escape, the
    arrow/gutter escape from a display equation) is drawn on the object's own
    line -- where Word shows it -- instead of at the neighbouring paragraph's
@@ -6637,8 +6668,25 @@ br[data-docx-break-run-marks] {
 .ProseMirror [data-math-alone] > br.ProseMirror-trailingBreak {
   display: none;
 }
-.ProseMirror [data-math-alone] > .mrnote-formatting-mark:is(.mrnote-formatting-mark--pilcrow, .mrnote-formatting-mark--cellEnd) {
-  position: absolute;
+/* So does ProseMirror's separator after the equation (an <img> it places
+   after a last inline atom, for the caret): after the display equation's
+   block it opened a line of its own, one paragraph line tall. Every table
+   row whose cell holds an equation alone was a line taller than Word's (the
+   QM guide's formula table: a 19.3 px empty line under each symbol, 35 pt
+   rows to Word's 20, the symbol at the top of its cell and the table cut
+   two rows early). Out of the flow it still holds the caret's place. The
+   repeated attribute outranks the line-box shift (`.document-auto-linebox
+   [data-line-height] > :not([style*="position: absolute"])`: position
+   relative, specificity 0,4,2), which kept the separator and the mark in the
+   flow of every such paragraph with Word line spacing, a table cell's among
+   them; `top: auto` drops its shift, which would move an absolute box. The
+   mark's own inline style (formattingMarksExtension ZERO_LAYOUT_WIDGET_STYLE,
+   position: relative) yields only to `!important`: a zero-size inline-block
+   still holds a line up by itself. */
+.ProseMirror :is(p, h1, h2, h3, h4, h5, h6)[data-math-alone][data-math-alone][data-math-alone]
+  > :is(img.ProseMirror-separator, .mrnote-formatting-mark--pilcrow, .mrnote-formatting-mark--cellEnd) {
+  position: absolute !important;
+  top: auto;
 }
 
 .math-block-preview[data-word-math-box]::before {
@@ -13248,14 +13296,16 @@ mark[data-highlight-color]:not([data-highlight-shading="true"]) :is([data-char-s
 }
 
 .note-editor-content .mrnote-tc-object-deletion[data-tc-object-kind="equation"],
-.note-editor-content .mrnote-tc-object-deletion[data-tc-object-kind="noteReference"] {
+.note-editor-content .mrnote-tc-object-deletion[data-tc-object-kind="noteReference"],
+.note-editor-content .mrnote-tc-object-deletion[data-tc-object-kind="field"] {
   color: var(--console-danger, #dc2626);
   text-decoration: line-through;
   text-decoration-color: var(--console-danger, #dc2626);
 }
 
 .note-editor-content .mrnote-tc-object-deletion[data-tc-object-kind="equation"]::after,
-.note-editor-content .mrnote-tc-object-deletion[data-tc-object-kind="noteReference"]::after {
+.note-editor-content .mrnote-tc-object-deletion[data-tc-object-kind="noteReference"]::after,
+.note-editor-content .mrnote-tc-object-deletion[data-tc-object-kind="field"]::after {
   content: none;
 }
 
@@ -17392,6 +17442,170 @@ mark[data-highlight-color]:not([data-highlight-shading="true"]) :is([data-char-s
   margin: 1.5rem 0 !important;
   border-top-style: dotted !important;
 }
+/* The paper the paginator writes on each sheet (its inline width, padding
+   and page height) and its column flows are the Print Layout's: Web Layout
+   wraps against the window, so they give way here. Before, a sheet kept its
+   794 px paper width and margins inside a phone's 375 px window (every line
+   ran off the right edge), and a two-column section kept its absolutely
+   placed tracks, the second column standing past the window. Word shows no
+   columns in Web Layout either ("To see columns, switch to Print Layout",
+   Microsoft Support, Add or remove columns in a document). */
+.note-editor-body-main--sheeted[data-document-view-mode="web"]
+  .note-editor-content
+  > article[data-page-sheet] {
+  width: 100% !important;
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 0 !important;
+  column-count: 1 !important;
+  column-gap: normal !important;
+  column-rule: none !important;
+}
+.note-editor-body-main--sheeted[data-document-view-mode="web"]
+  .note-editor-content
+  > article[data-page-sheet][data-page-unequal-column-flow="true"] {
+  background-image: none !important;
+}
+.note-editor-body-main--sheeted[data-document-view-mode="web"]
+  .note-editor-content
+  > article[data-page-sheet][data-page-unequal-column-flow="true"]
+  > * {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  width: auto !important;
+  clip-path: none !important;
+}
+/* A phone's Web Layout is its reading view (Word's Mobile View, ONLYOFFICE's
+   mobile "Mobile view"): a picture, a shape, a chart or a text box placed on
+   the page stands in the text's flow where it is anchored, centred and no
+   wider than the screen, instead of over the reflowed lines at its page
+   position. The file keeps every placement; only this view flows them.
+   An overlay object's wrapper is a zero-height box at its anchor (Print
+   Layout's In Front Of Text), so here it takes the height of what it holds:
+   lib/docs/mobile-web-fit.ts measures what each one holds and writes
+   --mobile-web-fit-shift / --mobile-web-fit-scale (the drawing brought to the
+   wrapper's left edge, and scaled down when it is wider than the screen) and
+   --mobile-web-fit-height (the room it then takes in the flow). */
+@media (max-width: 600px) {
+  .note-editor-body-main--sheeted[data-document-view-mode="web"]
+    .note-editor-content
+    [data-float-mode] {
+    position: relative !important;
+    inset: auto !important;
+    transform: none !important;
+    float: none !important;
+    max-width: 100% !important;
+    height: var(--mobile-web-fit-height, auto) !important;
+    margin: 12px auto !important;
+  }
+  .note-editor-body-main--sheeted[data-document-view-mode="web"]
+    .note-editor-content
+    [data-float-mode]
+    > * {
+    transform-origin: 0 0;
+    translate: var(--mobile-web-fit-shift, 0 0) !important;
+    scale: var(--mobile-web-fit-scale, 1) !important;
+  }
+  /* A text box's words wrap at the screen, as the body's do: its frame
+     drops its page width and position (a warped-text box keeps its drawing,
+     which the fit above scales). */
+  .note-editor-body-main--sheeted[data-document-view-mode="web"]
+    .note-editor-content
+    .mrnote-text-box[data-float-mode]:not(:has(> [data-office-text-warp-source]))
+    > :is(.mrnote-text-box__frame, .mrnote-text-box__chrome) {
+    position: relative !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  .note-editor-body-main--sheeted[data-document-view-mode="web"]
+    .note-editor-content
+    .mrnote-text-box[data-float-mode]:not(:has(> [data-office-text-warp-source]))
+    > .mrnote-text-box__chrome {
+    position: absolute !important;
+    inset: 0 !important;
+  }
+  /* The box's page insets and its paragraphs' page indents were measured
+     for its page width (a banner box 797 px wide with 162 px right indents
+     left a phone no line at all): at the screen's width the words keep a
+     small inset and lose the side indents, as the reading view of Word does. */
+  .note-editor-body-main--sheeted[data-document-view-mode="web"]
+    .note-editor-content
+    .mrnote-text-box[data-float-mode]:not(:has(> [data-office-text-warp-source]))
+    > .mrnote-text-box__frame {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+  .note-editor-body-main--sheeted[data-document-view-mode="web"]
+    .note-editor-content
+    .mrnote-text-box[data-float-mode]:not(:has(> [data-office-text-warp-source]))
+    > .mrnote-text-box__frame
+    p {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+}
+html[data-mobile-layout="on"]
+  .note-editor-body-main--sheeted[data-document-view-mode="web"]
+  .note-editor-content
+  [data-float-mode] {
+  position: relative !important;
+  inset: auto !important;
+  transform: none !important;
+  float: none !important;
+  max-width: 100% !important;
+  height: var(--mobile-web-fit-height, auto) !important;
+  margin: 12px auto !important;
+}
+html[data-mobile-layout="on"]
+  .note-editor-body-main--sheeted[data-document-view-mode="web"]
+  .note-editor-content
+  [data-float-mode]
+  > * {
+  transform-origin: 0 0;
+  translate: var(--mobile-web-fit-shift, 0 0) !important;
+  scale: var(--mobile-web-fit-scale, 1) !important;
+}
+html[data-mobile-layout="on"]
+  .note-editor-body-main--sheeted[data-document-view-mode="web"]
+  .note-editor-content
+  .mrnote-text-box[data-float-mode]:not(:has(> [data-office-text-warp-source]))
+  > :is(.mrnote-text-box__frame, .mrnote-text-box__chrome) {
+  position: relative !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+html[data-mobile-layout="on"]
+  .note-editor-body-main--sheeted[data-document-view-mode="web"]
+  .note-editor-content
+  .mrnote-text-box[data-float-mode]:not(:has(> [data-office-text-warp-source]))
+  > .mrnote-text-box__chrome {
+  position: absolute !important;
+  inset: 0 !important;
+}
+html[data-mobile-layout="on"]
+  .note-editor-body-main--sheeted[data-document-view-mode="web"]
+  .note-editor-content
+  .mrnote-text-box[data-float-mode]:not(:has(> [data-office-text-warp-source]))
+  > .mrnote-text-box__frame {
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+html[data-mobile-layout="on"]
+  .note-editor-body-main--sheeted[data-document-view-mode="web"]
+  .note-editor-content
+  .mrnote-text-box[data-float-mode]:not(:has(> [data-office-text-warp-source]))
+  > .mrnote-text-box__frame
+  p {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
 .note-editor-body-main--sheeted[data-document-view-mode="web"] .sheet-parity-blank-overlay,
 .note-editor-body-main--sheeted[data-document-view-mode="web"] .document-line-number-overlay,
 .note-editor-body-main--sheeted[data-document-view-mode="web"] .sheet-band-overlay,
@@ -17805,16 +18019,7 @@ span.document-auto-linebox .document-auto-line-fraction,
 .note-editor-content :is(p, h1, h2, h3, h4, h5, h6)[data-document-auto-intermediates="true"] span:not(.document-auto-linebox):not(.document-auto-line-fraction):not(.document-word-linebox):not(.document-word-line-fraction):not(span.document-auto-linebox *):not(span.document-auto-line-fraction *):not(span.document-word-linebox *):not(span.document-word-line-fraction *):not(.katex):not(.katex *) {
   line-height: 0 !important;
 }
-/* A raised or lowered run (`data-text-position`, Word's w:position) and the
-   format wrappers inside a superscript or subscript take no line of their
-   own in a projected paragraph: its leaves own the line height
-   (documentAutoLineSpacing gives a positioned leaf its face's line and the
-   line's height a strut at its top). Such a paragraph holds no
-   intermediates proof (`sub`, `sup` are non-text layout there), so each
-   wrapper inherited the paragraph's whole line, centred on the script's
-   smaller face or moved with the run, and stretched every line it stood on:
-   corpus R283-D02, "CaCO3" in a Subscript style lowered 2 pt under an At
-   least 14 pt line, 22 px lines for Word's 18.67. */
+ 
 .note-editor-content :is(p, h1, h2, h3, h4, h5, h6).document-auto-linebox [data-text-position]:not(.document-auto-linebox, .document-auto-line-fraction, span.document-auto-linebox *, span.document-auto-line-fraction *),
 .note-editor-content :is(p, h1, h2, h3, h4, h5, h6).document-auto-linebox :is(sub, sup, [data-text-position]) span:not(.document-auto-linebox, .document-auto-line-fraction, .document-word-linebox, .document-word-line-fraction, span.document-auto-linebox *, span.document-auto-line-fraction *, span.document-word-linebox *, span.document-word-line-fraction *) {
   line-height: 0;
@@ -19040,6 +19245,63 @@ span.document-auto-linebox .document-auto-line-fraction,
 .office-ribbon-skin[data-ribbon-collapsed="true"] [data-ribbon-strip-host] {
   height: auto !important;
   min-height: 0 !important;
+}
+
+/* The compact chrome (a phone, an embedded mobile editor: lib/narrow-window
+   COMPACT_CHROME_QUERY): the ribbon is its tab row, and a tab shows its
+   commands over the page (data-ribbon-peek, OfficeRibbonChassis) -- the page
+   below keeps its place, as under Office's "Show Tabs Only". */
+/* The frame clips its children to its rounded edge (overflow: clip above):
+   the band standing out below it is not clipped while it shows. */
+.office-ribbon-skin.office-ribbon-skin[data-ribbon-peek] {
+  overflow: visible !important;
+}
+.office-ribbon-skin[data-ribbon-peek] [data-ribbon-strip-host] {
+  position: absolute !important;
+  left: -1px;
+  right: -1px;
+  top: calc(100% - 1px);
+  z-index: 80;
+  background: var(--office-ribbon-surface, #ffffff);
+  border: 1px solid var(--docs-ribbon-border, #d8ebe8);
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  box-shadow: 0 16px 32px rgb(15 23 42 / 18%);
+  animation: office-ribbon-peek-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes office-ribbon-peek-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .office-ribbon-skin[data-ribbon-peek] [data-ribbon-strip-host] {
+    animation: none;
+  }
+}
+
+/* Tabs only, the tab row keeps the title row's commands in view: the tab
+   list scrolls under a finger (no pagers), and Undo, Redo, Save and More
+   (OfficeEditorActionRail's compact face) never shrink away. */
+.office-ribbon-skin[data-ribbon-compact] .note-editor-ribbon-tabs__pager {
+  display: none !important;
+}
+/* (!important: an editor's own row keeps a floor of ~3 tabs for the full
+   ribbon -- the deck's 200px -- which would push More off a phone's row.) */
+.office-ribbon-skin[data-ribbon-compact] .note-editor-ribbon-tabs__list {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+.office-ribbon-skin[data-ribbon-compact] .note-editor-ribbon-quick {
+  flex: 0 0 auto !important;
+  margin-left: auto;
+  /* Its few buttons fit: nothing to scroll, and a finger's hit area
+     (styles/touch-hit-area.css) is not clipped at the row's end. */
+  overflow: visible;
 }
 
 /* Title-row quick-action strip (tab row's right edge). Clips instead of

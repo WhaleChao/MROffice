@@ -17,6 +17,16 @@
  * proof names is the one deleted -- only when it is as long as the span the
  * edit took, in the stream that drew it: the same run, not a longer or a
  * shorter cut of it. Anything less is not aimed at.
+ *
+ * On the same content the server rewrote as another file (a consolidation
+ * of the page's revisions: its streams numbered anew) a run that no longer
+ * reads as its selection is still the edit's to delete where the delete
+ * named it: a line made a box is deleted show by show, and the line it
+ * was proven as reads no more once its first shows are gone. Its span is
+ * kept, and its stream is the one of these bytes whose every byte before
+ * the span and after it is the stream the edit's own output wrote
+ * (`sameContentStreams`): the content the edit was planned on, byte for
+ * byte, but for the span. One such stream, or none is aimed at.
  */
 import { pdfNativeListTextSourceRunSpan } from "./engine/native/list-text-model";
 import type { PdfNativeListTextSelectionEvidence, PdfNativeListTextSelectionProof } from "./engine/native/list-text-fidelity";
@@ -69,6 +79,12 @@ export async function standPdfNativeTextObjectDeleteOn(input: Readonly<{
   /** The planner's proof of a selection on those bytes. */
   prove: (selection: PdfNativeListTextSelectionEvidence) =>
     Promise<Pick<PdfNativeListTextSelectionProof, "evidence" | "sourceRun" | "target"> | null>;
+  /** With `sameContent`: the page's content streams of those bytes, and of
+   * the bytes the edit wrote when it was planned (its own output). */
+  sameContentStreams?: () => Promise<Readonly<{
+    saved: readonly Readonly<{ ref: Readonly<{ objectNumber: number; generation: number }>; bytes: Uint8Array }>[];
+    planned: readonly Uint8Array[];
+  }> | null>;
 }>): Promise<PdfNativeTextDeleteStanding> {
   const payload = input.payload && typeof input.payload === "object" && !Array.isArray(input.payload)
     ? input.payload as { direction?: unknown; selection?: { runSpan?: { start?: unknown; end?: unknown };
@@ -83,7 +99,15 @@ export async function standPdfNativeTextObjectDeleteOn(input: Readonly<{
   const found = await input.find(made);
   const proven = found ? await input.prove(found).catch(() => null) : null;
   const runSpan = pdfNativeListTextSourceRunSpan(proven);
-  if (!proven || !runSpan || !proven.evidence.selection) return notFound;
+  if (!proven || !runSpan || !proven.evidence.selection) {
+    const stood = input.sameContent && input.sameContentStreams
+      ? await sameContentStream(span as { start: number; end: number }, input.sameContentStreams).catch(() => null) : null;
+    if (!stood) return notFound;
+    return Object.freeze({ status: "stood" as const, payload: { ...(payload as Record<string, unknown>),
+      selection: { ...(payload.selection as Record<string, unknown>),
+        ...(payload.selection.contentStream ? { contentStream: { objectNumber: stood.objectNumber, generation: stood.generation } } : {}),
+        textSelection: { ...made, sourceSha256: input.sourceSha256 } } } });
+  }
   if (runSpan.end - runSpan.start !== (span!.end as number) - (span!.start as number)) return notFound;
   const stream = proven.sourceRun?.contentStream ?? proven.target ?? null;
   const held = payload.selection.contentStream;
@@ -97,4 +121,29 @@ export async function standPdfNativeTextObjectDeleteOn(input: Readonly<{
       runSpan: { start: runSpan.start, end: runSpan.end },
       ...(held && stream ? { contentStream: { objectNumber: stream.objectNumber, generation: stream.generation } } : {}),
       textSelection: proven.evidence.selection } } });
+}
+
+/** The one stream of the rewritten bytes that is, but for `span`, the stream
+ * the edit's own output wrote: every byte before the span the same, and
+ * every byte after it (wherever the output's emptied span ends), and the
+ * span itself not what the output holds there. Null for none, or several. */
+async function sameContentStream(
+  span: Readonly<{ start: number; end: number }>,
+  streams: NonNullable<Parameters<typeof standPdfNativeTextObjectDeleteOn>[0]["sameContentStreams"]>,
+): Promise<Readonly<{ objectNumber: number; generation: number }> | null> {
+  const read = await streams();
+  if (!read) return null;
+  const equal = (left: Uint8Array, leftFrom: number, right: Uint8Array, rightFrom: number, length: number) => {
+    for (let index = 0; index < length; index += 1) if (left[leftFrom + index] !== right[rightFrom + index]) return false;
+    return true;
+  };
+  const matches = read.saved.filter(({ bytes: saved }) => span.end <= saved.length && read.planned.some((planned) => {
+    const tail = saved.length - span.end;
+    const written = planned.length - tail - span.start;
+    if (written < 0) return false;
+    if (!equal(saved, 0, planned, 0, span.start) || !equal(saved, span.end, planned, span.start + written, tail)) return false;
+    // (The span is what the edit changed: the output holds something else there.)
+    return written !== span.end - span.start || !equal(saved, span.start, planned, span.start, written);
+  }));
+  return matches.length === 1 ? matches[0].ref : null;
 }

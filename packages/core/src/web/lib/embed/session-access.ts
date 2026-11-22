@@ -3,6 +3,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { onlyofficeAllowsComment, onlyofficeAllowsReview, onlyofficeRestrictsComments } from "./onlyoffice-frame";
+
 export type EmbedSessionMode = "edit" | "view" | "comment" | "review" | "fillForms";
 
 export interface EmbedPermissions {
@@ -31,7 +33,8 @@ export interface EmbedWatermark {
 export interface EmbedAccess {
   /** The token's mode. */
   readonly mode: EmbedSessionMode;
-  /** The mode the file opens in (a workbook, deck or PDF opens the Word-only modes read only). */
+  /** The mode the file opens in (a workbook, deck or PDF opens review as
+   * comment, and fillForms on anything but a PDF read only). */
   readonly effectiveMode: EmbedSessionMode;
   readonly permissions: EmbedPermissions;
   readonly watermark: EmbedWatermark | null;
@@ -145,6 +148,15 @@ export function embedFillsPdfForm(): boolean {
   return current !== null && current.mediated && current.effectiveMode === "fillForms";
 }
 
+/** Whether this frame comments on a workbook, a deck or a PDF and changes
+ * nothing else of the file (the token's comment, or review there): the
+ * session's account only reads the page, so the editor sends each comment
+ * gesture through the session's comment route (lib/embed/comment-session)
+ * instead of saving the page. */
+export function embedCommentsMediated(): boolean {
+  return current !== null && current.mediated && current.effectiveMode === "comment";
+}
+
 /** The role this person fills a form's fields as, when the session names one. */
 export function embedFormRole(): string | null {
   return current?.role ?? null;
@@ -162,9 +174,29 @@ export function embedAllowsComments(): boolean {
 /** Whether a comment by `author` may be resolved or deleted by this person:
  * always, unless the session's `manageComments` is off and it is someone
  * else's (ONLYOFFICE's editCommentAuthorOnly / deleteCommentAuthorOnly). */
-export function embedAllowsManagingComment(author: string | null | undefined, self: string | null | undefined): boolean {
+export function embedAllowsManagingComment(
+  author: string | null | undefined,
+  self: string | null | undefined,
+  action: "edit" | "remove" = "remove",
+): boolean {
+  // An ONLYOFFICE config's commentGroups (lib/embed/onlyoffice-frame): the
+  // groups whose comments this person may resolve (edit) or delete.
+  // (Every comment at once, author null: only where no group is excluded.)
+  if (author === null ? onlyofficeRestrictsComments(action) : !onlyofficeAllowsComment(action, author, self)) return false;
   if (current === null || current.permissions.manageComments) return true;
   return Boolean(author && self && author.trim() === self.trim());
+}
+
+/** Whether a comment by `author` is shown to this person (commentGroups.view). */
+export function embedShowsComment(author: string | null | undefined, self: string | null | undefined): boolean {
+  return onlyofficeAllowsComment("view", author, self);
+}
+
+/** Whether a tracked change by `author` may be accepted or rejected by this
+ * person (the session's acceptRejectChanges, and an ONLYOFFICE config's
+ * reviewGroups). */
+export function embedAllowsResolvingChangeBy(author: string | null | undefined, self: string | null | undefined): boolean {
+  return embedAllowsRevisionResolution() && onlyofficeAllowsReview(author, self);
 }
 
 /** Whether a file of `format` may leave the frame as an export or download. */

@@ -57,6 +57,10 @@ export interface LiveSpreadsheetEditor {
   settled(): boolean;
   /** A cell's computed value, as the grid shows it (the window's value store). */
   computed(sheetId: string, row: number, col: number): unknown;
+  /** Resolves once the calculation of the workbook as it is now has answered
+   * and the values store reads it (the window's backgroundCalculation
+   * settledView barrier); false when the source moved on or it failed. */
+  calculated?(): Promise<boolean>;
   /** Values typed into cells of one sheet, as the formula bar enters them
    * (``asTyped``: "50%", dates and numbers read as Excel reads them typed;
    * "=…" is a formula), committed as one undoable step of the window's own
@@ -68,6 +72,57 @@ export interface LiveSpreadsheetEditor {
   /** The person's selection on the open sheet (0-based): its active cell and
    * the selected rectangle. */
   selection?(): { sheetId: string; row: number; col: number; r1: number; c1: number; r2: number; c2: number } | null;
+  /** The workbook as the spreadsheet commands read it
+   * (lib/editor-commands/spreadsheet): every sheet's whole model and the
+   * workbook's settings; null while it is still opening. */
+  commandWorkbook?(): LiveCommandWorkbook | null;
+  /** The workbook's sheets after one command (the same sheets, the changed
+   * ones replaced), committed as one undoable step of the window's own commit
+   * (commitSheets: history, collaboration room, autosave). A whole-line edit
+   * also travels to collaborators as the ribbon's does. */
+  commitWorkbook?(sheets: readonly LiveContent[], lineEdit?: LiveLineEdit): LiveWriteOutcome;
+  /** The sheet tab commands (Rename, Delete, Hide / Unhide), as the tab menu
+   * runs them: Protect Workbook and the window's own notices included. */
+  renameSheet?(sheetId: string, name: string): LiveWriteOutcome;
+  deleteSheet?(sheetId: string): LiveWriteOutcome;
+  setSheetHidden?(sheetId: string, hidden: boolean): LiveWriteOutcome;
+  /** Open a sheet's tab, as clicking it does; false for a hidden sheet. */
+  activateSheet?(sheetId: string): boolean;
+  /** Select a range (0-based, its sheet opened), as Go To selects one. */
+  select?(sheetId: string, rect: { r1: number; c1: number; r2: number; c2: number }): boolean;
+  /** Insert > Pictures > This Device with this picture, over the selected
+   * cell of the open sheet as that command places it; false when refused. */
+  insertPicture?(file: File): boolean;
+}
+
+/** Whole rows or columns inserted or deleted (lib/collab/workbook-line-edits). */
+export interface LiveLineEdit {
+  readonly sheetId: string;
+  readonly axis: "row" | "col";
+  readonly op: "insert" | "delete";
+  readonly at: number;
+  readonly count: number;
+}
+
+export interface LiveCommandWorkbook {
+  /** Each sheet's model as the window holds it (the ribbon's sheet transactions read these). */
+  readonly sheets: readonly LiveContent[];
+  readonly activeSheetId: string | null;
+  /** The workbook's view options (theme, custom lists ...), as the window holds them. */
+  readonly viewOptions: LiveContent;
+  readonly calculationMode: "automatic" | "manual";
+  readonly dateSystem?: string;
+  /** Review > Protect Workbook > Structure. */
+  readonly workbookStructureProtection?: LiveContent;
+  /** The page saves back into the xlsx it was imported from (patchback). */
+  readonly imported: boolean;
+  /** Sheets the window holds only in part: a large sheet read in tiles, a
+   * sheet not filled in yet. A command never runs on one. */
+  readonly partialSheetIds: readonly string[];
+  /** Sheets read in tiles, whose rows and columns only the server moves. */
+  readonly tiledSheetIds: readonly string[];
+  /** Who a comment is written by: the person in this window. */
+  readonly commentAuthor: { readonly name: string; readonly id: string | null };
 }
 
 export interface LivePresentationEditor {
@@ -83,6 +138,10 @@ export interface LivePresentationEditor {
    * own commit; slides not in ``changedSlideIds`` keep the window's own. */
   commit(next: LiveContent, changedSlideIds: readonly string[]): boolean;
   goToSlide(index: number): boolean;
+  /** The shapes (block ids) selected on the slide shown. */
+  selectedShapeIds?(): readonly string[];
+  /** A number that changes whenever the deck's content does (anyone's edit, Undo). */
+  generation?(): number;
 }
 
 export interface PdfSearchHit {
@@ -107,6 +166,37 @@ export interface LivePdfEditor {
     text: string,
     options: { page?: number; occurrence?: number; style?: "highlight" | "underline" | "strikethrough" | "squiggly" },
   ): Promise<{ page: number } | { error: "not_found" | "not_measurable" | "read_only" }>;
+  /** The pages in reading order: 1-based number, size in points, rotation as shown. */
+  pages?(): readonly { page: number; width: number; height: number; rotation: number }[];
+  /** A page's text, as its text layer (or its OCR) reads; null for no such page. */
+  pageText?(page: number): Promise<string | null>;
+  /** The annotations the window holds: markups, notes, ink, shapes, stamps, signatures, redactions. */
+  annotations?(): readonly LivePdfAnnotation[];
+  /** The form's fields, by full name, with the values shown now. */
+  formFields?(): Promise<readonly LivePdfFormField[]>;
+  /** Insert > Image with this picture, centred on the page shown at the
+   * command's default size; false when refused (read-only, not a picture). */
+  insertPicture?(file: File): Promise<boolean>;
+}
+
+export interface LivePdfAnnotation {
+  readonly id: string;
+  readonly type: string;
+  readonly page: number;
+  readonly text: string;
+  readonly color: string | null;
+  readonly author: string | null;
+  readonly createdAt: string | null;
+}
+
+export interface LivePdfFormField {
+  readonly name: string;
+  readonly type: string;
+  readonly value: string | boolean | readonly string[] | null;
+  readonly page: number | null;
+  readonly readOnly: boolean;
+  readonly required: boolean;
+  readonly options?: readonly string[];
 }
 
 export type LiveEditorHandle = LiveDocumentEditor | LiveSpreadsheetEditor | LivePresentationEditor | LivePdfEditor;
@@ -149,6 +239,12 @@ export function registerLiveEditor(pageId: string, handle: LiveEditorHandle): ()
     if (current.length === 0) handles.delete(pageId);
     for (const listener of [...changeListeners]) listener();
   };
+}
+
+/** The page ``handle`` is registered for, or null once it is gone. */
+export function liveEditorPageId(handle: LiveEditorHandle): string | null {
+  for (const [pageId, list] of handles) if (list.includes(handle)) return pageId;
+  return null;
 }
 
 /** The live editor of ``pageId`` (of ``kind`` when given), or null. */

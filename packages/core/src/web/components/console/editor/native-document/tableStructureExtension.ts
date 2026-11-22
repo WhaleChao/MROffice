@@ -270,6 +270,11 @@ export function insertBreakSplittingTable(
   if (!plan) return null;
   const nodes = tableSplitNodes(state.schema, plan, breakNode);
   if (!nodes) return null;
+  const cut = structuralTableSplitAt(table, found.pos, plan);
+  if (cut !== null) {
+    splitTableInPlace(tr, found.pos, cut, plan, breakNode);
+    return cut + 1;
+  }
   tr.replaceWith(found.pos, found.pos + table.nodeSize, nodes);
   for (const fragment of plan.retagged) {
     const pos = tr.mapping.map(fragment.pos);
@@ -1477,6 +1482,73 @@ function applyAutoFitContentWidths(
   return changed;
 }
 
+/**
+ * Where a split can cut the table itself: the position between the last row
+ * of the first table and the first of the second, when both halves are the
+ * table's own rows as they stand (no merged cell carried across the cut, no
+ * page fragment retagged) -- else null, and the split rebuilds the halves.
+ *
+ * Word splits a table by cutting it: its rows are not deleted and inserted
+ * again, and with Track Changes on only the paragraph (and the break) put
+ * between the halves is an insertion. Rebuilt as two new tables, Track
+ * Changes recorded every row of the table as deleted and every row of the
+ * second table as inserted, and the first kept the source table's identity
+ * beside the deleted one (corpus R498-D57 WALK1: a column break typed in a
+ * 62-row table; the save refused the duplicated source table).
+ * `window.__docsStructuralTableSplitOff = true` rebuilds as before.
+ */
+function structuralTableSplitAt(
+  table: ProseMirrorNode,
+  pos: number,
+  plan: TableSplitPlan,
+): number | null {
+  if (
+    typeof window !== "undefined" &&
+    (window as Window & { __docsStructuralTableSplitOff?: boolean }).__docsStructuralTableSplitOff === true
+  ) {
+    return null;
+  }
+  if (!plan.head || plan.retagged.length > 0) return null;
+  const rows = (table.toJSON() as TableJsonNode).content ?? [];
+  const headRows = plan.head.content ?? [];
+  const tailRows = plan.tail.content ?? [];
+  if (
+    headRows.length === 0 ||
+    tailRows.length === 0 ||
+    headRows.length + tailRows.length !== rows.length ||
+    JSON.stringify(headRows) !== JSON.stringify(rows.slice(0, headRows.length)) ||
+    JSON.stringify(tailRows) !== JSON.stringify(rows.slice(headRows.length))
+  ) {
+    return null;
+  }
+  let cut = pos + 1;
+  for (let index = 0; index < headRows.length; index += 1) cut += table.child(index).nodeSize;
+  return cut;
+}
+
+/** Cut the table at `cut` and put `between` (the empty paragraph, the
+ * break) between the halves; each half takes the attributes the plan gives
+ * it (the second one is a new table, Word: Split returns it). */
+function splitTableInPlace(
+  tr: Transaction,
+  pos: number,
+  cut: number,
+  plan: TableSplitPlan,
+  between: ProseMirrorNode,
+): void {
+  tr.split(cut, 1);
+  const tailPos = cut + 1;
+  const tail = tr.doc.nodeAt(tailPos);
+  if (tail?.type.name === "table") {
+    tr.setNodeMarkup(tailPos, undefined, { ...tail.attrs, ...(plan.tail.attrs ?? {}) });
+  }
+  const head = tr.doc.nodeAt(pos);
+  if (head?.type.name === "table" && plan.head) {
+    tr.setNodeMarkup(pos, undefined, { ...head.attrs, ...(plan.head.attrs ?? {}) });
+  }
+  tr.insert(tailPos, between);
+}
+
 /** Meta of a Split Table transaction; its history boundary is closed after. */
 const TABLE_SPLIT_META = "documentTableSplit";
 
@@ -2112,11 +2184,13 @@ const TableStructure = Extension.create({
             if (!nodes) return false;
             // Split Table is one author operation, its own Undo step: never
             // folded into the typing just before it (or just after it).
-            const transaction = closeHistory(tr).replaceWith(
-              found.pos,
-              found.pos + found.node.nodeSize,
-              nodes,
-            );
+            const cut = structuralTableSplitAt(found.node, found.pos, plan);
+            const transaction = closeHistory(tr);
+            if (cut !== null) {
+              splitTableInPlace(transaction, found.pos, cut, plan, nodes[plan.head ? 1 : 0]);
+            } else {
+              transaction.replaceWith(found.pos, found.pos + found.node.nodeSize, nodes);
+            }
             for (const fragment of plan.retagged) {
               const pos = transaction.mapping.map(fragment.pos);
               const node = transaction.doc.nodeAt(pos);

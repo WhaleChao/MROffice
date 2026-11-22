@@ -11,7 +11,7 @@ import type {
   PdfNativeListTextSelectionProof,
   PdfNativeTextWordsFixedReason,
 } from "./engine/native/list-text-fidelity";
-import { pdfTextHasRightToLeftRun } from "./engine/native/reader-order";
+import { MRAI_NATIVE_REORDERED_TEXT_MESSAGE, pdfTextHasRightToLeftRun } from "./engine/native/reader-order";
 
 export const PDF_FALLBACK_TEXT_SCHEMA_VERSION = "mrai.pdf-source-text-fallback.v1" as const;
 
@@ -23,7 +23,8 @@ export type PdfFallbackTextRefusalCode =
   | "unreadable"
   | "split-unproven"
   | "glyphs-read-as-blanks"
-  | "text-box-source";
+  | "text-box-source"
+  | "letters-read-reordered";
 
 import { appendMraiNativeObjectRevisions } from "./engine/native/content-stream-transaction";
 import { MRAI_NATIVE_BOX_MARK_TAG as MRAI_BOX_BLOCK_TAG } from "./engine/native/box-mark";
@@ -924,7 +925,7 @@ const boxItems = (selection: PdfNativeListTextSelectionEvidence) =>
  * item begins to where it ends along it. The reader reads an item as one
  * run along one baseline, so every show it read into the item starts there.
  */
-function itemStart(item: PdfNativeListTextSelectionItemEvidence) {
+function itemStart(item: PdfNativeListTextSelectionItemEvidence, anywhereAlong = false) {
   const [a, b, c, d, e, f] = item.transform;
   let ux = a, uy = b;
   let length = Math.hypot(ux, uy);
@@ -942,7 +943,7 @@ function itemStart(item: PdfNativeListTextSelectionItemEvidence) {
     const px = x - e, py = y - f;
     const s = (px * vy - py * vx) / det;
     const t = (ux * py - uy * px) / det;
-    return Math.abs(t) <= off && s >= -0.2 * height - 0.5 && s <= item.width + 0.2 * height + 0.5;
+    return Math.abs(t) <= off && (anywhereAlong || (s >= -0.2 * height - 0.5 && s <= item.width + 0.2 * height + 0.5));
   };
 }
 function sizedLike(items: readonly PdfNativeListTextSelectionItemEvidence[]) {
@@ -1165,11 +1166,33 @@ export async function pdfRightToLeftLinesReadReordered(input: {
   // box a letter of the line stands in, is no line of right-to-left text.)
   if (!pdfTextHasRightToLeftRun(input.selection.item.str)) return false;
   const reading = await pageReading(input.sourceBytes, input.selection.pageNumber);
-  const fonts = fontsReadReordered(reading);
-  if (!fonts.size) return false;
   const items = boxItems(input.selection);
   const regions = items.map((item) => itemRegion(item));
   const sized = sizedLike(items);
+  // A recognised text layer drawn in the invisible mode (a scan's OCR)
+  // holds its right-to-left words in reading order, as the recognition
+  // engine writes them, each drawn left to right; the reader takes every
+  // show for the order it is drawn in and reads each such word turned round
+  // (pdf-walk-1000 0480: the layer's "القرآن" read "نآرقلا"). Written from
+  // the reader's words, the box made of the line held the letters reversed,
+  // drawn over the scan and saved so (once the box writer shaped Arabic
+  // script, 67cc34cee06).
+  {
+    let letters = 0, hidden = 0;
+    for (const show of reading.shows) {
+      const codes = show.font.rightToLeftLetterCodes;
+      if (!codes) continue;
+      for (const glyph of show.glyphs) {
+        if (!codes.letters.has(glyph.code) ||
+          !regions.some((inside, at) => Boolean(inside?.(glyph.x, glyph.y, glyph.ux, glyph.uy)) && sized(show, glyph, at))) continue;
+        letters += 1;
+        if (show.mode === 3 || show.mode === 7) hidden += 1;
+      }
+    }
+    if (hidden > 0 && hidden * 2 > letters) return true;
+  }
+  const fonts = fontsReadReordered(reading);
+  if (!fonts.size) return false;
   let letters = 0, reordered = 0;
   for (const show of reading.shows) {
     const codes = show.font.rightToLeftLetterCodes;
@@ -1217,6 +1240,7 @@ export async function locatePdfFallbackText(input: {
   // Codes of each show inside the box.
   const selected = new Map<ShowRecord, Set<number>>();
   const starts = items.map((item) => itemStart(item));
+  const baselines = items.map((item) => itemStart(item, true));
   for (const show of reading.shows) {
     // A show of a block written here (a text box made of a line, a
     // paragraph set again) is that block's box's: it is this box's only
@@ -1229,6 +1253,19 @@ export async function locatePdfFallbackText(input: {
     // emptied when this line was made a box (pdf-walk-1000 0337 p.1,
     
     if (show.box !== undefined && !starts.some((onItem) => onItem?.(show.origin[0], show.origin[1]))) continue;
+    // So is a show of a text layer drawn in the invisible mode (a scan's
+    // recognised words) that starts on no baseline of this box's items:
+    // such a layer sets each word on its own line's baseline, with no
+    // scripts or marks off it, and its lines stand closer than a line's
+    // reach below its baseline. The next line's first word, its frame
+    // running half a line into this one's, was named a piece of this line
+    // and hidden with it when the line was written as a box -- "RA" gone
+    // from the page and the saved file (pdf-walk-1000 ru0516g, 0516 p.1:
+    // "...possono. ra" over "RA telefono 35-178."). Anywhere along a
+    // baseline of the box is the box's (a line drawn by one show the
+    // reader reads as several items).
+    if ((show.mode === 3 || show.mode === 7) &&
+      !baselines.some((onLine) => onLine?.(show.origin[0], show.origin[1]))) continue;
     show.glyphs.forEach((glyph, code) => {
       // Every item the glyph stands in reads it: a superscript set right
       // after a word also stands in the word's slack, and crediting only the
@@ -1372,6 +1409,15 @@ export async function locatePdfFallbackText(input: {
       if (!plan) {
         // A show that draws nothing may stand inside a window.
         if (show.codeCount === 0 && window && windowSafe(window.end, show.start)) { window.end = show.end; continue; }
+        // So may a show of blanks alone between two shows of the box: the
+        // window goes on over it when the box's next show comes (checked
+        // then, from the window's end to that show), and ends before it
+        // where none does. A text layer that sets every word by itself with
+        // a blank's show after it (an OCR layer: `(word) Tj 100 Tz ( ) Tj`)
+        // was a piece a word -- 259 pieces for a paragraph of thirty lines,
+        // a binding too long to be taken (pdf-walk-1000 0435 p.1,
+        
+        if (window && show.codeCount > 0 && show.glyphs.every((glyph) => !glyph.ink)) continue;
         await flush();
         continue;
       }
@@ -1567,7 +1613,16 @@ export async function preparePdfFallbackTextOpen(input: {
   
   // words than the page shows: its box would be a line of other letters.)
   if (await pdfRightToLeftLinesReadReordered(input)) {
-    return { proof: await pdfWordsFixedTextProof(input, "letters-read-reordered"), blankedSource: null };
+    try {
+      return { proof: await pdfWordsFixedTextProof(input, "letters-read-reordered"), blankedSource: null };
+    } catch (error) {
+      // A line drawn in the invisible mode alone (a scan's OCR layer) has no
+      // show to set a format on either: it is refused, and says why.
+      if (error instanceof PdfFallbackTextRefusal && error.code === "not-found") {
+        fail("letters-read-reordered", MRAI_NATIVE_REORDERED_TEXT_MESSAGE);
+      }
+      throw error;
+    }
   }
   return {
     proof: pdfFallbackTextProof(data, input.selection),

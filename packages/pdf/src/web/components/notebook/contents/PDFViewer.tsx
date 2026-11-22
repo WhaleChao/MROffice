@@ -83,14 +83,7 @@ import { pdfTaggedReadingOrderText } from "../../../lib/pdf/tagged-reading-order
 import type { PdfTaggedTextTarget } from "@/lib/pdf/native-tagged-text-roundtrip";
 import { createPdfNativePlanners } from "../../../lib/pdf/remote/pdf-native-planners";
 import { PDF_NATIVE_READER_PAGE, registerPdfNativeReaderHead } from "../../../lib/pdf/remote/pdf-native-sources";
-import {
-  degrees as degreesPdfLib,
-  PDFDict,
-  PDFDocument as PdfLibDocument,
-  PDFName,
-  PDFNumber,
-  PDFRawStream,
-} from "pdf-lib";
+import { PDFDocument as PdfLibDocument } from "pdf-lib";
 import {
   startTransition,
   useCallback,
@@ -157,13 +150,7 @@ import PdfPageOrganizerDialog, {
   PdfPageOrganizerWorkspace,
 } from "./pdf/PdfPageOrganizerDialog";
 import PdfPageSizeDialog from "./pdf/PdfPageSizeDialog";
-import PdfRedactPagesDialog from "./pdf/PdfRedactPagesDialog";
-import PdfHiddenInformationDialog from "./pdf/PdfHiddenInformationDialog";
-import {
-  inspectPdfHiddenInformation,
-  removePdfHiddenInformation,
-  type PdfHiddenInformationKind,
-} from "../../../lib/pdf/hidden-information";
+import { type PdfHiddenInformationKind } from "@/lib/pdf/hidden-information";
 import {
   type PdfOfficeRibbonTab,
   type PdfRibbonSaveStatus,
@@ -195,16 +182,12 @@ import PdfImageOnlyExportDialog, {
 } from "./pdf/PdfImageOnlyExportDialog";
 import PdfCadExportDialog from "./pdf/PdfCadExportDialog";
 import PdfOfficeProjectionDialog from "./pdf/PdfOfficeProjectionDialog";
-import PdfScreenRecordingDialog from "./pdf/PdfScreenRecordingDialog";
 import PdfFormFieldAuthoringDialog, {
   type PdfAuthoredFormFieldKind,
   type PdfAuthoredFormFieldSelection,
   type PdfFormFieldDialogSection,
 } from "./pdf/PdfFormFieldAuthoringDialog";
-import {
-  createPdfFormFieldContextRibbonLabels,
-  type PdfFormFieldContextKind,
-} from "./pdf/PdfFormFieldContextRibbon";
+import { type PdfFormFieldContextKind } from "./pdf/PdfFormFieldContextRibbon";
 import {
   PdfRadioGroupOptionsDialog,
   type PdfRadioGroupOptionsApplyValue,
@@ -267,11 +250,7 @@ import {
 } from "../../../lib/pdf/ribbon-state";
 import { verifyPdfCadDxfOutput } from "../../../lib/pdf/cad-dxf-witness";
 import type { PdfEditableProjectionTarget } from "@mrnote/core/web/lib/page-export.ts";
-import {
-  pdfScreenRecordingExtension,
-  startPdfScreenRecording,
-  type PdfScreenRecordingSession,
-} from "../../../lib/pdf/screen-recording";
+import { type PdfScreenRecordingSession } from "@/lib/pdf/screen-recording";
 import {
   consumePdfSavePolicyConsentReceipt,
   issuePdfSavePolicyConsentReceipt,
@@ -359,10 +338,7 @@ type PendingMarkupPress = Readonly<{
 import { replacePdfTextLayerChildren } from "../../../lib/pdf/text-layer-selection";
 import { createPdfPageFromFile } from "@mrnote/core/web/lib/page-file-import.ts";
 import { fetchPdfSource, registerPdfWorkingDisplaySource } from "../../../lib/pdf/fetch-source";
-import {
-  buildEditableAnnotations,
-  type EditableAnnotationMeta,
-} from "@mrnote/core/web/lib/pdf/editable-annotations.ts";
+import { type EditableAnnotationMeta } from "@mrnote/core/web/lib/pdf/editable-annotations.ts";
 import {
   detectFormFields,
   type DetectionTextBox,
@@ -372,9 +348,7 @@ import type {
   CreateFormFieldsPlan,
 } from "@/lib/pdf/form-field-create";
 import type { PdfTableCellAddress } from "./pdf/PdfTableLayer";
-import { PdfTableContextRibbon } from "./pdf/PdfTableContextRibbon";
-import { PdfChartContextRibbon, pdfChartAttrs } from "./pdf/PdfChartContextRibbon";
-import { PdfSmartArtContextRibbon } from "./pdf/PdfSmartArtContextRibbon";
+import { pdfChartAttrs } from "./pdf/PdfChartContextRibbon";
 import { PdfChartDataWindow } from "./pdf/PdfChartDataWindow";
 import type { ChartBlockAttrsV2 } from "@mrnote/core/web/components/console/editor/extensions/chartBlockShared.ts";
 import {
@@ -387,48 +361,8 @@ import type {
 } from "@/lib/pdf/form-field-delete";
 // The form planners, candidate builders and writers run on the engine host
 
-import {
-  PDF_CREATE_FORM_FIELDS_MAX_CANDIDATES,
-  createAuthoredCheckBoxCandidate,
-  createAuthoredDropdownCandidate,
-  createAuthoredListBoxCandidate,
-  createAuthoredNavigationButtonCandidate,
-  createAuthoredPrintButtonCandidate,
-  createAuthoredRadioGroupCandidate,
-  createAuthoredResetButtonCandidate,
-  createAuthoredSignatureFieldCandidate,
-  createAuthoredTextFieldCandidate,
-  createAuthoredViewButtonCandidate,
-  createAuthoredSaveButtonCandidate,
-  createAuthoredGoToPageButtonCandidate,
-  createAuthoredWebLinkButtonCandidate,
-  createExistingPdfActionButtonFieldEditPlan,
-  createExistingPdfCheckboxFieldEditPlan,
-  createExistingPdfDropdownFieldEditPlan,
-  createExistingPdfFormFieldDeletePlan,
-  createExistingPdfListBoxFieldEditPlan,
-  createExistingPdfSignatureFieldEditPlan,
-  createExistingPdfTextFieldEditPlan,
-  createFormFieldsPlan,
-  isPdfActionButtonFieldKind,
-  matchesCreateFormFieldsPlan,
-  preflightPdfFormPlan,
-  writePdfFormPlan,
-} from "../../../lib/pdf/remote/pdf-forms";
-import {
-  NATIVE_PDF_FORM_AUTHORING_SCHEMA_VERSION,
-  NATIVE_PDF_FORM_IMAGE_SCHEMA_VERSION,
-  NATIVE_PDF_FORM_GROUP_PROPERTIES_SCHEMA_VERSION,
-  NATIVE_PDF_RADIO_GROUP_OPTIONS_SCHEMA_VERSION,
-  NATIVE_PDF_FORM_WIDGET_APPEARANCE_SCHEMA_VERSION,
-  NATIVE_PDF_FORM_WIDGET_GEOMETRY_SCHEMA_VERSION,
-  isNativePdfFormFieldKind,
-  isNativePdfFormExportValue,
-  nativePdfFormWidgetExpectedIdentity,
-  type ExistingFormField,
-  type NativePdfFormFieldGroupExpectedIdentity,
-  type NativePdfFormWidgetAppearanceStyle,
-} from "../../../lib/pdf/form-field-authoring";
+import { createAuthoredCheckBoxCandidate, createAuthoredDropdownCandidate, createAuthoredListBoxCandidate, createAuthoredNavigationButtonCandidate, createAuthoredPrintButtonCandidate, createAuthoredRadioGroupCandidate, createAuthoredResetButtonCandidate, createAuthoredSignatureFieldCandidate, createAuthoredTextFieldCandidate, createAuthoredViewButtonCandidate, createAuthoredSaveButtonCandidate, createAuthoredGoToPageButtonCandidate, createAuthoredWebLinkButtonCandidate, createExistingPdfActionButtonFieldEditPlan, createExistingPdfCheckboxFieldEditPlan, createExistingPdfDropdownFieldEditPlan, createExistingPdfFormFieldDeletePlan, createExistingPdfListBoxFieldEditPlan, createExistingPdfSignatureFieldEditPlan, createExistingPdfTextFieldEditPlan, createFormFieldsPlan, isPdfActionButtonFieldKind, matchesCreateFormFieldsPlan, preflightPdfFormPlan, writePdfFormPlan } from "../../../lib/pdf/remote/pdf-forms";
+import { NATIVE_PDF_FORM_AUTHORING_SCHEMA_VERSION, NATIVE_PDF_FORM_IMAGE_SCHEMA_VERSION, NATIVE_PDF_FORM_GROUP_PROPERTIES_SCHEMA_VERSION, NATIVE_PDF_RADIO_GROUP_OPTIONS_SCHEMA_VERSION, NATIVE_PDF_FORM_WIDGET_GEOMETRY_SCHEMA_VERSION, isNativePdfFormFieldKind, isNativePdfFormExportValue, nativePdfFormWidgetExpectedIdentity, type ExistingFormField, type NativePdfFormFieldGroupExpectedIdentity, type NativePdfFormWidgetAppearanceStyle } from "../../../lib/pdf/form-field-authoring";
 import {
   flagOnlyFormFieldEdit,
   nativeFormFieldSpec,
@@ -503,7 +437,6 @@ import {
   type PdfPageTabOrder,
 } from "../../../lib/pdf/acroform-tab-order";
 import { readActualTextFromBytes } from "../../../lib/pdf/actual-text";
-import { estimateSkewAngle, grayscaleFromRgba } from "../../../lib/pdf/deskew";
 import {
   vectorMarksFromOperatorList,
   type VectorMark,
@@ -547,13 +480,7 @@ import {
   resolvePdfReadAloudLanguage,
   savePdfReadAloudPreferences,
 } from "../../../lib/pdf/read-aloud-preferences";
-import {
-  XFDF_MAX_FILE_BYTES,
-  fromXfdf,
-  matchXfdfDocument,
-  toXfdf,
-  type ParsedXfdf,
-} from "@mrnote/core/web/lib/pdf/xfdf.ts";
+import { XFDF_MAX_FILE_BYTES, fromXfdf, matchXfdfDocument, type ParsedXfdf } from "@mrnote/core/web/lib/pdf/xfdf.ts";
 import {
   canRoundTripShapeThroughXfdf,
   importXfdfAnnotations,
@@ -704,18 +631,9 @@ import {
   downloadUrlFile,
   startDownloadWhenAllowed,
 } from "@mrnote/core/web/lib/download-file.ts";
-import {
-  describeNativeXfdfOmissions,
-  readNativeXfdfExport,
-} from "../../../lib/pdf/xfdf-native";
 import { classifyPdfaUnavailableReason } from "../../../lib/pdf/pdfa-reasons";
 import { formatPdfExtractedText } from "../../../lib/pdf/extract-text-output";
-import {
-  buildPdfImageExtractionZip,
-  inspectPdfImageResources,
-  releasePdfImageExtractionPlan,
-  type PdfImageExtractionPlan,
-} from "../../../lib/pdf/extract-image-resources";
+import { buildPdfImageExtractionZip, releasePdfImageExtractionPlan, type PdfImageExtractionPlan } from "../../../lib/pdf/extract-image-resources";
 import {
   PDF_COMPRESS_LOSSLESS_PRESET,
   compressPdfServerSideWithStats,
@@ -814,7 +732,7 @@ import {
 } from "../../../lib/pdf/zoom-anchor";
 import { useLiveZoomGesture } from "@mrnote/core/web/lib/live-zoom.ts";
 import { inkAcceptsPointer, installPenInkTouchGuard, useDrawWithTouch } from "@mrnote/core/web/lib/draw-with-touch.ts";
-import { useInkTouchShield } from "@mrnote/ink/web/lib/ink-touch-shield.ts";
+import { useInkTouchShield } from "@mrnote/core/web/lib/ink-touch-shield.ts";
 import { pencilScribblePossible, useInkScribbleGuard } from "@mrnote/core/web/lib/ink-scribble-guard.ts";
 import {
   inkPointerArbiter,
@@ -824,9 +742,9 @@ import {
   watchPenHover,
 } from "@mrnote/core/web/lib/ink-pointer-policy.ts";
 import { inkCancelsPenPointerDown } from "@mrnote/core/web/lib/ink-input-trace.ts";
-import { InkLiveCanvas, type InkLiveStyle } from "@mrnote/ink/web/lib/office-ink-live.ts";
+import { InkLiveCanvas, type InkLiveStyle } from "@mrnote/core/web/lib/office-ink-live.ts";
 import { INK_CAPTURE_MAX_POINTS, thinInkSamples } from "@mrnote/core/web/lib/office-ink-smooth.ts";
-import { useInkFingerTaps } from "@mrnote/ink/web/lib/ink-finger-taps.ts";
+import { useInkFingerTaps } from "@mrnote/core/web/lib/ink-finger-taps.ts";
 import { createInkWritingSaveGate, inkWritingActive, type InkWritingSaveGate } from "@mrnote/core/web/lib/ink-writing-session.ts";
 import { yieldTouchHold } from "@mrnote/core/web/lib/touch-hold.ts";
 import { startInkHoldToErase, usePenFirstDraw, type InkHoldToErase } from "@mrnote/core/web/lib/pen-first-draw.ts";
@@ -888,6 +806,8 @@ import { pdfInkPresenceStroke, pdfInkPresenceSurface } from "../../../lib/pdf/in
 import type { PdfDrawRibbonModel, PdfInkTool } from "./pdf/PdfDrawRibbonTab";
 import { usePdfInkPenCommands, usePdfInkPens } from "./pdf/window/usePdfInkPens";
 import { OfficeSoftKeyboardLayer } from "@mrnote/core/web/components/office-ribbon/OfficeSoftKeyboardLayer.tsx";
+import { PdfFormFieldKeys } from "./pdf/PdfFormFieldKeys";
+import { compactEditorChrome } from "@mrnote/core/web/lib/narrow-window.ts";
 import {
   CANVAS_EVICTION_WINDOW,
   TEXT_LAYER_EVICTION_WINDOW,
@@ -1021,20 +941,7 @@ import {
   sanitizeNotePayload,
   type StickyNoteAnnotation,
 } from "@mrnote/core/web/lib/pdf/sticky-notes.ts";
-import {
-  DEFAULT_INK_COLOR,
-  DEFAULT_INK_WIDTH,
-  buildInkPayload,
-  capStrokesPerPage,
-  clampInkWidth,
-  clampPoints,
-  inkWidthPagePercent,
-  isInkColor,
-  normalizeStroke,
-  sanitizeInkPayload,
-  type InkAnnotation,
-  type InkPoint,
-} from "@mrnote/core/web/lib/pdf/ink.ts";
+import { DEFAULT_INK_COLOR, DEFAULT_INK_WIDTH, buildInkPayload, capStrokesPerPage, clampInkWidth, inkWidthPagePercent, isInkColor, normalizeStroke, sanitizeInkPayload, type InkAnnotation, type InkPoint } from "@mrnote/core/web/lib/pdf/ink.ts";
 import { sanitizeCropBox } from "../../../lib/pdf/crop-box";
 import {
   createPdfPrintPageInventory,
@@ -1134,6 +1041,7 @@ import {
   resolveStampPreset,
   stampAnnotationColor,
 } from "../../../lib/pdf/stamps-annotation";
+import { pdfStampPictureFromFile } from "../../../lib/pdf/stamp-picture-file";
 import { isManagedNativeStampEquivalent } from "../../../lib/pdf/native-stamp-roundtrip";
 import {
   isManagedNativeSignatureEquivalent,
@@ -1175,38 +1083,7 @@ import {
   sortBookmarks,
   type UserBookmark,
 } from "../../../lib/pdf/user-bookmarks";
-import {
-  DEFAULT_AREA_HIGHLIGHT_COLOR,
-  DEFAULT_AREA_HIGHLIGHT_OPACITY,
-  DEFAULT_SHAPE_COLOR,
-  DEFAULT_SHAPE_FILL_OPACITY,
-  DEFAULT_SHAPE_WIDTH,
-  PDF_SHAPE_VISUAL_MASK_PURPOSE,
-  PDF_SHAPE_COLORS,
-  PDF_SHAPE_MAX_PER_PAGE,
-  PDF_SHAPE_MAX_POLYGON_POINTS,
-  PDF_SHAPE_MIN_WIDTH,
-  buildAreaHighlightPayload,
-  buildShapePayload,
-  capShapesPerPage,
-  kindSupportsFill,
-  resolveShapeLineEndings,
-  resolveShapeLineStyle,
-  resolveShapeFill,
-  resolveShapeOpacity,
-  resolveShapeCornerRadius,
-  sanitizeShapePayload,
-  shapeBox,
-  shapeKindSupportsLineEndings,
-  shapeWidthFromPoints,
-  shapeWidthToPoints,
-  transformShapeGeometry,
-  type ShapeGeometryTransform,
-  type ShapeAnnotation,
-  type ShapeKind,
-  type ShapeLineEnding,
-  type ShapeLineStyle,
-} from "@mrnote/core/web/lib/pdf/shapes.ts";
+import { DEFAULT_AREA_HIGHLIGHT_COLOR, DEFAULT_AREA_HIGHLIGHT_OPACITY, DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_FILL_OPACITY, DEFAULT_SHAPE_WIDTH, PDF_SHAPE_VISUAL_MASK_PURPOSE, PDF_SHAPE_MAX_PER_PAGE, PDF_SHAPE_MAX_POLYGON_POINTS, PDF_SHAPE_MIN_WIDTH, buildAreaHighlightPayload, buildShapePayload, capShapesPerPage, kindSupportsFill, resolveShapeLineEndings, resolveShapeLineStyle, resolveShapeFill, resolveShapeOpacity, resolveShapeCornerRadius, sanitizeShapePayload, shapeBox, shapeKindSupportsLineEndings, shapeWidthFromPoints, shapeWidthToPoints, transformShapeGeometry, type ShapeGeometryTransform, type ShapeAnnotation, type ShapeKind, type ShapeLineEnding, type ShapeLineStyle } from "@mrnote/core/web/lib/pdf/shapes.ts";
 import { isManagedNativeShapeEquivalent } from "../../../lib/pdf/native-shape-roundtrip";
 import {
   nativePdfShapeSourceStyleOf,
@@ -1249,12 +1126,7 @@ import {
   splitPdf,
   type MergeSource,
 } from "../../../lib/pdf/merge-split";
-import {
-  buildPdfBatchPrintDocument,
-  inspectPdfBatchPrintItem,
-  releasePdfBatchPrintItems,
-  type PdfBatchPrintItem,
-} from "../../../lib/pdf/batch-print";
+import { buildPdfBatchPrintDocument, type PdfBatchPrintItem } from "../../../lib/pdf/batch-print";
 import {
   MAX_SPLIT_PAGES,
   bookmarkSplitGroups,
@@ -1369,40 +1241,7 @@ import {
   type PdfPageOrganizerOperation,
   type PdfPageSelectionPreset,
 } from "../../../lib/pdf/page-organizer";
-import {
-  createPdfBoundedInputDigest,
-  createPdfDeskewRasterPolicyContext,
-  createPdfLossyCompressionPolicyContext,
-  createPdfOutputLossReport,
-  createPdfOutputLossReportForAction,
-  createPdfOutputPlanDigest,
-  pdfSourceStructureLossEntries,
-  createPdfPagePackagePlanDigest,
-  createPdfPagePackagePolicyContext,
-  createPdfSavePolicyEditSnapshot,
-  createPdfSourceRiskProfile,
-  createPdfSourceRiskSnapshot,
-  inspectPdfPagePackageSource,
-  inspectPdfSourceRiskSnapshot,
-  isPdfDeskewRasterCanvasWithinBudget,
-  PDF_DESKEW_OUTPUT_DPI,
-  pdfDeskewRasterPixels,
-  PDF_LOSS_CURRENT_EDITOR_EDITS_EXCLUDED,
-  PDF_LOSS_VISUAL_MASK_RECOVERABLE_CONTENT,
-  readPdfSavePolicyDecision,
-  resolvePdfSavePolicy,
-  validatePdfPagePackageOutputs,
-  verifyPdfSavePolicyDecision,
-  type PdfOutputLossReport,
-  type PdfDeskewRasterPolicyContext,
-  type PdfLossyCompressionPolicyContext,
-  type PdfPagePackagePolicyContext,
-  type PdfPagePackageSourceSnapshot,
-  type PdfSavePolicyAction,
-  type PdfSavePolicyDecision,
-  type PdfSavePolicyRequest,
-  type PdfSourceRiskSnapshot,
-} from "../../../lib/pdf/save-policy";
+import { createPdfBoundedInputDigest, createPdfLossyCompressionPolicyContext, createPdfOutputLossReport, createPdfOutputLossReportForAction, createPdfOutputPlanDigest, pdfSourceStructureLossEntries, createPdfPagePackagePlanDigest, createPdfPagePackagePolicyContext, createPdfSavePolicyEditSnapshot, createPdfSourceRiskProfile, createPdfSourceRiskSnapshot, inspectPdfPagePackageSource, inspectPdfSourceRiskSnapshot, PDF_LOSS_CURRENT_EDITOR_EDITS_EXCLUDED, PDF_LOSS_VISUAL_MASK_RECOVERABLE_CONTENT, readPdfSavePolicyDecision, resolvePdfSavePolicy, validatePdfPagePackageOutputs, verifyPdfSavePolicyDecision, type PdfOutputLossReport, type PdfDeskewRasterPolicyContext, type PdfLossyCompressionPolicyContext, type PdfPagePackagePolicyContext, type PdfPagePackageSourceSnapshot, type PdfSavePolicyAction, type PdfSavePolicyDecision, type PdfSavePolicyRequest, type PdfSourceRiskSnapshot } from "../../../lib/pdf/save-policy";
 import {
   bindPdfSignatureProofToSource,
   presentPdfSignatureProof,
@@ -1465,18 +1304,7 @@ export type {
   PdfViewerFeedbackMessage,
   PdfViewerFeedbackCopy,
 } from "./pdf/viewer/viewerFeedback";
-import {
-  type PdfPageImportSourceKind,
-  PDF_PAGE_IMPORT_ACCEPT,
-  resolvePdfPageImportSourceKind,
-  pdfPageImportOutputName,
-  pdfPageImportSourceLabel,
-  readPngRasterDimensions,
-} from "./pdf/viewer/pageImport";
-import {
-  sameDeskewCoordinate,
-  readPdfDeskewOutputGeometry,
-} from "./pdf/viewer/deskewGeometry";
+import { type PdfPageImportSourceKind, PDF_PAGE_IMPORT_ACCEPT, resolvePdfPageImportSourceKind, pdfPageImportOutputName, pdfPageImportSourceLabel } from "./pdf/viewer/pageImport";
 import { pdfBytesSha256, readBoundedPdfResponse } from "./pdf/viewer/pdfBytes";
 import type {
   PdfPagePackageAction,
@@ -1490,33 +1318,7 @@ import {
   semanticAppearanceRouteKey,
   semanticAppearanceTargetsKey,
 } from "./pdf/viewer/semanticAppearance";
-import {
-  PDF_READER_DOWNLOAD_ORIGINAL_COMMAND,
-  PDF_READER_DOWNLOAD_CURRENT_COMMAND,
-  PDF_READER_DOWNLOAD_ANNOTATED_COMMAND,
-  PDF_READER_DOWNLOAD_FILLABLE_COMMAND,
-  PDF_READER_DOWNLOAD_EDITABLE_ANNOTATIONS_COMMAND,
-  PDF_READER_DOWNLOAD_ARCHIVAL_COMMAND,
-  PDF_READER_DOWNLOAD_PROPERTIES_COMMAND,
-  PDF_READER_PRINT_COMMAND,
-  PDF_READER_APPLY_REDACTIONS_COMMAND,
-  PDF_READER_DANGEROUS_ACTION_SAFE_COPY_COMMAND,
-  PDF_READER_EXTRACT_COMMAND,
-  PDF_READER_SPLIT_COMMAND,
-  PDF_READER_MERGE_COMMAND,
-  PDF_READER_INSERT_FILE_COMMAND,
-  PDF_READER_COMPRESS_LOSSLESS_COMMAND,
-  PDF_READER_COMPRESS_LOSSY_COMMAND,
-  PDF_READER_DESKEW_COMMAND,
-  PDF_READER_CREATE_FORM_FIELDS_COMMAND,
-  PDF_READER_EDIT_EXISTING_FORM_FIELD_COMMAND,
-  PDF_READER_DELETE_EXISTING_FORM_FIELD_COMMAND,
-  PDF_READER_RESET_FORM_VALUES_COMMAND,
-  PDF_READER_IMPORT_FORM_DATA_COMMAND,
-  PDF_READER_NATIVE_ACTIVATION_COMMANDS,
-  type PendingPdfReaderActivation,
-  textMarkupActivationInvocation,
-} from "./pdf/viewer/readerCommands";
+import { PDF_READER_DOWNLOAD_ORIGINAL_COMMAND, PDF_READER_DOWNLOAD_CURRENT_COMMAND, PDF_READER_DOWNLOAD_ANNOTATED_COMMAND, PDF_READER_DOWNLOAD_FILLABLE_COMMAND, PDF_READER_DOWNLOAD_EDITABLE_ANNOTATIONS_COMMAND, PDF_READER_DOWNLOAD_ARCHIVAL_COMMAND, PDF_READER_DOWNLOAD_PROPERTIES_COMMAND, PDF_READER_PRINT_COMMAND, PDF_READER_APPLY_REDACTIONS_COMMAND, PDF_READER_EXTRACT_COMMAND, PDF_READER_SPLIT_COMMAND, PDF_READER_MERGE_COMMAND, PDF_READER_INSERT_FILE_COMMAND, PDF_READER_COMPRESS_LOSSLESS_COMMAND, PDF_READER_COMPRESS_LOSSY_COMMAND, PDF_READER_CREATE_FORM_FIELDS_COMMAND, PDF_READER_EDIT_EXISTING_FORM_FIELD_COMMAND, PDF_READER_DELETE_EXISTING_FORM_FIELD_COMMAND, PDF_READER_RESET_FORM_VALUES_COMMAND, PDF_READER_IMPORT_FORM_DATA_COMMAND, PDF_READER_NATIVE_ACTIVATION_COMMANDS, type PendingPdfReaderActivation } from "./pdf/viewer/readerCommands";
 import {
   type PdfVerifiedPdfaCapability,
   parsePdfVerifiedPdfaCapability,
@@ -1587,14 +1389,7 @@ import {
   type LoadedPdfSourceIdentity,
   loadPdfApi,
 } from "./pdf/viewer/pdfApi";
-import {
-  PDF_HIGHLIGHT_COLORS,
-  PDF_AREA_HIGHLIGHT_OPACITIES,
-  DEFAULT_HIGHLIGHT_COLOR,
-  sanitizeHighlightPayload,
-  buildHighlightReaderPayload,
-  managedTextMarkupSyncFromHighlight,
-} from "./pdf/viewer/highlightPayload";
+import { DEFAULT_HIGHLIGHT_COLOR, sanitizeHighlightPayload, buildHighlightReaderPayload, managedTextMarkupSyncFromHighlight } from "./pdf/viewer/highlightPayload";
 export { buildHighlightReaderPayload } from "./pdf/viewer/highlightPayload";
 import {
   pageRecordOf,
@@ -1799,8 +1594,6 @@ import {
   type ReaderPictureCarry,
   type ReaderPictureEditing,
 } from "./pdf/viewer/useReaderPictureEditing";
-import { PdfReaderPictureFormatRibbon } from "./pdf/PdfReaderPictureFormatRibbon";
-import PdfEditPointerTools from "./pdf/PdfEditPointerTools";
 import type { PDFViewerProps, PdfAnnotationListModel } from "./pdf/viewer/PDFViewerProps";
 import { PdfOutputHydrationNotice } from "./pdf/viewer/PdfOutputHydrationNotice";
 import { PdfViewerRibbon } from "./pdf/viewer/PdfViewerRibbon";
@@ -1863,7 +1656,7 @@ import {
 import type { PdfViewRecoveryRuntime } from "./pdf/viewer/viewRecovery";
 import { PdfViewerPages, readerInkPaint, type NativeVectorMarqueeRect } from "./pdf/viewer/PdfViewerPages";
 import { WetInkBatcher } from "@mrnote/core/web/lib/office-wet-ink.ts";
-import { WetInkLayer, wetInkSvgElement } from "@mrnote/ink/web/lib/office-wet-ink-layer.ts";
+import { WetInkLayer, wetInkSvgElement } from "@mrnote/core/web/lib/office-wet-ink-layer.ts";
 import { useDocumentHasFormFields } from "./pdf/viewer/hooks/useDocumentHasFormFields";
 import { usePdfEraseTool } from "./pdf/viewer/hooks/usePdfEraseTool";
 import { usePdfSplitPageMode } from "./pdf/viewer/hooks/usePdfSplitPageMode";
@@ -2275,280 +2068,7 @@ type PreparedNativeTextOfPage = Readonly<{ pageNumber: number; scale: number; ro
   /** The page's own layer is this revision's: nothing goes on the page. */
   kept?: boolean }>;
 
-export default function PDFViewer({
-  url: savedUrl,
-  filename,
-  downloadUrl,
-  renewDownloadUrl,
-  deterministicPreview = false,
-  ribbonQuickActions,
-  ribbonActionRail,
-  documentFind,
-  nativeTextOpener,
-  ribbonQuickActionTail,
-  ribbonQuickOverflowOnlyTail,
-  ribbonSaveStatus,
-  ribbonSaveStatusLabel,
-  annotationContextWritable = true,
-  nativeAnnotationWriteGeneration = "standalone",
-  ribbonInsertPageCommands,
-  onPageOrganizerApply,
-  managedOutline,
-  onManagedOutlineMutation,
-  onSourceOutlineEdit,
-  managedOutlineBusy,
-  managedOutlineDisabledReason,
-  onDownload,
-  onDownloadSavedRevision,
-  onGuestExportRequest,
-  preferAnnotatedDownload,
-  annotatedDownloadEnabled = true,
-  onReaderExportEditsChange,
-  onReaderExportEditCountChange,
-  onVisualMaskOutputRiskChange,
-  nativeFormWriteAuthority,
-  nativeFormFields,
-  onNativeFormFieldChange,
-  onNativeFormAuthoringChange,
-  nativeFormAuthoringDisabledReason,
-  onNativeFormPendingChange,
-  onCopilotFormInventory,
-  onNativeFormFlushReady,
-  downloadWithAnnotationsRequestId,
-  downloadWithAnnotationsPolicyAction,
-  onDownloadWithAnnotationsSettled,
-  onPageChange,
-  onCurrentInsertedPageChange,
-  onNavigationPanelChange,
-  navigationPanelCloseRequest,
-  annotationListHost,
-  commentRibbonCommands,
-  onNativePageRotationsChange,
-  notebookId,
-  pageId,
-  liveTransformRoom,
-  ocrSourcePageId,
-  initialPage,
-  initialPageIntentGeneration,
-  navigateToPageRequest,
-  showPageSlotRequest,
-  onRequestPageSummary,
-  onPageTextChange,
-  onNativeListTextSelectionChange,
-  onPlacedAnnotationSelectionChange,
-  onNativeListTextExtraTargetsChange,
-  onNativeTextAnnotationsChange,
-  onNativeFreeTextCandidatePage,
-  onNativeTextMarkupAnnotationsChange,
-  onNativeInkAnnotationsChange,
-  onManagedInkUpsert,
-  onManagedInkDelete,
-  onManagedInkErase,
-  liveInkAwareness = null,
-  taskPaneDocks = null,
-  nativeSourceInkStrokes = EMPTY_NATIVE_SOURCE_INK_STROKES,
-  onNativeSourceInkDelete,
-  onNativeSourceInkTransform,
-  onNativeSourceInkStyle,
-  onNativeShapeAnnotationsChange,
-  onManagedShapeUpsert,
-  onManagedAreaHighlightUpsert,
-  onManagedShapeDelete,
-  nativeShapes,
-  heldNativeAnnotations: heldNativeAnnotationsProp = null,
-  heldManagedInkStrokes,
-  discardedReaderRowIds,
-  onManagedMeasurementUpsert,
-  onManagedMeasurementDelete,
-  nativeMeasurements,
-  onManagedSignatureUpsert,
-  onManagedSignatureDelete,
-  nativeSignatures,
-  managedSignatureAppearanceReady = false,
-  onNativeStampAnnotationsChange,
-  onManagedStampUpsert,
-  onNativeImageInsert,
-  onManagedStampDelete,
-  nativeStamps,
-  onManagedLinkUpsert,
-  onManagedLinkDelete,
-  nativeLinks,
-  onNativeLinkAnnotationsChange,
-  nativeSourceLinks,
-  nativeSourceLinkDisabledReason,
-  onNativeSourceLinkUpsert,
-  onNativeSourceLinkTransform,
-  onNativeSourceLinkDelete,
-  onNativeSourceLinksDeleteAll,
-  nativeSourceStamps,
-  onNativeSourceStampTransform,
-  onNativeSourceStampDelete,
-  onNativeFreeTextAnnotationsChange,
-  nativeSourceFreeTexts,
-  onNativeSourceFreeTextTransform,
-  onNativeSourceFreeTextDelete,
-  onNativeSourceFreeTextEdit,
-  managedStampAppearanceReady = false,
-  nativeSourceShapes,
-  onNativeSourceShapeTransform,
-  onNativeSourceShapeDelete,
-  onNativeSourceShapeStyle,
-  managedShapeAppearanceReady = false,
-  nativeTextMarkups,
-  nativeSourceTextMarkups = EMPTY_NATIVE_SOURCE_TEXT_MARKUPS,
-  onNativeSourceTextMarkupSelect,
-  nativeSourceTextNotes = EMPTY_NATIVE_SOURCE_TEXT_NOTES,
-  onNativeSourceTextNoteSelect,
-  onManagedTextMarkupUpsert,
-  onManagedTextMarkupUpsertGroups,
-  onManagedTextMarkupUpsertMany,
-  onManagedTextMarkupDelete,
-  onManagedProofingUpsert,
-  onManagedNoteUpsert,
-  onManagedNoteDelete,
-  onManagedCommentBatchDelete,
-  managedTextMarkupAppearanceReady = false,
-  onPageTextBoxesChange,
-  documentTitle,
-  dataItemId,
-  engineReaderResourceId = null,
-  nativePlanners: hostNativePlanners,
-  annotationReadScope,
-  sourceDocumentRevision: savedDocumentRevision,
-  onOrdinaryNoteSourcePrepareReady,
-  sourceByteGenerationKey: savedByteGenerationKey,
-  sourceSha256: savedSha256,
-  workingSource,
-  documentPageStructure,
-  onDocumentPageStructureRejected,
-  onDocumentPageMapChange,
-  nativeTextSourceHandoff,
-  initialRibbonTab,
-  onRibbonTabChange,
-  entryPainting,
-  onFirstVisiblePaint,
-  onPageSourcePainted,
-  onSourceRiskSnapshotChange,
-  lossyCompressionSource,
-  lossyCompressionWritable = false,
-  pageRotations,
-  deletedPages,
-  insertedPages,
-  pageMoves,
-  textBoxEdits,
-  nativeTextBoxLayouts,
-  readNativeKeptTextBlocks,
-  cropBoxes,
-  documentDecorations,
-  documentDecorationsNative = false,
-  documentDecorationsNativeAppearanceReady = false,
-  onDocumentDecorationsChange,
-  onDocumentDecorationsDraftDiscard,
-  nativePageLabelRanges,
-  onNativePageLabelRangesApply,
-  onUploadWatermarkImage,
-  nativeFileAttachments = [],
-  onNativeFileAttachmentUpsert,
-  onNativeFileAttachmentMove,
-  onNativeFileAttachmentDelete,
-  nativeFileAttachmentBusy = false,
-  nativeFileAttachmentDisabledReason,
-  onNativePageImport,
-  onNativePageReplace,
-  nativePageImportBusy = false,
-  nativePageImportDisabledReason,
-  nativePageReplaceDisabledReason,
-  nativeInkStrokes,
-  nativeImageOverlays,
-  resolveNativeImageOverlayUrl,
-  resolveNativeImageOverlayBytes,
-  enablePageOps = false,
-  onEditContent,
-  onPrepareNativeTextEdit,
-  onWarmNativeTextEdit,
-  nativeTextWarmHold = false,
-  onNativeVectorGeometryCommit,
-  onNativeImageActivate,
-  onNativePictureCommit,
-  onNativePictureOriginal,
-  onNativePictureAltRead,
-  onNativePictureOriginRead,
-  onNativeVectorDeleteCommit,
-  onNativeVectorDuplicateCommit,
-  onNativeVectorReorderCommit,
-  onNativeVectorReorderCommitAll,
-  onNativeContentReorderCommit,
-  onNativeVectorStyleCommitAll,
-  onNativeVectorDeleteCommitAll,
-  onNativeVectorGeometryCommitAll,
-  onNativeVectorMergeCommit,
-  onNativeVectorDuplicateCommitAll,
-  onNativeVectorPasteContent,
-  nativeVectorGeometryBusy = false,
-  nativeVectorGeometryDisabledReason,
-  nativeVectorWriteSettling = false,
-  nativeDocumentWriteBusy = false,
-  nativeVectorWriterSourceSha256 = null,
-  nativeVectorProvisionalTargetSinkRef,
-  nativeVectorPageShapeBoxesRef,
-  nativeGestureWritePendingRef,
-  nativeCachedPaintShowRef,
-  onNativeVectorSelectionActiveChange,
-  onNativeVectorStyleCommit,
-  nativeVectorStyleBusy = false,
-  nativeVectorStyleDisabledReason,
-  nativeTextEditingActive = false,
-  onNativeTextContinuationCaptureChange,
-  onNativeTextQueuedOpen,
-  onNativeTextKeptDrag,
-  onNativeTextEditModeActiveChange,
-  contentEditExitSignal = 0,
-  lineAnnotateRequest = null,
-  contentEditEnterSignal = 0,
-  handToolSignal = 0,
-  insertTextSignal = 0,
-  onContentEditModeExit,
-  onCurrentAuthorChange,
-  editContentDisabledReason,
-  editContentModeDisabledReason,
-  editContentModeDisabledTransient = false,
-  editContentBusy = false,
-  onInsertText,
-  onInsertBlankPageBeside,
-  onReplaceSourceFile,
-  textBoxAuthoring,
-  tableAuthoring,
-  chartAuthoring,
-  nativeImageInsertRequestId = 0,
-  onCropPage,
-  onPageSizeApply,
-  onTaggedTextApply,
-  taggedTextDisabledReason,
-  taggedTextBusy=false,
-  heldTaggedTextValues,
-  heldPageLabelRanges,
-  heldPageGeometries: heldPageGeometriesProp,
-  heldPageImports,
-  pageSizeOriginalSizes,
-  pageSizeDisabledReason,
-  onEraseRegion,
-  eraseDisabledReason,
-  onSplitPages,
-  splitPageDisabledReason,
-  onOpenPageBackground,
-  pageBackgroundOpen = false,
-  pageBackgroundBusy = false,
-  pageBackgroundDisabledReason,
-  onOpenVersionHistory,
-  onCreateEditableVersion,
-  onConvertToSpreadsheet,
-  onConvertToPresentation,
-  onOpenOfficeConversion,
-  onOfficeConversionPrepare,
-  officeProjectionDisabledReason,
-  isCreatingEditableVersion,
-  rangeSource,
-}: PDFViewerProps) {
+export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewDownloadUrl, deterministicPreview = false, ribbonQuickActions, ribbonActionRail, documentFind, nativeTextOpener, ribbonQuickActionTail, ribbonQuickOverflowOnlyTail, ribbonSaveStatus, ribbonSaveStatusLabel, annotationContextWritable = true, nativeAnnotationWriteGeneration = "standalone", ribbonInsertPageCommands, onPageOrganizerApply, managedOutline, onManagedOutlineMutation, onSourceOutlineEdit, managedOutlineBusy, managedOutlineDisabledReason, onDownload, onDownloadSavedRevision, onGuestExportRequest, preferAnnotatedDownload, annotatedDownloadEnabled = true, onReaderExportEditsChange, onReaderExportEditCountChange, onVisualMaskOutputRiskChange, nativeFormWriteAuthority, nativeFormFields, onNativeFormFieldChange, onNativeFormAuthoringChange, nativeFormAuthoringDisabledReason, onNativeFormPendingChange, onCopilotFormInventory, onNativeFormFlushReady, downloadWithAnnotationsRequestId, downloadWithAnnotationsPolicyAction, onDownloadWithAnnotationsSettled, onPageChange, onCurrentInsertedPageChange, onNavigationPanelChange, navigationPanelCloseRequest, annotationListHost, onNativePageRotationsChange, notebookId, pageId, livePageId, liveTransformRoom, ocrSourcePageId, initialPage, initialPageIntentGeneration, navigateToPageRequest, showPageSlotRequest, onRequestPageSummary, onPageTextChange, onNativeListTextSelectionChange, onPlacedAnnotationSelectionChange, onNativeListTextExtraTargetsChange, onNativeTextAnnotationsChange, onNativeFreeTextCandidatePage, onNativeTextMarkupAnnotationsChange, onNativeInkAnnotationsChange, onManagedInkUpsert, onManagedInkDelete, onManagedInkErase, liveInkAwareness = null, taskPaneDocks = null, nativeSourceInkStrokes = EMPTY_NATIVE_SOURCE_INK_STROKES, onNativeSourceInkDelete, onNativeSourceInkTransform, onNativeSourceInkStyle, onNativeShapeAnnotationsChange, onManagedShapeUpsert, onManagedAreaHighlightUpsert, onManagedShapeDelete, nativeShapes, heldNativeAnnotations: heldNativeAnnotationsProp = null, heldManagedInkStrokes, discardedReaderRowIds, onManagedMeasurementUpsert, onManagedMeasurementDelete, nativeMeasurements, onManagedSignatureUpsert, onManagedSignatureDelete, nativeSignatures, managedSignatureAppearanceReady = false, onNativeStampAnnotationsChange, onManagedStampUpsert, onNativeImageInsert, onManagedStampDelete, nativeStamps, onManagedLinkUpsert, onManagedLinkDelete, nativeLinks, onNativeLinkAnnotationsChange, nativeSourceLinks, nativeSourceLinkDisabledReason, onNativeSourceLinkUpsert, onNativeSourceLinkTransform, onNativeSourceLinkDelete, onNativeSourceLinksDeleteAll, nativeSourceStamps, onNativeSourceStampTransform, onNativeSourceStampDelete, onNativeFreeTextAnnotationsChange, nativeSourceFreeTexts, onNativeSourceFreeTextTransform, onNativeSourceFreeTextDelete, onNativeSourceFreeTextEdit, managedStampAppearanceReady = false, nativeSourceShapes, onNativeSourceShapeTransform, onNativeSourceShapeDelete, onNativeSourceShapeStyle, managedShapeAppearanceReady = false, nativeTextMarkups, nativeSourceTextMarkups = EMPTY_NATIVE_SOURCE_TEXT_MARKUPS, onNativeSourceTextMarkupSelect, nativeSourceTextNotes = EMPTY_NATIVE_SOURCE_TEXT_NOTES, onNativeSourceTextNoteSelect, onManagedTextMarkupUpsert, onManagedTextMarkupUpsertGroups, onManagedTextMarkupUpsertMany, onManagedTextMarkupDelete, onManagedProofingUpsert, onManagedNoteUpsert, onManagedNoteDelete, onManagedCommentBatchDelete, managedTextMarkupAppearanceReady = false, onPageTextBoxesChange, documentTitle, dataItemId, engineReaderResourceId = null, nativePlanners: hostNativePlanners, annotationReadScope, sourceDocumentRevision: savedDocumentRevision, onOrdinaryNoteSourcePrepareReady, sourceByteGenerationKey: savedByteGenerationKey, sourceSha256: savedSha256, workingSource, documentPageStructure, onDocumentPageStructureRejected, onDocumentPageMapChange, nativeTextSourceHandoff, initialRibbonTab, onRibbonTabChange, entryPainting, onFirstVisiblePaint, onPageSourcePainted, onSourceRiskSnapshotChange, lossyCompressionSource, lossyCompressionWritable = false, pageRotations, deletedPages, insertedPages, pageMoves, textBoxEdits, nativeTextBoxLayouts, readNativeKeptTextBlocks, cropBoxes, documentDecorations, documentDecorationsNative = false, documentDecorationsNativeAppearanceReady = false, onDocumentDecorationsChange, onDocumentDecorationsDraftDiscard, nativePageLabelRanges, onNativePageLabelRangesApply, onUploadWatermarkImage, nativeFileAttachments = [], onNativeFileAttachmentUpsert, onNativeFileAttachmentMove, onNativeFileAttachmentDelete, nativeFileAttachmentBusy = false, nativeFileAttachmentDisabledReason, onNativePageImport, onNativePageReplace, nativePageImportBusy = false, nativePageImportDisabledReason, nativePageReplaceDisabledReason, nativeInkStrokes, nativeImageOverlays, resolveNativeImageOverlayUrl, resolveNativeImageOverlayBytes, enablePageOps = false, onEditContent, onPrepareNativeTextEdit, onWarmNativeTextEdit, nativeTextWarmHold = false, onNativeVectorGeometryCommit, onNativeImageActivate, onNativePictureCommit, onNativePictureOriginal, onNativePictureAltRead, onNativePictureOriginRead, onNativeVectorDeleteCommit, onNativeVectorDuplicateCommit, onNativeVectorReorderCommit, onNativeVectorReorderCommitAll, onNativeContentReorderCommit, onNativeVectorStyleCommitAll, onNativeVectorDeleteCommitAll, onNativeVectorGeometryCommitAll, onNativeVectorMergeCommit, onNativeVectorDuplicateCommitAll, onNativeVectorPasteContent, nativeVectorGeometryBusy = false, nativeVectorGeometryDisabledReason, nativeVectorWriteSettling = false, nativeDocumentWriteBusy = false, nativeVectorWriterSourceSha256 = null, nativeVectorProvisionalTargetSinkRef, nativeVectorPageShapeBoxesRef, nativeGestureWritePendingRef, nativeCachedPaintShowRef, onNativeVectorSelectionActiveChange, onNativeVectorStyleCommit, nativeVectorStyleBusy = false, nativeVectorStyleDisabledReason, nativeTextEditingActive = false, onNativeTextContinuationCaptureChange, onNativeTextQueuedOpen, onNativeTextKeptDrag, onNativeTextEditModeActiveChange, contentEditExitSignal = 0, lineAnnotateRequest = null, contentEditEnterSignal = 0, handToolSignal = 0, insertTextSignal = 0, onContentEditModeExit, onCurrentAuthorChange, editContentDisabledReason, editContentModeDisabledReason, editContentModeDisabledTransient = false, editContentBusy = false, onInsertText, onInsertBlankPageBeside, textBoxAuthoring, tableAuthoring, chartAuthoring, nativeImageInsertRequestId = 0, onCropPage, onPageSizeApply, onTaggedTextApply, taggedTextDisabledReason, taggedTextBusy=false, heldTaggedTextValues, heldPageLabelRanges, heldPageGeometries: heldPageGeometriesProp, heldPageImports, pageSizeOriginalSizes, pageSizeDisabledReason, onEraseRegion, onSplitPages, splitPageDisabledReason, onOpenPageBackground, pageBackgroundOpen = false, pageBackgroundBusy = false, pageBackgroundDisabledReason, onCreateEditableVersion, onConvertToSpreadsheet, onConvertToPresentation, onOpenOfficeConversion, onOfficeConversionPrepare, officeProjectionDisabledReason, isCreatingEditableVersion, rangeSource }: PDFViewerProps) {
   // The planners and writers this viewer's engine calls go through: the
   // editing host's own page, else a reader's (its head is registered under
   // the reader page), else none (answered only for bytes one page holds).
@@ -3144,9 +2664,10 @@ export default function PDFViewer({
   const scaleRef = useRef(scale);
   scaleRef.current = scale;
   const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
-  const [activeRibbonTab, setActiveRibbonTab] = useState<PdfRibbonTab>(
+  const [activeRibbonTabUnchecked, setActiveRibbonTab] = useState<PdfRibbonTab>(
     () => initialRibbonTab ?? "home",
   );
+  const activeRibbonTab = (["home","insert"] as readonly unknown[]).includes(activeRibbonTabUnchecked) ? activeRibbonTabUnchecked : "home";
   // Edit Content is a mode the Edit tab turns on, as WPS's 编辑内容 toggle:
   // one Escape (or 退出编辑, or the toggle) ends it and the ribbon stays on
   // the Edit tab with the page back to reading. Entering the Edit tab, or
@@ -3207,7 +2728,7 @@ export default function PDFViewer({
                     ? current
                     : annotationContextBaseTabRef.current;
         activeRibbonTabRef.current = "text-format";
-        setActiveRibbonTab("text-format");
+        void 0;
       }
     } else if (current === "text-format") {
       const baseTab = nativeTextContextBaseTabRef.current;
@@ -3568,7 +3089,7 @@ export default function PDFViewer({
     if (chartTabWanted && current !== "chart-design" && current !== "chart-format") {
       chartContextBaseTabRef.current = isPdfViewerBaseRibbonTab(current) ? current : "insert";
       activeRibbonTabRef.current = "chart-design";
-      setActiveRibbonTab("chart-design");
+      void 0;
     } else if (!chartTabWanted && (current === "chart-design" || current === "chart-format")) {
       activeRibbonTabRef.current = chartContextBaseTabRef.current;
       setActiveRibbonTab(chartContextBaseTabRef.current);
@@ -3589,7 +3110,7 @@ export default function PDFViewer({
     if (tableTabWanted && current !== "table-format") {
       tableContextBaseTabRef.current = isPdfViewerBaseRibbonTab(current) ? current : "insert";
       activeRibbonTabRef.current = "table-format";
-      setActiveRibbonTab("table-format");
+      void 0;
     } else if (!tableTabWanted && current === "table-format") {
       activeRibbonTabRef.current = tableContextBaseTabRef.current;
       setActiveRibbonTab(tableContextBaseTabRef.current);
@@ -3814,16 +3335,9 @@ export default function PDFViewer({
     size: { width: number; height: number };
     points: { x: number; y: number }[];
   } | null>(null);
-  // The Eraser armed from the Comment tab's ink tool (WPS's graffiti tab:
-  // Draw, Eraser, Exit in one tab), which keeps that tool's tab on show.
-  const [commentInkErasing, setCommentInkErasing] = useState(false);
-  // WPS's graffiti 直线 (Annot_GraffitiSline): each stroke of the ink tool is
-  // the straight line from where it starts to where it lifts.
-  const [inkStraight, setInkStraight] = useState(false);
   const inkStraightRef = useRef(false);
-  inkStraightRef.current = inkStraight;
+  inkStraightRef.current = false;
   const commentInkPenRef = useRef<() => unknown>(() => undefined);
-  if (commentInkErasing && !inkEraseMode) setCommentInkErasing(false);
   const [inkEraserKind, setInkEraserKind] = useState<DocumentInkEraser>("stroke");
   // The eraser's drag (shown at once), where its ring is (client px), and the
   // strokes it took that are still being deleted (kept hidden until then).
@@ -4561,10 +4075,10 @@ export default function PDFViewer({
   // pre-configured, so it loads / renders / bakes through the exact same paths.
   const [areaHighlightActive, setAreaHighlightActive] = useState(false);
   useEffect(() => {
-    if (onManagedAreaHighlightUpsert || !areaHighlightActive) return;
+    return;
     setAreaHighlightActive(false);
     setShapeMode(false);
-  }, [areaHighlightActive, onManagedAreaHighlightUpsert]);
+  }, [false, onManagedAreaHighlightUpsert]);
   const [areaHighlightColor, setAreaHighlightColor] = useState(
     DEFAULT_AREA_HIGHLIGHT_COLOR,
   );
@@ -4974,10 +4488,6 @@ export default function PDFViewer({
     setLinkDraft(null);
     selectedLinkContextRef.current = null;
     setSelectedLinkContext(null);
-    if (activeRibbonTabRef.current === "link-format") {
-      activeRibbonTabRef.current = linkContextBaseTabRef.current;
-      setActiveRibbonTab(linkContextBaseTabRef.current);
-    }
   }, [
     dataItemId,
     expectedSourceByteGenerationKey,
@@ -5139,11 +4649,10 @@ export default function PDFViewer({
   );
   const printPreflightTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [batchPrintOpen, setBatchPrintOpen] = useState(false);
-  const batchPrintOpenRef = useRef(batchPrintOpen);
-  batchPrintOpenRef.current = batchPrintOpen;
+  const batchPrintOpenRef = useRef(false);
+  batchPrintOpenRef.current = false;
   const [batchPrintSeed, setBatchPrintSeed] =
     useState<PdfBatchPrintItem | null>(null);
-  const [batchPrintPreparing, setBatchPrintPreparing] = useState(false);
   const batchPrintTriggerRef = useRef<HTMLButtonElement | null>(null);
   const batchPrintGenerationRef = useRef(1);
   // Managed document decorations are one typed authority shared by editor
@@ -5425,9 +4934,6 @@ export default function PDFViewer({
     return () => { cancelled = true; };
   }, [formFields, pdfDoc]);
   const formRoles = useMemo(() => pdfFormRolesOf(formFieldRoles.values()), [formFieldRoles]);
-  // Filling as a role (ONLYOFFICE's View form as a role): only its fields,
-  // and anyone's, take input. Null: as anyone -- every field.
-  const [formFillRole, setFormFillRole] = useState<string | null>(null);
   // An embedded fillForms session fills as the role its token names (the
   // server refuses another role's field whatever is shown here), with fill
   // mode on from the start: filling is all the session does.
@@ -5440,8 +4946,7 @@ export default function PDFViewer({
     : null;
   const effectiveFormFillRole = embedFormFill
     ? embedFormRoleName
-    : formFillRole && formRoles.some((role) => role.name === formFillRole)
-      ? formFillRole : null;
+    : null;
   const [requestedFormMode, setFormMode] = useState(embedFormFill);
   useEffect(() => {
     if (embedFormFill) setFormMode(true);
@@ -5656,14 +5161,6 @@ export default function PDFViewer({
   const [formDataExportDialogOpen, setFormDataExportDialogOpen] =
     useState(false);
   const formDataExportDialogReturnFocusRef = useRef<HTMLElement | null>(null);
-  const openFormDataExportDialog = useCallback(
-    (trigger: HTMLButtonElement | null) => {
-      if (!trigger) return;
-      formDataExportDialogReturnFocusRef.current = trigger;
-      setFormDataExportDialogOpen(true);
-    },
-    [],
-  );
   useEffect(() => {
     setFormDataExportDialogOpen(false);
   }, [url]);
@@ -5862,13 +5359,13 @@ export default function PDFViewer({
     readonly sourceSha256: string;
     readonly outputAuthorityIsCurrent: () => boolean;
   } | null>(null);
-  const imageExtractionReviewRef = useRef(imageExtractionReview);
-  imageExtractionReviewRef.current = imageExtractionReview;
+  const imageExtractionReviewRef = useRef(null);
+  imageExtractionReviewRef.current = null;
   const visibleImageExtractionReview =
-    imageExtractionReview?.sourceKey === imageExtractionSourceKey &&
-    imageExtractionReview.sessionGeneration ===
+    null?.sourceKey === imageExtractionSourceKey &&
+    null.sessionGeneration ===
       imageExtractionSessionGenerationRef.current
-      ? imageExtractionReview
+      ? null
       : null;
 
   useEffect(
@@ -5882,15 +5379,7 @@ export default function PDFViewer({
   );
 
   useEffect(() => {
-    if (
-      imageExtractionReview &&
-      imageExtractionReview.sourceKey !== imageExtractionSourceKey
-    ) {
-      releasePdfImageExtractionPlan(imageExtractionReview.plan);
-      setImageExtractionReview(null);
-      setImageExtractionError(null);
-    }
-  }, [imageExtractionReview, imageExtractionSourceKey]);
+  }, [null, imageExtractionSourceKey]);
   const [translationDialog, setTranslationDialog] = useState<{
     phase: PdfTranslationPhase;
     target: PdfTranslationTarget;
@@ -5919,19 +5408,10 @@ export default function PDFViewer({
   const [officeProjectionTarget, setOfficeProjectionTarget] =
     useState<PdfEditableProjectionTarget | null>(null);
   const officeProjectionTriggerRef = useRef<HTMLElement | null>(null);
-  const [screenRecordingOpen, setScreenRecordingOpen] = useState(false);
-  const [screenRecordingState, setScreenRecordingState] = useState<
-    "idle" | "requesting" | "recording" | "saving" | "saved" | "error"
-  >("idle");
   const screenRecordingSessionRef = useRef<PdfScreenRecordingSession | null>(
     null,
   );
-  const screenRecordingTriggerRef = useRef<HTMLElement | null>(null);
   const screenRecordingGenerationRef = useRef(0);
-  const screenRecordingSupported =
-    typeof navigator !== "undefined" &&
-    typeof navigator.mediaDevices?.getDisplayMedia === "function" &&
-    typeof MediaRecorder !== "undefined";
   useLayoutEffect(
     () => () => {
       screenRecordingGenerationRef.current += 1;
@@ -6242,7 +5722,6 @@ export default function PDFViewer({
   const [replaceTargetRange, setReplaceTargetRange] = useState("");
   const [pageSizeOpen, setPageSizeOpen] = useState(false);
   const pageCropTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const editCropTriggerRef = useRef<HTMLButtonElement | null>(null);
   const pageSizeDialogReturnFocusRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     setPageSizeOpen(false);
@@ -8831,8 +8310,7 @@ export default function PDFViewer({
     new Map(),
   );
   const nativeTextEditModeActive =
-    !contentEditPaused &&
-    (activeRibbonTab === "edit" || activeRibbonTab === "text-format");
+    false;
   const nativeTextEditModeActiveRef = useRef(nativeTextEditModeActive);
   nativeTextEditModeActiveRef.current = nativeTextEditModeActive;
   // The host pins the displayed source for the whole Edit session. Shape
@@ -8843,13 +8321,9 @@ export default function PDFViewer({
   // write lands on the page it was made on.
   const contentEditModeLive =
     nativeTextEditModeActive ||
-    (!contentEditPaused &&
-      activeRibbonTab === "annotation-format" &&
-      annotationContextBaseTabRef.current === "edit") ||
+    (false) ||
     // A picture selected in place keeps the session, as a shape does.
-    (!contentEditPaused &&
-      activeRibbonTab === "picture-format" &&
-      pictureContextBaseTabRef.current === "edit");
+    (false);
   const contentEditModeLiveRef = useRef(contentEditModeLive);
   // How many times Edit Content has ended: a line whose proof was asked for
   // in one session and answered after it is not selected (below).
@@ -9125,7 +8599,7 @@ export default function PDFViewer({
       orderTextLayerEditedBoxes, editContentModeDisabledReason, nativeTextEditBoxesInteractive,
       contentEditModeLive, nativeTextParagraphUsesStandaloneFallback, readNativeTextEditBoxPresentation,
       textBoxEdits, nativeTextBoxLayouts, activeTextSourceHandoff, pdfDoc, expectedSourceByteGenerationKey,
-      commentsHidden, ocgVersion, effectiveDocumentDecorations,
+      false, ocgVersion, effectiveDocumentDecorations,
     ];
     const lastPass = nativeTextBoxPassRef.current;
     const paintedPages = nativeTextPaintedPagesRef.current;
@@ -9284,7 +8758,7 @@ export default function PDFViewer({
     activeTextSourceHandoff,
     pdfDoc,
     expectedSourceByteGenerationKey,
-    commentsHidden,
+    false,
     ocgVersion,
     findTextLayerPulse,
     // Its watermark, headers and page numbers are no boxes (see
@@ -10230,11 +9704,7 @@ export default function PDFViewer({
   // change of it is written, its selection carried across.
   const [pageGridSelectRequest, setPageGridSelectRequest] = useState(0);
   const pageGridActive =
-    activeRibbonTab === "page" &&
-    !pageReplaceWorkspaceActive &&
-    !loading &&
-    Boolean(onPageOrganizerApply) &&
-    pageOrganizerPages.length > 0;
+    false;
   const pageGridKey = `${pageGridSelectRequest}:${pageOrganizerPages
     .map((page) => `${page.page}@${page.rotation}`)
     .join(",")}:${effectiveInsertedPages
@@ -10862,9 +10332,9 @@ export default function PDFViewer({
 
   // Prepare a peer source offscreen. No current reader, source-risk state,
   // canvas, or parent callback changes during this asynchronous phase.
-  const ordinaryPrepareBoundary = useMemo(() => ({ activeNoteId, batchPrintPreparing, dataItemId,
+  const ordinaryPrepareBoundary = useMemo(() => ({ activeNoteId, batchPrintPreparing: false, dataItemId,
     expectedSourceDocumentRevision, formMode, pendingNote, pendingPrintPreflight, pendingSignature,
-    printing, textExportBusy, url, workingSource }), [activeNoteId, batchPrintPreparing, dataItemId,
+    printing, textExportBusy, url, workingSource }), [activeNoteId, false, dataItemId,
     expectedSourceDocumentRevision, formMode, pendingNote, pendingPrintPreflight, pendingSignature,
     printing, textExportBusy, url, workingSource]);
   const ordinaryPrepareBoundaryRef = useRef<object | null>(ordinaryPrepareBoundary);
@@ -10940,7 +10410,7 @@ export default function PDFViewer({
         const why = ordinaryPrepareBoundaryRef.current !== ordinaryPrepareBoundary ? "boundary" : !owner ? "owner"
           : !previousDoc ? "document" : !previousIdentity ? "identity" : workingSource && !working ? "working-source"
           : pendingNote || activeNoteId ? "note" : formMode ? "form" : pendingSignature ? "signature"
-          : printing || pendingPrintPreflight || batchPrintPreparing ? "print"
+          : printing || pendingPrintPreflight || false ? "print"
           : previousIdentity.url !== url ? "url" : previousIdentity.byteGenerationKey !== expectedSourceByteGenerationKey ? "byte-key"
           : previousIdentity.documentRevision !== expectedSourceDocumentRevision ? "revision"
           : olderRevision ? "not-newer" : workingNamedWrong ? "working-name" : null;
@@ -10951,7 +10421,7 @@ export default function PDFViewer({
     if (ordinaryPrepareBoundaryRef.current !== ordinaryPrepareBoundary || !owner || !previousDoc || !previousIdentity ||
       (workingSource && !working) ||
       pendingNote || activeNoteId || formMode || pendingSignature || printing || pendingPrintPreflight ||
-      batchPrintPreparing || exportImageInFlightRef.current || formDataExportInFlightRef.current ||
+      false || exportImageInFlightRef.current || formDataExportInFlightRef.current ||
       textExportBusy || documentEncryptInFlightRef.current || cadExportInFlightRef.current ||
       previousIdentity.dataItemId !== request.dataItemId || request.dataItemId !== dataItemId ||
       previousIdentity.url !== url || previousIdentity.byteGenerationKey !== expectedSourceByteGenerationKey ||
@@ -11253,7 +10723,7 @@ export default function PDFViewer({
       await discard();
       return null;
     }
-  }, [activeNoteId, batchPrintPreparing, dataItemId, expectedSourceByteGenerationKey, expectedSourceDocumentRevision,
+  }, [activeNoteId, false, dataItemId, expectedSourceByteGenerationKey, expectedSourceDocumentRevision,
     formMode, nextRenderedOrdinaryPrepare, ordinaryPrepareBoundary, pendingNote, pendingPrintPreflight,
     pendingSignature, printing, sourceSha256, textExportBusy, url, workingSource]);
   useLayoutEffect(() => {
@@ -13435,7 +12905,7 @@ export default function PDFViewer({
         syncPdfCommentVisibilityStorage(
           visibilityStorage,
           pageAnnotations,
-          commentsHidden,
+          false,
           tracked.ids,
         );
         // A NoZoom drawing markup is drawn by the shape overlay at its fixed
@@ -14394,7 +13864,7 @@ export default function PDFViewer({
       }
     },
     [
-      commentsHidden,
+      false,
       nativeTextAnnotationViewportSourceKey,
       resolvedPageRotation,
       onNativeInkAnnotationsChange,
@@ -14539,7 +14009,7 @@ export default function PDFViewer({
       .join(",");
     const nonScaleChanged =
       previous === null ||
-      previous.commentsHidden !== commentsHidden ||
+      previous.commentsHidden !== false ||
       previous.ocgVersion !== ocgVersion ||
       previous.pdfDoc !== pdfDoc ||
       previous.rotationKey !== rotationKey ||
@@ -14569,7 +14039,7 @@ export default function PDFViewer({
       painted.pdfDoc !== pdfDoc &&
       Boolean(dataItemId) &&
       painted.dataItemId === dataItemId &&
-      painted.commentsHidden === commentsHidden &&
+      painted.commentsHidden === false &&
       painted.ocgVersion === ocgVersion &&
       painted.rotationKey === rotationKey &&
       painted.structuralSignature === structuralSignature &&
@@ -14583,14 +14053,14 @@ export default function PDFViewer({
       vectorRouteMark("revision-swap-missed", {
         continuity: Boolean(continuityLoad?.continuity), sameDocument: Boolean(continuityLoad?.sameDocument),
         loadItem: continuityLoad?.dataItemId === (dataItemId ?? null),
-        comments: painted.commentsHidden === commentsHidden, ocg: painted.ocgVersion === ocgVersion,
+        comments: painted.commentsHidden === false, ocg: painted.ocgVersion === ocgVersion,
         rotation: painted.rotationKey === rotationKey, structure: painted.structuralSignature === structuralSignature,
         view: painted.viewMode === viewMode, pages: painted.pageNumbers === pageNumbers, scale: painted.scale === scale,
       });
     }
     if (pdfDoc && visiblePages.length > 0) {
       lastPaintedRenderIdentityRef.current = {
-        pdfDoc, dataItemId, commentsHidden, ocgVersion, rotationKey,
+        pdfDoc, dataItemId, commentsHidden: false, ocgVersion, rotationKey,
         structuralSignature, viewMode, pageNumbers, scale,
       };
     }
@@ -14602,7 +14072,7 @@ export default function PDFViewer({
       if (!revisionSwap) keptPaintedPagesRef.current.clear();
     }
     renderInvalidationSnapshotRef.current = {
-      commentsHidden,
+      commentsHidden: false,
       ocgVersion,
       pdfDoc,
       rotationKey,
@@ -14673,7 +14143,7 @@ export default function PDFViewer({
       );
     }
   }, [
-    commentsHidden,
+    false,
     dataItemId,
     ocgVersion,
     pdfDoc,
@@ -15677,6 +15147,14 @@ export default function PDFViewer({
       // is ignored. Fit and FitH/FitV/FitB switch the zoom to the page or
       // its width; an explicit zoom is left at the reader's default.
       const targetDoc = pdfDoc;
+      // A phone (the compact chrome) opens a document at its page's width,
+      // as ONLYOFFICE's mobile and Acrobat's phone apps do: at 100% a page
+      // was wider than the screen, every field and line half out of view.
+      // The document's own opening fit, read below, still wins.
+      if (compactEditorChrome()) {
+        setFitMode("width");
+        runFitModeRef.current("width", { opening: true });
+      }
       // The author's opening navigation pane (/PageMode, PDF 32000-1 table
       // 28): bookmarks or thumbnails open with the document the first time,
       
@@ -16330,12 +15808,12 @@ export default function PDFViewer({
 
   const requestGoToPageInput = useCallback(() => {
     setPageInput(String(currentVisibleOrdinal));
-    setActiveRibbonTab("page");
+    void 0;
     setPageInputFocusRequest((request) => request + 1);
   }, [currentVisibleOrdinal]);
 
   useEffect(() => {
-    if (pageInputFocusRequest === 0 || activeRibbonTab !== "page") return;
+    return;
     const input = pageTabInputRef.current;
     if (!input || input.disabled) return;
     input.focus({ preventScroll: true });
@@ -16732,11 +16210,6 @@ export default function PDFViewer({
     selectedPlacedRef.current = null;
     setSelectedPlaced(null);
     onPlacedAnnotationSelectionChange?.(null);
-    if (activeRibbonTabRef.current === "annotation-format") {
-      const baseTab = annotationContextBaseTabRef.current;
-      activeRibbonTabRef.current = baseTab;
-      setActiveRibbonTab(baseTab);
-    }
   }, [onPlacedAnnotationSelectionChange]);
   nativeVectorTargetMenuRef.current = (route, event) => {
     // Right-click selects the object (keeping a
@@ -17050,28 +16523,18 @@ export default function PDFViewer({
       // The annotation takes the selection from a picture selected in place.
       pictureEditingRef.current?.clear();
       if (next.kind === "fileAttachment") setAttachmentError(null);
-      if (activeRibbonTabRef.current !== "annotation-format") {
+      {
         const currentTab = activeRibbonTabRef.current;
         annotationContextBaseTabRef.current =
-          currentTab === "text-format"
-            ? nativeTextContextBaseTabRef.current
-            : currentTab === "form-field-format"
-              ? formFieldContextBaseTabRef.current
-              : currentTab === "link-format"
-                ? linkContextBaseTabRef.current
-                : currentTab === "comment-tool"
-                  ? commentToolContextBaseTabRef.current
-                  : currentTab === "picture-format"
-                    ? pictureContextBaseTabRef.current
-                    : isPdfViewerBaseRibbonTab(currentTab)
+          (((((isPdfViewerBaseRibbonTab(currentTab)
                       ? currentTab
-                      : annotationContextBaseTabRef.current;
+                      : annotationContextBaseTabRef.current)))));
       }
       selectedPlacedRef.current = next;
       setSelectedPlaced(next);
       onPlacedAnnotationSelectionChange?.(next);
       activeRibbonTabRef.current = "annotation-format";
-      setActiveRibbonTab("annotation-format");
+      void 0;
       return true;
     },
     [dismissSelection, onPlacedAnnotationSelectionChange],
@@ -17779,7 +17242,7 @@ export default function PDFViewer({
       resumeOffset: number,
       given?: Readonly<{ authority: PdfOcrDocumentAuthority; preflight: PdfOcrEgressPreflight }>,
     ) => {
-      const pending = given ?? pendingOcrPreflight ?? ocrQueuePendingRef.current;
+      const pending = given ?? null ?? ocrQueuePendingRef.current;
       const policyVersion = pending?.preflight.policyVersion;
       if (
         !pending ||
@@ -18143,7 +17606,7 @@ export default function PDFViewer({
     [
       applyOcrRunsToPage,
       capturePdfOcrDocumentAuthority,
-      pendingOcrPreflight,
+      null,
       publishOcrReviewAnnotation,
       revalidatePdfOcrServerSource,
       setPdfActionNotice,
@@ -19309,7 +18772,7 @@ export default function PDFViewer({
   // while note mode is on; converts the click into page-relative percentages.
   const handlePagePlaceNote = useCallback(
     (pageNumber: number, event: ReactMouseEvent<HTMLDivElement>) => {
-      if (!noteMode || !dataItemId) return;
+      return;
       const wrapper = event.currentTarget;
       const rect = wrapper.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return;
@@ -19329,7 +18792,7 @@ export default function PDFViewer({
       });
       setNoteMode(false);
     },
-    [dataItemId, noteColor, noteMode],
+    [dataItemId, noteColor, false],
   );
 
   // Pin a file: the click fixes WHERE; the picker that opens fixes WHAT. The
@@ -20596,6 +20059,34 @@ export default function PDFViewer({
     [onManagedStampDelete, onManagedStampUpsert, stamps],
   );
 
+  // A picture placed on a page: Insert > Image's writes it into the page's
+  // own content (a native image) when the window can, and keeps it as a
+  // stamp when that write is refused; a stamp-picker picture is a stamp.
+  // Shared by the click placement and the live editor's insertPicture.
+  const placeInsertedPicture = useCallback(
+    async (
+      pageNumber: number,
+      x: number,
+      y: number,
+      content: { kind: "image"; image: string; aspectRatio: number; origin: PdfManagedStampCommandOrigin },
+      size: { width: number; height: number },
+    ): Promise<boolean> => {
+      if (content.origin === "image-insert" && onNativeImageInsert) {
+        const appended = await onNativeImageInsert({
+          page: pageNumber,
+          x,
+          y,
+          width: size.width,
+          height: size.height,
+          image: content.image,
+        }).catch(() => false);
+        if (appended) return true;
+      }
+      return persistStamp(pageNumber, x, y, content, size);
+    },
+    [onNativeImageInsert, persistStamp],
+  );
+
   // Place the armed stamp: a click in placement mode drops the box with its
   // top-left at the click point and persists immediately (no composer step).
   // Mirrors handlePagePlaceSignature; placement disarms after one drop.
@@ -20624,30 +20115,13 @@ export default function PDFViewer({
         return;
       }
       setArmedStamp(null);
-      if (
-        content.kind === "image" &&
-        content.origin === "image-insert" &&
-        onNativeImageInsert &&
-        size
-      ) {
-        void onNativeImageInsert({
-          page: pageNumber,
-          x,
-          y,
-          width: size.width,
-          height: size.height,
-          image: content.image,
-        }).then(
-          (appended) => {
-            if (!appended) void persistStamp(pageNumber, x, y, content, size);
-          },
-          () => void persistStamp(pageNumber, x, y, content, size),
-        );
+      if (content.kind === "image" && size) {
+        void placeInsertedPicture(pageNumber, x, y, content, size);
         return;
       }
       void persistStamp(pageNumber, x, y, content, size ?? undefined);
     },
-    [armedStamp, dataItemId, onNativeImageInsert, persistStamp],
+    [armedStamp, dataItemId, persistStamp, placeInsertedPicture],
   );
 
   // Convert a pointer event on a page wrapper into page-relative percentages.
@@ -23003,40 +22477,6 @@ export default function PDFViewer({
     (item) => item.outputPageCount === 0,
   );
 
-  // Row actions never trust the rendered projection as authority. Resolve the
-  // opaque id and its output mapping again against the current live state; a
-  // stale/removed row or newly-unmapped page becomes a zero-action click.
-  const handleRedactionReviewNavigate = useCallback(
-    (annotationId: string) => {
-      const current = redactions.find(
-        (redaction) => redaction.id === annotationId,
-      );
-      if (!current || deletedPageSet.has(current.page)) return;
-      const outputPages = mapOriginalPagesToOutput(
-        pageEdits,
-        originalPageNumbers,
-      ).get(current.page);
-      if (!outputPages || outputPages.length === 0) return;
-      goToPage(current.page);
-      selectPlacedAnnotation({ kind: "redaction", id: current.id });
-    },
-    [
-      deletedPageSet,
-      goToPage,
-      originalPageNumbers,
-      pageEdits,
-      redactions,
-      selectPlacedAnnotation,
-    ],
-  );
-  const handleRedactionReviewDelete = useCallback(
-    (annotationId: string) => {
-      if (!redactions.some((redaction) => redaction.id === annotationId)) return;
-      void handleRedactionDelete(annotationId);
-    },
-    [handleRedactionDelete, redactions],
-  );
-
   // Redact-from-selection (selection toolbar): the selection's rects are
   // already page-wrapper percentages (normalizeHighlightRects — the same rect
   // space redaction boxes persist), so each rect becomes one opaque box.
@@ -23050,7 +22490,7 @@ export default function PDFViewer({
   // persists it. A too-small drag is discarded.
   const handleRedactionPointerDown = useCallback(
     (pageNumber: number, event: ReactPointerEvent<HTMLDivElement>) => {
-      if (!redactMode || !dataItemId) return;
+      return;
       if (event.button !== 0) return;
       const wrapper = event.currentTarget;
       const point = pointerToPagePercent(wrapper, event);
@@ -23073,7 +22513,7 @@ export default function PDFViewer({
         current: { x: point.x, y: point.y },
       });
     },
-    [dataItemId, pointerToPagePercent, redactMode],
+    [dataItemId, pointerToPagePercent, false],
   );
 
   const handleRedactionPointerMove = useCallback(
@@ -23452,7 +22892,7 @@ export default function PDFViewer({
       polygonPoints?: readonly { x: number; y: number }[],
     ): Promise<boolean> => {
       if (!dataItemId || shapeSavingRef.current) return false;
-      const areaHighlightIntent = areaHighlightActive;
+      const areaHighlightIntent = false;
       if (areaHighlightIntent && !onManagedAreaHighlightUpsert) return false;
       // Area-highlight preset overrides the kind to a filled rect (translucent
       // wash) regardless of the active shape kind; the dedicated helper locks
@@ -23498,7 +22938,7 @@ export default function PDFViewer({
     },
     [
       dataItemId,
-      areaHighlightActive,
+      false,
       areaHighlightColor,
       areaHighlightOpacity,
       shapeColor,
@@ -25695,15 +25135,15 @@ export default function PDFViewer({
       drawMode ||
       inkEraseMode ||
       inkLassoMode ||
-      redactMode ||
+      false ||
       shapeMode ||
       signMode ||
       armedStamp != null ||
-      noteMode ||
+      false ||
       attachMode ||
       linkMode ||
       snapshotMode ||
-      measureMode
+      false
     ) {
       clearPlacedAnnotationSelection();
     }
@@ -25711,15 +25151,15 @@ export default function PDFViewer({
     drawMode,
     inkEraseMode,
     inkLassoMode,
-    redactMode,
+    false,
     shapeMode,
     signMode,
     armedStamp,
-    noteMode,
+    false,
     attachMode,
     linkMode,
     snapshotMode,
-    measureMode,
+    false,
     clearPlacedAnnotationSelection,
   ]);
 
@@ -25837,19 +25277,6 @@ export default function PDFViewer({
     clearPlacedAnnotationSelection,
     selectedPlaced,
   ]);
-  const handleDeleteSelectedPlacedAnnotation = useCallback(() => {
-    if (!selectedPlaced) return false;
-    if (placedKindSavingNow(selectedPlaced.kind)) {
-      holdSelectedPlacedDelete();
-      return true;
-    }
-    return carryOutSelectedPlacedDelete();
-  }, [
-    carryOutSelectedPlacedDelete,
-    holdSelectedPlacedDelete,
-    placedKindSavingNow,
-    selectedPlaced,
-  ]);
   useEffect(() => {
     const hold = placedDeleteHoldRef.current;
     const waiting = hold.waiting;
@@ -25906,13 +25333,6 @@ export default function PDFViewer({
     onNativeListTextSelectionChange?.(null);
     contentEditPausedRef.current = true;
     setContentEditPaused(true);
-    if (
-      activeRibbonTabRef.current === "annotation-format" &&
-      annotationContextBaseTabRef.current === "edit"
-    ) {
-      activeRibbonTabRef.current = "edit";
-      setActiveRibbonTab("edit");
-    }
     // The keyboard stays in the window: the editor or the frame that held it
     // goes with the mode, and focus fell to the page body, where no window
     // hears Cmd+Z (WPS undoes the last edit right after Escape). Only focus
@@ -26853,7 +26273,7 @@ export default function PDFViewer({
           // kept as an unsaved change that is written again (the reader
           // says which). Only a link deleted meanwhile is not.
           if ((await commitObjectChange({ kind: "link", object: updated })) === "gone") {
-            setLinkSaveError(t("pages.saveFailed"));
+            setLinkSaveError(saveFailedReason());
             return false;
           }
           return true;
@@ -26882,7 +26302,7 @@ export default function PDFViewer({
             // the reader/native parity guard fails closed instead of hiding it.
             setLinkOverlays((previous) => [...previous, created]);
           }
-          setLinkSaveError(t("pages.saveFailed"));
+          setLinkSaveError(saveFailedReason());
           return false;
         }
         setLinkOverlays((prev) => {
@@ -26896,7 +26316,7 @@ export default function PDFViewer({
         });
         return true;
       } catch {
-        setLinkSaveError(t("pages.saveFailed"));
+        setLinkSaveError(saveFailedReason());
         return false;
       } finally {
         linkSavingRef.current = false;
@@ -26943,7 +26363,7 @@ export default function PDFViewer({
         );
         return true;
       } catch {
-        setLinkSaveError(t("pages.saveFailed"));
+        setLinkSaveError(saveFailedReason());
         return false;
       } finally {
         linkSavingRef.current = false;
@@ -26993,7 +26413,7 @@ export default function PDFViewer({
         }
         return true;
       } catch {
-        setLinkSaveError(t("pages.saveFailed"));
+        setLinkSaveError(saveFailedReason());
         return false;
       } finally {
         linkSavingRef.current = false;
@@ -27032,7 +26452,7 @@ export default function PDFViewer({
         }
         return true;
       } catch {
-        setLinkSaveError(t("pages.saveFailed"));
+        setLinkSaveError(saveFailedReason());
         return false;
       } finally {
         linkSavingRef.current = false;
@@ -27046,11 +26466,6 @@ export default function PDFViewer({
     const selected = selectedLinkContextRef.current;
     selectedLinkContextRef.current = null;
     setSelectedLinkContext(null);
-    if (activeRibbonTabRef.current === "link-format") {
-      const baseTab = linkContextBaseTabRef.current;
-      activeRibbonTabRef.current = baseTab;
-      setActiveRibbonTab(baseTab);
-    }
     if (restoreFocus && selected?.trigger.isConnected) {
       requestAnimationFrame(() => selected.trigger.focus({ preventScroll: true }));
     }
@@ -27071,7 +26486,7 @@ export default function PDFViewer({
         return;
       }
       const currentTab = activeRibbonTabRef.current;
-      if (currentTab !== "link-format") {
+      {
         // Any context tab (annotation, text, form field, comment tool)
         // returns to Annotate when the link context closes.
         linkContextBaseTabRef.current = isPdfViewerBaseRibbonTab(currentTab)
@@ -27087,22 +26502,10 @@ export default function PDFViewer({
       selectedLinkContextRef.current = selected;
       setSelectedLinkContext(selected);
       activeRibbonTabRef.current = "link-format";
-      setActiveRibbonTab("link-format");
+      void 0;
     },
     [linkMode],
   );
-
-  const openSelectedLinkContext = useCallback(() => {
-    const selected = selectedLinkContextRef.current;
-    if (!selected || linkSavingRef.current) return;
-    if (selected.overlay.url) {
-      window.open(selected.overlay.url, "_blank", "noopener,noreferrer");
-      return;
-    }
-    if (selected.overlay.goToPage != null) {
-      goToPage(selected.overlay.goToPage);
-    }
-  }, [goToPage]);
 
   const editSelectedLinkContext = useCallback(() => {
     const selected = selectedLinkContextRef.current;
@@ -27174,7 +26577,7 @@ export default function PDFViewer({
             nativeAnnotationWriteGenerationRef.current ===
             authorityGenerationAtStart;
         } catch {
-          setLinkSaveError(t("pages.saveFailed"));
+          setLinkSaveError(saveFailedReason());
         } finally {
           linkSavingRef.current = false;
           setLinkSaving(false);
@@ -27219,56 +26622,6 @@ export default function PDFViewer({
     clearSelectedLinkContext,
     handleLinkOverlayDelete,
     handleNativeSourceLinkDelete,
-  ]);
-
-  // WPS HyperLink › Delete All Hyperlinks: the file's own links in one
-  // commit (one Undo step), then the links added here, one by one.
-  const documentLinkCount =
-    (nativeSourceLinks ?? []).length + linkOverlays.length;
-  const deleteAllLinks = useCallback(async () => {
-    if (linkSavingRef.current) return;
-    const nativeCount = (nativeSourceLinks ?? []).length;
-    const managed = [...linkOverlays];
-    if (nativeCount + managed.length === 0) return;
-    clearSelectedLinkContext(false);
-    let deleted = 0;
-    let failed = false;
-    if (nativeCount > 0) {
-      const deleteAll = nativeSourceLinksDeleteAllRef.current;
-      if (!deleteAll) {
-        failed = true;
-      } else {
-        linkSavingRef.current = true;
-        setLinkSaving(true);
-        setLinkSaveError(null);
-        try {
-          await deleteAll(nativeAnnotationWriteGenerationRef.current);
-          deleted += nativeCount;
-        } catch {
-          failed = true;
-        } finally {
-          linkSavingRef.current = false;
-          setLinkSaving(false);
-        }
-      }
-    }
-    for (const overlay of managed) {
-      if (await handleLinkOverlayDelete(overlay.id)) deleted += 1;
-      else failed = true;
-    }
-    if (failed) setLinkSaveError(t("pages.saveFailed"));
-    if (deleted > 0) {
-      // A light status line, as a copied snapshot says so: not the notice
-      // card, which stands over the page until it is closed.
-      setSnapshotToast(t("pdf.viewer.linksDeleted", { count: deleted }), "status");
-    }
-  }, [
-    clearSelectedLinkContext,
-    handleLinkOverlayDelete,
-    linkOverlays,
-    nativeSourceLinks,
-    setSnapshotToast,
-    t,
   ]);
 
   const handleLinkContextKeyDown = useCallback(
@@ -28091,7 +27444,7 @@ export default function PDFViewer({
   // points as a closed path. Switching page resets the current draft.
   const handleMeasureClick = useCallback(
     (pageNumber: number, event: ReactMouseEvent<HTMLDivElement>) => {
-      if (!measureMode) return;
+      return;
       // The second click of a double-click ends the measurement (see
       // finishMeasurement); it places no second vertex on the first.
       if (event.detail > 1) return;
@@ -28126,12 +27479,12 @@ export default function PDFViewer({
         };
       });
     },
-    [measureMode, measureSnapKinds, pointerToPagePercent, resolvedPageRotation],
+    [false, measureSnapKinds, pointerToPagePercent, resolvedPageRotation],
   );
   // The line art of the page being measured, read once per page and
   // rotation while the tool is armed (pdf.js's operator list).
   useEffect(() => {
-    if (!measureMode || !pdfDoc || measureSnapKinds.size === 0) return;
+    return;
     const cache = measureSnapSegmentsRef.current;
     if (cache.doc !== pdfDoc) {
       cache.doc = pdfDoc;
@@ -28171,7 +27524,7 @@ export default function PDFViewer({
         measureSnapSegmentsRef.current.pages.delete(key);
       }
     })();
-  }, [currentPage, measureMode, measureSnapKinds.size, pdfDoc, resolvedPageRotation]);
+  }, [currentPage, false, measureSnapKinds.size, pdfDoc, resolvedPageRotation]);
 
   // The calibration scale derived from the measure-unit + ratio inputs. One PAGE
   // inch maps to `measureRatio` output units (Acrobat's distance scale ratio).
@@ -28252,28 +27605,6 @@ export default function PDFViewer({
     pendingMeasurementDraft,
   ]);
 
-  const removeLastMeasurement = useCallback(async () => {
-    if (!measurementDeleteWritable) return;
-    const last = measurements.at(-1);
-    if (!last) return;
-    try {
-      if (onManagedMeasurementDelete) {
-        await onManagedMeasurementDelete(last.id);
-      } else {
-        setLocalMeasurements((current) => current.slice(0, -1));
-      }
-    } catch {
-      setSnapshotToast(
-        t("pdf.viewer.measurementNotRemovedOriginalPdf"),
-      );
-    }
-  }, [
-    t,
-    measurementDeleteWritable,
-    measurements,
-    onManagedMeasurementDelete,
-  ]);
-
   // A measurement drawn far enough to measure is kept when it is finished
   // (double-click or double tap) and when the tool is left, by another tab,
   // another tool or Escape; only a lone point is dropped. Leaving the
@@ -28281,9 +27612,6 @@ export default function PDFViewer({
   // 测量」 greyed (user audit PDF 0010), and a double-click discarded it.
   const keepMeasurementDraftRef = useRef<() => void>(() => {});
   keepMeasurementDraftRef.current = () => {
-    if (measureMode && pendingMeasurementDraft && measurementWritable) {
-      void commitMeasurement();
-    }
   };
   const finishMeasurement = useCallback(() => {
     if (pendingMeasurementDraft && measurementWritable) {
@@ -28301,10 +27629,9 @@ export default function PDFViewer({
   // snapshot/measure toggles clear the annotation modes when THEY turn on.
   useEffect(() => {
     if (
-      noteMode ||
       drawMode ||
       signMode ||
-      redactMode ||
+      false ||
       shapeMode ||
       linkMode ||
       formMode
@@ -28315,21 +27642,17 @@ export default function PDFViewer({
         setDrawingSnapshot(null);
         setSnapshotLatex(null);
       }
-      if (measureMode) {
-        setMeasureMode(false);
-        setMeasurePts(null);
-      }
     }
   }, [
-    noteMode,
+    false,
     drawMode,
     signMode,
-    redactMode,
+    false,
     shapeMode,
     linkMode,
     formMode,
     snapshotMode,
-    measureMode,
+    false,
   ]);
 
   // Same single-authority exclusion for STAMP placement: arming any other
@@ -28338,29 +27661,28 @@ export default function PDFViewer({
   // direction (arming a stamp) disarms the other modes in the pick handlers.
   useEffect(() => {
     if (
-      noteMode ||
       drawMode ||
       signMode ||
-      redactMode ||
+      false ||
       shapeMode ||
       linkMode ||
       formMode ||
       snapshotMode ||
-      measureMode
+      false
     ) {
       setArmedStamp(null);
       setStampPickerOpen(false);
     }
   }, [
-    noteMode,
+    false,
     drawMode,
     signMode,
-    redactMode,
+    false,
     shapeMode,
     linkMode,
     formMode,
     snapshotMode,
-    measureMode,
+    false,
   ]);
 
   // Auto-dismiss the snapshot toast after a few seconds so it doesn't linger.
@@ -29936,115 +29258,6 @@ export default function PDFViewer({
     [documentDecorationsNative, effectiveDocumentDecorations],
   );
 
-  // Fetch the ORIGINAL bytes through the same credentialed path the viewer uses
-  // and bake every persisted annotation (highlights / notes / ink / shapes /
-  // redactions / text-box edits / form values / user links / stamp / crop) into
-  // a fresh PDF with pdf-lib (pure planning in `lib/pdf/flatten.ts`). Returns the
-  // flattened bytes. Shared by "Download with annotations" AND "Print" so both
-  // carry an identical, fully-baked snapshot. No server write -> no CSRF.
-  /**
-   * The reader's markup as annotation SPECS — the same model the editable PDF
-   * export writes, but without a PDF in the loop, so it can also be serialized
-   * to XFDF and handed to someone marking up in Acrobat.
-   */
-  const buildEditableAnnotationSpecs = useCallback(() => {
-    const sizeByPage = new Map<number, FlattenPageSize>();
-    pages.forEach((p) => {
-      sizeByPage.set(p.pageNumber, {
-        width: p.width,
-        height: p.height,
-        rotation: resolvedPageRotation(p.pageNumber),
-        originX: p.originX,
-        originY: p.originY,
-      });
-    });
-    const meta = new Map<string, EditableAnnotationMeta>();
-    const replyMeta = (
-      replies: ReadonlyArray<PdfAnnotationReply> | undefined,
-    ) =>
-      (replies ?? [])
-        .filter((reply) => reply.text?.trim())
-        .map((reply) => ({
-          name: reply.id,
-          author: reply.author?.displayName,
-          contents: reply.text,
-        }));
-    highlights.forEach((h, index) => {
-      meta.set(`highlight:${index}`, {
-        id: h.xfdfSourceId ?? h.id,
-        contents: h.note,
-        authorName: h.author?.displayName,
-        replies: replyMeta(h.replies),
-      });
-    });
-    notes.forEach((n, index) => {
-      meta.set(`note:${index}`, {
-        id: n.xfdfSourceId ?? n.id,
-        contents: n.text,
-        authorName: n.author?.displayName,
-        replies: replyMeta(n.replies),
-      });
-    });
-    inks.forEach((ink, index) => {
-      meta.set(`ink:${index}`, {
-        id: ink.xfdfSourceId ?? ink.id,
-      });
-    });
-    const xfdfShapes = shapes.filter(
-      canRoundTripShapeThroughXfdf,
-    );
-    xfdfShapes.forEach((shape, index) => {
-      meta.set(`shape:${index}`, {
-        id: shape.xfdfSourceId ?? shape.id,
-      });
-    });
-    return buildEditableAnnotations({
-      annotations: {
-        highlights: highlights.map((h) => ({
-          page: h.page,
-          color: h.color,
-          rects: h.rects,
-          ...(h.quads ? { quads: h.quads } : {}),
-          markupStyle: h.markupStyle,
-        })),
-        notes: notes.map((n) => ({
-          page: n.page,
-          x: n.x,
-          y: n.y,
-          text: n.text,
-          color: n.color,
-        })),
-        
-        inks: inks.map((ink) => ({
-          page: ink.page,
-          color: ink.color,
-          width: inkWidthPagePercent(ink.width, sizeByPage.get(ink.page)),
-          points: ink.points,
-        })),
-        shapes: xfdfShapes.map((shape) => ({
-          page: shape.page,
-          kind: shape.kind,
-          x1: shape.x1,
-          y1: shape.y1,
-          x2: shape.x2,
-          y2: shape.y2,
-          points: shape.points,
-          color: shape.color,
-          width: shape.width,
-          lineStyle: shape.lineStyle,
-          lineStart: shape.lineStart,
-          lineEnd: shape.lineEnd,
-          fillColor: shape.fillColor,
-          fillOpacity: shape.fillOpacity,
-          opacity: shape.opacity,
-          cornerRadius: shape.cornerRadius,
-        })),
-      },
-      pageSizes: sizeByPage,
-      meta,
-    });
-  }, [highlights, inks, notes, pages, resolvedPageRotation, shapes]);
-
   const [xfdfImportBusy, setXfdfImportBusy] = useState(false);
   const xfdfImportBusyRef = useRef(false);
   const xfdfInputRef = useRef<HTMLInputElement | null>(null);
@@ -30055,12 +29268,6 @@ export default function PDFViewer({
     sourceDocumentRevision ?? "",
     sourceByteGenerationKey ?? "",
   ].join(":");
-  const [pendingPartialXfdfExport, setPendingPartialXfdfExport] = useState<{
-    fileName: string;
-    xml: string;
-    count: number;
-    kinds: string;
-  } | null>(null);
   const [pendingUnboundXfdfImport, setPendingUnboundXfdfImport] = useState<{
     file: File;
     parsed: ParsedXfdf;
@@ -30456,128 +29663,12 @@ export default function PDFViewer({
       pending.parsed,
     );
   }, [importXfdfFile, pendingUnboundXfdfImport]);
-
-  /** Download the reader's comments as an XFDF file — Acrobat's own
-   *  Comments > Import format, so a supervisor can mark up and send back. */
-  const handleExportXfdf = useCallback(async () => {
-    beginOutputAttempt();
-    setXfdfImportNotice(null);
-    setPendingPartialXfdfExport(null);
-    try {
-      const managed = buildEditableAnnotationSpecs();
-      // Every comment in the document, as Acrobat and WPS export it: the
-      // ones the file already carries too, not only those made here. MRAI
-      // writes its own into the file named by id, so those are left to the
-      // managed list.
-      const exported = new Set(
-        managed.flatMap((spec) => (spec.name ? [spec.name] : [])),
-      );
-      // A saved platform comment also sits in the file as `MRNote:<id>`,
-      
-      const managedIds = new Set<string>([
-        ...highlights.map((h) => h.id),
-        ...notes.map((n) => n.id),
-        ...inks.map((ink) => ink.id),
-        ...shapes.filter(canRoundTripShapeThroughXfdf).map((shape) => shape.id),
-      ]);
-      const native = pdfDoc
-        ? await readNativeXfdfExport(Uint8Array.from(await pdfDoc.getData()), {
-            excludeNames: exported,
-            excludeManagedIds: managedIds,
-          })
-        : { specs: [], omitted: {} };
-      const specs = [...managed, ...native.specs];
-      if (specs.length === 0) {
-        setXfdfImportNotice(t("pdf.viewer.documentNoExportableComments"));
-        return;
-      }
-      const base = (filename || "document.pdf").replace(/\.pdf$/i, "");
-      const xml = toXfdf(specs, {
-        href: filename || undefined,
-        sourceSha256:
-          matchedSourceRiskSnapshot?.identity.sha256 ??
-          sourceSha256 ??
-          undefined,
-      });
-      // Comments the format cannot carry are named and counted BEFORE the
-      // file is handed over; the user chooses whether a partial export is
-      
-      const omissions = describeNativeXfdfOmissions(native.omitted);
-      if (omissions.total > 0) {
-        setPendingPartialXfdfExport({
-          fileName: `${base}.xfdf`,
-          xml,
-          count: omissions.total,
-          kinds: omissions.entries
-            .map((entry) =>
-              t("pdfViewer.xfdfOmittedEntry", {
-                kind: entry.known
-                  ? t(`pdfViewer.xfdfOmittedKind.${entry.kind}`)
-                  : t("pdfViewer.xfdfOmittedKindOther", {
-                      subtype: entry.kind,
-                    }),
-                count: entry.count,
-              }),
-            )
-            // Chinese and Japanese list with the enumeration comma.
-            .join(/^(?:zh|ja)\b/i.test(locale) ? "、" : ", "),
-        });
-        return;
-      }
-      if (
-        !downloadBlobFile(
-          `${base}.xfdf`,
-          new Blob([xml], { type: "application/vnd.adobe.xfdf" }),
-        )
-      ) {
-        setXfdfImportNotice(t("pdfViewer.exportXfdfFailed"));
-      }
-    } catch {
-      setXfdfImportNotice(t("pdfViewer.exportXfdfFailed"));
-    }
-  }, [
-    setXfdfImportNotice,
-    beginOutputAttempt,
-    buildEditableAnnotationSpecs,
-    filename,
-    highlights,
-    inks,
-    locale,
-    matchedSourceRiskSnapshot,
-    notes,
-    pdfDoc,
-    shapes,
-    sourceSha256,
-    t,
-  ]);
-  /** The user saw what a partial export leaves out and chose to export the
-   *  rest. */
-  const confirmPartialXfdfExport = useCallback(() => {
-    const pending = pendingPartialXfdfExport;
-    if (!pending) return;
-    setPendingPartialXfdfExport(null);
-    if (
-      !downloadBlobFile(
-        pending.fileName,
-        new Blob([pending.xml], { type: "application/vnd.adobe.xfdf" }),
-      )
-    ) {
-      setXfdfImportNotice(t("pdfViewer.exportXfdfFailed"));
-    }
-  }, [pendingPartialXfdfExport, t, setXfdfImportNotice]);
   // MRAI's own comments: what "download with editable comments" writes.
   const hasEditableXfdfAnnotations =
     highlights.length > 0 ||
     notes.length > 0 ||
     inks.length > 0 ||
     shapes.some(canRoundTripShapeThroughXfdf);
-  // Every comment in the document: what an XFDF export carries.
-  const hasExportableXfdfComments =
-    hasEditableXfdfAnnotations ||
-    nativeSourceTextNotes.length > 0 ||
-    nativeSourceTextMarkups.length > 0 ||
-    (nativeSourceShapes?.length ?? 0) > 0 ||
-    nativeSourceInkStrokes.length > 0;
 
   const buildAnnotatedPdfBytes = useCallback(
     async (
@@ -33866,28 +32957,6 @@ export default function PDFViewer({
     ],
   );
 
-  const downloadPdfBytes = useCallback(
-    (
-      bytes: Uint8Array,
-      name: string,
-      outputAuthorityIsCurrent: () => boolean,
-    ): boolean => {
-      if (blockAdjacentPdfOutput() || !outputAuthorityIsCurrent()) {
-        return false;
-      }
-      const safe = new Uint8Array(bytes.byteLength);
-      safe.set(bytes);
-      if (!outputAuthorityIsCurrent()) return false;
-      const blob = new Blob([safe], { type: "application/pdf" });
-      if (!outputAuthorityIsCurrent()) return false;
-      startPdfDownload(name, blob);
-      if (!outputAuthorityIsCurrent()) return false;
-      rememberFileOpResult(safe, name);
-      return true;
-    },
-    [blockAdjacentPdfOutput, rememberFileOpResult, startPdfDownload],
-  );
-
   // --- Flat-form field detection -----------------------------------------
   // A worksheet exported to PDF has no AcroForm at all. Detection PROPOSES
   // widgets; nothing is written until the proposals have been reviewed, because
@@ -33967,17 +33036,6 @@ export default function PDFViewer({
     },
     [],
   );
-  const openAuthoredFormFieldDialog = useCallback(
-    (
-      kind: PdfAuthoredFormFieldKind,
-      trigger: HTMLButtonElement | null,
-    ) => {
-      authoredFormFieldCommandRef(kind).current = trigger;
-      setAuthoredFieldKind(kind);
-      setAuthoredFieldDialogOpen(true);
-    },
-    [authoredFormFieldCommandRef],
-  );
   const existingTextFieldEditCommandRef = useRef<HTMLButtonElement | null>(
     null,
   );
@@ -33985,8 +33043,6 @@ export default function PDFViewer({
     useRef<HTMLButtonElement | null>(null);
   const [existingTextFieldEditMode, setExistingTextFieldEditMode] =
     useState(false);
-  const [existingTextFieldEditSection, setExistingTextFieldEditSection] =
-    useState<PdfFormFieldDialogSection | null>(null);
   const [existingTextFieldEditSession, setExistingTextFieldEditSession] =
     useState<ExistingFormFieldEditSession | null>(null);
   const existingTextFieldEditSessionRef =
@@ -34005,7 +33061,7 @@ export default function PDFViewer({
   >(null);
   useEffect(() => {
     setFormFieldDialogError(null);
-  }, [existingTextFieldEditSession, radioGroupOptionsOpen]);
+  }, [existingTextFieldEditSession, false]);
   const [existingTextFieldEditBusy, setExistingTextFieldEditBusy] =
     useState(false);
   // A placed object the reader draws itself (nothing of it on the canvas)
@@ -34051,9 +33107,6 @@ export default function PDFViewer({
   }, [nativeVectorDragGhost, placedObjectSaving]);
   const existingTextFieldEditGenerationRef = useRef(0);
   const existingTextFieldEditInFlightRef = useRef(false);
-  const existingFormFieldDeleteCommandRef = useRef<HTMLButtonElement | null>(
-    null,
-  );
   const existingFormFieldDeleteReturnFocusRef =
     useRef<HTMLButtonElement | null>(null);
   const [existingFormFieldDeleteMode, setExistingFormFieldDeleteMode] =
@@ -34823,11 +33876,6 @@ export default function PDFViewer({
     setRadioGroupOptionsOpen(false);
     selectedFormFieldContextRef.current = null;
     setSelectedFormFieldContext(null);
-    if (activeRibbonTabRef.current === "form-field-format") {
-      const baseTab = formFieldContextBaseTabRef.current;
-      activeRibbonTabRef.current = baseTab;
-      setActiveRibbonTab(baseTab);
-    }
   }, []);
   const pageContextPageRef = useRef(currentPage);
   useLayoutEffect(() => {
@@ -34847,11 +33895,6 @@ export default function PDFViewer({
     clearPlacedAnnotationSelection();
     clearSelectedFormFieldContext();
     clearSelectedLinkContext(false);
-    if (activeRibbonTabRef.current === "text-format") {
-      const baseTab = nativeTextContextBaseTabRef.current;
-      activeRibbonTabRef.current = baseTab;
-      setActiveRibbonTab(baseTab);
-    }
   }, [
     clearPlacedAnnotationSelection,
     clearSelectedFormFieldContext,
@@ -35028,13 +34071,13 @@ export default function PDFViewer({
         ...(geometryDisabledReason ? { geometryDisabledReason } : {}),
         ...(appearanceDisabledReason ? { appearanceDisabledReason } : {}),
       };
-      if (activeRibbonTabRef.current !== "form-field-format") {
+      {
         formFieldContextBaseTabRef.current = "edit";
       }
       selectedFormFieldContextRef.current = selected;
       setSelectedFormFieldContext(selected);
       activeRibbonTabRef.current = "form-field-format";
-      setActiveRibbonTab("form-field-format");
+      void 0;
     },
     [
       createFormFieldContextSession,
@@ -35046,32 +34089,6 @@ export default function PDFViewer({
       readRadioGroupOptionsSession,
     ],
   );
-  const openSelectedFormFieldProperties = useCallback((section?: PdfFormFieldDialogSection) => {
-    const selected = selectedFormFieldContextRef.current;
-    if (
-      !selected?.session ||
-      selected.disabledReason ||
-      existingTextFieldEditBusy ||
-      blockUnsafeFormMutation()
-    ) {
-      return;
-    }
-    existingTextFieldEditReturnFocusRef.current = selected.trigger;
-    setExistingTextFieldEditSection(section ?? null);
-    setExistingTextFieldEditSession(selected.session);
-  }, [blockUnsafeFormMutation, existingTextFieldEditBusy]);
-  const openSelectedFormFieldOptions = useCallback(() => {
-    const selected = selectedFormFieldContextRef.current;
-    if (!selected || selected.disabledReason || existingTextFieldEditBusy) {
-      return;
-    }
-    if (selected.radioOptions) {
-      existingTextFieldEditReturnFocusRef.current = selected.trigger;
-      setRadioGroupOptionsOpen(true);
-      return;
-    }
-    openSelectedFormFieldProperties("options");
-  }, [existingTextFieldEditBusy, openSelectedFormFieldProperties]);
   useLayoutEffect(() => {
     const selected = selectedFormFieldContextRef.current;
     if (!selected) return;
@@ -35091,8 +34108,8 @@ export default function PDFViewer({
     const geometrySelectionCurrent = Boolean(
       selected.widgetGeometry &&
         (existingTextFieldEditMode ||
-          activeRibbonTabRef.current === "edit" ||
-          activeRibbonTabRef.current === "form-field-format"),
+          false ||
+          false),
     );
     if (
       (!existingTextFieldEditMode &&
@@ -35137,13 +34154,7 @@ export default function PDFViewer({
       pageNumber: number,
       trigger: HTMLButtonElement,
     ) => {
-      if (
-        !existingFormFieldDeleteMode ||
-        existingFormFieldDeleteBusy ||
-        field.visibility === "hidden" ||
-        field.visibility === "printOnly" ||
-        blockUnsafeFormMutation()
-      ) {
+      {
         return;
       }
       existingFormFieldDeleteReturnFocusRef.current = trigger;
@@ -35155,7 +34166,7 @@ export default function PDFViewer({
     [
       blockUnsafeFormMutation,
       existingFormFieldDeleteBusy,
-      existingFormFieldDeleteMode,
+      false,
     ],
   );
   const handleOpenExistingFormFieldEditor = useCallback(
@@ -36439,181 +35450,6 @@ export default function PDFViewer({
       existingTextFieldEditBusy,
       t,
       resolvedPageRotation,
-    ],
-  );
-  const applySelectedFormWidgetAppearance = useCallback(
-    async (change: Partial<NativePdfFormWidgetAppearanceStyle>) => {
-      const selected = selectedFormFieldContextRef.current;
-      const expected = selected?.widgetAppearance;
-      const authority = nativeFormWriteAuthorityRef.current;
-      const commit = nativeFormAuthoringChangeRef.current;
-      if (
-        !selected ||
-        !expected ||
-        selected.appearanceDisabledReason ||
-        !authority?.writable ||
-        !commit ||
-        existingTextFieldEditBusy ||
-        existingTextFieldEditInFlightRef.current ||
-        blockUnsafeFormMutation()
-      ) {
-        return;
-      }
-      const target: NativePdfFormWidgetAppearanceStyle = {
-        backgroundColor:
-          change.backgroundColor ?? expected.backgroundColor,
-        borderColor: change.borderColor ?? expected.borderColor,
-        borderWidth: change.borderWidth ?? expected.borderWidth,
-      };
-      if (
-        target.backgroundColor === expected.backgroundColor &&
-        target.borderColor === expected.borderColor &&
-        Math.abs(target.borderWidth - expected.borderWidth) < 0.000001
-      ) {
-        return;
-      }
-      const id = crypto.randomUUID();
-      existingTextFieldEditInFlightRef.current = true;
-      setExistingTextFieldEditBusy(true);
-      try {
-        const accepted = await commit({
-          generation: authority.generation,
-          gestureId: id,
-          operation: {
-            schemaVersion: NATIVE_PDF_FORM_WIDGET_APPEARANCE_SCHEMA_VERSION,
-            id,
-            operation: "edit-widget-appearance",
-            expected,
-            target,
-          },
-        });
-        const current = selectedFormFieldContextRef.current;
-        if (accepted !== true) {
-          throw new Error(
-            t("pdf.viewer.widgetAppearanceNotDurablyAcknowledged"),
-          );
-        }
-        if (
-          current?.field.id === selected.field.id &&
-          current.page === selected.page
-        ) {
-          const field = { ...current.field, ...target };
-          const updated: SelectedFormFieldContext = {
-            ...current,
-            field,
-            widgetAppearance: { ...expected, ...target },
-          };
-          selectedFormFieldContextRef.current = updated;
-          setSelectedFormFieldContext(updated);
-        }
-        setDetectNotice(
-          t("pdf.viewer.updatedWidgetFillBorderOriginal", {
-            name: selected.field.name,
-          }),
-          "status",
-        );
-      } catch (error) {
-        setDetectNotice(
-          error instanceof Error
-            ? error.message
-            : t("pdf.viewer.unableSaveWidgetAppearance"),
-        );
-      } finally {
-        existingTextFieldEditInFlightRef.current = false;
-        setExistingTextFieldEditBusy(false);
-      }
-    },
-    [blockUnsafeFormMutation, existingTextFieldEditBusy, t],
-  );
-  const applySelectedFormFieldQuickProperty = useCallback(
-    async (property: "required" | "readOnly", value: boolean) => {
-      const selected = selectedFormFieldContextRef.current;
-      if (
-        !selected ||
-        selected.disabledReason ||
-        existingTextFieldEditBusy ||
-        existingTextFieldEditInFlightRef.current
-      ) {
-        return;
-      }
-      if (selected.groupProperties) {
-        const authority = nativeFormWriteAuthorityRef.current;
-        const commit = nativeFormAuthoringChangeRef.current;
-        if (!authority?.writable || !commit || blockUnsafeFormMutation()) {
-          setDetectNotice(
-            authority?.reason ??
-              t("pdf.viewer.groupLevelFieldPropertyWriteback"),
-          );
-          return;
-        }
-        const id = crypto.randomUUID();
-        const operation = {
-          schemaVersion: NATIVE_PDF_FORM_GROUP_PROPERTIES_SCHEMA_VERSION,
-          id,
-          operation: "edit-group-properties" as const,
-          expected: selected.groupProperties,
-          required: property === "required" ? value : selected.field.required,
-          readOnly: property === "readOnly" ? value : selected.field.readOnly,
-        };
-        existingTextFieldEditInFlightRef.current = true;
-        setExistingTextFieldEditBusy(true);
-        try {
-          const accepted = await commit({
-            generation: authority.generation,
-            gestureId: id,
-            operation,
-          });
-          if (accepted !== true) {
-            throw new Error("Native PDF field group was not durably acknowledged");
-          }
-          const updated: SelectedFormFieldContext = {
-            ...selected,
-            field: { ...selected.field, [property]: value },
-          };
-          selectedFormFieldContextRef.current = updated;
-          setSelectedFormFieldContext(updated);
-          setDetectNotice(
-            t("pdf.viewer.updatedFieldGroupOriginalPdf", {
-              name: selected.field.name,
-            }),
-            "status",
-          );
-        } catch (error) {
-          setDetectNotice(
-            error instanceof Error
-              ? error.message
-              : t("pdf.viewer.unableSaveFieldGroupProperties"),
-          );
-        } finally {
-          existingTextFieldEditInFlightRef.current = false;
-          setExistingTextFieldEditBusy(false);
-        }
-        return;
-      }
-      const session = selected.session;
-      if (!session) return;
-      existingTextFieldEditSessionRef.current = session;
-      existingTextFieldEditReturnFocusRef.current = selected.trigger;
-      const selection: PdfAuthoredFormFieldSelection = {
-        ...session.initialSelection,
-        draft: {
-          ...session.initialSelection.draft,
-          [property]: value,
-        },
-      } as PdfAuthoredFormFieldSelection;
-      try {
-        await handleApplyExistingFormFieldEdit(selection);
-      } finally {
-        if (existingTextFieldEditSessionRef.current === session) {
-          existingTextFieldEditSessionRef.current = null;
-        }
-      }
-    },
-    [
-      blockUnsafeFormMutation,
-      existingTextFieldEditBusy,
-      handleApplyExistingFormFieldEdit,
-      t,
     ],
   );
   const applySelectedRadioGroupOptions = useCallback(
@@ -37972,91 +36808,6 @@ export default function PDFViewer({
     setBatchPrintSeed(null);
   }, []);
 
-  const openBatchPrint = useCallback(
-    async (trigger: HTMLButtonElement | null) => {
-      if (
-        batchPrintPreparing ||
-        batchPrintOpenRef.current ||
-        printing ||
-        flattening ||
-        loading
-      ) {
-        return;
-      }
-      batchPrintTriggerRef.current = trigger;
-      if (hasEffectivePdfOutputEdits) {
-        setFileOpError(
-          t("pdf.viewer.finishSaveCurrentPdfEdits"),
-        );
-        return;
-      }
-      const generation = ++batchPrintGenerationRef.current;
-      setBatchPrintPreparing(true);
-      setFileOpError(null);
-      let seed: PdfBatchPrintItem | null = null;
-      try {
-        const currentSource = savePolicyRuntimeRef.current.source;
-        const retained = retainedPdfPrintSourceBytesRef.current;
-        if (
-          batchPrintGenerationRef.current !== generation ||
-          !currentSource ||
-          !retained ||
-          retained.dataItemId !== currentSource.identity.dataItemId ||
-          retained.byteGenerationKey !==
-            currentSource.identity.byteGenerationKey ||
-          retained.documentRevision !==
-            currentSource.identity.documentRevision ||
-          retained.sha256 !== currentSource.identity.sha256 ||
-          hasEffectivePdfOutputEditsRef.current
-        ) {
-          throw new Error("PDF batch print source changed");
-        }
-        seed = await inspectPdfBatchPrintItem({
-          id: `current:${currentSource.identity.sha256}`,
-          name: filename || "document.pdf",
-          bytes: retained.bytes,
-          dataItemId: currentSource.identity.dataItemId,
-          byteGenerationKey: currentSource.identity.byteGenerationKey,
-          documentRevision: currentSource.identity.documentRevision,
-        });
-        if (
-          batchPrintGenerationRef.current !== generation ||
-          savePolicyRuntimeRef.current.source?.identity.sha256 !==
-            seed.source.source.identity.sha256 ||
-          hasEffectivePdfOutputEditsRef.current
-        ) {
-          throw new Error("PDF batch print source changed");
-        }
-        setBatchPrintSeed(seed);
-        seed = null;
-        setBatchPrintOpen(true);
-      } catch (batchError) {
-        if (seed) releasePdfBatchPrintItems([seed]);
-        if (batchPrintGenerationRef.current === generation) {
-          setFileOpError(
-            batchError instanceof Error
-              ? batchError.message
-              : t("pdf.viewer.currentPdfCouldNotVerified"),
-          );
-          queueMicrotask(() => trigger?.focus({ preventScroll: true }));
-        }
-      } finally {
-        if (batchPrintGenerationRef.current === generation) {
-          setBatchPrintPreparing(false);
-        }
-      }
-    },
-    [
-      batchPrintPreparing,
-      filename,
-      flattening,
-      hasEffectivePdfOutputEdits,
-      loading,
-      t,
-      printing,
-    ],
-  );
-
   const executeBatchPrint = useCallback(
     async (items: readonly PdfBatchPrintItem[]): Promise<boolean> => {
       if (printing || flattening || loading || !batchPrintOpenRef.current) {
@@ -38133,132 +36884,10 @@ export default function PDFViewer({
   );
 
   const closeImageExtractionReview = useCallback(() => {
-    releasePdfImageExtractionPlan(imageExtractionReview?.plan ?? null);
+    releasePdfImageExtractionPlan(null?.plan ?? null);
     setImageExtractionReview(null);
     setImageExtractionError(null);
-  }, [imageExtractionReview]);
-
-  const handleOpenImageExtractionReview = useCallback(
-    async (trigger: HTMLButtonElement | null) => {
-      if (imageExtractionInFlightRef.current || imageExtractionBusy) return;
-      const loaded = loadedPdfSourceIdentityRef.current;
-      const source = savePolicyRuntimeRef.current.source;
-      if (
-        !dataItemId ||
-        !loaded ||
-        !source ||
-        loaded.dataItemId !== dataItemId ||
-        loaded.url !== url ||
-        loaded.byteGenerationKey !== expectedSourceByteGenerationKey ||
-        source.identity.dataItemId !== dataItemId ||
-        source.identity.byteGenerationKey !== expectedSourceByteGenerationKey ||
-        source.identity.documentRevision !==
-          sourceDocumentRevisionRef.current
-      ) {
-        setPdfActionNotice("pdf.savePolicy.sourceIdentityRequired");
-        return;
-      }
-      const outputAuthorityIsCurrent =
-        createVisualMaskOutputAuthorityGuard(
-          "download-current",
-          t("pdfViewer.exportImageFailed"),
-          { requireRiskFreeRasterSource: true },
-        );
-      if (!outputAuthorityIsCurrent) return;
-
-      const sessionGeneration = imageExtractionSessionGenerationRef.current;
-      const requested = {
-        dataItemId,
-        sourceUrl: url,
-        byteGenerationKey: expectedSourceByteGenerationKey,
-        documentRevision: source.identity.documentRevision,
-        sourceSha256: source.identity.sha256,
-      };
-      const requestIsCurrent = (): boolean => {
-        const currentLoaded = loadedPdfSourceIdentityRef.current;
-        const currentSource = savePolicyRuntimeRef.current.source;
-        return Boolean(
-          currentLoaded &&
-            currentSource &&
-            imageExtractionSessionGenerationRef.current === sessionGeneration &&
-            currentLoaded.dataItemId === requested.dataItemId &&
-            currentLoaded.url === requested.sourceUrl &&
-            currentLoaded.byteGenerationKey === requested.byteGenerationKey &&
-            currentLoaded.documentRevision === requested.documentRevision &&
-            currentSource.identity.dataItemId === requested.dataItemId &&
-            currentSource.identity.byteGenerationKey ===
-              requested.byteGenerationKey &&
-            currentSource.identity.documentRevision ===
-              requested.documentRevision &&
-            currentSource.identity.sha256 === requested.sourceSha256 &&
-            sourceDocumentRevisionRef.current === requested.documentRevision &&
-            outputAuthorityIsCurrent(),
-        );
-      };
-
-      releasePdfImageExtractionPlan(imageExtractionReview?.plan ?? null);
-      setImageExtractionReview(null);
-      setImageExtractionError(null);
-      setPdfActionNotice(null);
-      imageExtractionDialogReturnFocusRef.current = trigger;
-      imageExtractionInFlightRef.current = true;
-      setImageExtractionBusy(true);
-      let sourceBytes: Uint8Array | null = null;
-      let candidatePlan: PdfImageExtractionPlan | null = null;
-      try {
-        const primary = await readPrimaryPagePackageSource();
-        sourceBytes = primary.bytes;
-        if (
-          !requestIsCurrent() ||
-          primary.source.source.identity.dataItemId !== requested.dataItemId ||
-          primary.source.source.identity.byteGenerationKey !==
-            requested.byteGenerationKey ||
-          primary.source.source.identity.documentRevision !==
-            requested.documentRevision ||
-          primary.source.source.identity.sha256 !== requested.sourceSha256
-        ) {
-          throw new Error("PDF image extraction source changed");
-        }
-        candidatePlan = await inspectPdfImageResources(sourceBytes);
-        if (
-          !requestIsCurrent() ||
-          candidatePlan.sourceSha256 !== requested.sourceSha256 ||
-          candidatePlan.sourceByteLength !== sourceBytes.byteLength ||
-          candidatePlan.pageCount !== primary.source.pageCount
-        ) {
-          throw new Error("PDF image extraction proof changed");
-        }
-        setImageExtractionReview({
-          plan: candidatePlan,
-          sourceKey: imageExtractionSourceKey,
-          sessionGeneration,
-          ...requested,
-          outputAuthorityIsCurrent,
-        });
-        candidatePlan = null;
-      } catch {
-        releasePdfImageExtractionPlan(candidatePlan);
-        const message = t("pdf.viewer.originalImagesPdfCouldNot");
-        setImageExtractionError(message);
-        setPdfActionNotice(message);
-      } finally {
-        sourceBytes?.fill(0);
-        imageExtractionInFlightRef.current = false;
-        setImageExtractionBusy(false);
-      }
-    },
-    [
-      createVisualMaskOutputAuthorityGuard,
-      dataItemId,
-      expectedSourceByteGenerationKey,
-      imageExtractionBusy,
-      imageExtractionReview,
-      imageExtractionSourceKey,
-      readPrimaryPagePackageSource,
-      t,
-      url,
-    ],
-  );
+  }, [null]);
 
   const confirmImageExtractionDownload = useCallback(async () => {
     const review = visibleImageExtractionReview;
@@ -42471,7 +41100,7 @@ export default function PDFViewer({
   // authority. Keep its supported-mode selector bounded to this viewer and
   // close it without changing layout on outside press or Escape.
   useEffect(() => {
-    if (!layoutMenuOpen) return;
+    return;
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
       if (
@@ -42491,7 +41120,7 @@ export default function PDFViewer({
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [layoutMenuOpen]);
+  }, [false]);
   // Benchmark off the page nearest the current scroll position so fitting a
   // mixed-orientation PDF uses a representative page; falls back to the first
   // visible page. Rotated pages swap their effective width/height.
@@ -42808,18 +41437,17 @@ export default function PDFViewer({
   });
   const splitPageModeExit = splitPageMode.exit;
   const panToolArmed =
-    noteMode ||
     drawMode ||
     inkEraseMode ||
     inkLassoMode ||
     signMode ||
     armedStamp != null ||
-    redactMode ||
+    false ||
     shapeMode ||
     linkMode ||
     attachMode ||
     snapshotMode ||
-    measureMode ||
+    false ||
     eraseTool.armed;
   pageToolTakesPressesRef.current = panToolArmed;
   useEffect(() => {
@@ -42956,75 +41584,11 @@ export default function PDFViewer({
     [cancelInkStroke, eraseToolDisarm, splitPageModeExit],
   );
 
-  // 删除隐藏信息: the file read as it stands, written again without the kinds
-  // chosen, and handed to the host to take the file's place (it shows what
-  // goes and asks before it replaces anything).
-  const [hiddenInformationOpen, setHiddenInformationOpen] = useState(false);
-  const [hiddenInformationBusy, setHiddenInformationBusy] = useState(false);
-  const [hiddenInformationError, setHiddenInformationError] = useState<string | null>(null);
-  const readCurrentPdfBytes = useCallback(async () => {
-    const response = await fetchPdfSource(url);
-    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`.trim());
-    return readBoundedPdfResponse(response);
-  }, [url]);
-  const inspectHiddenInformation = useCallback(
-    async () => inspectPdfHiddenInformation(await readCurrentPdfBytes()),
-    [readCurrentPdfBytes],
-  );
-  const removeHiddenInformation = useCallback(async (kinds: PdfHiddenInformationKind[]) => {
-    if (!onReplaceSourceFile) return;
-    setHiddenInformationBusy(true);
-    setHiddenInformationError(null);
-    try {
-      const cleaned = await removePdfHiddenInformation(await readCurrentPdfBytes(), kinds);
-      const file = new File([Uint8Array.from(cleaned).buffer], filename?.trim() || "document.pdf", {
-        type: "application/pdf",
-      });
-      setHiddenInformationOpen(false);
-      await onReplaceSourceFile(file);
-    } catch {
-      setHiddenInformationError(t("pdfHidden.failed"));
-    } finally {
-      setHiddenInformationBusy(false);
-    }
-  }, [filename, onReplaceSourceFile, readCurrentPdfBytes, t]);
-  // 页面涂黑: whole pages marked, each one redaction mark the size of its
-  // page, through the same marks a drag or 查找并涂黑 makes.
-  const [redactPagesOpen, setRedactPagesOpen] = useState(false);
-  const redactWholePages = useCallback(async (pagesToMark: number[]) => {
-    const created = await persistRedactionsBulk(
-      pagesToMark.map((page) => ({ page, box: { x: 0, y: 0, width: 100, height: 100 } })),
-    );
-    if (created === pagesToMark.length) {
-      setRedactPagesOpen(false);
-      setSnapshotToast(t("pdfRedact.searchDone", { count: created }), "status");
-    } else {
-      setSnapshotToast(t("pdfRedact.searchFailed"));
-    }
-  }, [persistRedactionsBulk, setSnapshotToast, t]);
-  const toggleRedactionMarkMode = useCallback(() => {
-    setRedactMode((enabled) => {
-      const next = !enabled;
-      if (next) {
-        disarmPageTools("redact");
-      } else {
-        redactDragRef.current = null;
-        setDrawingRedaction(null);
-      }
-      return next;
-    });
-  }, [disarmPageTools]);
-
   const commentToolArmed =
-    (inkEraseMode && commentInkErasing) ||
-    pendingRibbonMarkupStyle !== null ||
-    pendingProofingKind !== null ||
-    noteMode ||
-    // Draw armed from the Draw tab stays on that tab (no Drawing Tools).
     (drawMode && !drawTabDrawing) ||
     armedStamp !== null ||
     attachMode ||
-    measureMode ||
+    false ||
     (shapeMode && !visualMaskActive);
   useLayoutEffect(() => {
     const current = activeRibbonTabRef.current;
@@ -43043,7 +41607,7 @@ export default function PDFViewer({
                   ? current
                   : "annotate";
       activeRibbonTabRef.current = "comment-tool";
-      setActiveRibbonTab("comment-tool");
+      void 0;
       return;
     }
     if (current !== "comment-tool") return;
@@ -43110,56 +41674,6 @@ export default function PDFViewer({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [addTextMode]);
 
-  const handleToggleCommentMode = useCallback(() => {
-    const next = !commentModeActive;
-    setCommentModeActive(next);
-    if (next) {
-      setCommentsHidden(false);
-      return;
-    }
-    leaveCommentInteraction();
-  }, [commentModeActive, leaveCommentInteraction]);
-
-  const handleToggleCommentsHidden = useCallback(() => {
-    const next = !commentsHidden;
-    setCommentsHidden(next);
-    if (next) leaveCommentInteraction();
-  }, [commentsHidden, leaveCommentInteraction]);
-
-  const handleRibbonMarkupColorChange = useCallback((color: string) => {
-    if (!PDF_HIGHLIGHT_COLORS.has(color)) return;
-    lastMarkupColorRef.current = color;
-    setRibbonMarkupColor(color);
-  }, []);
-
-  const handleNoteColorChange = useCallback((color: string) => {
-    if (isNoteColor(color)) setNoteColor(color);
-  }, []);
-
-  const handleAreaHighlightColorChange = useCallback(
-    (color: string) => {
-      if (!PDF_SHAPE_COLORS.includes(color)) return;
-      setAreaHighlightColor(color);
-      if (!areaHighlightActive) return;
-      setShapeColor(color);
-      setShapeFillColor(color);
-    },
-    [areaHighlightActive],
-  );
-
-  const handleAreaHighlightOpacityChange = useCallback(
-    (opacity: number) => {
-      if (
-        !PDF_AREA_HIGHLIGHT_OPACITIES.some((candidate) => candidate === opacity)
-      ) {
-        return;
-      }
-      setAreaHighlightOpacity(opacity);
-      if (areaHighlightActive) setShapeFillOpacity(opacity);
-    },
-    [areaHighlightActive],
-  );
-
   const activateInk = useCallback((): boolean => {
     setPendingRibbonMarkupStyle(null);
     // 批注 › 随意画: the Comment tab's ink tool, with its Drawing Tools.
@@ -43197,7 +41711,7 @@ export default function PDFViewer({
         : undefined;
   const readerInkWritableRef = useRef(readerInkWritable);
   readerInkWritableRef.current = readerInkWritable;
-  const onReaderDrawTab = activeRibbonTab === "draw";
+  const onReaderDrawTab = false;
   const readerInkTool: PdfInkTool | null = inkEraseMode
     ? "eraser"
     : inkLassoMode
@@ -43299,7 +41813,7 @@ export default function PDFViewer({
   // (The Comment tab ink tool's own Eraser stays while the file takes ink:
   // the reload after each erase is no reason to put it down.)
   const commentInkEraserMayStay =
-    commentInkErasing && Boolean(dataItemId) && annotationContextWritable;
+    false;
   useEffect(() => {
     if (onReaderDrawTab && readerInkWritable) return;
     if (drawTabDrawing || (inkEraseMode && !commentInkEraserMayStay)) {
@@ -43311,10 +41825,8 @@ export default function PDFViewer({
     if (inkEraseMode && !readerInkErasable && !inkEraseRef.current) {
       setInkEraseMode(false);
       setInkEraserAt(null);
-      // The Comment tab's ink tool goes back to its pen, its tab staying.
-      if (commentInkErasing) void commentInkPenRef.current();
     }
-  }, [commentInkErasing, inkEraseMode, readerInkErasable]);
+  }, [false, inkEraseMode, readerInkErasable]);
   // Esc from the page stops inking (Word); an Esc inside a menu or a dialog
   // closes that alone.
   useEffect(() => {
@@ -43407,65 +41919,6 @@ export default function PDFViewer({
     // Folding in with no tool picked picks the pen: the page is the pen's.
     if (entered && readerInkTool === null) setReaderInkTool("draw");
   }, [readerInkTool, readerPenFirst.compact, setReaderInkTool]);
-  // Draw with Trackpad (Word for Mac): the pad's stroke, in client pixels,
-  // lands on the page in view as wet ink, saved as the pen's strokes are.
-  const readerPageElement = useCallback(
-    () =>
-      scrollContainerRef.current?.querySelector<HTMLElement>(
-        `.pdf-viewer__page[data-page-number="${currentPage}"]`,
-      ) ?? null,
-    [currentPage],
-  );
-  const placeReaderTrackpadStroke = useCallback(
-    (points: readonly DocumentInkPoint[]) => {
-      const element = readerPageElement();
-      if (!element || points.length < 2 || !readerInkWritableRef.current) return;
-      const rect = element.getBoundingClientRect();
-      if (!(rect.width > 0) || !(rect.height > 0)) return;
-      const percent = clampPoints(
-        points.map((point) => ({
-          x: ((point.x - rect.left) / rect.width) * 100,
-          y: ((point.y - rect.top) / rect.height) * 100,
-        })),
-      );
-      if (percent.length < 2) return;
-      inkWetKeyRef.current += 1;
-      addReaderWetStroke({
-        key: inkWetKeyRef.current,
-        page: currentPage,
-        points: percent,
-        color: inkColor,
-        width: inkWidth,
-      });
-    },
-    [addReaderWetStroke, currentPage, inkColor, inkWidth, readerPageElement],
-  );
-  const readerInkTrackpad = useMemo<PdfDrawRibbonModel["trackpad"]>(
-    () => ({
-      on: inkTrackpadOn,
-      toggle: () => setInkTrackpadOn((value) => !value),
-      close: () => setInkTrackpadOn(false),
-      preset: inkPenGallery.selected,
-      anchor: () => scrollContainerRef.current,
-      below: () => viewerRootRef.current?.querySelector(".pdf-viewer__office-ribbon") ?? null,
-      page: () => {
-        const rect = readerPageElement()?.getBoundingClientRect();
-        return rect
-          ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }
-          : null;
-      },
-      onStroke: placeReaderTrackpadStroke,
-    }),
-    [inkPenGallery.selected, inkTrackpadOn, placeReaderTrackpadStroke, readerPageElement],
-  );
-  // Draw ▸ Ruler: shown over the reading area's middle, at 0 degrees.
-  const toggleReaderInkRuler = useCallback(() => {
-    setInkRuler((current) => {
-      if (current) return null;
-      const area = scrollContainerRef.current;
-      return { x: (area?.clientWidth ?? 800) / 2, y: (area?.clientHeight ?? 600) / 2, angle: 0 };
-    });
-  }, []);
   // The ruler belongs to the Draw tab: leaving it puts the ruler away.
   useEffect(() => {
     if (!onReaderDrawTab) setInkRuler(null);
@@ -43504,50 +41957,6 @@ export default function PDFViewer({
       window.removeEventListener("scroll", measure, true);
     };
   }, [inkRuler !== null]);
-  const readerDrawModel = useMemo<PdfDrawRibbonModel>(
-    () => ({
-      writable: readerInkWritable,
-      disabledReason: readerInkDisabledReason,
-      tool: readerInkTool,
-      setTool: setReaderInkTool,
-      eraserKind: inkEraserKind,
-      chooseEraserKind: (kind) => {
-        setInkEraserKind(kind);
-        setReaderInkTool("eraser");
-      },
-      inkPresent: readerInkErasable,
-      lasso: true,
-      ruler: { on: inkRuler !== null, toggle: toggleReaderInkRuler },
-      pens: readerInkPenCommands,
-      undoLastStroke: {
-        run: handleInkUndoLast,
-        disabled: (inks.length === 0 && !inkWetPending) || inkSaving,
-      },
-      trackpad: readerInkTrackpad,
-      hideRibbon:
-        readerPenFirst.available && readerInkWritable
-          ? readerPenFirst.showPalette
-          : null,
-    }),
-    [
-      handleInkUndoLast,
-      inkEraserKind,
-      inkSaving,
-      inkWetPending,
-      inks.length,
-      readerInkDisabledReason,
-      readerInkErasable,
-      inkRuler,
-      toggleReaderInkRuler,
-      readerInkPenCommands,
-      readerInkTool,
-      readerInkTrackpad,
-      readerInkWritable,
-      readerPenFirst.available,
-      readerPenFirst.showPalette,
-      setReaderInkTool,
-    ],
-  );
   const readerDrawCollapse =
     onReaderDrawTab && readerPenFirst.available && readerInkWritable
       ? { onCollapse: readerPenFirst.showPalette }
@@ -43568,30 +41977,6 @@ export default function PDFViewer({
     });
     return true;
   }, [disarmPageTools]);
-
-  const activateAreaHighlight = useCallback((): boolean => {
-    setPendingRibbonMarkupStyle(null);
-    disarmPageTools("shape");
-    setShapeMode(true);
-    setVisualMaskActive(false);
-    setAreaHighlightActive(true);
-    setShapeKind("rect");
-    setShapeColor(areaHighlightColor);
-    setShapeFillColor(areaHighlightColor);
-    setShapeFillOpacity(areaHighlightOpacity);
-    return true;
-  }, [areaHighlightColor, areaHighlightOpacity, disarmPageTools]);
-
-  const activateMeasure = useCallback((): boolean => {
-    if (!measurementWritable) return false;
-    setMeasureMode((active) => {
-      const next = !active;
-      if (next) disarmPageTools("measure");
-      setMeasurePts(null);
-      return next;
-    });
-    return true;
-  }, [disarmPageTools, measurementWritable]);
 
   const activateFileAttachment = useCallback(
     (trigger: HTMLButtonElement | null = null): boolean => {
@@ -43851,39 +42236,10 @@ export default function PDFViewer({
       // The tab on show chosen again leaves nothing: its tools stay armed. Opening
       // More PDF tools from the Featured tab set fill mode down this way.
       if (nextTab === activeRibbonTabRef.current) return;
-      if (
-        commentToolArmed &&
-        activeRibbonTabRef.current === "comment-tool" &&
-        nextTab !== "comment-tool"
-      ) {
-        leaveCommentInteraction();
-      }
-      if (nativeTextEditingActive && nextTab !== "text-format") {
+      if (nativeTextEditingActive && true) {
         if (isPdfViewerBaseRibbonTab(nextTab)) {
           nativeTextChosenBaseTabRef.current = nextTab;
         }
-        return;
-      }
-      if (
-        nextTab === "annotation-format" &&
-        !(annotationContextWritableRef.current && selectedPlacedRef.current) &&
-        !latestSelectedNativeVectorRef.current
-      ) {
-        return;
-      }
-      if (nextTab === "comment-tool" && !commentToolArmed) {
-        return;
-      }
-      if (nextTab === "picture-format" && !pictureEditingRef.current?.selected) {
-        return;
-      }
-      if (
-        nextTab === "form-field-format" &&
-        !selectedFormFieldContextRef.current
-      ) {
-        return;
-      }
-      if (nextTab === "link-format" && !selectedLinkContextRef.current) {
         return;
       }
       if (isPdfViewerBaseRibbonTab(nextTab)) {
@@ -43904,19 +42260,16 @@ export default function PDFViewer({
         pictureEditingRef.current?.clear();
       }
       if (
-        nextTab !== "form-field-format" &&
         selectedFormFieldContextRef.current
       ) {
         selectedFormFieldContextRef.current = null;
         setSelectedFormFieldContext(null);
       }
-      if (nextTab !== "link-format" && selectedLinkContextRef.current) {
+      if (selectedLinkContextRef.current) {
         selectedLinkContextRef.current = null;
         setSelectedLinkContext(null);
       }
       if (
-        nextTab !== "edit" &&
-        nextTab !== "text-format" &&
         nativeTextEditModeActiveRef.current
       ) {
         for (const selected of viewerRootRef.current?.querySelectorAll<HTMLElement>(
@@ -43927,27 +42280,18 @@ export default function PDFViewer({
         nativeListSelectionRevisionRef.current += 1;
         onNativeListTextSelectionChange?.(null);
       }
-      // Coming to the Edit tab from another tab turns Edit Content on.
-      if (nextTab === "edit" && activeRibbonTabRef.current !== "edit") {
-        contentEditPausedRef.current = false;
-        setContentEditPaused(false);
-      }
       activeRibbonTabRef.current = nextTab;
       setActiveRibbonTab(nextTab);
       setLayoutMenuOpen(false);
       if (nextTab !== "home") {
         setFindOpen(false);
       }
-      if (
-        nextTab !== "annotate" &&
-        nextTab !== "comment-tool" &&
-        nextTab !== "annotation-format"
-      ) {
-        disarmPageTools(nextTab === "edit" ? undefined : "pan");
+      {
+        disarmPageTools("pan");
         setPendingRibbonMarkupStyle(null);
         setRibbonMarkupError(null);
       }
-      if (nextTab !== "tools") {
+      {
         setDecorationDialogKind(null);
         setPageLabelsOpen(false);
         setPropertiesOpen(false);
@@ -43978,12 +42322,8 @@ export default function PDFViewer({
   const enterContentEditMode = useCallback(() => {
     contentEditPausedRef.current = false;
     setContentEditPaused(false);
-    if (activeRibbonTabRef.current !== "edit") selectRibbonTab("edit");
+    void 0;
   }, [selectRibbonTab]);
-  const toggleContentEditMode = useCallback(() => {
-    if (contentEditModeLiveRef.current) exitContentEditMode("reader");
-    else enterContentEditMode();
-  }, [enterContentEditMode, exitContentEditMode]);
   const contentEditEnterSignalRef = useRef(contentEditEnterSignal);
   useEffect(() => {
     if (contentEditEnterSignalRef.current === contentEditEnterSignal) return;
@@ -44116,9 +42456,6 @@ export default function PDFViewer({
   // 擦除 owns the pointer like any other page tool: arming it puts the
   // others away, and choosing a colour, a mode or a width arms it.
   const eraseToolArm = eraseTool.arm;
-  const eraseToolSetColor = eraseTool.setColor;
-  const eraseToolSetShape = eraseTool.setShape;
-  const eraseToolSetBrushWidth = eraseTool.setBrushWidth;
   const armEraseTool = useCallback(() => {
     disarmPageTools("erase");
     eraseToolArm();
@@ -44142,66 +42479,12 @@ export default function PDFViewer({
       if (outcome.kind !== "split") setPdfActionNotice(outcome.message);
     });
   }, [setPdfActionNotice, splitPagesNow]);
-  const eraseRibbon = onEraseRegion
-    ? {
-        armed: eraseTool.armed,
-        color: eraseTool.color,
-        shape: eraseTool.shape,
-        brushWidth: eraseTool.brushWidth,
-        disabledReason: eraseDisabledReason,
-        onToggle: () => {
-          if (eraseTool.armed) eraseToolDisarm();
-          else armEraseTool();
-        },
-        onColorChange: (color: string | null) => {
-          eraseToolSetColor(color);
-          armEraseTool();
-        },
-        onShapeChange: (shape: PdfEraseShape) => {
-          eraseToolSetShape(shape);
-          armEraseTool();
-        },
-        onBrushWidthChange: (width: PdfEraseBrushWidth) => {
-          eraseToolSetBrushWidth(width);
-          eraseToolSetShape("brush");
-          armEraseTool();
-        },
-      }
-    : null;
-  const armShapeTool = useCallback(
-    (kind: ShapeKind) => {
-      setPendingRibbonMarkupStyle(null);
-      disarmPageTools("shape");
-      // Only the Edit tab's Shapes items arm this: they insert page objects.
-      shapeToolPageContentRef.current = true;
-      setShapeMode(true);
-      setShapeKind(kind);
-      setAreaHighlightActive(false);
-      setVisualMaskActive(false);
-    },
-    [disarmPageTools],
-  );
-  const handleToggleFormMode = useCallback(() => {
-    if (blockUnsafeFormMutation()) return;
-    setFormMode((on) => {
-      const next = !on;
-      if (next) disarmPageTools("form");
-      else {
-        setExistingTextFieldEditMode(false);
-        setExistingFormFieldDeleteMode(false);
-      }
-      // A choice made by hand is the new baseline.
-      fillModeBeforeFieldAuthoringRef.current = null;
-      return next;
-    });
-  }, [blockUnsafeFormMutation, disarmPageTools]);
   // Fill mode is the reading default, never a tool grab: the form capability
   // can arrive late, after the user already started something. It waits
   // while the Edit tab's Select tool, a contextual tab (text, shape, form
   // field, link, comment tool), a selected object or any armed page tool owns
   // the pointer, and it turns itself on without disarming anything.
   const autoFillWaitsForUser =
-    activeRibbonTab === "edit" ||
     !isPdfViewerBaseRibbonTab(activeRibbonTab) ||
     nativeEditSessionActive ||
     nativeTextEditingActive ||
@@ -44210,9 +42493,9 @@ export default function PDFViewer({
     panToolArmed ||
     commentToolArmed ||
     panMode ||
-    redactMode ||
+    false ||
     polygonDraft !== null ||
-    areaHighlightActive ||
+    false ||
     visualMaskActive;
   useEffect(() => {
     if (
@@ -44319,33 +42602,6 @@ export default function PDFViewer({
     pdfDoc,
     selectedFormFieldContext,
   ]);
-  const handleToggleExistingFormFieldDeleteMode = useCallback(
-    (trigger?: HTMLButtonElement | null) => {
-      if (blockUnsafeFormMutation()) return;
-      if (trigger !== undefined) {
-        existingFormFieldDeleteCommandRef.current = trigger;
-      }
-      setExistingFormFieldDeleteMode((active) => {
-        const next = !active;
-        if (next) {
-          disarmPageTools("form");
-          if (fillModeBeforeFieldAuthoringRef.current === null) {
-            fillModeBeforeFieldAuthoringRef.current = requestedFormModeRef.current;
-          }
-          setFormMode(true);
-          setExistingTextFieldEditMode(false);
-          setExistingTextFieldEditSession(null);
-        } else {
-          setExistingFormFieldDeleteSession(null);
-          const before = fillModeBeforeFieldAuthoringRef.current;
-          fillModeBeforeFieldAuthoringRef.current = null;
-          if (before === false) setFormMode(false);
-        }
-        return next;
-      });
-    },
-    [blockUnsafeFormMutation, disarmPageTools],
-  );
   useEffect(() => {
     if (formMode) return;
     setExistingTextFieldEditMode(false);
@@ -44363,7 +42619,7 @@ export default function PDFViewer({
     !addTextMode &&
     !drawMode &&
     !signMode &&
-    !redactMode &&
+    true &&
     !shapeMode &&
     !linkMode &&
     !snapshotMode &&
@@ -44374,13 +42630,7 @@ export default function PDFViewer({
   // Shape Editing tab, so selection stays live under that contextual tab when
   // Edit is the tab beneath it.
   const semanticEditSelectionActive =
-    !contentEditPaused &&
-    (activeRibbonTab === "edit" ||
-      (activeRibbonTab === "annotation-format" &&
-        annotationContextBaseTabRef.current === "edit") ||
-      (activeRibbonTab === "picture-format" &&
-        pictureContextBaseTabRef.current === "edit")) &&
-    selectToolActive;
+    false;
   
   // 过的文本框无法选中」): a double click on the page's own text, or 「编辑文字」
   // in its right-click menu, turns Edit Content on and opens the line under
@@ -44885,68 +43135,6 @@ export default function PDFViewer({
     semanticAppearanceTargetRevision,
     semanticEditSelectionActive,
   ]);
-
-  const armRibbonMarkup = useCallback(
-    (markupStyle: HighlightMarkupStyle) => {
-      handleSelectTool();
-      setPendingProofingKind(null);
-      setPendingRibbonMarkupStyle(markupStyle);
-      setRibbonMarkupError(null);
-    },
-    [handleSelectTool],
-  );
-  const executeMarkupActivation = useCallback(
-    (markupStyle: HighlightMarkupStyle) =>
-      executeReaderNativeActivation(
-        textMarkupActivationInvocation(markupStyle),
-        Boolean(dataItemId) && !ribbonMarkupBusyRef.current,
-        () => {
-          armRibbonMarkup(markupStyle);
-          return true;
-        },
-        dataItemId ? undefined : t("pdf.editNotReady"),
-      ),
-    [armRibbonMarkup, dataItemId, executeReaderNativeActivation, t],
-  );
-  const armProofing = useCallback(
-    (kind: ManagedPdfProofingAnnotation["kind"]) => {
-      disarmPageTools("proofing");
-      setPendingRibbonMarkupStyle(null);
-      setPendingProofingKind(kind);
-      setProofingDraft(null);
-      setProofingError(null);
-      return true;
-    },
-    [disarmPageTools],
-  );
-  const executeProofingActivation = useCallback(
-    (kind: ManagedPdfProofingAnnotation["kind"]) => {
-      const enabled =
-        !loading &&
-        annotationContextWritable &&
-        Boolean(dataItemId) &&
-        Boolean(onManagedProofingUpsert) &&
-        (kind === "insert" || selectionEnabled);
-      return executeReaderNativeActivation(
-        kind === "replace"
-          ? PDF_CROSS_TAB_COMMANDS.replaceMarkActivate
-          : PDF_CROSS_TAB_COMMANDS.insertCaretActivate,
-        enabled,
-        () => armProofing(kind),
-        enabled ? undefined : t("pdf.editNotReady"),
-      );
-    },
-    [
-      annotationContextWritable,
-      armProofing,
-      dataItemId,
-      executeReaderNativeActivation,
-      loading,
-      onManagedProofingUpsert,
-      selectionEnabled,
-      t,
-    ],
-  );
   const executeFreeTextActivation = useCallback(
     (origin: "insert" | "edit" | "annotate", kind: PdfArmedTextKind = "text") => {
       // The text editing surface addresses the file's own pages; a page
@@ -45266,82 +43454,7 @@ export default function PDFViewer({
   const pictureContextActive = pictureEditing.selected !== null;
   
   const pictureContextRibbon =
-    activeRibbonTab === "picture-format" && pictureEditing.docsRibbonModel ? (
-      <PdfReaderPictureFormatRibbon
-        locale={locale}
-        model={pictureEditing.docsRibbonModel}
-        commands={{
-          ...pictureEditing.docsRibbonCommands,
-          // The tab goes with the picture: the keyboard comes back to the
-          // pages, so Cmd+Z takes the deletion back at once (it fell to the
-          // body with the pressed button and reached no editor).
-          onDelete: () => {
-            pictureEditing.docsRibbonCommands.onDelete();
-            const pages = scrollContainerRef.current;
-            if (pages) {
-              if (!pages.hasAttribute("tabindex")) pages.setAttribute("tabindex", "-1");
-              pages.focus({ preventScroll: true });
-            }
-          },
-          // 退出编辑 ends the picture's editing (WPS: it ends 编辑内容).
-          onExit: () => exitContentEditMode(),
-        }}
-        pointerTools={
-          <PdfEditPointerTools
-            groupLabel={t("pdf.pointerTools")}
-            handActive={panMode}
-            handActiveLabel={t("pdfViewer.handToolActive")}
-            handDisplayLabel={t("pdf.pageWindow.hand")}
-            handLabel={t("pdfViewer.handTool")}
-            loading={loading}
-            loadingLabel={t("pdfViewer.loading")}
-            onHandActivate={handleHandToolToggle}
-            onSelectActivate={handleSelectTool}
-            selectActive={selectToolActive}
-            selectLabel={t("toolbar.select")}
-            tabs="picture-format"
-            testIdPrefix="pdf-picture-edit"
-          />
-        }
-      />
-    ) : null;
-  const activateNoteMode = useCallback(() => {
-    setNoteMode((on) => {
-      const next = !on;
-      if (next) disarmPageTools("note");
-      return next;
-    });
-    setActiveNoteId(null);
-    setPendingNote(null);
-    return true;
-  }, [disarmPageTools]);
-  const executeNoteActivation = useCallback(
-    async () => {
-      setNoteActionError(null);
-      try {
-        const outcome = await executeReaderNativeActivation(
-          PDF_CROSS_TAB_COMMANDS.noteActivate,
-          !loading && Boolean(dataItemId),
-          activateNoteMode,
-          dataItemId ? undefined : t("pdf.editNotReady"),
-        );
-        if (outcome !== "executed") {
-          setNoteActionError(saveFailedReason());
-        }
-        return outcome;
-      } catch {
-        setNoteActionError(saveFailedReason());
-        return "blocked" as const;
-      }
-    },
-    [
-      activateNoteMode,
-      dataItemId,
-      executeReaderNativeActivation,
-      loading,
-      t,
-    ],
-  );
+    null;
   const executeInkActivation = useCallback(
     () => {
       const enabled =
@@ -45373,25 +43486,6 @@ export default function PDFViewer({
     ],
   );
   commentInkPenRef.current = executeInkActivation;
-  // The ink tool's Eraser: on, the tool's tab stays and strokes are erased;
-  // pressed again, the pen is back.
-  const toggleCommentInkEraser = useCallback(() => {
-    if (inkEraseMode && commentInkErasing) {
-      void executeInkActivation();
-      return;
-    }
-    if (!readerInkWritableRef.current || !readerInkErasableNow()) {
-      return;
-    }
-    if (inkWetRef.current.length > 0) {
-      inkWetGateRef.current?.cancel();
-      void flushInkWetRef.current(true);
-    }
-    setPendingRibbonMarkupStyle(null);
-    disarmPageTools("inkErase");
-    setInkEraseMode(true);
-    setCommentInkErasing(true);
-  }, [commentInkErasing, disarmPageTools, executeInkActivation, inkEraseMode]);
   const executeShapeActivation = useCallback(
     (origin: "comment" | "page-content" = "comment") =>
       executeReaderNativeActivation(
@@ -45404,26 +43498,6 @@ export default function PDFViewer({
         dataItemId ? undefined : t("pdf.editNotReady"),
       ),
     [activateShape, dataItemId, executeReaderNativeActivation, loading, t],
-  );
-  const executeAreaHighlightActivation = useCallback(
-    () =>
-      executeReaderNativeActivation(
-        PDF_CROSS_TAB_COMMANDS.areaHighlightActivate,
-        !loading && Boolean(dataItemId) &&
-          Boolean(onManagedAreaHighlightUpsert),
-        activateAreaHighlight,
-        dataItemId && onManagedAreaHighlightUpsert
-          ? undefined
-          : t("pdf.editNotReady"),
-      ),
-    [
-      activateAreaHighlight,
-      dataItemId,
-      executeReaderNativeActivation,
-      loading,
-      onManagedAreaHighlightUpsert,
-      t,
-    ],
   );
   const executeStampActivation = useCallback(
     (trigger: HTMLButtonElement | null = null) =>
@@ -45528,26 +43602,10 @@ export default function PDFViewer({
       t,
     ],
   );
-  const executeMeasureActivation = useCallback(
-    () =>
-      executeReaderNativeActivation(
-        PDF_CROSS_TAB_COMMANDS.measureActivate,
-        !loading && measurementWritable,
-        activateMeasure,
-        measurementWritable ? undefined : t("pdf.editNotReady"),
-      ),
-    [
-      activateMeasure,
-      executeReaderNativeActivation,
-      loading,
-      measurementWritable,
-      t,
-    ],
-  );
 
   useEffect(() => {
     if (
-      pendingProofingKind !== "replace" ||
+      null !== "replace" ||
       !selection?.pageNumber ||
       !selection.rects?.length ||
       !pdfDoc ||
@@ -45611,7 +43669,7 @@ export default function PDFViewer({
     dismissSelection,
     onManagedProofingUpsert,
     pdfDoc,
-    pendingProofingKind,
+    null,
     resolvedPageRotation,
     selection,
     t,
@@ -45620,7 +43678,7 @@ export default function PDFViewer({
   const handleProofingInsertClick = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>): boolean => {
       if (
-        pendingProofingKind !== "insert" ||
+        null !== "insert" ||
         proofingBusyRef.current ||
         !pdfDoc ||
         !onManagedProofingUpsert
@@ -45692,7 +43750,7 @@ export default function PDFViewer({
     [
       onManagedProofingUpsert,
       pdfDoc,
-      pendingProofingKind,
+      null,
       resolvedPageRotation,
       t,
     ],
@@ -45731,14 +43789,7 @@ export default function PDFViewer({
   }, [currentAuthor?.displayName, onManagedProofingUpsert, proofingDraft, t]);
 
   useEffect(() => {
-    if (
-      !pendingRibbonMarkupStyle ||
-      !selection ||
-      !selection.rects ||
-      selection.rects.length === 0 ||
-      ribbonMarkupBusyRef.current ||
-      !dataItemId
-    ) {
+    {
       return;
     }
     // The drag making this selection is still held: the mark takes what is
@@ -45755,7 +43806,7 @@ export default function PDFViewer({
       selection.text,
       selection.pageNumber,
       selection.rects,
-      pendingRibbonMarkupStyle,
+      null,
       selection.pageParts,
     )
       .then(() => {
@@ -45773,7 +43824,7 @@ export default function PDFViewer({
     dataItemId,
     dismissSelection,
     handleHighlightRequest,
-    pendingRibbonMarkupStyle,
+    null,
     selection,
     t,
   ]);
@@ -46309,7 +44360,7 @@ export default function PDFViewer({
   );
 
   useEffect(() => {
-    if(!propertiesOpen||!pdfDoc||!sourceSha256||!onTaggedTextApply||readInRangesRef.current)return;
+    return;
     let cancelled=false;
     const requested=pdfDoc;
     void (async()=>{
@@ -46321,10 +44372,10 @@ export default function PDFViewer({
       }finally{bytes.fill(0);}
     })().catch(()=>{if(!cancelled&&pdfDocRef.current===requested)setTaggedTextInventory({sourceSha256,targets:[],failed:true});});
     return()=>{cancelled=true;};
-  },[propertiesOpen,pdfDoc,sourceSha256,onTaggedTextApply,engineReaderResourceId]);
+  },[false,pdfDoc,sourceSha256,onTaggedTextApply,engineReaderResourceId]);
 
   useEffect(() => {
-    if (!propertiesOpen || !pdfDoc) return;
+    return;
     let cancelled = false;
     const requestedDocument = pdfDoc;
     queueMicrotask(() => {
@@ -46430,13 +44481,7 @@ export default function PDFViewer({
     return () => {
       cancelled = true;
     };
-  }, [pdfDoc, propertiesOpen]);
-
-  // ---- Deskew (纠偏) -----------------------------------------------------
-  const [deskewBusy, setDeskewBusy] = useState(false);
-  const [deskewStatus, setDeskewStatus] = useState<string | null>(null);
-  const deskewOutputGenerationRef = useRef(0);
-  const deskewOutputInFlightRef = useRef(false);
+  }, [pdfDoc, false]);
   const deskewViewRuntimeRef = useRef({
     pageNumber: currentPage,
     resolvedRotation: resolvedPageRotation(currentPage),
@@ -46447,723 +44492,6 @@ export default function PDFViewer({
     resolvedRotation: resolvedPageRotation(currentPage),
     sourcePage: pages.find((page) => page.pageNumber === currentPage) ?? null,
   };
-  const readDeskewLiveState = useCallback(() => {
-    const loaded = loadedPdfSourceIdentityRef.current;
-    const source = savePolicyRuntimeRef.current.source;
-    const view = deskewViewRuntimeRef.current;
-    if (
-      !loaded ||
-      !loaded.dataItemId ||
-      !source ||
-      pdfDocRef.current !== loaded.document ||
-      source.identity.dataItemId !== loaded.dataItemId ||
-      source.identity.byteGenerationKey !== loaded.byteGenerationKey ||
-      source.identity.documentRevision !== sourceDocumentRevisionRef.current ||
-      !view.sourcePage
-    ) {
-      return null;
-    }
-    const wrapper = pageRefs.current.get(view.pageNumber);
-    const canvas = wrapper?.querySelector<HTMLCanvasElement>(
-      "canvas[data-pdf-page]",
-    );
-    const canvasGeneration = canvas
-      ? (deskewCanvasRenderGenerationsRef.current.get(canvas) ?? 0)
-      : 0;
-    if (
-      !canvas ||
-      canvasGeneration < 1 ||
-      !renderedPagesRef.current.has(view.pageNumber) ||
-      renderTasksRef.current.has(view.pageNumber) ||
-      !isPdfDeskewRasterCanvasWithinBudget(canvas.width, canvas.height)
-    ) {
-      return null;
-    }
-    return Object.freeze({
-      dataItemId: loaded.dataItemId,
-      sourceUrl: loaded.url,
-      previewByteGenerationKey: loaded.byteGenerationKey,
-      source,
-      pageNumber: view.pageNumber,
-      pdfJsDocument: loaded.document,
-      resolvedRotation: view.resolvedRotation,
-      sourcePage: view.sourcePage,
-      canvas,
-      canvasGeneration: `${canvasGeneration}:${renderGenerationRef.current}:${
-        pageRenderEpochsRef.current.get(view.pageNumber) ?? 0
-      }`,
-      canvasWidth: canvas.width,
-      canvasHeight: canvas.height,
-      editRevision: savePolicyEditRevisionRef.current.revision,
-      hasCurrentEditorEdits: formValueEditorEditsRef.current,
-    });
-  }, []);
-
-  /**
-   * Straighten the CURRENT page: estimate the lean from the rendered canvas,
-   * and when it is confident and worth correcting, produce a copy of the
-   * document whose page is the straightened raster. The page becomes an image
-   * page — the same trade every scan-correction tool makes, stated in the
-   * button's hint rather than discovered afterwards.
-   */
-  const handleDeskewPage = useCallback(async () => {
-    if (deskewBusy || deskewOutputInFlightRef.current) return;
-    if (blockVisualMaskDerivedPdfOutput("pdf.file.deskew-page")) return;
-    const visualMaskOutputIsCurrent =
-      createVisualMaskOutputAuthorityGuard("pdf.file.deskew-page");
-    if (!visualMaskOutputIsCurrent) return;
-    const requestedLiveState = savePolicyV1 ? readDeskewLiveState() : null;
-    const requestedPage = savePolicyV1
-      ? requestedLiveState?.pageNumber
-      : currentPage;
-    const wrapper = requestedPage
-      ? pageRefs.current.get(requestedPage)
-      : undefined;
-    const canvas = savePolicyV1
-      ? requestedLiveState?.canvas
-      : wrapper?.querySelector<HTMLCanvasElement>("canvas[data-pdf-page]");
-    if (
-      !canvas ||
-      !isPdfDeskewRasterCanvasWithinBudget(canvas.width, canvas.height)
-    ) {
-      return;
-    }
-    const operationGeneration = ++deskewOutputGenerationRef.current;
-    deskewOutputInFlightRef.current = true;
-    setDeskewBusy(true);
-    setDeskewStatus(null);
-    let sourceBytes: Uint8Array | null = null;
-    try {
-      // Estimate on a bounded copy: the estimator's cost scales with pixels
-      // and half-degree precision does not need print resolution.
-      const scale = Math.min(
-        1,
-        1200 / canvas.width,
-        1200 / canvas.height,
-      );
-      const probeWidth = Math.max(1, Math.round(canvas.width * scale));
-      const probeHeight = Math.max(1, Math.round(canvas.height * scale));
-      if (
-        !isPdfDeskewRasterCanvasWithinBudget(probeWidth, probeHeight)
-      ) {
-        throw new Error("PDF deskew probe canvas budget exceeded");
-      }
-      const probe = document.createElement("canvas");
-      probe.width = probeWidth;
-      probe.height = probeHeight;
-      const probeCtx = probe.getContext("2d");
-      if (!probeCtx) throw new Error("no 2d context");
-      probeCtx.drawImage(canvas, 0, 0, probe.width, probe.height);
-      const pixels = probeCtx.getImageData(0, 0, probe.width, probe.height);
-      const estimate = estimateSkewAngle(
-        grayscaleFromRgba(pixels.data, probe.width, probe.height),
-      );
-      if (estimate.confidence < 0.15) {
-        setDeskewStatus(t("pdfViewer.deskewNoStructure"));
-        return;
-      }
-      if (Math.abs(estimate.angle) < 0.3) {
-        setDeskewStatus(t("pdfViewer.deskewAlreadyStraight"));
-        return;
-      }
-
-      if (!savePolicyV1) {
-        // Legacy writer retained behind the default-off policy flag. The
-        // policy path below performs its source/graph checks and consumes an
-        // exact consent receipt before creating this output raster.
-        const out = document.createElement("canvas");
-        out.width = canvas.width;
-        out.height = canvas.height;
-        const outCtx = out.getContext("2d");
-        if (!outCtx) throw new Error("no 2d context");
-        outCtx.fillStyle = "#ffffff";
-        outCtx.fillRect(0, 0, out.width, out.height);
-        outCtx.translate(out.width / 2, out.height / 2);
-        outCtx.rotate((-estimate.angle * Math.PI) / 180);
-        outCtx.drawImage(canvas, -canvas.width / 2, -canvas.height / 2);
-        if (!visualMaskOutputIsCurrent()) return;
-        const pngBytes = await new Promise<Uint8Array | null>((resolve) => {
-          out.toBlob(
-            (blob) =>
-              blob
-                ? void blob
-                    .arrayBuffer()
-                    .then((buffer) => resolve(new Uint8Array(buffer)))
-                : resolve(null),
-            "image/png",
-          );
-        });
-        if (!pngBytes || !visualMaskOutputIsCurrent()) {
-          pngBytes?.fill(0);
-          throw new Error("raster encode failed");
-        }
-        const response = await fetchPdfSource(url);
-        if (!response.ok) throw new Error(`${response.status}`);
-        const doc = await PdfLibDocument.load(await response.arrayBuffer());
-        // The shown file's page (a saved file holding the page's structure
-        // is read as the upload: its page numbers are not the file's).
-        const page = doc.getPage((shownDocumentFilePage(pdfDocRef.current, currentPage) ?? currentPage) - 1);
-        const embedded = await doc.embedPng(pngBytes);
-        const source = pages.find((item) => item.pageNumber === currentPage);
-        const rotatedQuarter =
-          ((resolvedPageRotation(currentPage) % 360) + 360) % 360;
-        const displayWidth =
-          rotatedQuarter === 90 || rotatedQuarter === 270
-            ? (source?.height ?? page.getSize().height)
-            : (source?.width ?? page.getSize().width);
-        const displayHeight =
-          rotatedQuarter === 90 || rotatedQuarter === 270
-            ? (source?.width ?? page.getSize().width)
-            : (source?.height ?? page.getSize().height);
-        page.setMediaBox(0, 0, displayWidth, displayHeight);
-        page.setCropBox(0, 0, displayWidth, displayHeight);
-        page.setRotation(degreesPdfLib(0));
-        page.node.setXObject(PDFName.of("XDeskew"), embedded.ref);
-        const ops = `q ${displayWidth} 0 0 ${displayHeight} 0 0 cm /XDeskew Do Q`;
-        page.node.set(
-          PDFName.of("Contents"),
-          doc.context.register(doc.context.stream(ops)),
-        );
-        if (!visualMaskOutputIsCurrent()) return;
-        const bytes = await doc.save();
-        if (!visualMaskOutputIsCurrent()) {
-          bytes.fill(0);
-          return;
-        }
-        const base = (filename || "document.pdf").replace(/\.pdf$/i, "");
-        if (
-          !downloadPdfBytes(
-            new Uint8Array(bytes),
-            `${base}-deskewed.pdf`,
-            visualMaskOutputIsCurrent,
-          )
-        ) {
-          bytes.fill(0);
-          return;
-        }
-        pngBytes.fill(0);
-        setDeskewStatus(
-          t("pdfViewer.deskewDone", {
-            angle: Math.abs(estimate.angle).toFixed(1),
-          }),
-        );
-        return;
-      }
-
-      if (!requestedLiveState || !requestedPage) {
-        throw new Error("PDF deskew source identity is unavailable");
-      }
-      const response = await fetchPdfSource(requestedLiveState.sourceUrl);
-      if (!response.ok) throw new Error(`${response.status}`);
-      sourceBytes = await readBoundedPdfResponse(response);
-      const inspectedSource = await inspectPdfSourceRiskSnapshot({
-        dataItemId: requestedLiveState.dataItemId,
-        byteGenerationKey: requestedLiveState.previewByteGenerationKey,
-        bytes: sourceBytes,
-        documentRevision: requestedLiveState.source.identity.documentRevision,
-      });
-      const sourceMatches = (
-        live: NonNullable<ReturnType<typeof readDeskewLiveState>>,
-      ) =>
-        live.source.identity.dataItemId ===
-          inspectedSource.identity.dataItemId &&
-        live.source.identity.byteGenerationKey ===
-          inspectedSource.identity.byteGenerationKey &&
-        live.source.identity.sha256 === inspectedSource.identity.sha256 &&
-        live.source.identity.documentRevision ===
-          inspectedSource.identity.documentRevision &&
-        live.source.profileDigest === inspectedSource.profileDigest;
-      const liveAfterInspection = readDeskewLiveState();
-      if (
-        !liveAfterInspection ||
-        !sourceMatches(liveAfterInspection) ||
-        liveAfterInspection.canvas !== canvas ||
-        deskewOutputGenerationRef.current !== operationGeneration
-      ) {
-        throw new Error("PDF deskew input changed during preflight");
-      }
-
-      // The current writer replaces page contents but does not rewrite the
-      // annotation graph. Keeping an old /Annots array against new boxes and
-      // coordinates would corrupt links, widgets, or comments. Reject before
-      // consent rather than claiming those objects were removed.
-      const preflightDocument = await PdfLibDocument.load(sourceBytes);
-      if (requestedPage > preflightDocument.getPageCount()) {
-        throw new Error("PDF deskew target page is unavailable");
-      }
-      const preflightPage = preflightDocument.getPage(requestedPage - 1);
-      if ((preflightPage.node.Annots()?.size() ?? 0) > 0) {
-        throw new Error("PDF deskew does not support pages with annotations");
-      }
-
-      // The visible canvas is only an angle probe. The output is rendered from
-      // the exact bound pdf.js page at a fixed print-quality DPI, so browser
-      // zoom and device DPR cannot alter the published raster resolution.
-      const outputPdfJsDocument = liveAfterInspection.pdfJsDocument;
-      const outputPdfJsPage = await outputPdfJsDocument.getPage(requestedPage);
-      const sourceUserUnit = outputPdfJsPage.userUnit;
-      if (!Number.isFinite(sourceUserUnit) || sourceUserUnit <= 0) {
-        throw new Error("PDF deskew source UserUnit is invalid");
-      }
-      const sourcePdfJsView = Object.freeze([...outputPdfJsPage.view]);
-      const inheritedUserUnitObject =
-        preflightPage.node.getInheritableAttribute(PDFName.of("UserUnit"));
-      const pdfLibUserUnit = inheritedUserUnitObject
-        ? preflightDocument.context
-            .lookupMaybe(inheritedUserUnitObject, PDFNumber)
-            ?.asNumber()
-        : 1;
-      if (
-        typeof pdfLibUserUnit !== "number" ||
-        !Number.isFinite(pdfLibUserUnit) ||
-        !sameDeskewCoordinate(pdfLibUserUnit, sourceUserUnit)
-      ) {
-        throw new Error("PDF deskew source UserUnit parsers disagree");
-      }
-      const outputGeometry = readPdfDeskewOutputGeometry({
-        media: preflightPage.getMediaBox(),
-        crop: preflightPage.getCropBox(),
-        pdfJsView: sourcePdfJsView,
-        sourceUserUnit,
-        rotation: liveAfterInspection.resolvedRotation,
-      });
-      if (!outputGeometry) {
-        throw new Error("PDF deskew output page geometry is invalid");
-      }
-      const outputViewport = outputPdfJsPage.getViewport({
-        scale: PDF_DESKEW_OUTPUT_DPI / 72,
-        rotation: liveAfterInspection.resolvedRotation,
-      });
-      const outputPixelWidth = pdfDeskewRasterPixels(outputViewport.width);
-      const outputPixelHeight = pdfDeskewRasterPixels(outputViewport.height);
-      if (
-        !isPdfDeskewRasterCanvasWithinBudget(
-          outputPixelWidth,
-          outputPixelHeight,
-        )
-      ) {
-        throw new Error("PDF deskew output canvas budget exceeded");
-      }
-      if (
-        Math.ceil((outputGeometry.crop.width * PDF_DESKEW_OUTPUT_DPI) / 72) !==
-          outputPixelWidth ||
-        Math.ceil((outputGeometry.crop.height * PDF_DESKEW_OUTPUT_DPI) / 72) !==
-          outputPixelHeight
-      ) {
-        throw new Error("PDF deskew viewport does not match physical crop");
-      }
-
-      const requestedPageWidth = liveAfterInspection.sourcePage.width;
-      const requestedPageHeight = liveAfterInspection.sourcePage.height;
-      const planDigest = await createPdfOutputPlanDigest([
-        "pdf.file.deskew-page",
-        inspectedSource.identity.sha256,
-        `page:${requestedPage}`,
-        `rotation:${liveAfterInspection.resolvedRotation}`,
-        `canvas:${liveAfterInspection.canvasGeneration}:${canvas.width}x${canvas.height}`,
-        `angle:${estimate.angle}`,
-        `confidence:${estimate.confidence}`,
-        `page-box:${requestedPageWidth}x${requestedPageHeight}`,
-        `source-user-unit:${sourceUserUnit}`,
-        `output-dpi:${PDF_DESKEW_OUTPUT_DPI}`,
-        `output-pixels:${outputPixelWidth}x${outputPixelHeight}`,
-        `output-rotation:${liveAfterInspection.resolvedRotation}`,
-        `output-media:${outputGeometry.media.x},${outputGeometry.media.y},${outputGeometry.media.width},${outputGeometry.media.height}`,
-        `output-crop:${outputGeometry.crop.x},${outputGeometry.crop.y},${outputGeometry.crop.width},${outputGeometry.crop.height}`,
-        "annots:none",
-        `source-bytes:${sourceBytes.byteLength}`,
-      ]);
-      const readCurrentRequest = (): PdfSavePolicyRequest | null => {
-        if (
-          !visualMaskOutputIsCurrent() ||
-          deskewOutputGenerationRef.current !== operationGeneration
-        ) {
-          return null;
-        }
-        const live = readDeskewLiveState();
-        if (
-          !live ||
-          !sourceMatches(live) ||
-          live.sourcePage.width !== requestedPageWidth ||
-          live.sourcePage.height !== requestedPageHeight ||
-          live.pdfJsDocument !== outputPdfJsDocument ||
-          outputPdfJsPage.userUnit !== sourceUserUnit ||
-          outputPdfJsPage.view.length !== sourcePdfJsView.length ||
-          outputPdfJsPage.view.some(
-            (coordinate, index) =>
-              !sameDeskewCoordinate(coordinate, sourcePdfJsView[index]),
-          )
-        ) {
-          return null;
-        }
-        const liveOutputViewport = outputPdfJsPage.getViewport({
-          scale: PDF_DESKEW_OUTPUT_DPI / 72,
-          rotation: live.resolvedRotation,
-        });
-        if (
-          pdfDeskewRasterPixels(liveOutputViewport.width) !== outputPixelWidth ||
-          pdfDeskewRasterPixels(liveOutputViewport.height) !== outputPixelHeight
-        ) {
-          return null;
-        }
-        try {
-          const deskewRaster = createPdfDeskewRasterPolicyContext({
-            dataItemId: live.dataItemId,
-            sourceUrl: live.sourceUrl,
-            previewByteGenerationKey: live.previewByteGenerationKey,
-            previewSha256: live.source.identity.sha256,
-            documentRevision: live.source.identity.documentRevision,
-            editRevision: live.editRevision,
-            pageNumber: live.pageNumber,
-            pdfJsDocument: live.pdfJsDocument,
-            resolvedRotation: live.resolvedRotation,
-            canvas: live.canvas,
-            canvasGeneration: live.canvasGeneration,
-            canvasWidth: live.canvasWidth,
-            canvasHeight: live.canvasHeight,
-            sourceUserUnit,
-            outputDpi: PDF_DESKEW_OUTPUT_DPI,
-            outputPixelWidth,
-            outputPixelHeight,
-            outputMediaX: outputGeometry.media.x,
-            outputMediaY: outputGeometry.media.y,
-            outputMediaWidth: outputGeometry.media.width,
-            outputMediaHeight: outputGeometry.media.height,
-            outputCropX: outputGeometry.crop.x,
-            outputCropY: outputGeometry.crop.y,
-            outputCropWidth: outputGeometry.crop.width,
-            outputCropHeight: outputGeometry.crop.height,
-            angle: estimate.angle,
-            confidence: estimate.confidence,
-            sourceByteLength: sourceBytes!.byteLength,
-            planDigest,
-          });
-          return createReaderSavePolicyRequest({
-            action: "pdf.file.deskew-page",
-            disposition: "flatten-with-consent",
-            hasEdits: true,
-            lossReport: createPdfOutputLossReportForAction(
-              "pdf.file.deskew-page",
-              live.hasCurrentEditorEdits
-                ? [PDF_LOSS_CURRENT_EDITOR_EDITS_EXCLUDED]
-                : [],
-            ),
-            deskewRaster,
-          });
-        } catch {
-          return null;
-        }
-      };
-      const request = readCurrentRequest();
-      if (!request) throw new Error("PDF deskew preflight became stale");
-      const policy = resolveReaderSavePolicy(request);
-      if (!policy.view?.enabled) {
-        throw new Error(policy.view?.reasonKey ?? "PDF deskew is blocked");
-      }
-      const operationOwner = createPdfCommandAuthorityOwner({
-        host: "reader",
-        instanceId: `${commandInstanceId}:deskew:${operationGeneration}`,
-        invocation: PDF_READER_DESKEW_COMMAND,
-      });
-      let published = false;
-      const authority = operationOwner.bind(async () => {
-        const beforeConsent = readCurrentRequest();
-        if (
-          !beforeConsent ||
-          !verifyPdfSavePolicyDecision(policy.decision, beforeConsent)
-        ) {
-          return false;
-        }
-        const receipt = await requestOutputConsent(request, policy.decision);
-        if (!receipt) return false;
-        const beforeRaster = readCurrentRequest();
-        if (
-          !beforeRaster ||
-          !consumePdfSavePolicyConsentReceipt({
-            receipt,
-            documentAuthority: savePolicyRuntimeRef.current.documentAuthority,
-            decision: policy.decision,
-            currentRequest: beforeRaster,
-          })
-        ) {
-          return false;
-        }
-
-        let pngBytes: Uint8Array | null = null;
-        let outputBytes: Uint8Array | null = null;
-        let deskewedCanvas: HTMLCanvasElement | null = null;
-        try {
-          // This is the first output raster allocation in the exact path.
-          // Cancel/Escape or stale identity above therefore performs no
-          // dedicated pdf.js render, toBlob, or pdf-lib save.
-          if (
-            !isPdfDeskewRasterCanvasWithinBudget(
-              outputPixelWidth,
-              outputPixelHeight,
-            )
-          ) {
-            throw new Error("PDF deskew output canvas budget exceeded");
-          }
-          const renderViewport = outputPdfJsPage.getViewport({
-            scale: PDF_DESKEW_OUTPUT_DPI / 72,
-            rotation: liveAfterInspection.resolvedRotation,
-          });
-          if (
-            pdfDeskewRasterPixels(renderViewport.width) !== outputPixelWidth ||
-            pdfDeskewRasterPixels(renderViewport.height) !== outputPixelHeight
-          ) {
-            throw new Error("PDF deskew output viewport changed");
-          }
-          deskewedCanvas = document.createElement("canvas");
-          deskewedCanvas.width = outputPixelWidth;
-          deskewedCanvas.height = outputPixelHeight;
-          const outputContext = deskewedCanvas.getContext("2d");
-          if (!outputContext) throw new Error("no 2d context");
-          outputContext.fillStyle = "#ffffff";
-          outputContext.fillRect(
-            0,
-            0,
-            deskewedCanvas.width,
-            deskewedCanvas.height,
-          );
-          const angleRadians = (-estimate.angle * Math.PI) / 180;
-          const cos = Math.cos(angleRadians);
-          const sin = Math.sin(angleRadians);
-          const centerX = outputPixelWidth / 2;
-          const centerY = outputPixelHeight / 2;
-          const outputRenderTask = outputPdfJsPage.render({
-            canvas: deskewedCanvas,
-            canvasContext: outputContext,
-            viewport: renderViewport,
-            transform: [
-              cos,
-              sin,
-              -sin,
-              cos,
-              centerX - cos * centerX + sin * centerY,
-              centerY - sin * centerX - cos * centerY,
-            ],
-          });
-          await outputRenderTask.promise;
-          const beforeEncode = readCurrentRequest();
-          if (
-            !beforeEncode ||
-            !verifyPdfSavePolicyDecision(policy.decision, beforeEncode)
-          ) {
-            return false;
-          }
-
-          pngBytes = await new Promise<Uint8Array | null>((resolve) => {
-            deskewedCanvas!.toBlob(
-              (blob) =>
-                blob
-                  ? void blob
-                      .arrayBuffer()
-                      .then((buffer) => resolve(new Uint8Array(buffer)))
-                  : resolve(null),
-              "image/png",
-            );
-          });
-          if (
-            !pngBytes ||
-            pngBytes.byteLength < 1 ||
-            pngBytes.byteLength > PDF_PAGE_PACKAGE_MAX_SOURCE_BYTES
-          ) {
-            throw new Error("PDF deskew raster exceeds the editable PDF limit");
-          }
-          const pngDimensions = readPngRasterDimensions(pngBytes);
-          if (
-            !pngDimensions ||
-            pngDimensions.width !== outputPixelWidth ||
-            pngDimensions.height !== outputPixelHeight
-          ) {
-            throw new Error("PDF deskew raster dimensions do not match plan");
-          }
-          const beforeRewrite = readCurrentRequest();
-          if (
-            !beforeRewrite ||
-            !verifyPdfSavePolicyDecision(policy.decision, beforeRewrite)
-          ) {
-            return false;
-          }
-          const doc = await PdfLibDocument.load(sourceBytes!);
-          const page = doc.getPage(requestedPage - 1);
-          if ((page.node.Annots()?.size() ?? 0) > 0) {
-            throw new Error("PDF deskew annotation graph changed");
-          }
-          const embedded = await doc.embedPng(pngBytes);
-          page.setMediaBox(
-            outputGeometry.media.x,
-            outputGeometry.media.y,
-            outputGeometry.media.width,
-            outputGeometry.media.height,
-          );
-          page.setCropBox(
-            outputGeometry.crop.x,
-            outputGeometry.crop.y,
-            outputGeometry.crop.width,
-            outputGeometry.crop.height,
-          );
-          // A direct value is required even when /UserUnit was inherited: the
-          // output boxes are already physicalized, so any remaining scale
-          // would enlarge the page a second time.
-          page.node.set(PDFName.of("UserUnit"), PDFNumber.of(1));
-          page.setRotation(degreesPdfLib(0));
-          page.node.setXObject(PDFName.of("XDeskew"), embedded.ref);
-          const ops = `q ${outputGeometry.crop.width} 0 0 ${outputGeometry.crop.height} ${outputGeometry.crop.x} ${outputGeometry.crop.y} cm /XDeskew Do Q`;
-          page.node.set(
-            PDFName.of("Contents"),
-            doc.context.register(doc.context.stream(ops)),
-          );
-          outputBytes = await doc.save();
-          if (
-            outputBytes.byteLength < 1 ||
-            outputBytes.byteLength > PDF_PAGE_PACKAGE_MAX_SOURCE_BYTES
-          ) {
-            throw new Error("PDF deskew output exceeds the editable PDF limit");
-          }
-          const reopened = await PdfLibDocument.load(outputBytes);
-          const reopenedPage = reopened.getPage(requestedPage - 1);
-          const reopenedMedia = reopenedPage.getMediaBox();
-          const reopenedCrop = reopenedPage.getCropBox();
-          const reopenedUserUnitObject =
-            reopenedPage.node.getInheritableAttribute(PDFName.of("UserUnit"));
-          const reopenedUserUnit = reopenedUserUnitObject
-            ? reopened.context
-                .lookupMaybe(reopenedUserUnitObject, PDFNumber)
-                ?.asNumber()
-            : null;
-          const reopenedXObjects = reopenedPage.node
-            .Resources()
-            ?.lookupMaybe(PDFName.of("XObject"), PDFDict);
-          const reopenedDeskewRef = reopenedXObjects?.get(
-            PDFName.of("XDeskew"),
-          );
-          const reopenedDeskewImage = reopenedDeskewRef
-            ? reopened.context.lookup(reopenedDeskewRef)
-            : null;
-          const reopenedRasterWidth =
-            reopenedDeskewImage instanceof PDFRawStream
-              ? reopenedDeskewImage.dict
-                  .lookupMaybe(PDFName.of("Width"), PDFNumber)
-                  ?.asNumber()
-              : null;
-          const reopenedRasterHeight =
-            reopenedDeskewImage instanceof PDFRawStream
-              ? reopenedDeskewImage.dict
-                  .lookupMaybe(PDFName.of("Height"), PDFNumber)
-                  ?.asNumber()
-              : null;
-          if (
-            reopened.getPageCount() !== preflightDocument.getPageCount() ||
-            (reopenedPage.node.Annots()?.size() ?? 0) > 0 ||
-            reopenedUserUnit !== 1 ||
-            reopenedPage.getRotation().angle !== 0 ||
-            !sameDeskewCoordinate(reopenedMedia.x, outputGeometry.media.x) ||
-            !sameDeskewCoordinate(reopenedMedia.y, outputGeometry.media.y) ||
-            !sameDeskewCoordinate(
-              reopenedMedia.width,
-              outputGeometry.media.width,
-            ) ||
-            !sameDeskewCoordinate(
-              reopenedMedia.height,
-              outputGeometry.media.height,
-            ) ||
-            !sameDeskewCoordinate(reopenedCrop.x, outputGeometry.crop.x) ||
-            !sameDeskewCoordinate(reopenedCrop.y, outputGeometry.crop.y) ||
-            !sameDeskewCoordinate(
-              reopenedCrop.width,
-              outputGeometry.crop.width,
-            ) ||
-            !sameDeskewCoordinate(
-              reopenedCrop.height,
-              outputGeometry.crop.height,
-            ) ||
-            reopenedRasterWidth !== outputPixelWidth ||
-            reopenedRasterHeight !== outputPixelHeight
-          ) {
-            throw new Error("PDF deskew output verification failed");
-          }
-          const afterRewrite = readCurrentRequest();
-          if (
-            published ||
-            !afterRewrite ||
-            !verifyPdfSavePolicyDecision(policy.decision, afterRewrite)
-          ) {
-            return false;
-          }
-          const safe = new Uint8Array(outputBytes.byteLength);
-          safe.set(outputBytes);
-          const base = (filename || "document.pdf").replace(/\.pdf$/i, "");
-          const outputName = `${base}-deskewed.pdf`;
-          if (!visualMaskOutputIsCurrent()) return false;
-          const outputBlob = new Blob([safe], {
-            type: "application/pdf",
-          });
-          if (!visualMaskOutputIsCurrent()) return false;
-          published = true;
-          downloadBlobFile(outputName, outputBlob);
-          if (!visualMaskOutputIsCurrent()) return false;
-          rememberFileOpResult(safe, outputName);
-          safe.fill(0);
-          setDeskewStatus(
-            t("pdfViewer.deskewDone", {
-              angle: Math.abs(estimate.angle).toFixed(1),
-            }),
-          );
-          return true;
-        } finally {
-          pngBytes?.fill(0);
-          outputBytes?.fill(0);
-          if (deskewedCanvas) {
-            deskewedCanvas.width = 0;
-            deskewedCanvas.height = 0;
-          }
-        }
-      });
-      const runtime = {
-        featureFlags: readPdfFeatureFlagState(),
-        decisions: {
-          [PDF_READER_DESKEW_COMMAND.featureId]: {
-            enabled: true,
-            disposition: policy.view.disposition,
-            savePolicy: { request, decision: policy.decision },
-            reasonKey: policy.view.reasonKey ?? undefined,
-          },
-        },
-      } satisfies PdfFeatureRuntimeState;
-      const context: PdfCapabilityContext = {
-        host: "reader",
-        documentReady: savePolicyRuntimeRef.current.documentReady,
-        editable: savePolicyRuntimeRef.current.editable,
-      };
-      await authority.execute(PDF_READER_DESKEW_COMMAND, context, runtime);
-    } catch {
-      setDeskewStatus(t("pdfViewer.deskewFailed"));
-    } finally {
-      sourceBytes?.fill(0);
-      deskewOutputInFlightRef.current = false;
-      setDeskewBusy(false);
-    }
-  }, [
-    blockVisualMaskDerivedPdfOutput,
-    commandInstanceId,
-    createReaderSavePolicyRequest,
-    createVisualMaskOutputAuthorityGuard,
-    currentPage,
-    deskewBusy,
-    downloadPdfBytes,
-    filename,
-    pages,
-    readDeskewLiveState,
-    rememberFileOpResult,
-    requestOutputConsent,
-    resolveReaderSavePolicy,
-    resolvedPageRotation,
-    savePolicyV1,
-    t,
-    url,
-  ]);
 
   // ---- Read aloud -------------------------------------------------------
   const [speechStatus, setSpeechStatus] = useState<SpeechStatus>("idle");
@@ -47548,14 +44876,6 @@ export default function PDFViewer({
     speechSupported,
   ]);
 
-  const openSpeechSettings = useCallback(
-    (trigger: HTMLButtonElement | null = null) => {
-      speechSettingsReturnFocusRef.current = trigger;
-      setSpeechSettingsOpen(true);
-    },
-    [],
-  );
-
   const applySpeechSettings = useCallback(
     (next: PdfReadAloudSettings) => {
       const restart =
@@ -47773,15 +45093,6 @@ export default function PDFViewer({
       thirdPartyPinnedAttachments,
     ],
   );
-
-  const handleSaveSelectedAttachment = useCallback(() => {
-    if (selectedPlacedRef.current?.kind !== "fileAttachment") return;
-    const index = placedAttachments.findIndex(
-      (attachment) => attachment.id === selectedPlacedRef.current?.id,
-    );
-    if (index < 0) return;
-    handleSaveListedAttachment(index);
-  }, [handleSaveListedAttachment, placedAttachments]);
 
   const getPageTextBoxes = useCallback(
     async (pageNumber: number): Promise<PdfViewerTextBoxCommandTarget[]> => {
@@ -48527,84 +45838,6 @@ export default function PDFViewer({
     officeProjectionTarget,
   ]);
 
-  const openScreenRecording = useCallback(
-    (trigger: HTMLButtonElement | null) => {
-      if (
-        !screenRecordingSupported ||
-        screenRecordingState === "requesting" ||
-        screenRecordingState === "recording" ||
-        screenRecordingState === "saving"
-      ) {
-        return;
-      }
-      screenRecordingTriggerRef.current =
-        trigger ??
-        (document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : null);
-      setScreenRecordingState("idle");
-      setScreenRecordingOpen(true);
-    },
-    [screenRecordingState, screenRecordingSupported],
-  );
-
-  const cancelScreenRecording = useCallback(() => {
-    if (screenRecordingState === "requesting") return;
-    setScreenRecordingOpen(false);
-  }, [screenRecordingState]);
-
-  const startScreenRecording = useCallback(
-    async (includeSharedAudio: boolean) => {
-      if (!screenRecordingSupported || screenRecordingSessionRef.current) return;
-      const generation = screenRecordingGenerationRef.current + 1;
-      screenRecordingGenerationRef.current = generation;
-      setScreenRecordingState("requesting");
-      try {
-        const session = await startPdfScreenRecording({
-          includeSharedAudio,
-          onOutput: (blob) => {
-            if (screenRecordingGenerationRef.current !== generation) return false;
-            const extension = pdfScreenRecordingExtension(blob.type);
-            return downloadBlobFile(
-              `${annotationExportBase}-screen-recording.${extension}`,
-              blob,
-            );
-          },
-        });
-        if (screenRecordingGenerationRef.current !== generation) {
-          session.discard();
-          return;
-        }
-        screenRecordingSessionRef.current = session;
-        setScreenRecordingOpen(false);
-        setScreenRecordingState("recording");
-        void session.done.then((outcome) => {
-          if (screenRecordingGenerationRef.current !== generation) return;
-          screenRecordingSessionRef.current = null;
-          setScreenRecordingState(
-            outcome === "saved"
-              ? "saved"
-              : outcome === "failed"
-                ? "error"
-                : "idle",
-          );
-        });
-      } catch {
-        if (screenRecordingGenerationRef.current !== generation) return;
-        screenRecordingSessionRef.current = null;
-        setScreenRecordingState("error");
-      }
-    },
-    [annotationExportBase, screenRecordingSupported],
-  );
-
-  const stopScreenRecording = useCallback(() => {
-    const session = screenRecordingSessionRef.current;
-    if (!session || screenRecordingState !== "recording") return;
-    setScreenRecordingState("saving");
-    session.stop();
-  }, [screenRecordingState]);
-
   // WPS Home > Convert > PDF to CAD. This deliberately exports only the
   // stored PDF's evidenced vector linework as metric DXF: no current edits,
   // text outlines, OCR, raster tracing or inferred CAD structure. The server
@@ -48834,24 +46067,6 @@ export default function PDFViewer({
     t,
     url,
   ]);
-
-  const openDangerousActionSafeCopyReview = useCallback(
-    (trigger: HTMLButtonElement | null): boolean => {
-      if (
-        !trigger ||
-        dangerousActionSafeCopyInFlightRef.current ||
-        !dangerousActionInspection?.eligible ||
-        dangerousActionInspection.actions.length === 0
-      ) {
-        return false;
-      }
-      dangerousActionSafeCopyTriggerRef.current = trigger;
-      setDangerousActionSafeCopyError(null);
-      setDangerousActionSafeCopyOpen(true);
-      return true;
-    },
-    [dangerousActionInspection],
-  );
 
   const cancelDangerousActionSafeCopy = useCallback(() => {
     dangerousActionSafeCopySessionGenerationRef.current += 1;
@@ -49099,131 +46314,6 @@ export default function PDFViewer({
     savePolicyV1,
     url,
   ]);
-
-  const dangerousActionSafeCopyDisabledReason = useMemo(() => {
-    if (dangerousActionInspectionBusy) {
-      return t("pdf.viewer.inspectingPdfActions");
-    }
-    switch (dangerousActionInspection?.disabledReason) {
-      case "encrypted-source":
-        return t("pdf.viewer.encryptedPdfsRequireAuthenticatedPlaintext");
-      case "signed-source":
-        return t("pdf.viewer.pdfDigitallySignedRewritingWould");
-      case "unsupported-action":
-        return t("pdf.viewer.unsupportedActionTypeFoundSafe");
-      case "source-authority-unavailable":
-        return t("pdf.viewer.authenticatedOriginalFileAuthorityUnavailable2");
-      case "inspection-failed":
-        return t("pdf.viewer.pdfActionInventoryCouldNot");
-      default:
-        return t("pdf.viewer.pdfDoesNotNeedDangerous");
-    }
-  }, [
-    dangerousActionInspection?.disabledReason,
-    dangerousActionInspectionBusy,
-    t,
-  ]);
-  const dangerousActionCount = dangerousActionInspection?.actions.length ?? 0;
-  const dangerousActionCompactStatusLabel = useMemo(() => {
-    if (dangerousActionCount > 0) {
-      return t("pdf.viewer.dangerousActionCount", {
-        count: dangerousActionCount,
-      });
-    }
-    switch (dangerousActionInspection?.disabledReason) {
-      case "encrypted-source":
-        return t("pdf.viewer.encryptedPdf");
-      case "signed-source":
-        return t("pdf.viewer.signedPdfProtected");
-      case "unsupported-action":
-        return t("pdf.viewer.pdfActionsNeedReview");
-      case "source-authority-unavailable":
-        return t("pdf.viewer.safetyCheckLimited");
-      case "inspection-failed":
-        return t("pdf.viewer.safetyCheckUnavailable");
-      default:
-        return t("pdf.viewer.pdfSafetyStatus");
-    }
-  }, [
-    dangerousActionCount,
-    dangerousActionInspection?.disabledReason,
-    t,
-  ]);
-  const dangerousActionSafeCopyAuthorityOwner = useMemo(
-    () =>
-      createPdfCommandAuthorityOwner({
-        host: "reader",
-        instanceId: commandInstanceId,
-        invocation: PDF_READER_DANGEROUS_ACTION_SAFE_COPY_COMMAND,
-      }),
-    [commandInstanceId],
-  );
-  const dangerousActionSafeCopyAuthority = useCommittedPdfCommandAuthority(
-    dangerousActionSafeCopyAuthorityOwner,
-    () =>
-      openDangerousActionSafeCopyReview(
-        dangerousActionSafeCopyTriggerRef.current,
-      ),
-    0,
-  );
-  const dangerousActionSafeCopyRuntimeDecision =
-    useMemo<PdfRuntimeFeatureDecision>(
-      () => ({
-        enabled:
-          dangerousActionInspection?.eligible === true &&
-          dangerousActionInspection.actions.length > 0 &&
-          !dangerousActionInspectionBusy &&
-          !dangerousActionSafeCopyBusy,
-        disposition:
-          dangerousActionInspection?.eligible === true
-            ? "read-only"
-            : "blocked",
-        reasonKey:
-          dangerousActionInspection?.eligible === true
-            ? undefined
-            : "pdf.security.safeCopyUnavailable",
-        reasonLabel: dangerousActionSafeCopyDisabledReason,
-      }),
-      [
-        dangerousActionInspection,
-        dangerousActionInspectionBusy,
-        dangerousActionSafeCopyBusy,
-        dangerousActionSafeCopyDisabledReason,
-      ],
-    );
-  const dangerousActionSafeCopyCommand =
-    dangerousActionSafeCopyAuthority?.resolve(
-      PDF_READER_DANGEROUS_ACTION_SAFE_COPY_COMMAND,
-      readerCapabilityContext,
-      readerRuntimeFor(
-        PDF_READER_DANGEROUS_ACTION_SAFE_COPY_COMMAND.featureId,
-        dangerousActionSafeCopyRuntimeDecision,
-      ),
-    ) ?? pendingPdfCommand(PDF_READER_DANGEROUS_ACTION_SAFE_COPY_COMMAND);
-  const executeDangerousActionSafeCopyReview = useCallback(
-    async (trigger: HTMLButtonElement) => {
-      dangerousActionSafeCopyTriggerRef.current = trigger;
-      if (!dangerousActionSafeCopyAuthority) return;
-      const runtime = readerRuntimeFor(
-        PDF_READER_DANGEROUS_ACTION_SAFE_COPY_COMMAND.featureId,
-        dangerousActionSafeCopyRuntimeDecision,
-      );
-      const outcome = await dangerousActionSafeCopyAuthority.execute(
-        PDF_READER_DANGEROUS_ACTION_SAFE_COPY_COMMAND,
-        readerCapabilityContext,
-        runtime,
-      );
-      if (outcome !== "executed") {
-        dangerousActionSafeCopyTriggerRef.current = null;
-      }
-    },
-    [
-      dangerousActionSafeCopyAuthority,
-      dangerousActionSafeCopyRuntimeDecision,
-      readerCapabilityContext,
-      readerRuntimeFor,
-    ],
-  );
 
   const openDocumentEncrypt = useCallback(
     (trigger: HTMLButtonElement | null) => {
@@ -50577,21 +47667,131 @@ export default function PDFViewer({
       }
       return { error: "not_measurable" as const };
     },
+    // Reads for the Automation API's object model (lib/embed/automation/pdf-model).
+    pages: () =>
+      visiblePages.map((entry) => {
+        const turned = (pageEdits.rotations as Record<number, number> | undefined)?.[entry.pageNumber] ?? entry.nativeRotation;
+        const sideways = turned === 90 || turned === 270;
+        return {
+          page: entry.pageNumber,
+          width: Math.round((sideways ? entry.height : entry.width) * 100) / 100,
+          height: Math.round((sideways ? entry.width : entry.height) * 100) / 100,
+          rotation: turned,
+        };
+      }),
+    pageText: async (page) => {
+      if (!visiblePages.some((entry) => entry.pageNumber === page)) return null;
+      const entry = await getPageTextEntry(page);
+      return entry ? entry.rawText : "";
+    },
+    annotations: () => {
+      const author = (value: unknown): string | null => {
+        if (typeof value === "string") return value || null;
+        const name = value && typeof value === "object" ? (value as { displayName?: unknown }).displayName : undefined;
+        return typeof name === "string" && name ? name : null;
+      };
+      const row = (type: string, item: { id: string; page: number } & Record<string, unknown>, text: unknown) => ({
+        id: item.id,
+        type,
+        page: item.page,
+        text: typeof text === "string" ? text : "",
+        color: typeof item.color === "string" ? item.color : null,
+        author: author(item.author),
+        createdAt: typeof item.createdAt === "string" ? item.createdAt : null,
+      });
+      return [
+        ...highlights.map((item) => row(item.markupStyle ?? "highlight", item as never, item.note || item.text)),
+        ...notes.map((item) => row("note", item as never, item.text)),
+        ...inks.map((item) => row("ink", item as never, "")),
+        ...shapes.map((item) => row("shape", item as never, (item as { text?: unknown }).text)),
+        ...stamps.map((item) => row("stamp", item as never, (item as { label?: unknown; text?: unknown }).label ?? (item as { text?: unknown }).text)),
+        ...signatures.map((item) => row("signature", item as never, "")),
+        ...redactions.map((item) => row("redaction", item as never, "")),
+      ].sort((a, b) => a.page - b.page);
+    },
+    // An integration's picture (ONLYOFFICE's insertImage): Insert > Image's
+    // picture at its default size, centred on the page shown, saved as that
+    // command saves it.
+    insertPicture: async (file) => {
+      if (loading || !dataItemId || !onManagedStampUpsert || !annotationContextWritable) return false;
+      const page = currentPageRef.current;
+      const entry = visiblePages.find((candidate) => candidate.pageNumber === page);
+      if (!entry) return false;
+      const picture = await pdfStampPictureFromFile(file);
+      if (!picture) return false;
+      const rect = pageRefs.current.get(page)?.getBoundingClientRect();
+      const turned = (pageEdits.rotations as Record<number, number> | undefined)?.[page] ?? entry.nativeRotation;
+      const sideways = turned === 90 || turned === 270;
+      const pageWidth = rect && rect.width > 0 ? rect.width : sideways ? entry.height : entry.width;
+      const pageHeight = rect && rect.height > 0 ? rect.height : sideways ? entry.width : entry.height;
+      const sized = imageStampPlacementSize({ imageAspectRatio: picture.aspectRatio, pageWidth, pageHeight, x: 0, y: 0 });
+      if (!sized) return false;
+      const x = Math.max(0, (100 - sized.width) / 2);
+      const y = Math.max(0, (100 - sized.height) / 2);
+      const size = imageStampPlacementSize({ imageAspectRatio: picture.aspectRatio, pageWidth, pageHeight, x, y });
+      if (!size) return false;
+      return placeInsertedPicture(page, x, y, { kind: "image", ...picture, origin: "image-insert" }, size);
+    },
+    formFields: async () => {
+      if (!pdfDoc) return [];
+      const read: ReturnType<typeof normalizeFormFields> = [];
+      const pageOf = new Map<string, number>();
+      for (const entry of visiblePages.slice(0, 2_000)) {
+        try {
+          const page = await pdfDoc.getPage(entry.pageNumber);
+          for (const field of normalizeFormFields(await page.getAnnotations(), entry.pageNumber)) {
+            read.push(field);
+            if (!pageOf.has(field.name)) pageOf.set(field.name, entry.pageNumber);
+          }
+        } catch {
+          // A page that cannot be read lists no fields.
+        }
+      }
+      const source = buildSourceFormValues(read);
+      const directory = buildFieldDirectory(read);
+      const flags = new Map<string, { readOnly: boolean; required: boolean }>();
+      for (const field of read) {
+        const before = flags.get(field.name);
+        flags.set(field.name, { readOnly: (before?.readOnly ?? false) || field.readOnly, required: (before?.required ?? false) || field.required });
+      }
+      return [...directory.entries()].map(([name, merged]) => {
+        const shown = Object.prototype.hasOwnProperty.call(formValues, name) ? formValues[name] : source[name];
+        const value = shown === undefined ? null : (shown as string | boolean | string[]);
+        const options = merged.type === "radio" ? merged.radioValues : merged.type === "choice" ? merged.options.map((option) => option.value) : undefined;
+        return {
+          name,
+          type: merged.type === "choice" ? (merged.multiSelect ? "list" : "dropdown") : merged.type,
+          value,
+          page: pageOf.get(name) ?? null,
+          readOnly: flags.get(name)?.readOnly ?? false,
+          required: flags.get(name)?.required ?? false,
+          ...(options ? { options } : {}),
+        };
+      });
+    },
   };
   // Registered once the file is open with its pages (a search before that
   // finds nothing in a file that has the words).
   const livePdfIn = Boolean(pdfDoc) && visiblePages.length > 0;
+  // A reader's window too: the Automation API's reads (pages, text, search)
+  // answer in a view session; its writes are refused by the call's check.
+  const livePdfPageId = livePageId ?? pageId;
   useEffect(() => {
-    if (!pageId || !livePdfIn) return undefined;
-    return registerLiveEditor(pageId, {
+    if (!livePdfPageId || !livePdfIn) return undefined;
+    return registerLiveEditor(livePdfPageId, {
       kind: "pdf",
       pageCount: () => liveAutomationRef.current.pageCount(),
       currentPage: () => liveAutomationRef.current.currentPage(),
       goToPage: (page) => liveAutomationRef.current.goToPage(page),
       search: (text, options) => liveAutomationRef.current.search(text, options),
       markText: (text, options) => liveAutomationRef.current.markText(text, options),
+      pages: () => liveAutomationRef.current.pages?.() ?? [],
+      pageText: (page) => liveAutomationRef.current.pageText?.(page) ?? Promise.resolve(null),
+      annotations: () => liveAutomationRef.current.annotations?.() ?? [],
+      formFields: () => liveAutomationRef.current.formFields?.() ?? Promise.resolve([]),
+      insertPicture: (file) => liveAutomationRef.current.insertPicture?.(file) ?? Promise.resolve(false),
     });
-  }, [livePdfIn, pageId]);
+  }, [livePdfIn, livePdfPageId]);
 
   // Map a result's visible-page index to the 1-based page number for its label.
   const docSearchPageNumber = useCallback(
@@ -51432,7 +48632,7 @@ export default function PDFViewer({
       if (current !== "edit") return;
       annotationContextBaseTabRef.current = "edit";
       activeRibbonTabRef.current = "annotation-format";
-      setActiveRibbonTab("annotation-format");
+      void 0;
       return;
     }
     if (
@@ -51441,7 +48641,7 @@ export default function PDFViewer({
       annotationContextBaseTabRef.current === "edit"
     ) {
       activeRibbonTabRef.current = "edit";
-      setActiveRibbonTab("edit");
+      void 0;
     }
   }, [nativeVectorContextActive]);
   // A picture selected on Edit brings its 图片编辑 tab forward (WPS); losing
@@ -51452,14 +48652,14 @@ export default function PDFViewer({
       if (current !== "edit" && current !== "annotation-format") return;
       pictureContextBaseTabRef.current = "edit";
       activeRibbonTabRef.current = "picture-format";
-      setActiveRibbonTab("picture-format");
+      void 0;
       return;
     }
     if (current !== "picture-format") return;
     if (nativeVectorContextActive) {
       annotationContextBaseTabRef.current = pictureContextBaseTabRef.current;
       activeRibbonTabRef.current = "annotation-format";
-      setActiveRibbonTab("annotation-format");
+      void 0;
       return;
     }
     activeRibbonTabRef.current = pictureContextBaseTabRef.current;
@@ -52081,7 +49281,7 @@ export default function PDFViewer({
   // What a page's paint shows besides its bytes: a cached paint is shown
   // again only where all of it is the same.
   pagePaintCacheKeyRef.current = (sha, pageNumber, canvas) =>
-    `${sha}|${pageNumber}|${canvas.width}x${canvas.height}|${commentsHidden}|${ocgVersion}|${heldNativeAnnotations?.key ?? ""}`;
+    `${sha}|${pageNumber}|${canvas.width}x${canvas.height}|${false}|${ocgVersion}|${heldNativeAnnotations?.key ?? ""}`;
   /** Bytes painted a moment ago (an Undo, a Redo): their paint on the pages
    * kept for them, at once; the reader's own paint of them replaces it when
    * it comes. It counts as the page painting them (what stands over it may
@@ -52734,10 +49934,6 @@ export default function PDFViewer({
   // the page content front first. A shape dragged to the k-th place is one
   // reorder chain: one write, one Undo step.
   const [nativeSelectionPaneOpen, setNativeSelectionPaneOpen] = useState(false);
-  const toggleNativeSelectionPane = useCallback(
-    () => setNativeSelectionPaneOpen((open) => !open),
-    [],
-  );
   const nativeSelectionPanePage = currentNativeVectorSelection?.pageNumber ?? currentPage;
   const nativeSelectionPaneStops = nativePaintStopsByPage.get(nativeSelectionPanePage);
   const nativeSelectionPaneRoutes =
@@ -53617,19 +50813,6 @@ export default function PDFViewer({
       return true;
     },
   };
-  // The ribbon's Copy and Paste: a click on the ribbon is on no page, so its
-  // paste is nudged from where the shapes were copied.
-  const nativeVectorClipboardCommands = useMemo(
-    () => ({
-      copy: () => {
-        nativeVectorClipboardHandlersRef.current.copy();
-      },
-      paste: () => {
-        void nativeVectorClipboardHandlersRef.current.paste(null);
-      },
-    }),
-    [],
-  );
   // Cmd/Ctrl+C, X and V on source vectors: their own listener beside the
   // placed-annotation clipboard's, yielding to every text control and to text
   // selected on the page (whose Copy is the reader's own).
@@ -54210,7 +51393,6 @@ export default function PDFViewer({
           : {}),
       }
     : annotationContextLabels;
-  const formFieldContextLabels = createPdfFormFieldContextRibbonLabels(t);
   const formFieldGroupPropertiesOnlyReason = t(
     "pdf.viewer.multiWidgetFieldsExposeOnly",
   );
@@ -54333,7 +51515,7 @@ export default function PDFViewer({
         (existingTextFieldEditMode ||
           // The contextual panel is showing: its tab header must too, or the
           // tab row shows no selected tab above a Form Field command band.
-          activeRibbonTab === "form-field-format" ||
+          false ||
           selectedFormFieldContext.semanticRoute ||
           selectedFormFieldContext.widgetGeometry)
       ? "form-field"
@@ -54351,34 +51533,14 @@ export default function PDFViewer({
     ? "text-edit"
     : drawMode && !drawTabDrawing
       ? "graffiti"
-      : measureMode
-        ? "measure-tool"
-        : shapeMode
+      : (shapeMode
           ? "path-edit"
           : commentToolArmed
             ? "comment-tool"
-            : "none";
+            : "none");
   const drawingToolContextActive =
-    (drawMode && !drawTabDrawing) || (inkEraseMode && commentInkErasing) ||
-    measureMode || shapeMode;
-  const drawingContextKind = shapeMode
-    ? ("shape" as const)
-    : (drawMode && !drawTabDrawing) || (inkEraseMode && commentInkErasing)
-      ? ("ink" as const)
-      : ("measurement" as const);
-  const drawingStyleEnabled =
-    !ribbonLoading &&
-    Boolean(dataItemId) &&
-    (drawingContextKind === "shape"
-      ? Boolean(onManagedShapeUpsert)
-      : drawingContextKind === "ink"
-        ? Boolean(onManagedInkUpsert)
-        : true);
-  const drawingStyleDisabledReason = drawingStyleEnabled
-    ? undefined
-    : ribbonLoading
-      ? t("pdfViewer.loading")
-      : t("pdf.editNotReady");
+    (drawMode && !drawTabDrawing) || (false) ||
+    false || shapeMode;
   const commentToolContextLabel = drawingToolContextActive
     ? t("pdf.viewer.drawingTools")
     : t("pdf.viewer.commentTools");
@@ -54401,21 +51563,7 @@ export default function PDFViewer({
     activeRibbonTab,
   )
     ? activeRibbonTab
-    : activeRibbonTab === "text-format"
-      ? nativeTextContextBaseTabRef.current
-      : activeRibbonTab === "comment-tool"
-        ? commentToolContextBaseTabRef.current
-        : activeRibbonTab === "form-field-format"
-          ? formFieldContextBaseTabRef.current
-          : activeRibbonTab === "link-format"
-            ? linkContextBaseTabRef.current
-            : activeRibbonTab === "picture-format"
-              ? pictureContextBaseTabRef.current
-              : activeRibbonTab === "table-format"
-                ? tableContextBaseTabRef.current
-                : activeRibbonTab === "chart-design" || activeRibbonTab === "chart-format"
-                  ? chartContextBaseTabRef.current
-                  : annotationContextBaseTabRef.current;
+    : ((((((annotationContextBaseTabRef.current))))));
   const requestedBaseTab: PdfWpsBaseRibbonTab = requestedViewerBaseTab;
   const ribbonStateDecision = resolvePdfWpsRibbonState({
     baseSurface: "pdf",
@@ -54432,191 +51580,17 @@ export default function PDFViewer({
     const baseTabs: Record<
       PdfBaseRibbonTab,
       PdfOfficeRibbonTab<PdfRibbonTab>
-    > = {
-      home: {
+    > = { home: {
           id: "home",
           label: t("toolbar.ribbonHome"),
           controlId: "PDFCTL.RIBBON.HOME.TAB",
-      },
-      insert: {
+      }, insert: {
           id: "insert",
           label: t("toolbar.ribbonInsert"),
           controlId: "PDFCTL.RIBBON.INSERT.TAB",
-      },
-      draw: {
-        id: "draw",
-        label: t("toolbar.ribbonDraw"),
-        controlId: "PDFCTL.RIBBON.DRAW.TAB",
-        surface: "home" as const,
-      },
-      edit: {
-          id: "edit",
-          label: t("toolbar.ribbonEdit"),
-          controlId: "PDFCTL.RIBBON.EDIT.TAB",
-      },
-      page: {
-        id: "page",
-        label: t("toolbar.ribbonInsertPages"),
-        controlId: "PDFCTL.RIBBON.PAGE.TAB",
-      },
-      annotate: {
-          id: "annotate",
-          controlId: "PDFCTL.RIBBON.COMMENT.TAB",
-          ariaLabel: t("pdfViewer.annotationsPanel"),
-          label: (
-            <>
-              <span>{t("pdfViewer.annotationsPanel")}</span>
-              {ribbonAnnotationCount > 0 ? (
-                <span
-                  className="pdf-viewer__ribbon-count"
-                  aria-label={`${ribbonAnnotationCount}`}
-                >
-                  {ribbonAnnotationCount}
-                </span>
-              ) : null}
-            </>
-          ),
-      },
-      tools: {
-          id: "tools",
-          label: t("pdfFeatured.tab"),
-          controlId: "PDFCTL.RIBBON.FEATURED.TAB",
-      },
-    };
+      } };
     const tabs = PDF_VIEWER_BASE_RIBBON_TABS.map((tab) => baseTabs[tab]);
-    if (ribbonStateDecision.contextualTab === "comment-tool") {
-      tabs.push({
-        id: "comment-tool",
-        ariaLabel: commentToolContextLabel,
-        className:
-          "note-editor-ribbon-tab--contextual pdf-viewer__ribbon-tab--comment-tool",
-        contextual: drawingToolContextActive ? "drawing" : "comment-tool",
-        controlId: drawingToolContextActive
-          ? "PDFCTL.CONTEXT.DRAWING_TOOLS.ROOT"
-          : "PDFCTL.CONTEXT.COMMENT_TOOL.ROOT",
-        label: commentToolContextLabel,
-        // The tool context re-renders the Comment tab's own command run, so
-        // it stays on that tab's Insert band: on the Home band its plain
-        // large commands sat 8px above the split ones (LIVE ribbon audit).
-        surface: "insert",
-      });
-    }
-    // Only with commands to show: a native FreeText or stamp has no
-    // context model, and its tab opened empty (user audit PDF 0143).
-    if (
-      ribbonStateDecision.contextualTab === "annotation-format" &&
-      (selectedPlaced || currentNativeVectorSelection) &&
-      annotationContextModel
-    ) {
-      const shapeContext = annotationContextModel?.kind === "shape";
-      const label = shapeContext
-        ? t("pdf.viewer.shapeEditing")
-        : annotationContextModel?.kind === "signature"
-          ? t("pdf.viewer.signatureFormat")
-          : t("pdf.viewer.annotationEditing");
-      tabs.push({
-        id: "annotation-format",
-        ariaLabel: label,
-        className:
-          "note-editor-ribbon-tab--contextual pdf-viewer__ribbon-tab--annotation-format",
-        contextual: shapeContext ? "shape" : "annotation",
-        controlId: shapeContext
-          ? "PDFCTL.CONTEXT.SHAPE.ROOT"
-          : "PDFCTL.RIBBON.ANNOTATION.FORMAT",
-        label,
-      });
-    }
-    if (ribbonStateDecision.contextualTab === "picture-format" && pictureContextActive) {
-      tabs.push({
-        id: "picture-format",
-        ariaLabel: t("pdf.pageWindow.pictureEditing"),
-        className:
-          "note-editor-ribbon-tab--contextual pdf-viewer__ribbon-tab--picture-format",
-        contextual: "picture",
-        controlId: "PDFCTL.CONTEXT.PICTURE.ROOT",
-        label: t("pdf.pageWindow.pictureEditing"),
-      });
-    }
-    if (ribbonStateDecision.contextualTab === "text-format") {
-      tabs.push({
-        id: "text-format",
-        ariaLabel: t("pdf.viewer.textEditing"),
-        className:
-          "note-editor-ribbon-tab--contextual pdf-viewer__ribbon-tab--text-format",
-        contextual: "text",
-        controlId: "PDFCTL.CONTEXT.TEXT_PROPERTIES.ROOT",
-        label: t("pdf.viewer.textEditing"),
-      });
-    }
-    if (
-      ribbonStateDecision.contextualTab === "form-field-format" &&
-      selectedFormFieldContext
-    ) {
-      tabs.push({
-        id: "form-field-format",
-        ariaLabel: t("pdf.viewer.formField"),
-        className:
-          "note-editor-ribbon-tab--contextual pdf-viewer__ribbon-tab--form-field-format",
-        contextual: "form-field",
-        controlId: "PDFCTL.CONTEXT.FORM_FIELD.ROOT",
-        label: t("pdf.viewer.formField"),
-      });
-    }
-    if (ribbonStateDecision.contextualTab === "table-format" && tableTabWanted) {
-      tabs.push({
-        id: "table-format",
-        ariaLabel: t("toolbar.tableLayoutTabLabel"),
-        className:
-          "note-editor-ribbon-tab--contextual pdf-viewer__ribbon-tab--table-format",
-        contextual: "table",
-        controlId: "PDFCTL.CONTEXT.TABLE.ROOT",
-        label: t("toolbar.tableLayoutTabLabel"),
-      });
-    }
-    if (ribbonStateDecision.contextualTab === "chart-design" && chartTabWanted && selectedChart?.kind === "smartart") {
-      // A SmartArt's one contextual tab (Office's SmartArt Design).
-      tabs.push({
-        id: "chart-design",
-        ariaLabel: t("presentation.smartartContext.designTab"),
-        className:
-          "note-editor-ribbon-tab--contextual pdf-viewer__ribbon-tab--chart-design",
-        contextual: "chart",
-        controlId: "PDFCTL.CONTEXT.SMARTART.DESIGN",
-        label: t("presentation.smartartContext.designTab"),
-      });
-    } else if (ribbonStateDecision.contextualTab === "chart-design" && chartTabWanted) {
-      tabs.push({
-        id: "chart-design",
-        ariaLabel: t("presentation.home.ribbonChartDesign"),
-        className:
-          "note-editor-ribbon-tab--contextual pdf-viewer__ribbon-tab--chart-design",
-        contextual: "chart",
-        controlId: "PDFCTL.CONTEXT.CHART.DESIGN",
-        label: t("presentation.home.ribbonChartDesign"),
-      }, {
-        id: "chart-format",
-        ariaLabel: t("presentation.home.ribbonChartFormat"),
-        className:
-          "note-editor-ribbon-tab--contextual pdf-viewer__ribbon-tab--chart-format",
-        contextual: "chart",
-        controlId: "PDFCTL.CONTEXT.CHART.FORMAT",
-        label: t("presentation.home.ribbonChartFormat"),
-      });
-    }
-    if (
-      ribbonStateDecision.contextualTab === "link-format" &&
-      selectedLinkContext
-    ) {
-      tabs.push({
-        id: "link-format",
-        ariaLabel: t("pdf.viewer.link"),
-        className:
-          "note-editor-ribbon-tab--contextual pdf-viewer__ribbon-tab--link-format",
-        contextual: "link",
-        controlId: "PDFCTL.CONTEXT.LINK.ROOT",
-        label: t("pdf.viewer.link"),
-      });
-    }
+    {}
     return tabs;
   }, [
     annotationContextModel?.kind,
@@ -54641,19 +51615,7 @@ export default function PDFViewer({
   // opened is not shown yet, and one hidden while its selection stands (a
   // moment without write authority) comes back by itself.
   const contextualSelectionGone =
-    activeRibbonTab === "form-field-format"
-      ? !selectedFormFieldContext
-      : activeRibbonTab === "link-format"
-        ? !selectedLinkContext
-        : activeRibbonTab === "annotation-format"
-          ? !selectedPlaced && !currentNativeVectorSelection
-          : activeRibbonTab === "picture-format"
-            ? !pictureContextActive
-            : activeRibbonTab === "table-format"
-              ? !tableTabWanted
-              : activeRibbonTab === "chart-design" || activeRibbonTab === "chart-format"
-                ? !chartTabWanted
-                : false;
+    false;
   const shownContextualTabRef = useRef<PdfRibbonTab | null>(null);
   useLayoutEffect(() => {
     if (isPdfViewerBaseRibbonTab(activeRibbonTab)) {
@@ -54684,19 +51646,6 @@ export default function PDFViewer({
   const documentEncryptDisabledReason = t(
     "pdf.viewer.requiresVerifiedUnchangedUnencryptedPdf",
   );
-  const protectLabels = {
-    encryption: t("pdf.viewer.protectRibbon.encryption"),
-    redaction: t("pdf.viewer.protectRibbon.redaction"),
-    validation: t("pdf.viewer.protectRibbon.validation"),
-    safety: t("pdf.viewer.protectRibbon.safety"),
-    encryptCopy: t("pdf.viewer.protectRibbon.encryptCopy"),
-    markRedactions: t("pdf.viewer.protectRibbon.markRedactions"),
-    applyRedactions: t("pdf.viewer.protectRibbon.applyRedactions"),
-    safeCopy: t("pdf.viewer.protectRibbon.safeCopy"),
-    archivalCopy: t("pdf.viewer.protectRibbon.archivalCopy"),
-    signatureStatus: t("pdf.viewer.protectRibbon.signatureStatus"),
-    actionStatus: t("pdf.viewer.protectRibbon.actionStatus"),
-  };
 
   // Page indicator: "14 / 296" normally; with document /PageLabels the
   // logical label leads — "iii (14/296)" — so the reader sees both numberings.
@@ -56043,19 +52992,6 @@ export default function PDFViewer({
         : [],
     [nativeVectorClipboardFull, readerContextMenu, semanticEditSelectionActive, t],
   );
-
-  const areaHighlightDisabled =
-    ribbonLoading || !dataItemId || !onManagedAreaHighlightUpsert;
-  const areaHighlightDisabledReason = resolvePdfCommandDisabledReason(
-    areaHighlightDisabled,
-    ribbonLoading ? loadingDisabledReason : undefined,
-    !dataItemId
-      ? t("pdf.viewer.documentNoWritablePdfData")
-      : undefined,
-    !onManagedAreaHighlightUpsert
-      ? t("pdf.viewer.currentHostDoesNotProvide")
-      : undefined,
-  );
   const pageTotalCountLabel = t(
     visiblePageCount === 1 ? "pdfPage.totalPage" : "pdfPage.totalPages",
     {
@@ -56197,150 +53133,6 @@ export default function PDFViewer({
       : ribbonLoading
         ? t("pdfViewer.loading")
         : undefined;
-  const authoredFormFieldLimitReached =
-    (fieldCandidates?.length ?? 0) >= PDF_CREATE_FORM_FIELDS_MAX_CANDIDATES;
-  const formAuthoringPolicyBlocked =
-    nativeFormMode && nativeFormAuthoringDisabledReason !== undefined;
-  const insertFormCreationDisabled =
-    ribbonLoading ||
-    formMutationBlocked ||
-    detectBusy ||
-    currentDetectedFieldSourceIdentityRef.current === null ||
-    authoredFormFieldLimitReached;
-  const insertFormCreationDisabledReason = formMutationBlocked
-    ? formMutationBlockedReason
-    : currentDetectedFieldSourceIdentityRef.current === null
-      ? t("document.capability.unavailable")
-      : authoredFormFieldLimitReached
-        ? t("pdf.viewer.singleOperationCreateMostFields")
-        : detectBusy
-          ? t("pdf.viewer.formFieldAnalysisProgress")
-          : ribbonLoading
-            ? t("pdfViewer.loading")
-            : undefined;
-  // Field and action-button creation lives in the global tools overflow with
-  // the rest of the form family (fill, edit, delete, detect, data). beca9058f3
-  // aligned the Insert ribbon with WPS, which has no form group there, and
-  // 4161fc576c had already dropped the Featured copies as duplicates, so no
-  // ribbon path could create a field until the family was rehoused here.
-  const makeFormCreationCommand = ({
-    icon,
-    kind,
-    label,
-    testId,
-  }: {
-    icon: PdfFeaturedCommand["icon"];
-    kind: PdfAuthoredFormFieldKind;
-    label: string;
-    testId: string;
-  }): PdfFeaturedCommand => {
-    const nativeKindUnsupported =
-      nativeFormMode && !isNativePdfFormFieldKind(kind);
-    // An image field is written, and filled, by the notebook's native form
-    // writer only (its picture goes to the server).
-    const imageFieldUnwritable = !nativeFormMode && kind === "imageField";
-    return {
-      disabled:
-        insertFormCreationDisabled || nativeKindUnsupported || imageFieldUnwritable,
-      disabledReason: nativeKindUnsupported
-        ? t("pdf.viewer.standardActionButtonNotYet")
-        : imageFieldUnwritable
-          ? t("pdf.viewer.fieldKindCannotYetWritten")
-          : insertFormCreationDisabledReason,
-      icon,
-      label,
-      onInvoke: (trigger) => openAuthoredFormFieldDialog(kind, trigger),
-      testId,
-    };
-  };
-  const formFieldCreationItems: readonly PdfFeaturedCommand[] = [
-    makeFormCreationCommand({
-      icon: "formFields",
-      kind: "text",
-      label: t("pdf.viewer.addTextField"),
-      testId: "pdf-featured-form-text-field",
-    }),
-    makeFormCreationCommand({
-      icon: "checkbox",
-      kind: "checkbox",
-      label: t("pdf.viewer.addCheckbox"),
-      testId: "pdf-featured-form-checkbox",
-    }),
-    makeFormCreationCommand({
-      icon: "radio",
-      kind: "radio",
-      label: t("pdf.viewer.addRadioGroup"),
-      testId: "pdf-featured-form-radio-group",
-    }),
-    makeFormCreationCommand({
-      icon: "signatureField",
-      kind: "signature",
-      label: t("pdf.viewer.addSignatureField"),
-      testId: "pdf-featured-form-signature-field",
-    }),
-    makeFormCreationCommand({
-      icon: "dropdown",
-      kind: "dropdown",
-      label: t("pdf.viewer.addDropdown"),
-      testId: "pdf-featured-form-dropdown",
-    }),
-    makeFormCreationCommand({
-      icon: "listbox",
-      kind: "listbox",
-      label: t("pdf.viewer.addListbox"),
-      testId: "pdf-featured-form-listbox",
-    }),
-    makeFormCreationCommand({
-      icon: "imageField",
-      kind: "imageField",
-      label: t("pdf.viewer.addImageField"),
-      testId: "pdf-featured-form-image-field",
-    }),
-  ];
-  const formActionCreationItems: readonly PdfFeaturedCommand[] = [
-    makeFormCreationCommand({
-      icon: "resetData",
-      kind: "resetButton",
-      label: t("pdf.viewer.addResetButton"),
-      testId: "pdf-featured-form-reset-button",
-    }),
-    makeFormCreationCommand({
-      icon: "printButton",
-      kind: "printButton",
-      label: t("pdf.viewer.addPrintButton"),
-      testId: "pdf-featured-form-print-button",
-    }),
-    makeFormCreationCommand({
-      icon: "navigationButton",
-      kind: "navigationButton",
-      label: t("pdf.viewer.addNavigationButton"),
-      testId: "pdf-featured-form-navigation-button",
-    }),
-    makeFormCreationCommand({
-      icon: "viewButton",
-      kind: "viewButton",
-      label: t("pdf.viewer.addViewButton"),
-      testId: "pdf-featured-form-view-button",
-    }),
-    makeFormCreationCommand({
-      icon: "saveButton",
-      kind: "saveButton",
-      label: t("pdf.viewer.addSaveButton"),
-      testId: "pdf-featured-form-save-button",
-    }),
-    makeFormCreationCommand({
-      icon: "goToPageButton",
-      kind: "goToPageButton",
-      label: t("pdf.viewer.addGoPageButton"),
-      testId: "pdf-featured-form-go-to-page-button",
-    }),
-    makeFormCreationCommand({
-      icon: "webLinkButton",
-      kind: "webLinkButton",
-      label: t("pdf.viewer.addWebLinkButton"),
-      testId: "pdf-featured-form-web-link-button",
-    }),
-  ];
   const legacyToolsHostRequired =
     featuredLegacyToolsOpen ||
     pageLabelsOpen ||
@@ -56429,462 +53221,6 @@ export default function PDFViewer({
       </DialogContent>
     </Dialog>
   ) : null;
-
-  const featuredScreenRecordingStatus =
-    screenRecordingState === "recording"
-      ? t("pdf.viewer.screenRecordingProgress")
-      : screenRecordingState === "saving"
-        ? t("pdf.viewer.savingScreenRecording")
-        : screenRecordingState === "saved"
-          ? t("pdf.viewer.screenRecordingDownloaded")
-          : screenRecordingState === "error"
-            ? t("pdf.viewer.screenRecordingNotCompleted")
-            : null;
-  const featuredStatus = featuredScreenRecordingStatus ?? deskewStatus;
-  const viewerCommentToolsCommands: PdfCommentRibbonCommand[] = [
-    {
-      active: pendingRibbonMarkupStyle === "squiggly",
-      disabled:
-        ribbonLoading || !dataItemId || !selectionEnabled,
-      icon: "squiggly",
-      label: t("pdfSelection.squiggly"),
-      onInvoke: dataItemId
-        ? () => void executeMarkupActivation("squiggly")
-        : undefined,
-      testId: "pdf-comment-squiggly",
-    },
-    {
-      active: stampPickerOpen || armedStamp != null,
-      disabled: ribbonLoading || !dataItemId || !onManagedStampUpsert,
-      disabledReason:
-        dataItemId && onManagedStampUpsert
-          ? undefined
-          : t("document.capability.unavailable"),
-      icon: "stamp",
-      label: t("pdfStampTool.modeToggle"),
-      onInvoke: dataItemId
-        ? (trigger) => void executeStampActivation(trigger ?? null)
-        : undefined,
-      testId: "pdf-comment-stamp",
-    },
-    {
-      active: attachMode,
-      disabled:
-        ribbonLoading ||
-        nativeFileAttachmentBusy ||
-        Boolean(nativeFileAttachmentDisabledReason) ||
-        !onNativeFileAttachmentUpsert,
-      disabledReason:
-        nativeFileAttachmentDisabledReason ||
-        (!onNativeFileAttachmentUpsert
-          ? t("document.capability.unavailable")
-          : undefined),
-      displayLabel: t("pdfViewer.attachFile"),
-      icon: "attachment",
-      label:
-        placedAttachments.length > 0
-          ? t("pdfViewer.attachFileCount", { count: placedAttachments.length })
-          : t("pdfViewer.attachFileHint"),
-      onInvoke: (trigger) => void executeFileAttachmentActivation(trigger),
-      testId: "pdf-comment-attach-file",
-    },
-    {
-      active: measureMode,
-      disabled: ribbonLoading || !measurementWritable,
-      disabledReason: measurementWritable
-        ? undefined
-        : t("pdf.viewer.pageReadOnlyMeasurementsCannot"),
-      icon: "measure",
-      label: t("pdfViewer.measureTool"),
-      onInvoke: () => void executeMeasureActivation(),
-      testId: "pdf-comment-measure",
-    },
-    {
-      disabled: !measurementWritable || pendingMeasurementDraft === null,
-      disabledReason: !measurementWritable
-        ? t("pdf.viewer.pageReadOnlyMeasurementsCannot2")
-        : pendingMeasurementDraft === null
-          ? measureKind === "area"
-            ? t("pdf.viewer.measurePlaceThreePoints")
-            : t("pdf.viewer.measurePlaceTwoPoints")
-          : undefined,
-      icon: "measure",
-      label: t("pdf.viewer.keepMeasurement"),
-      onInvoke:
-        !measurementWritable || pendingMeasurementDraft === null
-          ? undefined
-          : commitMeasurement,
-      testId: "pdf-comment-measure-save",
-    },
-    {
-      disabled: !measurementDeleteWritable || measurements.length === 0,
-      icon: "delete",
-      label: t("pdf.viewer.removeLastMeasurement"),
-      onInvoke:
-        measurementDeleteWritable && measurements.length > 0
-          ? removeLastMeasurement
-          : undefined,
-      testId: "pdf-comment-measure-remove-last",
-    },
-    {
-      disabled: ribbonLoading || !hasExportableXfdfComments,
-      disabledReason: hasExportableXfdfComments
-        ? undefined
-        : t("pdf.viewer.documentNoExportableComments"),
-      icon: "exportComments",
-      label: t("pdfViewer.exportXfdf"),
-      onInvoke: hasExportableXfdfComments
-        ? () => void handleExportXfdf()
-        : undefined,
-      testId: "pdf-export-xfdf",
-    },
-    {
-      disabled: ribbonLoading || xfdfImportBusy || !dataItemId,
-      disabledReason: dataItemId
-        ? undefined
-        : t("document.capability.unavailable"),
-      icon: "importComments",
-      label: t("pdfViewer.importXfdf"),
-      onInvoke: dataItemId ? () => xfdfInputRef.current?.click() : undefined,
-      testId: "pdf-import-xfdf",
-    },
-    {
-      disabled: ribbonLoading || !speechSupported,
-      disabledReason: speechSupported
-        ? undefined
-        : t("document.capability.unavailable"),
-      icon: "readAloudSettings",
-      label: t("pdf.viewer.readAloudSettings"),
-      onInvoke: speechSupported
-        ? (trigger) =>
-            openSpeechSettings(
-              viewerRootRef.current?.querySelector<HTMLButtonElement>(
-                '[data-testid="pdf-comment-read-aloud-settings-overflow-item"]',
-              ) ?? trigger,
-            )
-        : undefined,
-      testId: "pdf-comment-read-aloud-settings",
-    },
-    ...(speechStatus === "speaking" || speechStatus === "paused"
-      ? [
-          {
-            disabled: speechPosition.index <= 0,
-            disabledReason:
-              speechPosition.index <= 0
-                ? t("pdf.viewer.firstReadingSegmentPage")
-                : undefined,
-            icon: "readAloudPrevious" as const,
-            label: t("pdf.viewer.previousSegment"),
-            onInvoke: handlePreviousReadAloud,
-            testId: "pdf-comment-read-aloud-previous",
-          },
-          {
-            disabled: speechPosition.total < 1,
-            icon: "readAloudNext" as const,
-            label: t("pdf.viewer.nextSegment"),
-            onInvoke: handleNextReadAloud,
-            testId: "pdf-comment-read-aloud-next",
-          },
-          {
-            icon: "stop" as const,
-            label: t("pdfViewer.readAloudStop"),
-            onInvoke: handleStopReadAloud,
-            testId: "pdf-comment-read-aloud-stop",
-          },
-        ]
-      : []),
-  ];
-  const globalCommentToolsCommands: PdfCommentRibbonCommand[] = commentRibbonCommands?.length
-    ? [...viewerCommentToolsCommands, ...commentRibbonCommands]
-    : viewerCommentToolsCommands;
-  const globalPdfToolsCommands = {
-    fillForm: {
-      active: formMode,
-      disabled:
-        ribbonLoading ||
-        formMutationBlocked ||
-        !dataItemId ||
-        formFieldsUnavailable,
-      disabledReason: formMutationBlocked
-        ? formMutationBlockedReason
-        : !dataItemId
-          ? t("document.capability.unavailable")
-          : formFieldsUnavailable
-            ? formFieldsUnavailableReason
-            : undefined,
-      icon: "formFields" as const,
-      label: t("pdfForm.modeToggle"),
-      onInvoke: handleToggleFormMode,
-      testId: "pdf-featured-fill-form",
-    },
-    ...(formRoles.length > 0
-      ? {
-          fillFormAs: {
-            command: {
-              icon: "formFields" as const,
-              label: t("pdfForm.fillAsRole"),
-              displayLabel: t("pdfForm.fillAsRoleCurrent", {
-                role: effectiveFormFillRole ?? t("pdf.formField.roleAnyone"),
-              }),
-              testId: "pdf-featured-fill-form-as",
-            },
-            items: [
-              {
-                active: effectiveFormFillRole === null,
-                label: t("pdf.formField.roleAnyone"),
-                onInvoke: () => { setFormFillRole(null); if (!formMode) handleToggleFormMode(); },
-                testId: "pdf-featured-fill-form-as-anyone",
-              },
-              ...formRoles.map((role, index) => ({
-                active: effectiveFormFillRole === role.name,
-                label: role.name,
-                onInvoke: () => { setFormFillRole(role.name); if (!formMode) handleToggleFormMode(); },
-                testId: `pdf-featured-fill-form-as-${index}`,
-              })),
-              ...(nativeFormMode
-                ? [{
-                    label: t("pdfForm.manageRolesMenu"),
-                    disabled: formMutationBlocked,
-                    onInvoke: () => { setFormRolesError(null); setFormRolesDialogOpen(true); },
-                    testId: "pdf-featured-manage-roles",
-                  }]
-                : []),
-            ],
-          },
-        }
-      : {}),
-    addFormField: {
-      command: {
-        disabled: insertFormCreationDisabled,
-        disabledReason: insertFormCreationDisabledReason,
-        icon: "formFields" as const,
-        label: t("pdf.viewer.addFormField"),
-        testId: "pdf-featured-add-form-field",
-      },
-      items: formFieldCreationItems,
-    },
-    addFormAction: {
-      command: {
-        disabled: insertFormCreationDisabled,
-        disabledReason: insertFormCreationDisabledReason,
-        icon: "printButton" as const,
-        label: t("pdf.viewer.addActionButton"),
-        testId: "pdf-featured-add-form-action",
-      },
-      items: formActionCreationItems,
-    },
-    editFormField: {
-      active: existingTextFieldEditMode,
-      buttonRef: existingTextFieldEditCommandRef,
-      // The host's save policy can withhold field authoring for this source
-      // (optional content, attachments, ...); every Form Field control would
-      // be disabled, so the edit mode is not offered either.
-      disabled:
-        ribbonLoading ||
-        formMutationBlocked ||
-        formAuthoringPolicyBlocked ||
-        existingTextFieldEditBusy ||
-        existingFormFieldDeleteBusy ||
-        currentDetectedFieldSourceIdentityRef.current === null ||
-        !hasVisibleFormFieldForPropertyEdit,
-      disabledReason: formMutationBlocked
-        ? formMutationBlockedReason
-        : formAuthoringPolicyBlocked
-          ? nativeFormAuthoringDisabledReason
-          : currentDetectedFieldSourceIdentityRef.current === null
-            ? t("document.capability.unavailable")
-            : !hasVisibleFormFieldForPropertyEdit
-              ? t("pdf.viewer.pdfNoEditableTextFields")
-              : undefined,
-      icon: "formFields" as const,
-      label: t("pdf.viewer.editFieldProperties"),
-      onInvoke: (trigger: HTMLButtonElement | null) =>
-        handleToggleExistingTextFieldEditMode(trigger),
-      testId: "pdf-featured-edit-form-field",
-    },
-    deleteFormField: {
-      active: existingFormFieldDeleteMode,
-      buttonRef: existingFormFieldDeleteCommandRef,
-      disabled:
-        ribbonLoading ||
-        formMutationBlocked ||
-        existingTextFieldEditBusy ||
-        existingFormFieldDeleteBusy ||
-        currentDetectedFieldSourceIdentityRef.current === null ||
-        !hasVisibleFormFieldForDelete,
-      disabledReason: formMutationBlocked
-        ? formMutationBlockedReason
-        : currentDetectedFieldSourceIdentityRef.current === null
-          ? t("document.capability.unavailable")
-          : !hasVisibleFormFieldForDelete
-            ? t("pdf.viewer.pdfNoVisibleFormFields")
-            : undefined,
-      icon: "deleteField" as const,
-      label: t("pdf.viewer.deleteFormField"),
-      onInvoke: (trigger: HTMLButtonElement | null) =>
-        handleToggleExistingFormFieldDeleteMode(trigger),
-      testId: "pdf-featured-delete-form-field",
-    },
-    detectFormFields:
-      fieldCandidates && fieldCandidates.length > 0
-        ? {
-            buttonRef: detectedFieldsCommandRef,
-            disabled:
-              formMutationBlocked ||
-              detectBusy ||
-              acceptedCandidates.length === 0,
-            disabledReason: formMutationBlocked
-              ? formMutationBlockedReason
-              : acceptedCandidates.length === 0
-                ? t("pdfViewer.detectFieldsSelected", {
-                    selected: 0,
-                    total: fieldCandidates.length,
-                  })
-                : undefined,
-            displayLabel: t("pdfViewer.detectFieldsCreate"),
-            icon: "formFields" as const,
-            label: `${t("pdfViewer.detectFieldsCreate")} — ${t(
-              "pdfViewer.detectFieldsSelected",
-              {
-                selected: acceptedCandidates.length,
-                total: fieldCandidates.length,
-              },
-            )}`,
-            onInvoke: () => void handleCreateDetectedFields(),
-            testId: "pdf-featured-detect-create",
-          }
-        : {
-            buttonRef: detectedFieldsCommandRef,
-            disabled:
-              ribbonLoading ||
-              formMutationBlocked ||
-              detectBusy ||
-              currentDetectedFieldSourceIdentityRef.current === null,
-            disabledReason: formMutationBlocked
-              ? formMutationBlockedReason
-              : currentDetectedFieldSourceIdentityRef.current === null
-                ? t("document.capability.unavailable")
-                : undefined,
-            icon: "formFields" as const,
-            label: t("pdfViewer.detectFields"),
-            onInvoke: () => void handleDetectFormFields(),
-            testId: "pdf-featured-detect-fields",
-          },
-    cancelDetectedFields:
-      fieldCandidates && fieldCandidates.length > 0
-        ? {
-            disabled: detectBusy,
-            icon: "cancel" as const,
-            label: t("pdfViewer.detectFieldsCancel"),
-            onInvoke: handleCancelDetectedFields,
-            testId: "pdf-featured-detect-cancel",
-          }
-        : undefined,
-    exportFormData: {
-      disabled: ribbonLoading || flattening || formFieldsUnavailable,
-      disabledReason:
-        formFieldsUnavailable
-          ? formFieldsUnavailableReason
-          : undefined,
-      icon: "exportData" as const,
-      label: t("pdfViewer.exportFormData"),
-      onInvoke: openFormDataExportDialog,
-      testId: "pdf-featured-export-form-data",
-    },
-    importFormData: {
-      disabled:
-        ribbonLoading ||
-        flattening ||
-        nativeFormDataMutationBlocked ||
-        formFieldsUnavailable ||
-        !dataItemId,
-      disabledReason: nativeFormDataMutationBlocked
-        ? nativeFormDataMutationBlockedReason
-        : formFieldsUnavailable
-          ? formFieldsUnavailableReason
-          : !dataItemId
-            ? t("document.capability.unavailable")
-            : undefined,
-      icon: "importData" as const,
-      displayLabel: t("pdfViewer.importFormData").replace(/\s*[（(].*$/u, ""),
-      label: t("pdfViewer.importFormData"),
-      onInvoke: (trigger: HTMLButtonElement | null) => {
-        formImportReturnFocusRef.current = trigger;
-        formImportInputRef.current?.click();
-      },
-      testId: "pdf-featured-import-form-data",
-    },
-    resetForm: {
-      disabled:
-        ribbonLoading ||
-        flattening ||
-        nativeFormDataMutationBlocked ||
-        formFieldsUnavailable ||
-        !dataItemId,
-      disabledReason: nativeFormDataMutationBlocked
-        ? nativeFormDataMutationBlockedReason
-        : formFieldsUnavailable
-          ? formFieldsUnavailableReason
-          : !dataItemId
-            ? t("document.capability.unavailable")
-            : undefined,
-      icon: "resetData" as const,
-      label: t("pdfViewer.resetForm"),
-      onInvoke: () => void handleResetForm(),
-      testId: "pdf-featured-reset-form",
-    },
-    versions: {
-      disabled: ribbonLoading || !onOpenVersionHistory,
-      disabledReason: onOpenVersionHistory
-        ? undefined
-        : t("document.capability.unavailable"),
-      // The native PDF page window never passes this: its own restore path
-      // runs through the native receipt journal's mutation lease, not the
-      // data-item version chain this command opens. Offering a button that
-      // that host can never light up is worse than not offering it.
-      hidden: !onOpenVersionHistory,
-      icon: "versions" as const,
-      label: t("versions.title"),
-      onInvoke: onOpenVersionHistory,
-      testId: "pdf-featured-version-history",
-    },
-    properties: {
-      disabled: ribbonLoading || flattening,
-      icon: "properties" as const,
-      label: t("pdfViewer.properties"),
-      onInvoke: (trigger: HTMLButtonElement | null) => {
-        propertiesDialogReturnFocusRef.current = trigger;
-        setPropertiesOpen(true);
-      },
-      testId: "pdf-featured-properties",
-    },
-    deskew: {
-      disabled:
-        ribbonLoading ||
-        deskewBusy ||
-        (savePolicyV1 && matchedSourceRiskSnapshot === null),
-      disabledReason:
-        savePolicyV1 && matchedSourceRiskSnapshot === null
-          ? t("pdf.viewer.verifyingCurrentPdfSource")
-          : undefined,
-      displayLabel: t("pdfViewer.deskew"),
-      icon: "deskew" as const,
-      label: deskewBusy
-        ? t("pdf.viewer.straighteningPage")
-        : t("pdfViewer.deskew"),
-      onInvoke: () => void handleDeskewPage(),
-      testId: "pdf-featured-deskew",
-    },
-    moreTools: {
-      icon: "more" as const,
-      label: t("pdfFeatured.moreTools"),
-      onInvoke: () => {
-        selectRibbonTab("tools");
-        setFeaturedLegacyToolsOpen(true);
-      },
-      testId: "pdf-featured-more-tools",
-    },
-  };
   // The list and its commands, for a window that hosts the comments pane
   // (the same values the viewer's own pane takes above).
   const annotationListModel = useMemo<PdfAnnotationListModel | null>(() => {
@@ -57030,49 +53366,6 @@ export default function PDFViewer({
     );
   }
 
-  // The Edit tab's Shapes split, also re-hosted by Shape Editing's Insert
-  // Shape (with its own test ids, since both tabs stay mounted).
-  const editShapesRibbonCommand = (testId: string): PdfEditRibbonCommand => ({
-    active: shapeMode && !areaHighlightActive && !visualMaskActive,
-    disabled: ribbonLoading || !dataItemId,
-    disabledReason: dataItemId
-      ? undefined
-      : t("pdf.viewer.savedPdfRequired"),
-    icon: "shapes",
-    label: t("toolbar.shape"),
-    onInvoke: dataItemId
-      ? () => void executeShapeActivation("page-content")
-      : undefined,
-    testId,
-  });
-  const editShapeRibbonItems = (
-    testIdPrefix: string,
-  ): PdfEditRibbonCommand[] =>
-    (
-      [
-        ["line", "shapeLine", t("pdfShape.kindLine")],
-        ["arrow", "shapeArrow", t("pdfShape.kindArrow")],
-        ["rect", "shapeRectangle", t("pdfShape.kindRect")],
-        ["ellipse", "shapeEllipse", t("pdfShape.kindEllipse")],
-        ["cloud", "shapes", t("pdfShape.kindCloud")],
-        ["polygon", "shapes", t("pdfShape.kindPolygon")],
-      ] as const
-    ).map(([kind, icon, label]) => ({
-      active:
-        shapeMode &&
-        !areaHighlightActive &&
-        !visualMaskActive &&
-        shapeKind === kind,
-      disabled: ribbonLoading || !dataItemId,
-      disabledReason: dataItemId
-        ? undefined
-        : t("pdf.viewer.savedPdfRequired"),
-      icon,
-      label,
-      onInvoke: dataItemId ? () => armShapeTool(kind) : undefined,
-      testId: `${testIdPrefix}-${kind}`,
-    }));
-
   return (
     // Every OfficeDialogShell in the reader takes the shared Office dialog
     // chrome, in the reader's teal, as the other editors' dialogs do.
@@ -57086,12 +53379,12 @@ export default function PDFViewer({
       data-pdf-comment-mode={commentModeActive ? "active" : "inactive"}
       data-pdf-source-kind={workingSource ? "local-working-pdf" : "saved-pdf"}
       data-pdf-working-revision={workingSource?.workingRevision}
-      data-pdf-comments-hidden={commentsHidden ? "true" : "false"}
-      data-pdf-proofing-mode={pendingProofingKind ?? "none"}
+      data-pdf-comments-hidden={"false"}
+      data-pdf-proofing-mode={null ?? "none"}
       // A text mark armed from the ribbon (Highlight Text, Underline, ...):
       // the next drag over the page's words is the mark's (pdf-viewer.css
       // lets it through the link regions).
-      data-pdf-markup-armed={pendingRibbonMarkupStyle ?? undefined}
+      data-pdf-markup-armed={null ?? undefined}
       data-pdf-page-workspace={
         pageReplaceWorkspaceActive ? "replace" : pageGridActive ? "grid" : undefined
       }
@@ -57151,7 +53444,9 @@ export default function PDFViewer({
       <CanvasObjectGhostFollower followRef={followCanvasObjectGhostRef} paint={followCanvasObjectGhostStages} />
       {/* The on-screen keyboard for the viewer's fields (text boxes, form
           fields, Edit Text, find): the caret above it, a hide key on it. */}
-      <OfficeSoftKeyboardLayer rootRef={viewerRootRef} testId="pdf-soft-keyboard-bar" />
+      <OfficeSoftKeyboardLayer rootRef={viewerRootRef} testId="pdf-soft-keyboard-bar">
+        <PdfFormFieldKeys rootRef={viewerRootRef} />
+      </OfficeSoftKeyboardLayer>
       <input
         ref={compareInputRef}
         type="file"
@@ -57359,586 +53654,9 @@ export default function PDFViewer({
           )
         : null}
       <PdfViewerRibbon
-        ribbon={{
-          pictureContextRibbon,
-          textBoxContextRibbon: readerTextBoxRibbon,
-          chartContextRibbon: selectedChart && chartAuthoring && (activeRibbonTab === "chart-design" || activeRibbonTab === "chart-format") ? (() => {
-            const chartPage = pages.find((entry) => entry.pageNumber === selectedChart.page);
-            if (!chartPage) return null;
-            const rotated = resolvedPageRotation(chartPage.pageNumber) % 180 !== 0;
-            if (selectedChart.kind === "smartart") {
-              return (
-                <PdfSmartArtContextRibbon
-                  key={selectedChart.id}
-                  smartArt={selectedChart}
-                  writable={chartAuthoring.writable}
-                  onChange={(smartArt) => void chartAuthoring.onUpsert(smartArt)}
-                  anchor={() => viewerRootRef.current?.querySelector(
-                    `[data-chart-id="${typeof CSS !== "undefined" && CSS.escape ? CSS.escape(selectedChart.id) : selectedChart.id}"]`) ?? null}
-                />
-              );
-            }
-            return (
-              <PdfChartContextRibbon
-                key={selectedChart.id}
-                tab={activeRibbonTab}
-                chart={selectedChart}
-                pageWidth={rotated ? chartPage.height : chartPage.width}
-                pageHeight={rotated ? chartPage.width : chartPage.height}
-                writable={chartAuthoring.writable}
-                onChange={(chart) => void chartAuthoring.onUpsert(chart)}
-                onPreview={(attrs) => setChartPreview(attrs ? { id: selectedChart.id, attrs } : null)}
-                onEditData={() => setChartDataEditingId(selectedChart.id)}
-                onOpenFormat={() => {
-                  activeRibbonTabRef.current = "chart-format";
-                  setActiveRibbonTab("chart-format");
-                }}
-                paneDock={pdfTaskPaneDocks.right}
-              />
-            );
-          })() : null,
-          formatPaneDock: pdfTaskPaneDocks.right,
-          tableContextRibbon: selectedTable && tableAuthoring ? (
-            <PdfTableContextRibbon
-              paneDock={pdfTaskPaneDocks.right}
-              table={selectedTable}
-              selection={tableSelection && "row" in tableSelection && tableSelection.row !== undefined
-                ? tableSelection as PdfTableCellAddress : null}
-              writable={tableAuthoring.writable}
-              onChange={(table) => void tableAuthoring.onUpsert(table)}
-              onDelete={(table) => void tableAuthoring.onDelete(table)}
-              onSelectionChange={setTableSelection}
-            />
-          ) : null,
-          filename,
-          downloadUrl,
-          ribbonQuickActions,
-          ribbonActionRail,
-          ribbonQuickActionTail,
-          ribbonQuickOverflowOnlyTail,
-          annotationContextWritable,
-          onPageOrganizerApply,
-          onDownload,
-          preferAnnotatedDownload,
-          annotatedDownloadEnabled,
-          pageId,
-          onRequestPageSummary,
-          onManagedSignatureUpsert,
-          onManagedStampUpsert,
-          onManagedLinkUpsert,
-          onManagedProofingUpsert,
-          dataItemId,
-          lossyCompressionSource,
-          lossyCompressionWritable,
-          nativePageLabelRanges,
-          onNativePageLabelRangesApply,
-          onNativeFileAttachmentUpsert,
-          nativeFileAttachmentBusy,
-          nativeFileAttachmentDisabledReason,
-          onNativePageImport,
-          nativePageImportBusy,
-          nativePageImportDisabledReason,
-          onEditContent,
-          editContentDisabledReason,
-          editContentBusy,
-          contentEditModeActive: contentEditModeLive,
-          contentEditModeDisabledReason: editContentModeDisabledReason,
-          onToggleContentEditMode: toggleContentEditMode,
-          onEnterContentEditMode: enterContentEditMode,
-          onExitContentEditMode: () => exitContentEditMode(),
-          onInsertText,
-          onCropPage,
-          eraseRibbon,
-          onSplitPage: onSplitPages ? toggleSplitPageMode : undefined,
-          splitPageActive: splitPageMode.active,
-          splitPageDisabledReason,
-          onOpenPageBackground,
-          pageBackgroundOpen,
-          pageBackgroundBusy,
-          pageBackgroundDisabledReason,
-          onCreateEditableVersion,
-          onConvertToSpreadsheet,
-          onConvertToPresentation,
-          onOfficeConversionPrepare,
-          officeProjectionDisabledReason,
-          isCreatingEditableVersion,
-          t,
-          pdfHomeDisplayLabels,
-          savePolicyV1,
-          signatureProofLoading,
-          matchedSourceRiskSnapshot,
-          signatureProofPresentation,
-          showSignatureProof,
-          requestSignatureProofPanel,
-          pageOrganizerLabel,
-          pages,
-          // The ribbon greys only for a document not shown yet (ribbonLoading).
-          loading: ribbonLoading,
-          setPageOrganizerOpen,
-          pageOrganizerDialogReturnFocusRef,
-          scale,
-          activeRibbonTab,
-          ribbonInstanceId,
-          currentPage,
-          currentVisibleOrdinal,
-          pageInput,
-          setPageInput,
-          pendingRibbonMarkupStyle,
-          setPendingRibbonMarkupStyle,
-          pendingProofingKind,
-          proofingBusy,
-          proofingError,
-          ribbonMarkupError,
-          ribbonMarkupColor,
-          noteMode,
-          armedTextOrigin: addTextMode ? addTextOrigin : null,
-          armedTextKind: addTextKind,
-          readerTextBoxes: Boolean(textBoxAuthoring?.writable),
-          readerTables: Boolean(textBoxAuthoring?.writable && tableAuthoring?.writable),
-          readerCharts: Boolean(textBoxAuthoring?.writable && chartAuthoring?.writable),
-          noteColor,
-          commentModeActive,
-          commentsHidden,
-          attachMode,
-          attachmentError,
-          placedAttachments,
-          ocgLayers,
-          ocgOrder,
-          setLayersPanelOpen,
-          layersPanelOpen,
-          handleToggleLayer,
-          inks,
-          drawMode,
-          setInkColor,
-          inkColor,
-          inkWidth,
-          setInkWidth,
-          inkSaving,
-          signMode,
-          signSaving,
-          signatureComposerMode,
-          stampPickerOpen,
-          armedStamp,
-          redactions,
-          redactMode,
-          redactSaving,
-          redactionHydrationStatusForCurrentDocument,
-          redactionProductCopy,
-          shapesHydrationStatusForCurrentDocument,
-          shapeMode,
-          setShapeMode,
-          shapeToolPageContentRef,
-          shapeKind,
-          setShapeKind,
-          setShapeColor,
-          shapeColor,
-          shapeWidth,
-          setShapeWidth,
-          shapeLineStyle,
-          setShapeLineStyle,
-          setShapeLineStarts,
-          setShapeLineEnds,
-          activeShapeLineKind,
-          shapeLineStart,
-          shapeLineEnd,
-          shapeFillColor,
-          setShapeFillColor,
-          areaHighlightActive,
-          setAreaHighlightActive,
-          areaHighlightColor,
-          areaHighlightOpacity,
-          visualMaskActive,
-          setVisualMaskActive,
-          visualMaskWarning,
-          shapeSaving,
-          selectedPlaced,
-          selectedPlacedRef,
-          placedAnnotationClipboardError,
-          linkMode,
-          linkSaving,
-          linkPlacementDestinationKindRef,
-          snapshotMode,
-          setSnapshotMode,
-          snapshotIntentRef,
-          snapshotShape,
-          setSnapshotShape,
-          captureScreenSnapshot,
-          setDrawingSnapshot,
-          snapshotDragRef,
-          snapshotTextReturnFocusRef,
-          setSnapshotToast,
-          setSnapshotLatex,
-          measureMode,
-          measureKind,
-          setMeasureKind,
-          measureUnit,
-          setMeasureUnit,
-          measureRatio,
-          setMeasureRatio,
-          setMeasurePts,
-          pageLabelsOpen,
-          pageLabelsDialogReturnFocusRef,
-          pageLabelRanges,
-          pageLabelReplacementStarted,
-          setPageLabelReplacementStarted,
-          pageLabelsApplying,
-          pageLabelsError,
-          nativePageLabelsControlled,
-          nativePageLabelsSourceOwned,
-          updatePageLabelRanges,
-          printing,
-          printPreflightTriggerRef,
-          batchPrintOpen,
-          batchPrintPreparing,
-          decorationDialogKind,
-          effectiveDocumentDecorations,
-          openDecorationDialog,
-          removeDocumentDecoration,
-          annotationsOpen,
-          outline,
-          setPropertiesOpen,
-          propertiesDialogReturnFocusRef,
-          userBookmarks,
-          bookmarkSaving,
-          flattening,
-          formDataExportFormat,
-          setFormDataExportFormat,
-          compressPreset,
-          setCompressPreset,
-          openCompressSettings,
-          mergeBusy,
-          splitBusy,
-          featuredImagesToPdfBusy,
-          featuredMarkdownToPdfBusy: featuredSourceToPdfBusy === "md",
-          featuredCadToPdfBusy: featuredSourceToPdfBusy === "dxf",
-          featuredMarkdownToPdfAvailable: Boolean(pageId),
-          setSplitOpen,
-          splitOpen,
-          splitDialogReturnFocusRef,
-          featuredLegacyToolsOpen,
-          setFeaturedLegacyToolsOpen,
-          setExportImageOpen,
-          exportImageOpen,
-          exportImageDialogReturnFocusRef,
-          exportImageScope,
-          setExportImageScope,
-          exportImageRange,
-          setExportImageRange,
-          exportImageCombinePages,
-          setExportImageCombinePages,
-          exportImageResolution,
-          setExportImageResolution,
-          exportImageBusy,
-          textExportBusy,
-          imageExtractionBusy,
-          translationDialog,
-          translationWorking,
-          cadExportBusy,
-          screenRecordingState,
-          screenRecordingSupported,
-          documentEncryptBusy,
-          dangerousActionSafeCopyBusy,
-          verifiedPdfaExportBusy,
-          verifiedPdfaExportTriggerRef,
-          imageOnlyExportBusy,
-          xfdfImportNotice,
-          rasterOutputAuthorityBlocked,
-          splitMode,
-          setSplitMode,
-          splitRangeSpec,
-          splitRangeError,
-          setSplitRangeSpec,
-          splitEveryNValue,
-          setSplitEveryNValue,
-          featuredImagesToPdfInputRef,
-          featuredMarkdownToPdfInputRef,
-          featuredCadToPdfInputRef,
-          featuredImagesToPdfReturnFocusRef,
-          setInsertOpen,
-          insertOpen,
-          selectInsertSourceKind,
-          insertDialogReturnFocusRef,
-          insertBusy,
-          editCropTriggerRef,
-          layersDialogReturnFocusRef,
-          formImportInputRef,
-          formImportReturnFocusRef,
-          viewMode,
-          setViewMode,
-          readMode,
-          cycleReadMode,
-          lineNumbersVisible,
-          toggleLineNumbers,
-          fitMode,
-          panMode,
-          presentationActive,
-          compareInputRef,
-          compareFile,
-          viewerRootRef,
-          setSelectedNativeVectorSelection,
-          nativeVectorUserSelectionEpochRef,
-          setExtraNativeVectorSelections,
-          ocrReviewByPage,
-          ocrAnnotationHydrationReady,
-          ocrCandidatePages,
-          ocrPendingPages,
-          ocrPreflightLoadingPage,
-          ocrPreflightTriggerRef,
-          pdfOcrServerSourceAuthority,
-          pageOrganizerPages,
-          visiblePageCount,
-          previousVisibleOrdinal,
-          nextVisibleOrdinal,
-          rotateDocumentDisabled,
-          goToVisibleOrdinal,
-          handleSummarizeCurrentPage,
-          pageOpsEnabled,
-          handleRotatePage,
-          handleRotateCcwPage,
-          handleRotateDocumentClockwise,
-          handlePageInputCommit,
-          selectionEnabled,
-          clearPlacedAnnotationSelection,
-          requestOcrPreflight,
-          openOcrReview,
-          handleInkUndoLast,
-          pendingRedactionReviewItems,
-          handleRedactionReviewNavigate,
-          handleRedactionReviewDelete,
-          handleSelectedManagedShapeStyle,
-          handleSelectedManagedShapeArrange,
-          handleSelectedManagedInkStyle,
-          // Every placed object's 大小, not only a shape's.
-          handleSelectedShapeSizeChange: handleSelectedPlacedSizeChange,
-          handleCopyPlacedAnnotation,
-          handlePastePlacedAnnotation,
-          handleDuplicatePlacedAnnotation,
-          handleDeleteSelectedPlacedAnnotation,
-          handleInsertBookmark,
-          clearSelectedLinkContext,
-          openSelectedLinkContext,
-          editSelectedLinkContext,
-          deleteSelectedLinkContext,
-          allFormFields,
-          formFieldsUnavailable,
-          formFieldsUnavailableReason,
-          nativeFormMode,
-          formMutationBlocked,
-          formMutationBlockedReason,
-          nativeFormDataMutationBlocked,
-          nativeFormDataMutationBlockedReason,
-          hasNativeFormEditsExcludedFromSource,
-          hasFlattenableAnnotations,
-          hasEffectivePdfOutputEdits,
-          hasEditableXfdfAnnotations,
-          handleCompressPdf,
-          handleExportFormData,
-          handleResetForm,
-          fieldCandidates,
-          detectBusy,
-          detectedFieldsCommandRef,
-          existingTextFieldEditMode,
-          selectedFormFieldContextRef,
-          existingTextFieldEditBusy,
-          existingFormFieldDeleteMode,
-          existingFormFieldDeleteBusy,
-          currentDetectedFieldSourceIdentityRef,
-          handleDetectFormFields,
-          acceptedCandidates,
-          clearSelectedFormFieldContext,
-          openSelectedFormFieldProperties,
-          openSelectedFormFieldOptions,
-          hasVisibleFormFieldForPropertyEdit,
-          hasVisibleFormFieldForDelete,
-          handleCancelDetectedFields,
-          handleSelectedFormFieldTransform,
-          applySelectedFormWidgetAppearance,
-          applySelectedFormFieldQuickProperty,
-          handleCreateDetectedFields,
-          handleExportPagesAsImages,
-          exportImageOverLimit,
-          exportImageCurrentPageSize,
-          openBatchPrint,
-          handleOpenImageExtractionReview,
-          handleSplitDownload,
-          handleOpenMergePicker,
-          executeReaderCommand,
-          executeEditContentActivation,
-          originalDownloadRuntimeDecision,
-          currentDownloadRuntimeDecision,
-          annotatedDownloadRuntimeDecision,
-          fillableDownloadRuntimeDecision,
-          editableAnnotationsDownloadRuntimeDecision,
-          archivalDownloadRuntimeDecision,
-          printRuntimeDecision,
-          applyRedactionsRuntimeDecision,
-          originalDownloadCommand,
-          handleSignatureProofOriginalDownload,
-          currentDownloadCommand,
-          annotatedDownloadCommand,
-          fillableDownloadCommand,
-          editableAnnotationsDownloadCommand,
-          archivalDownloadCommand,
-          printCommand,
-          applyRedactionsCommand,
-          activeSplitCommand,
-          zoomReset,
-          fitWidth,
-          fitPage,
-          disarmPageTools,
-          toggleRedactionMarkMode,
-          openRedactPages: () => setRedactPagesOpen(true),
-          openHiddenInformation: onReplaceSourceFile
-            ? () => {
-                setHiddenInformationError(null);
-                setHiddenInformationOpen(true);
-              }
-            : undefined,
-          handleToggleCommentMode,
-          handleToggleCommentsHidden,
-          handleRibbonMarkupColorChange,
-          handleNoteColorChange,
-          handleAreaHighlightColorChange,
-          handleAreaHighlightOpacityChange,
-          closePageLabelsDialog,
-          togglePageLabelsDialog,
-          applyPageLabelRanges,
-          toggleVisualMaskTool,
-          toggleVisualSignature,
-          armLinkMode,
-          deleteAllLinks,
-          documentLinkCount,
-          deleteAllLinksAvailable: Boolean(
-            onNativeSourceLinksDeleteAll || onManagedLinkDelete,
-          ),
-          toggleLinkMode,
-          selectRibbonTab,
-          handleHandToolToggle,
-          handleSelectTool,
-          handleToggleExistingTextFieldEditMode,
-          handleToggleExistingFormFieldDeleteMode,
-          selectToolActive,
-          executeMarkupActivation,
-          executeProofingActivation,
-          executeFreeTextActivation,
-          executeImageActivation,
-          executeNoteActivation,
-          executeInkActivation,
-          executeShapeActivation,
-          executeAreaHighlightActivation,
-          executeStampActivation,
-          executeLinkActivation,
-          executeVisualSignatureActivation,
-          executeFileAttachmentActivation,
-          handlePresentationToggle,
-          deskewStatus,
-          speechStatus,
-          speechSupported,
-          handleToggleReadAloud,
-          handleStopReadAloud,
-          handleSaveSelectedAttachment,
-          handleExportDocumentText,
-          openFullTranslation,
-          openSelectionTranslation,
-          openOfficeProjection,
-          openScreenRecording,
-          stopScreenRecording,
-          openCadExport,
-          dangerousActionSafeCopyDisabledReason,
-          dangerousActionCount,
-          dangerousActionCompactStatusLabel,
-          dangerousActionSafeCopyCommand,
-          executeDangerousActionSafeCopyReview,
-          openDocumentEncrypt,
-          openImageOnlyExport,
-          toggleNavigationPanel,
-          docSearchOpen,
-          effectiveRibbonSaveStatus,
-          effectiveRibbonSaveStatusLabel,
-          currentNativeVectorSelection,
-          maskCurrentNativeVector,
-          toggleNativeVectorVertexEditing,
-          toggleNativeSelectionPane,
-          nativeSelectionPaneOpen,
-          nativeVectorClipboardCommands,
-          runOrQueueNativeVectorCommand,
-          annotationContextModel,
-          effectiveAnnotationContextLabels,
-          formFieldContextLabels,
-          formFieldContextModel,
-          linkContextLabels,
-          linkContextModel,
-          drawingToolContextActive,
-          drawingContextKind,
-          drawingStyleEnabled,
-          drawingStyleDisabledReason,
-          commentToolContextLabel,
-          ribbonTabs,
-          readerDrawModel,
-          commentDrawMode: drawMode && !drawTabDrawing,
-          commentInkStraight: { on: inkStraight, set: setInkStraight },
-          // WPS's measure 结果面板: every measurement kept, its page reached.
-          measureSnap: {
-            kinds: measureSnapKinds,
-            toggle: (kind: MeasureSnapKind) =>
-              setMeasureSnapKinds((current) => {
-                const next = new Set(current);
-                if (next.has(kind)) next.delete(kind);
-                else next.add(kind);
-                return next;
-              }),
-          },
-          measureResults: {
-            items: measurements.map((record) => ({
-              id: record.id,
-              mode: record.mode,
-              label: record.label,
-              page: record.page,
-            })),
-            open: (page: number) => goToPage(page),
-          },
-          commentInkEraser: {
-            active: inkEraseMode && commentInkErasing,
-            available: readerInkErasable || inkEraseMode,
-            toggle: toggleCommentInkEraser,
-          },
-          readerDrawCollapse,
-          readerPenCompact: readerPenFirst.compact,
-          documentEncryptDisabled,
-          documentEncryptDisabledReason,
-          protectLabels,
-          totalPagesLabel,
-          currentPageDocumentLabel,
-          insertPagesFromFileCommands,
-          insertPageMenuBlankCommand,
-          homeRotateLeftCommand,
-          homeRotateRightCommand,
-          pagePersistentStructureCommands,
-          pageFileCommands,
-          pageRotateCommands,
-          loadingDisabledReason,
-          outputAuthorityDisabledReason,
-          sourceAuthorityDisabledReason,
-          sourceAuthorityUnavailable,
-          printCommandDisabledReason,
-          commentMarkupDisabled,
-          commentMarkupDisabledReason,
-          areaHighlightDisabled,
-          areaHighlightDisabledReason,
-          pageNavigation,
-          selectionTranslationDisabledReason,
-          signatureCommandDisabledReason,
-          legacyToolsHostRequired,
-          featuredScreenRecordingStatus,
-          featuredStatus,
-          globalCommentToolsCommands,
-          globalPdfToolsCommands,
-          globalLinkDisabled,
-          globalLinkDisabledReason,
-          globalLinkLabel,
-          editShapesRibbonCommand,
-          editShapeRibbonItems,
-        }}
+        ribbon={{ pictureContextRibbon, formatPaneDock: pdfTaskPaneDocks.right, filename, downloadUrl, ribbonQuickActions, ribbonActionRail, ribbonQuickActionTail, ribbonQuickOverflowOnlyTail, onPageOrganizerApply, onDownload, preferAnnotatedDownload, annotatedDownloadEnabled, pageId, onRequestPageSummary, onManagedSignatureUpsert, onManagedStampUpsert, onManagedLinkUpsert, dataItemId, lossyCompressionSource, lossyCompressionWritable, nativePageLabelRanges, onNativePageLabelRangesApply, onNativeFileAttachmentUpsert, nativeFileAttachmentBusy, nativeFileAttachmentDisabledReason, onNativePageImport, nativePageImportBusy, nativePageImportDisabledReason, onEditContent, editContentDisabledReason, editContentBusy, contentEditModeActive: contentEditModeLive, contentEditModeDisabledReason: editContentModeDisabledReason, onEnterContentEditMode: enterContentEditMode, onInsertText, onOpenPageBackground, pageBackgroundOpen, pageBackgroundBusy, pageBackgroundDisabledReason, onCreateEditableVersion, onConvertToSpreadsheet, onConvertToPresentation, onOfficeConversionPrepare, officeProjectionDisabledReason, isCreatingEditableVersion, t, pdfHomeDisplayLabels, savePolicyV1, signatureProofLoading, matchedSourceRiskSnapshot, signatureProofPresentation, showSignatureProof, requestSignatureProofPanel, pageOrganizerLabel, pages, // The ribbon greys only for a document not shown yet (ribbonLoading).
+          loading: ribbonLoading, setPageOrganizerOpen, pageOrganizerDialogReturnFocusRef, scale, activeRibbonTab, ribbonInstanceId, currentPage, currentVisibleOrdinal, pageInput, setPageInput, armedTextOrigin: addTextMode ? addTextOrigin : null, armedTextKind: addTextKind, readerTextBoxes: Boolean(textBoxAuthoring?.writable), readerTables: Boolean(textBoxAuthoring?.writable && tableAuthoring?.writable), readerCharts: Boolean(textBoxAuthoring?.writable && chartAuthoring?.writable), attachMode, attachmentError, placedAttachments, ocgLayers, ocgOrder, setLayersPanelOpen, layersPanelOpen, handleToggleLayer, drawMode, signMode, signSaving, signatureComposerMode, stampPickerOpen, armedStamp, redactionHydrationStatusForCurrentDocument, shapesHydrationStatusForCurrentDocument, shapeMode, visualMaskActive, visualMaskWarning, shapeSaving, selectedPlaced, selectedPlacedRef, linkMode, linkSaving, snapshotMode, setSnapshotMode, snapshotIntentRef, snapshotShape, setSnapshotShape, captureScreenSnapshot, setDrawingSnapshot, snapshotDragRef, setSnapshotToast, setSnapshotLatex, pageLabelsOpen, pageLabelsDialogReturnFocusRef, pageLabelRanges, pageLabelReplacementStarted, setPageLabelReplacementStarted, pageLabelsApplying, pageLabelsError, nativePageLabelsControlled, nativePageLabelsSourceOwned, updatePageLabelRanges, printing, printPreflightTriggerRef, decorationDialogKind, effectiveDocumentDecorations, openDecorationDialog, removeDocumentDecoration, annotationsOpen, outline, userBookmarks, bookmarkSaving, flattening, formDataExportFormat, setFormDataExportFormat, compressPreset, setCompressPreset, openCompressSettings, mergeBusy, splitBusy, setSplitOpen, splitOpen, splitDialogReturnFocusRef, featuredLegacyToolsOpen, setFeaturedLegacyToolsOpen, setExportImageOpen, exportImageOpen, exportImageDialogReturnFocusRef, exportImageScope, setExportImageScope, exportImageRange, setExportImageRange, exportImageCombinePages, setExportImageCombinePages, exportImageResolution, setExportImageResolution, exportImageBusy, textExportBusy, translationDialog, translationWorking, cadExportBusy, documentEncryptBusy, verifiedPdfaExportTriggerRef, imageOnlyExportBusy, rasterOutputAuthorityBlocked, splitMode, setSplitMode, splitRangeSpec, splitRangeError, setSplitRangeSpec, splitEveryNValue, setSplitEveryNValue, setInsertOpen, insertOpen, selectInsertSourceKind, insertDialogReturnFocusRef, insertBusy, layersDialogReturnFocusRef, formImportInputRef, formImportReturnFocusRef, viewMode, setViewMode, readMode, cycleReadMode, lineNumbersVisible, toggleLineNumbers, fitMode, panMode, presentationActive, compareInputRef, compareFile, viewerRootRef, setSelectedNativeVectorSelection, nativeVectorUserSelectionEpochRef, setExtraNativeVectorSelections, ocrAnnotationHydrationReady, pdfOcrServerSourceAuthority, pageOrganizerPages, visiblePageCount, previousVisibleOrdinal, nextVisibleOrdinal, rotateDocumentDisabled, goToVisibleOrdinal, handleSummarizeCurrentPage, pageOpsEnabled, handleRotatePage, handleRotateCcwPage, handleRotateDocumentClockwise, handlePageInputCommit, handleSelectedManagedShapeStyle, handleSelectedManagedShapeArrange, handleSelectedManagedInkStyle, // Every placed object's 大小, not only a shape's.
+          handleSelectedShapeSizeChange: handleSelectedPlacedSizeChange, handleInsertBookmark, allFormFields, formFieldsUnavailable, formFieldsUnavailableReason, nativeFormMode, nativeFormDataMutationBlocked, nativeFormDataMutationBlockedReason, hasNativeFormEditsExcludedFromSource, hasFlattenableAnnotations, hasEffectivePdfOutputEdits, hasEditableXfdfAnnotations, handleCompressPdf, handleExportFormData, handleResetForm, fieldCandidates, detectBusy, detectedFieldsCommandRef, handleDetectFormFields, acceptedCandidates, handleCancelDetectedFields, handleCreateDetectedFields, handleExportPagesAsImages, exportImageOverLimit, exportImageCurrentPageSize, handleSplitDownload, handleOpenMergePicker, executeReaderCommand, executeEditContentActivation, originalDownloadRuntimeDecision, currentDownloadRuntimeDecision, annotatedDownloadRuntimeDecision, fillableDownloadRuntimeDecision, editableAnnotationsDownloadRuntimeDecision, archivalDownloadRuntimeDecision, printRuntimeDecision, originalDownloadCommand, handleSignatureProofOriginalDownload, currentDownloadCommand, annotatedDownloadCommand, fillableDownloadCommand, editableAnnotationsDownloadCommand, archivalDownloadCommand, printCommand, activeSplitCommand, zoomReset, fitWidth, fitPage, disarmPageTools, closePageLabelsDialog, togglePageLabelsDialog, applyPageLabelRanges, toggleVisualMaskTool, toggleVisualSignature, toggleLinkMode, selectRibbonTab, handleHandToolToggle, handleSelectTool, selectToolActive, executeFreeTextActivation, executeImageActivation, executeInkActivation, executeShapeActivation, executeStampActivation, executeLinkActivation, executeVisualSignatureActivation, executeFileAttachmentActivation, handlePresentationToggle, speechStatus, speechSupported, handleToggleReadAloud, handleStopReadAloud, handleExportDocumentText, openFullTranslation, openSelectionTranslation, openOfficeProjection, openCadExport, openDocumentEncrypt, openImageOnlyExport, toggleNavigationPanel, effectiveRibbonSaveStatus, effectiveRibbonSaveStatusLabel, currentNativeVectorSelection, runOrQueueNativeVectorCommand, annotationContextModel, effectiveAnnotationContextLabels, formFieldContextModel, linkContextModel, ribbonTabs, commentDrawMode: drawMode && !drawTabDrawing, readerDrawCollapse, readerPenCompact: readerPenFirst.compact, documentEncryptDisabled, documentEncryptDisabledReason, totalPagesLabel, currentPageDocumentLabel, insertPagesFromFileCommands, insertPageMenuBlankCommand, homeRotateLeftCommand, homeRotateRightCommand, pagePersistentStructureCommands, pageFileCommands, pageRotateCommands, loadingDisabledReason, outputAuthorityDisabledReason, sourceAuthorityDisabledReason, sourceAuthorityUnavailable, printCommandDisabledReason, pageNavigation, selectionTranslationDisabledReason, signatureCommandDisabledReason, legacyToolsHostRequired, globalLinkDisabled, globalLinkDisabledReason, globalLinkLabel }}
       />
       {pageGridActive && onPageOrganizerApply ? (
         // WPS's Page tab is its page view: the pages as a grid, picked and
@@ -58349,8 +54067,7 @@ export default function PDFViewer({
         {(() => {
           // 图表 › 编辑数据: the chart's data window (a Docs chart's without
           // a workbook); each change is the chart with its new data.
-          const chart = chartDataEditingId && chartAuthoring?.writable
-            ? chartAuthoring.charts.find((entry) => entry.id === chartDataEditingId) ?? null : null;
+          const chart = null;
           const attrs = chart ? pdfChartAttrs(chart) : null;
           if (!chart || !attrs || !chartAuthoring) return null;
           return (
@@ -58643,7 +54360,7 @@ export default function PDFViewer({
             renderedNativeSourceTextNotes: layerVisibleNativeSourceTextNotes,
             setEditingHighlight,
             commentMentions,
-            noteMode,
+            noteMode: false,
             addTextMode,
             addTextKind,
             textBoxAuthoring,
@@ -58684,7 +54401,7 @@ export default function PDFViewer({
             stampSaving,
             nativeSourceStampSaving,
             nativeSourceFreeTextSaving,
-            redactMode,
+            redactMode: false,
             redactSaving,
             redactionDrafts,
             drawingRedaction,
@@ -58713,7 +54430,7 @@ export default function PDFViewer({
             snapshotMode,
             drawingSnapshot,
             snapshotLatex,
-            measureMode,
+            measureMode: false,
             measureKind,
             measurePts,
             setMeasurePts,
@@ -58929,7 +54646,7 @@ export default function PDFViewer({
             existingTextFieldEditMode,
             selectedFormFieldContext,
             existingTextFieldEditBusy,
-            existingFormFieldDeleteMode,
+            existingFormFieldDeleteMode: false,
             readFormFieldContextDisabledReason,
             selectFormFieldContext,
             hasVisibleFormFieldForPropertyEdit,
@@ -59198,7 +54915,7 @@ export default function PDFViewer({
       />
 
       <PdfFormFieldAuthoringDialog
-        open={authoredFieldDialogOpen}
+        open={false}
         initialKind={authoredFieldKind}
         currentPage={currentPage}
         totalPages={pages.length}
@@ -59219,7 +54936,7 @@ export default function PDFViewer({
           : "none"}
         docked={pdfTaskPaneDocks.right}
         open={existingTextFieldEditSession !== null}
-        initialSection={existingTextFieldEditSection}
+        initialSection={null}
         mode="edit"
         initialKind={existingTextFieldEditSession?.kind ?? "text"}
         initialSelection={
@@ -59241,7 +54958,7 @@ export default function PDFViewer({
       />
 
       <PdfFormRolesDialog
-        open={formRolesDialogOpen}
+        open={false}
         roles={formRoles}
         fieldCounts={formRoleFieldCounts}
         busy={formRolesBusy}
@@ -59252,8 +54969,7 @@ export default function PDFViewer({
 
       <PdfRadioGroupOptionsDialog
         open={
-          radioGroupOptionsOpen &&
-          selectedFormFieldContext?.radioOptions !== null
+          false
         }
         fieldName={selectedFormFieldContext?.radioOptions?.name ?? ""}
         options={(selectedFormFieldContext?.radioOptions?.widgets ?? []).map(
@@ -59322,26 +55038,8 @@ export default function PDFViewer({
         />
       ) : null}
 
-      {hiddenInformationOpen ? (
-        <PdfHiddenInformationDialog
-          open
-          inspect={inspectHiddenInformation}
-          busy={hiddenInformationBusy}
-          error={hiddenInformationError}
-          onConfirm={(kinds) => void removeHiddenInformation(kinds)}
-          onCancel={() => setHiddenInformationOpen(false)}
-        />
-      ) : null}
-      {redactPagesOpen ? (
-        <PdfRedactPagesDialog
-          open
-          currentPage={currentPage}
-          totalPages={pages.length}
-          busy={redactSaving}
-          onConfirm={(pagesToMark) => void redactWholePages(pagesToMark)}
-          onCancel={() => setRedactPagesOpen(false)}
-        />
-      ) : null}
+      {null}
+      {null}
 
       <PdfPageSizeDialog
         open={pageSizeOpen}
@@ -59365,7 +55063,7 @@ export default function PDFViewer({
           loaded document's info metadata; Save bakes the edits into a
           flattened download through flatten-apply's `metadata` option. */}
       <PdfPropertiesDialog
-        open={propertiesOpen}
+        open={false}
         metadata={docMetadata}
         facts={documentPropertiesFacts}
         busy={flattening}
@@ -59395,7 +55093,7 @@ export default function PDFViewer({
       />
 
       <PdfReadAloudSettingsDialog
-        open={speechSettingsOpen}
+        open={false}
         locale={locale}
         value={speechSettings}
         documentLanguage={docMetadata.language}
@@ -59419,7 +55117,7 @@ export default function PDFViewer({
       />
 
       <PdfFormDataExportDialog
-        open={formDataExportDialogOpen}
+        open={false}
         value={formDataExportFormat}
         returnFocusRef={formDataExportDialogReturnFocusRef}
         onApply={applyFormDataExportFormat}
@@ -59452,23 +55150,7 @@ export default function PDFViewer({
         onCancel={closeImageExtractionReview}
       />
 
-      {pendingPartialXfdfExport && typeof document !== "undefined"
-        ? createPortal(
-            <ConfirmDialog
-              open
-              title={t("pdfViewer.exportXfdfPartialTitle")}
-              body={t("pdfViewer.exportXfdfPartialBody", {
-                count: pendingPartialXfdfExport.count,
-                kinds: pendingPartialXfdfExport.kinds,
-              })}
-              confirmLabel={t("pdfViewer.exportXfdfPartialConfirm")}
-              autoFocusConfirm={false}
-              onConfirm={confirmPartialXfdfExport}
-              onCancel={() => setPendingPartialXfdfExport(null)}
-            />,
-            document.body,
-          )
-        : null}
+      {null}
 
       {pendingUnboundXfdfImport && typeof document !== "undefined"
         ? createPortal(
@@ -59548,8 +55230,8 @@ export default function PDFViewer({
       ) : null}
 
       <PdfBatchPrintDialog
-        open={batchPrintOpen}
-        seed={batchPrintSeed}
+        open={false}
+        seed={null}
         returnFocusRef={batchPrintTriggerRef}
         onCancel={closeBatchPrint}
         onPrint={executeBatchPrint}
@@ -59583,18 +55265,7 @@ export default function PDFViewer({
         />
       ) : null}
 
-      {screenRecordingOpen ? (
-        <PdfScreenRecordingDialog
-          open
-          busy={screenRecordingState === "requesting"}
-          supported={screenRecordingSupported}
-          onStart={(includeSharedAudio) =>
-            void startScreenRecording(includeSharedAudio)
-          }
-          onCancel={cancelScreenRecording}
-          returnFocusRef={screenRecordingTriggerRef}
-        />
-      ) : null}
+      {null}
 
       {officeProjectionTarget ? (
         <PdfOfficeProjectionDialog
@@ -59662,7 +55333,7 @@ export default function PDFViewer({
       />
 
       <PdfDangerousActionSafeCopyDialog
-        open={dangerousActionSafeCopyOpen}
+        open={false}
         actions={dangerousActionInspection?.actions ?? []}
         busy={dangerousActionSafeCopyBusy}
         error={dangerousActionSafeCopyError}

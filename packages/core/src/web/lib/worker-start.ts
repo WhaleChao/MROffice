@@ -18,7 +18,13 @@
 // - an error before the worker says it is ready is handled here (the
 //   browser no longer reports it as the page's uncaught error) and reported
 //   as what it is, a worker that did not start (WorkerStartFailed, with the
-//   worker's name and the error's own words, the chunk among them);
+//   worker's name and the error's own words, the chunk among them) -- once
+//   the start is final: a first start that a retry recovers is no failure
+
+//   missed their deadline on a cold cache, mostly on a try-it notebook's first
+//   load, and not one retry did), so it is reported only with the start that
+//   gives the worker up, its words carried in that report. A worker that is
+//   never given up reports its 2nd, 4th, 8th, ... failed start;
 // - the caller gets one more try, after a pause (a chunk that failed to
 //   load usually loads a moment later); a second failure is final, and the
 //   caller's own fallback (its work on the page's thread) takes over. A
@@ -76,6 +82,8 @@ export function startResilientWorker(name: string, options: ResilientWorkerOptio
   let failures = 0;
   let notBefore = 0;
   let gaveUp = false;
+  /** What the failed starts before this one said, for the report that is made. */
+  let earlier: string[] = [];
   const ready = new WeakSet<Worker>();
   const lastError = new WeakMap<Worker, string>();
 
@@ -84,10 +92,21 @@ export function startResilientWorker(name: string, options: ResilientWorkerOptio
     if (worker && ready.has(worker)) return "gave_up";
     const detail = worker ? lastError.get(worker) : undefined;
     failures += 1;
-    const error = new Error(`${name} did not start (attempt ${failures} of ${attempts}): ${reason}${detail ? ` — ${detail}` : ""}`);
-    error.name = "WorkerStartFailed";
-    reportClientError(error);
-    if (failures >= attempts) {
+    const words = `${reason}${detail ? ` — ${detail}` : ""}`;
+    const final = failures >= attempts;
+    // A finite worker reports its last start; one never given up, each
+    // doubling of the failed starts in a row (2, 4, 8, ...).
+    const reported = Number.isFinite(attempts) ? final : failures >= 2 && (failures & (failures - 1)) === 0;
+    if (reported) {
+      const before = earlier.length ? `; before: ${earlier.join("; ")}` : "";
+      const error = new Error(`${name} did not start (attempt ${failures} of ${attempts}): ${words}${before}`.slice(0, 900));
+      error.name = "WorkerStartFailed";
+      reportClientError(error);
+      earlier = [];
+    } else {
+      earlier = [...earlier, `attempt ${failures}: ${words}`.slice(0, 300)].slice(-2);
+    }
+    if (final) {
       gaveUp = true;
       return "gave_up";
     }
@@ -118,6 +137,8 @@ export function startResilientWorker(name: string, options: ResilientWorkerOptio
     },
     started(worker) {
       ready.add(worker);
+      // A start that came: the misses before it were no failure.
+      earlier = [];
     },
     failed,
     get gaveUp() {

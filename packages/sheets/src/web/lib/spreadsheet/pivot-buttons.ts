@@ -71,6 +71,7 @@ import {
   pivotComputationMatrix,
   pivotIsScenarioReport,
   pivotLiveSourceRange,
+  pivotSourceRowsRead,
   pivotNativeScalarDisplay,
   pivotRangeToA1,
   profilePivotFieldsFromRange,
@@ -439,7 +440,7 @@ export function pivotChartReportForSave(
       coveredCells(normalizeMerges(sourceSheet.merges)),
       evaluator,
     );
-    const range = pivotLiveSourceRange(config, sourceSheet.dataTables) ?? sourceRange;
+    const range = pivotSourceRowsRead(pivotLiveSourceRange(config, sourceSheet.dataTables) ?? sourceRange, sourceSheet, spill);
     const live: string[][] = [];
     for (let row = range.r1; row <= range.r2; row += 1) {
       const values: string[] = [];

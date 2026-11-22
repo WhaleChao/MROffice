@@ -274,8 +274,14 @@ export function sanitizeCommentNativePerson(
   return providerId && userId ? { providerId, userId } : null;
 }
 
-/** The custody bound of a comment's own body XML (mirrors the API). */
-export const COMMENT_NATIVE_BODY_MAX_CHARS = 65_536;
+/**
+ * The custody bound of a comment's own body XML (mirrors the API's
+ * COMMENT_NATIVE_BODY_MAX_CHARS): Word spells a long rich comment's every run
+ * with its rsid and properties (a 26-paragraph note of 3,823 characters is
+ * 68,680 characters of XML, corpus R491-D27), and a body dropped here is a
+ * comments part the save can no longer write.
+ */
+export const COMMENT_NATIVE_BODY_MAX_CHARS = 262_144;
 
 /** Carry an imported comment's own body XML as it is, or null. */
 export function sanitizeCommentNativeBody(value: unknown): string | null {

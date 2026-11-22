@@ -571,6 +571,9 @@ export function DocumentRuler({
   return (
     <div
       ref={stripRef}
+      // The ruler measures the page, which keeps its ltr geometry under an
+      // rtl interface.
+      dir="ltr"
       className="docs-document-ruler-viewport"
       data-testid={`${testId}-viewport`}
       data-follows-page={measurement ? "true" : undefined}

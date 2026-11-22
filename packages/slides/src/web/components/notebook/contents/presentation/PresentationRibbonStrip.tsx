@@ -95,11 +95,11 @@ function PresentationRibbonStripBody({
   // each crossing.
   const insertAnatomy =
     activeTab === "insert" ||
-    activeTab === "design" ||
-    activeTab === "animations" ||
-    activeTab === "slideshow" ||
-    activeTab === "record" ||
-    activeTab === "draw";
+    false ||
+    false ||
+    false ||
+    false ||
+    false;
   // A tab not named here is a secondary Home band, never a bare strip:
   // Chart Design and SmartArt Format used to fall through to a bare
   // `OfficeRibbonStrip`, where the generic window button skins
@@ -112,9 +112,7 @@ function PresentationRibbonStripBody({
       ? presentationChrome.homeRibbonSurface
       : activeTab === "insert"
         ? presentationChrome.insertRibbonSurface
-        : activeTab === "draw"
-          ? presentationChrome.drawRibbonSurface
-          : presentationChrome.secondaryRibbonSurface;
+        : presentationChrome.secondaryRibbonSurface;
   return (
     <OfficeRibbonSurfaceStrip
       surface={insertAnatomy ? "insert" : "home"}

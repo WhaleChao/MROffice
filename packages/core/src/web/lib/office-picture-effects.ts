@@ -777,6 +777,8 @@ export function officePictureEffectsCss(
     readonly scale?: number;
     /** The Gaussian deviation an outer shadow's blur radius draws, per unit of it (PowerPoint's: `POWERPOINT_SHADOW_BLUR_DEVIATION`). */
     readonly shadowBlurDeviation?: number;
+    /** An evenly scaled outer shadow is scaled about its alignment point (`officeShadowCss`'s `evenScaleUnder`: a slide's picture). */
+    readonly evenScaleShadowUnder?: boolean;
   } = {},
 ): OfficePictureEffectsCss | null {
   const effects = normalizeOfficePictureEffects(value);
@@ -799,7 +801,10 @@ export function officePictureEffectsCss(
     filters.push(`drop-shadow(0 0 ${blur}px ${color})`, `drop-shadow(0 0 ${blur}px ${color})`);
   }
   const shadow = effects.shadow && effects.shadow !== "none"
-    ? officeShadowCss(effects.shadow, size, options.shadowBlurDeviation === undefined ? {} : { blurDeviation: options.shadowBlurDeviation })
+    ? officeShadowCss(effects.shadow, size, {
+        ...(options.shadowBlurDeviation === undefined ? {} : { blurDeviation: options.shadowBlurDeviation }),
+        ...(options.evenScaleShadowUnder ? { evenScaleUnder: true } : {}),
+      })
     : null;
   // An outer shadow of the picture's own size follows what the picture draws,
   // as PowerPoint's does: its transparent pixels cast none, its see-through

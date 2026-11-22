@@ -99,11 +99,12 @@ export interface PowerPointBulletFace {
   readonly ownFirst?: true;
   /**
    * Where the reader lacks `face` (Cambria Math, Segoe UI Symbol): the served
-   * face and CSS size-adjust (%) that draw the character at Windows' own ink
-   * box (TRIAGE 99, `drawn` in the table) -- STIX Two Math, Cambria Math's
-   * stand-in, draws U+25C6 half as large again as Windows does.
+   * bullet face (lib/office-fonts/bullet-faces, `MRAI-Bullet-…`) whose glyph
+   * is set at Windows' own ink box and advance for the character (TRIAGE 99,
+   * `drawn` in the table) -- STIX Two Math, Cambria Math's stand-in, draws
+   * U+25C6 half as large again as Windows does, centred on the math axis.
    */
-  readonly drawnBy?: { readonly family: string; readonly sizeAdjustPercent: number };
+  readonly drawnBy?: { readonly family: string };
 }
 
 interface BulletFaceRow {
@@ -117,7 +118,7 @@ interface BulletTable {
   readonly chain: { readonly serif: readonly string[]; readonly sans: readonly string[] };
   readonly faces: Readonly<Record<string, BulletFaceRow>>;
   /** Chain face -> served face -> [character (hex), size-adjust %] (scripts/build-powerpoint-bullet-fallbacks.py --glyphbox). */
-  readonly drawn?: Readonly<Record<string, Readonly<Record<string, readonly (readonly [string, number])[]>>>>;
+  readonly drawn?: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>>;
 }
 
 const BULLETS = bulletTable as unknown as BulletTable;
@@ -132,11 +133,11 @@ const BULLET_FACES: ReadonlyMap<string, { readonly name: string; readonly row: B
 /** Faces named for a symbol set: their characters are pictures, never fallen back from. */
 const SYMBOL_SET_FACE = /^(wingdings|webdings|symbol$|marlett|ms outlook|bookshelf symbol|mt extra)/i;
 
-/** Chain face (lower case) -> character -> the served face and size-adjust drawing it at Windows' ink box. */
-const BULLET_DRAWN: ReadonlyMap<string, ReadonlyMap<number, { readonly family: string; readonly sizeAdjustPercent: number }>> = new Map(
+/** Chain face (lower case) -> character -> the bullet face drawing it at Windows' ink box. */
+const BULLET_DRAWN: ReadonlyMap<string, ReadonlyMap<number, { readonly family: string }>> = new Map(
   Object.entries(BULLETS.drawn ?? {}).map(([face, byFamily]) => [
     face.toLowerCase(),
-    new Map(Object.entries(byFamily).flatMap(([family, rows]) => rows.map(([hex, percent]) => [parseInt(hex, 16), { family, sizeAdjustPercent: percent }] as const))),
+    new Map(Object.entries(byFamily).flatMap(([family, codes]) => codes.map((hex) => [parseInt(hex, 16), { family }] as const))),
   ]),
 );
 

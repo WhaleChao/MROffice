@@ -365,6 +365,29 @@ function fontTableAltOff(): boolean {
   return typeof window !== "undefined" && (window as Window & {__docsFontTableAltOff?: boolean}).__docsFontTableAltOff === true;
 }
 
+/** `window.__docsLocalAltNamesOff = true` asks the older reading (an altName
+ * in another script than Latin taken as a face Word has), for an A/B of one
+ * build. */
+function localAltNamesOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsLocalAltNamesOff?: boolean}).__docsLocalAltNamesOff === true;
+}
+/**
+ * Whether an altName is a localized name Windows does not ship: a name in
+ * another script than Latin that is none of Windows' own East Asian names
+ * (苹方-简, the Mac's PingFang SC). Word passes over such an altName to its
+ * fixed pick for the family's name or its pick by the entry's family: Myriad
+ * Pro is Segoe UI, a swiss or auto entry Calibri, a roman one Cambria
+ * (docx-look/cjk16/probes alt: fresh names with altName 苹方-简, 苹方-繁 and
+ * PingFang SC; an altName 微软雅黑 is Microsoft YaHei). Corpus R491-D14: a
+ * cover in Myriad Pro, altName 苹方-简, Segoe UI's 14.6 pt lines at 11 pt in
+ * Word's PDF where PingFang's East Asian line stood 22.6 pt.
+ */
+function localAltNameOnlyOnOtherSystems(alt: string): boolean {
+  if (localAltNamesOff()) return false;
+  const key = alt.trim().toLowerCase();
+  return !/^[\x20-\x7e\u00c0-\u024f\u1e00-\u1eff]+$/.test(key) && !WINDOWS_EAST_ASIAN_LOCAL_NAMES.has(key);
+}
+
 /**
  * The face Windows Word sets a family it lacks in, the font table read: the
  * entry's w:altName when Word has that face; else Word's fixed pick for the
@@ -394,7 +417,7 @@ function wordTablePicks(faces: readonly string[] | undefined, lacked: string): s
   if (fontTableAltOff() || !faces?.length) return [lacked];
   const last = faces[faces.length - 1];
   const alt = faces.length > 1 || !WORD_TABLE_ENTRY_PICKS.has(last.toLowerCase()) ? faces[0] : null;
-  if (alt && wordWindowsLacksFace(alt) === undefined) return [alt];
+  if (alt && wordWindowsLacksFace(alt) === undefined && (wordHasFace(alt) || !localAltNameOnlyOnOtherSystems(alt))) return [alt];
   if (lacked !== "Cambria") return [lacked];
   return WORD_TABLE_ENTRY_PICKS.has(last.toLowerCase()) ? [last] : [lacked];
 }

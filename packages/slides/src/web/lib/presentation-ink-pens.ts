@@ -10,7 +10,7 @@ import {
   type DocumentInkPreset,
   type DocumentInkTool,
 } from "@mrnote/core/web/lib/document-ink.ts";
-import type { OfficeInkPenSpec } from "@mrnote/ink/web/lib/office-ink-pens.ts";
+import type { OfficeInkPenSpec } from "@mrnote/core/web/lib/office-ink-pens.ts";
 
 /** 1 mm is 72/25.4 pt; widths are stated in points to a tenth. */
 function mmToPt(mm: number): number {

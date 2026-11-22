@@ -41,7 +41,7 @@ import { paintPresentationBlockFormat } from "./presentation-format-painter-appl
 import { shapeBlockWithPatch } from "@mrnote/core/web/lib/presentation-shape-buttons.ts";
 import { PRESENTATION_SMARTART_LABEL_TEXT_ADAPTER } from "@mrnote/core/web/lib/presentation-smartart-text.ts";
 import type { ShapeKind } from "@mrnote/core/web/lib/presentation-shapes.ts";
-import type { OfficeShapeEffect } from "@mrnote/core/web/components/office-ribbon/OfficeShapeFormatTab.tsx";
+import type { OfficeShapeEffect } from "@/components/office-ribbon/OfficeShapeFormatTab";
 import {
   normalizeOfficeShapeEffectPreset,
   officeShapeEffectMenuValue,
@@ -55,7 +55,7 @@ import type {
   OfficePictureEffects,
   OfficePictureEffectValues,
 } from "@mrnote/core/web/lib/office-picture-effects.ts";
-import type { PresentationSmartArtFormatState } from "../components/notebook/contents/presentation/PresentationSmartArtFormatTab";
+import type { PresentationSmartArtFormatState } from "@/components/notebook/contents/presentation/PresentationSmartArtFormatTab";
 import type { OfficeShapeStyleRecipe } from "@mrnote/core/web/lib/office-shape-style-catalog.ts";
 import { sameOfficeTextPaint, type OfficeTextPaint } from "@mrnote/core/web/lib/office-text-paint.ts";
 import type { PresentationWordArtStyle } from "@mrnote/core/web/lib/presentation-wordart-gallery.ts";

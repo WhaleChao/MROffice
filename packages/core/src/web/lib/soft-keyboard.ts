@@ -89,6 +89,23 @@ export function softKeyboardInset(win: Window = window): number {
 }
 
 /**
+ * How many pixels at the bottom of `element`'s box the on-screen keyboard
+ * hides, plus `margin` for the bar on its top edge (0 while it is down). A
+ * view that scrolls its own content (the spreadsheet grid) treats this as a
+ * cover on its bottom edge, as it does a task pane floating over it, so the
+ * cell being typed in stays above the keyboard.
+ */
+export function softKeyboardCover(
+  element: Element,
+  margin: number = SOFT_KEYBOARD_CARET_MARGIN_PX,
+  win: Window = window,
+): number {
+  if (softKeyboardInset(win) === 0) return 0;
+  const box = element.getBoundingClientRect();
+  return Math.max(0, Math.round(box.bottom - (visibleBand(win).bottom - margin)));
+}
+
+/**
  * Does this keydown send a chat composer's message? "Enter sends, Shift+Enter
  * starts a new line" left an on-screen keyboard (an iPad's, Android's) no way
  * to write a second line: it has no Shift+Return, and its Return is Enter.

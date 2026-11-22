@@ -39,6 +39,31 @@ import type { UseDocumentPagedSurfaceResult as DocumentPagedSurfaceLayout } from
 import { washoutPictureStyle } from "@mrnote/core/web/components/console/editor/native-document/watermark.ts";
 import { PAPER_UNDERLAY_ATTR, paperBoxesPlaced, paperUnderlayOff, paperUnderlaySheetRule } from "@mrnote/core/web/components/console/editor/native-document/paged/paperUnderlay.ts";
 
+/**
+ * The editor's sheet at an index, read once per render: every page's note
+ * zone asks for its sheet in its ref callback, which runs on every render of
+ * the editor, and each asked the whole list of sheets for it. R492-D04's
+ * print (1 900 sheets, 2 332 notes): 139 s of 850 s in querySelectorAll. The
+ * list is kept until the end of the task that read it; the sheets do not
+ * change while React calls the callbacks of one commit.
+ */
+let sheetsRead: { root: HTMLElement; children: number; sheets: NodeListOf<HTMLElement> } | null = null;
+function editorSheetAt(root: HTMLElement | null | undefined, index: number): HTMLElement | undefined {
+  if (!root) return undefined;
+  const kept = sheetsRead;
+  // A list read before the editor's pages changed in the same task (a sheet
+  // added, taken away or drawn again) is read again.
+  if (kept && kept.root === root && kept.children === root.childElementCount) {
+    const sheet = kept.sheets[index];
+    if (!sheet || sheet.parentElement === root) return sheet;
+  }
+  const read = { root, children: root.childElementCount, sheets: root.querySelectorAll<HTMLElement>(":scope > article[data-page-sheet]") };
+  if (!sheetsRead) queueMicrotask(() => { sheetsRead = null; });
+  sheetsRead = read;
+  return read.sheets[index];
+}
+
+
 export interface DocumentPagedSurfaceProps {
   bandEditScope: DocumentPagedSurfaceLayout["bandEditScope"];
   bandEditing: DocumentPagedSurfaceLayout["bandEditing"];
@@ -190,6 +215,9 @@ export function DocumentPagedSurface({
   return (
     <div
             ref={patternAnchorRef}
+            // Document content keeps its own left-to-right geometry under an
+            // rtl interface (postcss-rtl-mirror.cjs mirrors only the chrome).
+            dir="ltr"
             className={`note-editor-body-main${
               detachedPagePreviewActive ? " note-editor-body-main--hidden" : ""
             } note-editor-body-main--sheeted`}
@@ -547,9 +575,7 @@ export function DocumentPagedSurface({
                             host.style.top = "";
                             host.style.bottom = `${box.paddingBottom}px`;
                             if (sheetIndex === null || !isUsableEditor(editor)) return;
-                            const sheet = editorViewDom(editor)?.querySelectorAll<HTMLElement>(
-                              ":scope > article[data-page-sheet]",
-                            )[sheetIndex];
+                            const sheet = editorSheetAt(editorViewDom(editor), sheetIndex);
                             // A page of newspaper columns sets its notes in
                             // them (the column projection names them on the
                             // sheet; this zone is not inside it).

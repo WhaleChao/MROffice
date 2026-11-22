@@ -1690,8 +1690,16 @@ export class PagedDocumentBridge {
   private checkLayoutOnlyRun(run: { base: ProseMirrorNode; end: ProseMirrorNode }) {
     if (this.closed) return;
     try {
-      if (!this.positionMap(run.end).canonical.content.eq(this.positionMap(run.base).canonical.content)) this.setIssue("invalid-document");
-    } catch { this.setIssue("invalid-document"); }
+      const end = this.positionMap(run.end).canonical;
+      const base = this.positionMap(run.base).canonical;
+      if (!end.content.eq(base.content)) {
+        // Which canonical node a layout-only update changed, and how (types
+        // and attribute names only, never content): the report said only
+        
+        // reader's page), with nothing to find the pass that did it by.
+        this.setIssue("invalid-document", new Error(`layout-only update changed ${describeCanonicalDifference(base, end)}`));
+      }
+    } catch (error) { this.setIssue("invalid-document", error); }
   }
 
   private deferLayoutOnlyCheck(base: ProseMirrorNode, latest: ProseMirrorNode) {
@@ -3001,4 +3009,34 @@ export class PagedDocumentBridge {
     this.undoManager.destroy(); this.undoManager.clear();
     this.view = null; this.viewBinding = null; this.lastViewState = null;
   }
+}
+
+/**
+ * Where two canonical documents first differ, content-free: the path of
+ * child indexes, the node types there, and what differs between them (the
+ * attribute names, the marks' names, the text's length, the child count).
+ */
+export function describeCanonicalDifference(before: ProseMirrorNode, after: ProseMirrorNode): string {
+  const path: number[] = [];
+  let a: ProseMirrorNode = before;
+  let b: ProseMirrorNode = after;
+  for (let depth = 0; depth < 32; depth += 1) {
+    if (a.type !== b.type) return `at ${path.join(".") || "root"}: ${a.type.name} -> ${b.type.name}`;
+    const attrs = new Set([...Object.keys(a.attrs), ...Object.keys(b.attrs)]);
+    const changedAttrs = [...attrs].filter((key) => JSON.stringify(a.attrs[key]) !== JSON.stringify(b.attrs[key]));
+    if (changedAttrs.length > 0) return `at ${path.join(".") || "root"} ${a.type.name}: attrs ${changedAttrs.slice(0, 6).join(",")}`;
+    const marksA = a.marks.map((mark) => mark.type.name).join(",");
+    const marksB = b.marks.map((mark) => mark.type.name).join(",");
+    if (!a.sameMarkup(b) || marksA !== marksB) return `at ${path.join(".") || "root"} ${a.type.name}: marks ${marksA} -> ${marksB}`;
+    if (a.isText || b.isText) return `at ${path.join(".") || "root"} text: length ${a.text?.length ?? 0} -> ${b.text?.length ?? 0}`;
+    let index = 0;
+    while (index < a.childCount && index < b.childCount && a.child(index).eq(b.child(index))) index += 1;
+    if (index >= a.childCount || index >= b.childCount) {
+      return `at ${path.join(".") || "root"} ${a.type.name}: children ${a.childCount} -> ${b.childCount}`;
+    }
+    path.push(index);
+    a = a.child(index);
+    b = b.child(index);
+  }
+  return `at ${path.join(".")}: deeper than 32`;
 }

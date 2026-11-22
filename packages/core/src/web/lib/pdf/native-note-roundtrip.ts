@@ -194,12 +194,17 @@ export function nativeNoteRepliesForRoundTrip(
   for (const item of raw) {
     if (!item || typeof item !== "object") return null;
     const reply = item as Record<string, unknown>;
+    // A review state record (Completed, None...: ISO 32000-1 table 172) is a
+    // reply whose words may be empty; the writer gives it /State and
+    // /StateModel (apps/api native_edit_primitives).
+    const reviewState = reply.reviewState === undefined ? undefined : readPdfReplyReviewState(reply.reviewState);
+    if (reviewState === null) return null;
     if (
       typeof reply.id !== "string" ||
       !reply.id.trim() ||
       reply.id.length > 384 ||
       typeof reply.text !== "string" ||
-      !reply.text.trim() ||
+      (!reply.text.trim() && !reviewState) ||
       reply.text.length > MAX_REPLY_TEXT ||
       typeof reply.createdAt !== "string" ||
       !reply.createdAt ||
@@ -232,9 +237,40 @@ export function nativeNoteRepliesForRoundTrip(
       text: reply.text,
       createdAt: reply.createdAt,
       ...(author ? { author } : {}),
+      ...(reviewState ? { reviewState } : {}),
     });
   }
   return replies;
+}
+
+const PDF_REPLY_REVIEW_STATES: Readonly<Record<string, readonly string[]>> = {
+  Review: ["Accepted", "Rejected", "Cancelled", "Completed", "None"],
+  Marked: ["Marked", "Unmarked"],
+};
+
+/** A stored reply's review state, or null when it is not one the writer
+ * takes (the save is refused rather than the state dropped). */
+export function readPdfReplyReviewState(
+  raw: unknown,
+): PdfAnnotationReply["reviewState"] | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, unknown>;
+  if (Object.keys(value).some((key) => key !== "model" && key !== "state")) return null;
+  const { model, state } = value;
+  if ((model !== "Review" && model !== "Marked") || typeof state !== "string") return null;
+  if (!PDF_REPLY_REVIEW_STATES[model]?.includes(state)) return null;
+  return { model, state };
+}
+
+/** The review states that close a PDF discussion (Acrobat's Accepted / Completed). */
+export const PDF_RESOLVING_REVIEW_STATES: ReadonlySet<string> = new Set(["Accepted", "Completed"]);
+
+/** Whether a note's latest review state record (a reply carrying one)
+ * closes its discussion. */
+export function pdfNoteRepliesResolved(replies: readonly PdfAnnotationReply[] | undefined): boolean {
+  let latest: string | undefined;
+  for (const reply of replies ?? []) if (reply.reviewState) latest = reply.reviewState.state;
+  return latest !== undefined && PDF_RESOLVING_REVIEW_STATES.has(latest);
 }
 
 /**

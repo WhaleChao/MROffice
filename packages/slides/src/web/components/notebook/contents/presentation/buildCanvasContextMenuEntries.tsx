@@ -16,7 +16,7 @@ import type { PointerContextMenuEntry, PointerContextMenuAction } from "@mrnote/
 import { isSlideHidden } from "@mrnote/core/web/lib/presentation-slide-visibility.ts";
 import { officeContextMenuIcon } from "@mrnote/core/web/components/office-ribbon/officeContextMenuIcons.tsx";
 import { officeShortcut } from "@mrnote/core/web/lib/office-context-menu.ts";
-import { IconNewSlide, IconDuplicateSlide, IconSlideShowHideSlide } from "@mrnote/core/web/components/notebook/contents/PresentationRibbonIcons.tsx";
+import { IconNewSlide, IconDuplicateSlide, IconSlideShowHideSlide } from "../PresentationRibbonIcons";
 import { presentationDesktopShortcutLabel } from "../../../../lib/presentation-desktop-shortcuts";
 import { presentationSlideLayoutCommandsAreWritable } from "@mrnote/core/web/lib/presentation-slide-buttons.ts";
 import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";

@@ -54,6 +54,8 @@ import { resyncHoverAfterScroll } from "../../lib/pointer-hover-resync";
 import { screenScaleOf } from "../../lib/css-zoom";
 import { boxWithin } from "../../lib/glide-geometry";
 import { SURFACE_MOVE_EASE, SURFACE_MOVE_MS, surfaceMotionAllowed } from "../../lib/desk-motion";
+import { onlyofficeRibbonFolded } from "../../lib/embed/onlyoffice-frame";
+import { useCompactEditorChrome } from "../../lib/narrow-window";
 import { glideRibbonFold, type RibbonFoldGlide } from "../../lib/ribbon-fold-motion";
 import { OfficeRibbonKeyTips } from "./OfficeRibbonKeyTipLayer";
 import { useOfficeRibbonCommandGate } from "./officeRibbonCommandGate";
@@ -337,12 +339,26 @@ export function OfficeRibbonTabs<K extends string>({
   const collapsedKey = `mrai.ribbon.collapsed.${testIdPrefix}`;
   const [storedRibbonCollapsed, setRibbonCollapsed] = useState(() => {
     try {
-      return typeof window !== "undefined" && window.localStorage.getItem(collapsedKey) === "1";
+      if (typeof window === "undefined") return false;
+      const stored = window.localStorage.getItem(collapsedKey);
+      // An embedded editor whose integration asked for a compact toolbar
+      // (lib/embed/onlyoffice-frame) opens folded until the person unfolds it.
+      return stored === "1" || (stored === null && onlyofficeRibbonFolded());
     } catch {
-      return false;
+      return onlyofficeRibbonFolded();
     }
   });
-  const ribbonCollapsed = foldable && storedRibbonCollapsed;
+  // The compact chrome (a phone, an embedded mobile editor: lib/narrow-window)
+  // folds the ribbon to its tab row whatever was remembered, and a tab shows
+  // its commands over the page -- Office's "Show Tabs Only": the commands
+  // stand over the document until it is touched again, the page underneath
+  // keeping its place.
+  const compactChrome = useCompactEditorChrome() && foldable && !collapse;
+  const [peekAsked, setPeek] = useState(false);
+  // Leaving the compact chrome (a phone turned, the switch to the full
+  // editor) leaves no peek behind.
+  const peek = compactChrome && peekAsked;
+  const ribbonCollapsed = foldable && (compactChrome ? !peek : storedRibbonCollapsed);
   // Folding and unfolding glide: the command strip closes up into the tab
   // row (and opens out of it), the page below sliding with it on the
   // compositor (lib/ribbon-fold-motion); the fold a window opens with is
@@ -361,11 +377,16 @@ export function OfficeRibbonTabs<K extends string>({
     const state = () => {
       if (ribbonCollapsed) root.setAttribute("data-ribbon-collapsed", "true");
       else root.removeAttribute("data-ribbon-collapsed");
+      if (compactChrome) root.setAttribute("data-ribbon-compact", "");
+      else root.removeAttribute("data-ribbon-compact");
+      if (peek) root.setAttribute("data-ribbon-peek", "");
+      else root.removeAttribute("data-ribbon-peek");
     };
     // A glide still running lands first; the next starts from there.
     motion.glide?.finish();
     motion.glide = null;
-    const glide = motion.shown && strip !== null && surfaceMotionAllowed() && typeof strip.animate === "function";
+    // A peek stands over the page: nothing below it moves, so nothing glides.
+    const glide = !compactChrome && motion.shown && strip !== null && surfaceMotionAllowed() && typeof strip.animate === "function";
     motion.shown = true;
     if (!glide || !strip) {
       state();
@@ -375,7 +396,32 @@ export function OfficeRibbonTabs<K extends string>({
       duration: SURFACE_MOVE_MS,
       easing: SURFACE_MOVE_EASE,
     });
-  }, [ribbonCollapsed]);
+  }, [ribbonCollapsed, compactChrome, peek]);
+  // A peek ends where Office's does: a press in the document (anywhere in the
+  // editor outside the ribbon -- a menu or dialog the ribbon opened lies
+  // outside the editor and keeps it), Escape, or the selected tab again.
+  useEffect(() => {
+    if (!peek) return undefined;
+    const root = tabsContainerRef.current?.closest<HTMLElement>(".office-ribbon-skin");
+    const editor = root?.parentElement?.closest<HTMLElement>(
+      ".native-page-window, .note-editor-wrapper, .wm-window, [data-embed-editor-root]",
+    );
+    if (!root || !editor) return undefined;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node) || root.contains(target) || !editor.contains(target)) return;
+      setPeek(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) setPeek(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [peek]);
   const foldRibbon = (collapsed: boolean) => {
     setRibbonCollapsed(collapsed);
     try {
@@ -395,6 +441,16 @@ export function OfficeRibbonTabs<K extends string>({
     const start = pressStartRef.current;
     pressStartRef.current = null;
     const wasSelected = start && start.key === key ? start.selected : activeTab === key;
+    if (compactChrome) {
+      // Tabs only: a tab shows its commands, the one showing hides them.
+      if (wasSelected && peek) {
+        setPeek(false);
+        return;
+      }
+      setPeek(true);
+      if (!wasSelected) onSelect(key);
+      return;
+    }
     if (wasSelected) {
       if (collapse) collapse.onCollapse();
       else foldRibbon(!ribbonCollapsed);
@@ -655,6 +711,8 @@ export function OfficeRibbonTabs<K extends string>({
             </button>
           ),
         )}
+        {/* The editor's plugins (lib/plugins/ribbon-store): their own tab. */}
+        {null}
         {indicator ? (
           <span
             aria-hidden="true"

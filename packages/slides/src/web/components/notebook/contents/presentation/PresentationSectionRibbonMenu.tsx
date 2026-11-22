@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@mrnote/core/web/components/ui/dropdown-menu.tsx";
 
-import { IconSectionMenu } from "@mrnote/core/web/components/notebook/contents/PresentationRibbonIcons.tsx";
+import { IconSectionMenu } from "../PresentationRibbonIcons";
 import {
   PresentationSectionMenuItems,
   type PresentationSectionCommand,

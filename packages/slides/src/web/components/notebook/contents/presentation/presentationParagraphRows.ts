@@ -143,16 +143,16 @@ export const PRESENTATION_BULLET_DRAWN_PREFIX = "MRAI Bullet ";
 
 /**
  * The family drawing `char`, a bullet fallen back to `face` (Cambria Math,
- * Segoe UI Symbol), in `drawnBy`'s served face at Windows' ink box, declared
- * on first use (`ensureOfficeScaledScriptFamily`: that face's slice for the
- * character, the character's range alone, its size-adjust) unless the reader
- * has `face` itself.
+ * Segoe UI Symbol), in `drawnBy`'s bullet face (its glyph set at Windows' ink
+ * box and advance), declared on first use (`ensureOfficeScaledScriptFamily`:
+ * that face's file for the character's range alone, at its own size) unless
+ * the reader has `face` itself.
  */
-function presentationBulletDrawnFamily(face: string, char: string, drawnBy: { readonly family: string; readonly sizeAdjustPercent: number }): string {
+function presentationBulletDrawnFamily(face: string, char: string, drawnBy: { readonly family: string }): string {
   const code = char.codePointAt(0) as number;
   const hex = code.toString(16).toUpperCase().padStart(4, "0");
   const family = `${PRESENTATION_BULLET_DRAWN_PREFIX}${face} ${hex}`;
-  ensureOfficeScaledScriptFamily(family, drawnBy.family, code, `U+${hex}`, `${drawnBy.sizeAdjustPercent}%`, undefined, face);
+  ensureOfficeScaledScriptFamily(family, drawnBy.family, code, `U+${hex}`, "100%", undefined, face);
   return family;
 }
 

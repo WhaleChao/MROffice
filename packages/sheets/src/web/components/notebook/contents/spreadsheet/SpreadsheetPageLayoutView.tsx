@@ -281,7 +281,11 @@ export type SpreadsheetPageLayoutDrawing = readonly [
      * (the default) spans its cells, a one-cell anchor keeps its extent, an
      * absolute one keeps both. The content node is already drawn at its
      * printed size. */
-    printAnchor?: "twoCell" | "oneCell" | "absolute" }?,
+    printAnchor?: "twoCell" | "oneCell" | "absolute";
+    /** Printed px its line reaches past the frame's right and bottom: a
+     *  chart's area line is printed on the frame's edge, its outer half
+     *  counted as the chart's (R457-X21). */
+    printLineReach?: number }?,
 ];
 
 export interface PageLayoutDrawingTransaction {
@@ -767,9 +771,9 @@ function vectorizePrintedFill(
 
 /** The printed cells' plain fills (vectorizePrintedFill), in the cells'
  * order: a later cell's fill covers the dot an earlier one runs into it. */
-function PrintedCellFills({ fills }: { fills: readonly PrintedFill[] }) {
+function PrintedCellFills({ fills, testId = "spreadsheet-page-layout-printed-fills" }: { fills: readonly PrintedFill[]; testId?: string }) {
   return (
-    <svg aria-hidden="true" data-testid="spreadsheet-page-layout-printed-fills" width={1} height={1}
+    <svg aria-hidden="true" data-testid={testId} width={1} height={1}
       style={{ position: "absolute", left: 0, top: 0, overflow: "visible", pointerEvents: "none" }}>
       {fills.map((fill, index) => (
         <path key={index} data-printed-fill="" fill={fill.color} d={printedRectPath(fill.x, fill.y, fill.width, fill.height)} />
@@ -1532,7 +1536,7 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
       ? { ...(rowHeights ?? {}), [keyboardResize.index]: keyboardResize.size }
       : rowHeights;
   const laidOutGeometry = resolveSpreadsheetPageLayoutGeometry({
-    drawingBounds: drawings.map((drawing) => officePrintedDrawingReach(drawing[1], drawing[4]?.printAnchor, printScale)),
+    drawingBounds: drawings.map((drawing) => officePrintedDrawingReach(drawing[1], drawing[4]?.printAnchor, printScale, drawing[4]?.printLineReach)),
     totalRows: rowCount,
     nativeGridDpi: nativeTextDpi,
     nativeDigitWidth,
@@ -2305,7 +2309,12 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
           </div>
         ))}
         {builtPages.map((page) => {
-          if (!page.rows.length || !page.cols.length) return null;
+          // A page of no columns is a band of hidden ones alone, before a
+          // column wider than the page (paginateAxis hiddenLed): Windows Excel
+          // prints it blank, its header and footer only (R466-X78: 11 of 78
+          // pages; the API's blank band page). A sheet whose columns are all
+          // hidden has no other band and prints nothing.
+          if (!page.rows.length || (!page.cols.length && geometry.pagination.colRanges.length < 2)) return null;
           // A page whose inputs are as they were is handed back as the same
           // element, so React skips its whole subtree: a scroll that brings
           // new pages into view builds those pages only, not every page and
@@ -3015,6 +3024,34 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
               ];
             }),
           );
+          // A page that starts right after hidden columns prints their cells'
+          // top and bottom borders at its left edge, one printer dot long: a
+          // zero-width cell's line (Windows Excel, xlsx backlog bl8/x63: a
+          // table's lines in hidden D:F at a page starting at G; R460-X63
+          // page 6; the API's hidden_lead_edges / draw_border_stub).
+          const printedStubs: PrintedFill[] = [];
+          if (printMode && nativeTextDpi && !rightToLeft && pageFirstCol !== undefined && hiddenCols?.has(pageFirstCol - 1)) {
+            const hiddenRun: number[] = [];
+            for (let col = pageFirstCol - 1; col >= 0 && hiddenCols.has(col); col -= 1) hiddenRun.push(col);
+            const left = columnsLeft(pageFirstCol, geometry.colSizes[pageFirstCol] ?? geometry.colWidth) * paperScale;
+            const dot = PRINT_DOT_PT * paperScale;
+            for (const row of page.rows) {
+              const sourceRow = sourceRowAt(row);
+              const top = (rowOffsets.get(row) ?? 0) * paperScale;
+              const height = (geometry.rowSizes[row] ?? geometry.rowHeight) * paperScale;
+              for (const col of hiddenRun) {
+                if (mergeAt(sourceRow, col)) continue;
+                const edges: PrintedEdge[] = [];
+                vectorizePrintedBorders(pageCellStyle(sourceRow, col), { left, top, width: 0, height }, false, false, edges, false);
+                for (const edge of edges) {
+                  if (edge.y1 !== edge.y2) continue;
+                  for (const stroke of printedEdgeStrokes({ ...edge, x2: edge.x1 }, geometry.contentScale, paperScale)) {
+                    printedStubs.push({ x: left, y: stroke.y, width: dot, height: stroke.height, color: stroke.color });
+                  }
+                }
+              }
+            }
+          }
           const {cols: drawingColumnBands, rows: drawingRowBands} = drawingBandsForPage(page);
           const renderAxis = (column: boolean) => {
             const indices = column ? page.cols : page.rows;
@@ -3305,7 +3342,7 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                   }}
                   data-sheet-background={backgroundPicture ? "true" : undefined}
                 >
-                  {printMode && pageGridlines ? (
+                  {printMode && pageGridlines && page.cols.length ? (
                     <PrintedGridlines
                       width={gridWidth}
                       height={gridHeight}
@@ -3332,6 +3369,7 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                   {printedEdges.length ? (
                     <PrintedCellBorders edges={printedEdges} scale={geometry.contentScale} pxPerPt={paperScale} />
                   ) : null}
+                  {printedStubs.length ? <PrintedCellFills fills={printedStubs} testId="spreadsheet-page-layout-printed-stubs" /> : null}
                 </div>
                 {unclippedNodes.length ? (
                   <div data-page-layout-unclipped="" aria-hidden className="pointer-events-none absolute"
@@ -3339,7 +3377,7 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                     {unclippedNodes}
                   </div>
                 ) : null}
-                {printMode && pageGridlines ? (
+                {printMode && pageGridlines && page.cols.length ? (
                   <PrintedGridFrame
                     left={dataLeft}
                     top={dataTop}

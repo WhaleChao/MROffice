@@ -25,7 +25,7 @@ import type {
 } from "../PdfTextEditor";
 import type {
   PdfTextCommentPointerTool,
-} from "../PdfCommentRibbonTab";
+} from "@/components/notebook/contents/pdf/PdfCommentRibbonTab";
 import type { EmbeddedImageEdit } from "@/lib/pdf/embedded-image-edits";
 import type { PdfPageTextState } from "./pageTextState";
 import type {
@@ -112,73 +112,7 @@ export interface PdfPageWindowTextEditorModel {
 }
 
 export function PdfPageWindowTextEditor({ editor }: { editor: PdfPageWindowTextEditorModel }) {
-  const {
-    nativePlanners,
-    savePolicyV1,
-    workspaceWritable,
-    textBoxEdits,
-    formulaDraftsByKey,
-    setFormulaDraftsByKey,
-    pdfFormulaSourceFlushActiveRef,
-    imageOverlays,
-    inkStrokes,
-    liveInkAwareness,
-    inkDrawMode,
-    inkColor,
-    inkWidth,
-    inkPenType,
-    inkEraseMode,
-    inkEraserKind,
-    recordEraseInkStrokes,
-    editorRibbonTab,
-    editorRibbonTabRef,
-    editorContextCommand,
-    editorObjectSelectionResetKey,
-    textEditViewMode,
-    addTextMode,
-    textCommentContextActive,
-    textCommentPointerTool,
-    picturePointerTool,
-    textCommentFontSizePoints,
-    textCommentFontColor,
-    imageEditMode,
-    textEditEntryPainting,
-    nativeImageSelectRequest,
-    freeTextFocusRequest,
-    embeddedImageEdits,
-    setQueuedSurfaceImageCommands,
-    embeddedImageBusy,
-    handleEditorObjectSelectionChange,
-    pdfPageTextState,
-    setPdfPageCount,
-    currentPage,
-    setCurrentPageWithIntent,
-    autosave,
-    dataItemId,
-    handleNativeFreeTextAnnotationsChange,
-    previewUrl,
-    provisionalSurfaceSource,
-    surfaceSourceUrl,
-    surfaceDocumentPageStructure,
-    onSurfaceDocumentPageMapChange,
-    handleEmbeddedImageAction,
-    embeddedImagePreviewUrls,
-    handleEditorSourceRevisionRendered,
-    nativeImageTransformReady,
-    enqueueNativeFreeTextCommit,
-    handleCreatedTextBoxCommit,
-    recordTextBoxHistory,
-    recordAddInkStroke,
-    resolveImageUrl,
-    handleImageOverlayChange,
-    handleImageOverlayDelete,
-    handlePdfPageTextChange,
-    handlePdfPageTextBoxesChange,
-    pageRotations,
-    deleteInkStroke,
-    handleSmartCropDetectorChange,
-    textCommentFont,
-  } = editor;
+  const { nativePlanners, savePolicyV1, workspaceWritable, textBoxEdits, formulaDraftsByKey, setFormulaDraftsByKey, pdfFormulaSourceFlushActiveRef, imageOverlays, inkStrokes, liveInkAwareness, inkColor, inkWidth, inkPenType, inkEraserKind, recordEraseInkStrokes, editorRibbonTab, editorRibbonTabRef, editorContextCommand, editorObjectSelectionResetKey, textEditViewMode, addTextMode, textCommentContextActive, textCommentPointerTool, textCommentFontSizePoints, textCommentFontColor, textEditEntryPainting, nativeImageSelectRequest, freeTextFocusRequest, embeddedImageEdits, setQueuedSurfaceImageCommands, embeddedImageBusy, handleEditorObjectSelectionChange, pdfPageTextState, setPdfPageCount, currentPage, setCurrentPageWithIntent, autosave, dataItemId, handleNativeFreeTextAnnotationsChange, previewUrl, provisionalSurfaceSource, surfaceSourceUrl, surfaceDocumentPageStructure, onSurfaceDocumentPageMapChange, handleEmbeddedImageAction, embeddedImagePreviewUrls, handleEditorSourceRevisionRendered, nativeImageTransformReady, enqueueNativeFreeTextCommit, handleCreatedTextBoxCommit, recordTextBoxHistory, recordAddInkStroke, resolveImageUrl, handleImageOverlayChange, handleImageOverlayDelete, handlePdfPageTextChange, handlePdfPageTextBoxesChange, pageRotations, deleteInkStroke, handleSmartCropDetectorChange, textCommentFont } = editor;
   return (
     <PdfTextEditor
       // Mounted once per document: a revision (a save's export, an
@@ -209,8 +143,8 @@ export function PdfPageWindowTextEditor({ editor }: { editor: PdfPageWindowTextE
       onEditsChange={(next) => {
         if (
           editorRibbonTabRef.current !== "insert" &&
-          editorRibbonTabRef.current !== "annotate" &&
-          editorRibbonTabRef.current !== "comment-tool" &&
+          true &&
+          true &&
           !pdfFormulaSourceFlushActiveRef.current
         ) {
           return;
@@ -225,8 +159,8 @@ export function PdfPageWindowTextEditor({ editor }: { editor: PdfPageWindowTextE
       onFormulaDraftsChange={setFormulaDraftsByKey}
       addTextMode={
         (editorRibbonTab === "insert" ||
-          editorRibbonTab === "annotate" ||
-          editorRibbonTab === "comment-tool") &&
+          false ||
+          false) &&
         addTextMode
       }
       addTextStyle={
@@ -240,9 +174,7 @@ export function PdfPageWindowTextEditor({ editor }: { editor: PdfPageWindowTextE
           : undefined
       }
       imageEditMode={
-        (editorRibbonTab === "edit" ||
-          editorRibbonTab === "picture-format") &&
-        imageEditMode
+        false
       }
       embeddedImageEdits={embeddedImageEdits}
       nativeImageTransformReady={nativeImageTransformReady}
@@ -257,8 +189,7 @@ export function PdfPageWindowTextEditor({ editor }: { editor: PdfPageWindowTextE
       panMode={
         (textCommentContextActive &&
           textCommentPointerTool === "hand") ||
-        (editorRibbonTab === "picture-format" &&
-          picturePointerTool === "hand")
+        (false)
       }
       onObjectSelectionChange={handleEditorObjectSelectionChange}
       objectSelectionResetKey={editorObjectSelectionResetKey}
@@ -284,8 +215,8 @@ export function PdfPageWindowTextEditor({ editor }: { editor: PdfPageWindowTextE
       onImageDelete={handleImageOverlayDelete}
       inkStrokes={inkStrokes}
       liveInkAwareness={liveInkAwareness}
-      inkDrawMode={editorRibbonTab === "draw" && inkDrawMode}
-      inkEraseMode={editorRibbonTab === "draw" && inkEraseMode}
+      inkDrawMode={false}
+      inkEraseMode={false}
       inkEraserKind={inkEraserKind}
       onInkErase={recordEraseInkStrokes}
       inkColor={inkColor}

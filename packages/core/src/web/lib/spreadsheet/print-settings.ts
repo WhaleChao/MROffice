@@ -1623,6 +1623,11 @@ export interface PaginateInput {
   /** The column positions hidden source columns stand right before, within
    * the printed range (paginateAxis ``hiddenLed``; the API's hidden_led_cols). */
   hiddenLedCols?: readonly number[];
+  /** Hidden source columns stand past the last printed position, within the
+   * range (a wide column's text spilling on over them): after a band of one
+   * column wider than the page they print a blank page of their own
+   * (paginateAxis ``hiddenTail``; the API's hidden_tail_cols). */
+  hiddenTailCols?: boolean;
   /** Page Setup > Sheet > Row and column headings: the column-letter band's
    * height and the row-number column's width, in points at the same scale as
    * the rows and columns. They print inside the margins, so they take their
@@ -1641,6 +1646,7 @@ function paginateAxis(
   sizes: readonly number[] | undefined,
   manualBreaks: readonly number[] | undefined,
   hiddenLed?: ReadonlySet<number>,
+  hiddenTail = false,
 ): Array<[number, number]> {
   const sizeAt = (index: number) => {
     const candidate = sizes?.[index];
@@ -1680,6 +1686,11 @@ function paginateAxis(
     overflowed = used > available;
     start = Math.max(start + 1, end);
   }
+  // Hidden lines the range runs on into past its last shown one, after a band
+  // of one line wider than the page, stand a band of their own too, its page
+  // blank (lookwin p223-lw w6h, R460-X20's Readme: A 742 pt wide, its text
+  // past the 511 pt page, B:XFD hidden). The API's paginate_axis ``hidden_tail``.
+  if (hiddenTail && overflowed && ranges.length) ranges.push([total, total - 1]);
   return ranges;
 }
 /**
@@ -1739,6 +1750,7 @@ export function paginateSheet(input: PaginateInput): PageBreakResult {
     colSizes,
     printManualBreaksApply(settings.scaling, "col") ? settings.manualColBreaks : undefined,
     input.hiddenLedCols?.length ? new Set(input.hiddenLedCols) : undefined,
+    input.hiddenTailCols === true,
   );
 
   return { rowRanges, colRanges, repeatRowCount, repeatColCount };

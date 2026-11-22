@@ -14,8 +14,7 @@
  */
 
 import {
-  PresentationChartDataTable,
-  presentationChartDataTableView,
+  PresentationChartPlotDataTable,
 } from "./PresentationChartDataTable";
 import { useMemo } from "react";
 import { readPresentationChartV2 } from "@mrnote/core/web/lib/presentation-chart-v2.ts";
@@ -25,14 +24,14 @@ import {
   presentationChartAreaStyleCss,
   presentationChartTitleWordsCss,
 } from "@mrnote/core/web/lib/presentation-chart-area-style.ts";
-import { geometryNumber, hasLayoutGeometry } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
+import { hasLayoutGeometry } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
 import type {
   PresentationChartBlock,
 } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
 import { PresentationChartCanvas } from "./PresentationChartCanvas";
-import { AUTOFIT_EMU_PER_PX } from "../../../../lib/presentation/text-layout-css";
 import {
   presentationChartCanvasBlock,
+  presentationChartDataTableBasis,
   presentationChartFallbackPicture,
 } from "../../../../lib/presentation/chart-picture-request";
 
@@ -78,18 +77,10 @@ export function PresentationChartVisual({
   const resizing =
     liveSize !== undefined &&
     (liveSize.width !== sourceBlock.width || liveSize.height !== sourceBlock.height);
-  const frameHeight = resizing ? liveSize!.height : geometryNumber(sourceBlock, "height");
-  const dataTable = useMemo(
-    () =>
-      presentationChartDataTableView(
-        block,
-        typeof frameHeight === "number" ? frameHeight / AUTOFIT_EMU_PER_PX : 0,
-      ),
-    [block, frameHeight],
-  );
-  // The data table takes its rows from the bottom of the frame and the chart
-  // is drawn in the rest, not squeezed into it (one rule with the server's
-  // ahead-of-print filling, `presentationChartCanvasBlock`).
+  // A data table is laid out inside the chart's picture, the picture on the
+  // whole frame (`presentationChartCanvasBlock`, TRIAGE C40), and drawn over
+  // it where the picture says (`PresentationChartPlotDataTable`).
+  const tabled = useMemo(() => presentationChartDataTableBasis(block) !== null, [block]);
   const canvasBlock = useMemo(
     () => presentationChartCanvasBlock(block, resizing ? liveSize : undefined),
     [block, resizing, liveSize],
@@ -139,7 +130,7 @@ export function PresentationChartVisual({
           </strong>
         ) : null}
       </PresentationChartCanvas>
-      {dataTable ? <PresentationChartDataTable view={dataTable} /> : null}
+      {tabled ? <PresentationChartPlotDataTable block={canvasBlock} /> : null}
       {!hasLayoutGeometry(block) && block.caption && !presentationChartHasNativeSource(block) ? (
         <small>{block.caption}</small>
       ) : null}

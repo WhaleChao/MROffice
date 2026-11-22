@@ -106,6 +106,20 @@ const MAX_TOTAL_VISIBLE_CHARS = 1_000_000;
 const MAX_TOTAL_LIST_ITEMS = 2_048;
 const MAX_TOTAL_TABLE_ROWS = 512;
 const MAX_TOTAL_TABLE_CELLS = 4_096;
+/** A picture a web archive chunk holds itself (server reading generation
+ * 321, altchunk_html._picture_block): PNG, JPEG or GIF bytes, base64, drawn
+ * at the size Word draws it. The card builds the data URL from the kind it
+ * names; the block holds no URL of its own. */
+const PICTURE_FORMATS = new Set(["png", "jpeg", "gif"]);
+const PICTURE_MAX_CHARS = 1_000_000;
+const MAX_TOTAL_PICTURE_CHARS = 4_000_000;
+const PICTURE_MAX_SIDE = 10_000;
+/** The leading bytes of each picture kind, base64 of its signature. */
+const PICTURE_SIGNATURE_PREFIXES: Record<string, readonly string[]> = {
+  png: ["iVBORw0KGgo"],
+  jpeg: ["/9j/"],
+  gif: ["R0lGODdh", "R0lGODlh"],
+};
 
 interface AltChunkTextBlock {
   readonly kind: "paragraph" | "heading" | "blockquote" | "pre";
@@ -133,11 +147,20 @@ interface AltChunkHorizontalRuleBlock {
   readonly kind: "horizontal_rule";
 }
 
+interface AltChunkPictureBlock {
+  readonly kind: "image";
+  readonly format: "png" | "jpeg" | "gif";
+  readonly data: string;
+  readonly width: number;
+  readonly height: number;
+}
+
 export type DocumentAltChunkBlock =
   | AltChunkTextBlock
   | AltChunkListBlock
   | AltChunkTableBlock
-  | AltChunkHorizontalRuleBlock;
+  | AltChunkHorizontalRuleBlock
+  | AltChunkPictureBlock;
 
 export interface DocumentAltChunkSource {
   readonly adapter: "docx";
@@ -344,10 +367,42 @@ function normalizeBlock(value: unknown): DocumentAltChunkBlock | null {
   ) {
     return { kind: "horizontal_rule" };
   }
+  if (value.kind === "image") {
+    const side = (raw: unknown): number | null =>
+      Number.isInteger(raw) && Number(raw) >= 1 && Number(raw) <= PICTURE_MAX_SIDE
+        ? Number(raw)
+        : null;
+    const width = side(value.width);
+    const height = side(value.height);
+    if (
+      !hasOnlyKeys(value, new Set(["kind", "format", "data", "width", "height"])) ||
+      typeof value.format !== "string" ||
+      !PICTURE_FORMATS.has(value.format) ||
+      typeof value.data !== "string" ||
+      value.data.length < 4 ||
+      value.data.length > PICTURE_MAX_CHARS ||
+      !BASE64_RE.test(value.data) ||
+      !(PICTURE_SIGNATURE_PREFIXES[value.format] ?? []).some((prefix) =>
+        (value.data as string).startsWith(prefix),
+      ) ||
+      width === null ||
+      height === null
+    ) {
+      return null;
+    }
+    return {
+      kind: "image",
+      format: value.format as AltChunkPictureBlock["format"],
+      data: value.data,
+      width,
+      height,
+    };
+  }
   return null;
 }
 
 interface CanonicalBlockBudget {
+  pictureCharacters: number;
   characters: number;
   listItems: number;
   tableRows: number;
@@ -359,6 +414,7 @@ function addCanonicalBlockToBudget(
   budget: CanonicalBlockBudget,
 ): boolean {
   if ("text" in block) budget.characters += block.text.length;
+  if (block.kind === "image") budget.pictureCharacters += block.data.length;
   if (block.kind === "ordered_list" || block.kind === "unordered_list") {
     budget.listItems += block.items.length;
     budget.characters += block.items.reduce(
@@ -379,6 +435,7 @@ function addCanonicalBlockToBudget(
     );
   }
   return (
+    budget.pictureCharacters <= MAX_TOTAL_PICTURE_CHARS &&
     budget.characters <= MAX_TOTAL_VISIBLE_CHARS &&
     budget.listItems <= MAX_TOTAL_LIST_ITEMS &&
     budget.tableRows <= MAX_TOTAL_TABLE_ROWS &&
@@ -425,6 +482,7 @@ export function normalizeDocumentAltChunkReadOnlyAttrs(
   }
   const canonicalBlocks: DocumentAltChunkBlock[] = [];
   const budget: CanonicalBlockBudget = {
+    pictureCharacters: 0,
     characters: 0,
     listItems: 0,
     tableRows: 0,
@@ -808,6 +866,29 @@ function renderBlock(
           : null,
         React.createElement("tbody", null, tableRows),
       ),
+    );
+  }
+  if (block.kind === "image") {
+    // A picture is one row: it moves to the next page whole.
+    const row = cursor.next;
+    cursor.next += 1;
+    if (!rowDrawn(cursor, row)) return null;
+    return React.createElement(
+      "div",
+      { key, style: { margin: "8px 0" }, [PAGE_ROW_ATTR]: row },
+      React.createElement("img", {
+        src: `data:image/${block.format};base64,${block.data}`,
+        alt: "",
+        width: block.width,
+        height: block.height,
+        draggable: false,
+        style: {
+          display: "block",
+          maxWidth: "100%",
+          height: "auto",
+          aspectRatio: `${block.width} / ${block.height}`,
+        },
+      }),
     );
   }
   const rule = cursor.next;

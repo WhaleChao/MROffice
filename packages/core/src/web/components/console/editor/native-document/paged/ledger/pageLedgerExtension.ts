@@ -167,6 +167,7 @@ import {
   pageStartAtoms,
   sheetsKeptByPlan,
   resolvePassScope,
+  scopedPlanStart,
   scopedStopAt,
   scopeWindowEnd,
   visibleSheetRange,
@@ -1542,7 +1543,7 @@ function planLedgerPass(
       oracle,
       keepChainBacksUp: (normalizeWordCompatibilityMode(view.state.doc.attrs.wordCompatibilityMode) ?? 0) >= 15,
       wordLegacyBalance: (normalizeWordCompatibilityMode(view.state.doc.attrs.wordCompatibilityMode) ?? 0) < 15,
-      ...(own ? { start: hasNotes && notesCarryLeadingAfter(view) ? own.start : { ...own.start, leadingAfterPx: 0 } } : {}),
+      ...(own ? { start: scopedPlanStart(own.start, hasNotes ? notesCarryLeadingAfter(view) : null) } : {}),
       ...(stopAt ? { stopAt } : {}),
     });
   };

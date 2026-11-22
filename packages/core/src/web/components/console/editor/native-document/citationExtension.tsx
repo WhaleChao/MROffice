@@ -397,6 +397,12 @@ export function citationDisplayText(
   return labels.join("; ");
 }
 
+/** `window.__docsCitationTextOff = true` (A/B, read as a citation's view is
+ * made): its text is drawn in a <button> again, the older view. */
+function citationTextOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsCitationTextOff?: boolean }).__docsCitationTextOff === true;
+}
+
 /**
  * The in-text citation marker. Paints the LIVE formatted in-text citation for its
  * source in the active style (APA "(Doe, 2021)" / IEEE "[1]"), recomputed from the
@@ -416,8 +422,18 @@ function createCitationView(
   dom.setAttribute("data-type", "citation");
   dom.setAttribute("data-testid", "citation");
   dom.style.whiteSpace = "normal";
-  const marker = document.createElement("button");
-  marker.type = "button";
+  // Drawn as text of its line, as Word's CITATION field result is runs of its
+  // paragraph: "(Doe, 2021)" breaks at its space and goes with the "." after
+  // it. A <button> is an atomic inline: never broken inside, and broken
+  // before and after by the browser and the line engine (as the note
+  // reference was, footnoteExtension). Still a button to the keyboard.
+  const asButton = citationTextOff();
+  const marker = document.createElement(asButton ? "button" : "span");
+  if (marker instanceof HTMLButtonElement) marker.type = "button";
+  else {
+    marker.setAttribute("role", "button");
+    marker.tabIndex = 0;
+  }
   marker.className = "mrnote-citation__marker";
   marker.contentEditable = "false";
   dom.append(marker);
@@ -440,14 +456,23 @@ function createCitationView(
   paint();
   const stopRefreshing = refreshWhenEditPauses(editor, "citations", paint);
 
-  marker.addEventListener("click", () => {
+  const jump = () => {
     const sourceId = sourceIdOf();
     if (!sourceId) return;
     const target = editor.view.dom.querySelector(
       `[data-bibliography-entry="${sourceId}"]`,
     ) as HTMLElement | null;
     target?.scrollIntoView({ block: "center", behavior: "smooth" });
-  });
+  };
+  marker.addEventListener("click", jump);
+  if (!asButton) {
+    marker.addEventListener("keydown", (event) => {
+      const { key } = event as KeyboardEvent;
+      if (key !== "Enter" && key !== " ") return;
+      event.preventDefault();
+      jump();
+    });
+  }
 
   return {
     dom,

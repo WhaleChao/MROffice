@@ -50,10 +50,10 @@ import {
   inkVariableWidthOutlinePathData,
   thinInkSamples,
 } from "@mrnote/core/web/lib/office-ink-smooth.ts";
-import { InkLiveCanvas, inkLiveEffectStyle } from "@mrnote/ink/web/lib/office-ink-live.ts";
+import { InkLiveCanvas, inkLiveEffectStyle } from "@mrnote/core/web/lib/office-ink-live.ts";
 import { appendInkEffectSvg, inkEffectPaint, inkEffectSvgPlan, isInkEffect } from "@mrnote/core/web/lib/office-ink-effects.ts";
 import { WetInkBatcher } from "@mrnote/core/web/lib/office-wet-ink.ts";
-import { wetInkSvgElement } from "@mrnote/ink/web/lib/office-wet-ink-layer.ts";
+import { wetInkSvgElement } from "@mrnote/core/web/lib/office-wet-ink-layer.ts";
 import { inkRulerGuideFor, type InkRulerState } from "@mrnote/core/web/lib/office-ink-ruler.ts";
 import {
   inkPointerArbiter,
@@ -61,11 +61,11 @@ import {
   inkPredictedSamples,
   inkSamplePressure,
 } from "@mrnote/core/web/lib/ink-pointer-policy.ts";
-import { runInkPressSetup } from "@mrnote/ink/web/lib/ink-press-deferral.ts";
+import { runInkPressSetup } from "@mrnote/core/web/lib/ink-press-deferral.ts";
 import { yieldTouchHold } from "@mrnote/core/web/lib/touch-hold.ts";
 import { startInkHoldToErase } from "@mrnote/core/web/lib/pen-first-draw.ts";
 import { isOfficeInkTap } from "@mrnote/core/web/lib/office-ink-conversion.ts";
-import { inkPresetForTilt } from "@mrnote/ink/web/lib/office-ink-tilt.ts";
+import { inkPresetForTilt } from "@mrnote/core/web/lib/office-ink-tilt.ts";
 import { MAX_SHAPE_STROKE_WIDTH } from "@mrnote/core/web/lib/spreadsheet/shapes.ts";
 import { isInkCircleGesture } from "@mrnote/core/web/lib/office-ink-lasso-selection.ts";
 import { INK_CIRCLE_OFFER_MS, inkCircleOfferAt, type OfficeInkCircleOffer } from "@mrnote/core/web/components/office-ribbon/OfficeInkCircleSelect.tsx";
@@ -300,17 +300,7 @@ export function useSpreadsheetBeginInkGesture({
       const liveNow = liveSheetsRef.current[liveActiveSheetIndexRef.current];
       const currentObjects =
         mode !== "draw" && liveNow && liveNow.id === sheet.id ? liveNow.objects ?? [] : sheetObjects;
-      // The erasers and the lasso take drawn shapes too.
-      const currentInkCount =
-        mode !== "draw" ? currentObjects.filter((object) => isSpreadsheetLassoObject(object)).length : sheetInkObjects.length;
-      if (
-        !mode ||
-        ribbonTab !== "draw" ||
-        !stage ||
-        !sheetProtectionAllowsRef.current(sheet, "editObjects") ||
-        (mode === "draw" && currentObjects.length + (inkWetRef.current?.pending.length ?? 0) >= MAX_SHEET_OBJECTS) ||
-        (mode !== "draw" && currentInkCount === 0)
-      ) {
+      {
         return;
       }
       event.preventDefault();

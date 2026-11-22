@@ -84,7 +84,7 @@ function isBorderLineStyle(value: unknown): value is BorderLineStyle {
     (BORDER_LINE_STYLES as readonly string[]).includes(value)
   );
 }
-import { excelWildcardToRegexSource, shiftFormula } from "./formula-engine";
+import { excelWildcardToRegexSource, lettersToColumn, shiftFormula } from "./formula-engine";
 import { formulaReferenceSpans } from "./formula-reference-highlight";
 import { type ExcelDateSystemArg } from "./excel-1900-calendar";
 import { excelMinDateSerial } from "./excel-1900-calendar";
@@ -3952,24 +3952,143 @@ export function ruleMovedBy(
     : null;
 }
 
-/**
- * Plan the conditional formats of a Cut -> Paste on one sheet (live audit
- * S-029). Excel moves a cell's conditional formatting with it, as measured
- * against Excel 16 (Range.Cut Destination):
- *  - a rule wholly inside the moved cells moves with them and keeps its rank;
- *  - a rule reaching past them keeps its other cells, re-anchored so they read
- *    what they read before, and the moved cells carry the rule to the
- *    destination: as more areas of the same rule when the moved copy is the
- *    same rule written at another anchor, otherwise as a rule of their own
- *    ranked right after it;
- *  - the moved copy's references follow the move (`follow` re-points what
- *    names the moved cells, every other reference stays), so =P120>15 cut to
- *    R120 reads R120 and =B140>C140 cut to E140 still compares with C140;
- *  - every other rule's references to the moved cells follow them too, and the
- *    destination's own rules are left in place.
- * `follow` must return the same object for a rule it does not change. `null`
- * when a moved rule does not fit `bounds`; the caller must not commit.
- */
+/** Every formula a rule holds, as ruleOnAreas shifts them. */
+function ruleFormulaTexts(rule: ConditionalFormatRule): string[] {
+  const formula = conditionalRuleFormula(rule);
+  if (formula !== undefined) return [formula];
+  const stops: (FormulaStopLike | undefined)[] = [];
+  if (rule.kind === "colorScale" || rule.kind === "dataBar") {
+    const record = rule as unknown as Record<string, FormulaStopLike | undefined>;
+    stops.push(record.min, record.mid, record.max);
+  } else if (rule.kind === "iconSet" && rule.stops) {
+    stops.push(...rule.stops);
+  }
+  return stops.flatMap((stop) => (stop?.type === "formula" && stop.formula ? [stop.formula] : []));
+}
+
+const RELATIVE_REF_RE = /(\$?)([A-Za-z]{1,3})(\$?)([0-9]{1,7})/g;
+const MAX_MOVED_RULE_PIECES = 4_096;
+
+
+
+
+
+
+
+
+
+
+
+
+function movedShareFollowed(
+  moved: ConditionalFormatRule,
+  follow: (rule: ConditionalFormatRule) => ConditionalFormatRule,
+  cut: ConditionalRange,
+  rowDelta: number,
+  colDelta: number,
+): ConditionalFormatRule[] {
+  const whole = [follow(moved)];
+  const anchor = moved.range;
+  const blocks = [cut, { r1: cut.r1 + rowDelta, c1: cut.c1 + colDelta, r2: cut.r2 + rowDelta, c2: cut.c2 + colDelta }];
+  // Where a relative reference starts or stops naming a moved (or overwritten)
+  // cell as the reading cell walks the share.
+  const rowCuts = new Set<number>();
+  const colCuts = new Set<number>();
+  for (const text of ruleFormulaTexts(moved)) {
+    for (const match of text.matchAll(RELATIVE_REF_RE)) {
+      const row = Number(match[4]) - 1;
+      const col = lettersToColumn(match[2].toUpperCase());
+      for (const block of blocks) {
+        if (!match[3]) {
+          rowCuts.add(block.r1 - row + anchor.r1);
+          rowCuts.add(block.r2 - row + anchor.r1 + 1);
+        }
+        if (!match[1]) {
+          colCuts.add(block.c1 - col + anchor.c1);
+          colCuts.add(block.c2 - col + anchor.c1 + 1);
+        }
+      }
+    }
+  }
+  const segments = (from: number, to: number, cuts: Set<number>): Array<[number, number]> => {
+    const points = [...cuts].filter((point) => point > from && point <= to).sort((a, b) => a - b);
+    const out: Array<[number, number]> = [];
+    let start = from;
+    for (const point of points) {
+      out.push([start, point - 1]);
+      start = point;
+    }
+    out.push([start, to]);
+    return out;
+  };
+  const pieces: ConditionalRange[] = [];
+  for (const area of ruleAreas(moved)) {
+    for (const [r1, r2] of segments(area.r1, area.r2, rowCuts)) {
+      for (const [c1, c2] of segments(area.c1, area.c2, colCuts)) pieces.push({ r1, c1, r2, c2 });
+    }
+    if (pieces.length > MAX_MOVED_RULE_PIECES) return whole;
+  }
+  if (pieces.length <= ruleAreas(moved).length) return whole;
+  const body = (rule: ConditionalFormatRule) => {
+    const record: Record<string, unknown> = { ...rule };
+    delete record.id;
+    for (const key of NATIVE_RULE_IDENTITY) delete record[key];
+    return JSON.stringify(record);
+  };
+  const groups: Array<{ read: ConditionalFormatRule; areas: ConditionalRange[] }> = [];
+  for (const piece of pieces) {
+    const own = ruleOnAreas(moved, [piece], true);
+    if (!own) return whole;
+    const read = follow(own);
+    const spelled = body(read);
+    const group = groups.find((candidate) => {
+      const there = ruleOnAreas(candidate.read, [piece], true);
+      return there !== null && body(there) === spelled;
+    });
+    if (group) group.areas.push(piece);
+    else groups.push({ read, areas: [piece] });
+  }
+  if (groups.length === 1) return whole;
+  const out: ConditionalFormatRule[] = [];
+  for (const [index, group] of groups.entries()) {
+    const areas = coalesceRanges(group.areas);
+    for (let start = 0; start < areas.length; start += MAX_CONDITIONAL_AREAS) {
+      const rule = ruleOnAreas(group.read, areas.slice(start, start + MAX_CONDITIONAL_AREAS), index === 0 && start === 0);
+      if (!rule) return whole;
+      out.push(rule);
+    }
+  }
+  return out;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export function planRulesForCellMove(
   rules: readonly ConditionalFormatRule[],
   from: ConditionalRange,
@@ -3977,10 +4096,13 @@ export function planRulesForCellMove(
   colDelta: number,
   follow: (rule: ConditionalFormatRule) => ConditionalFormatRule,
   bounds?: { maxRow?: number; maxCol?: number },
-): { rules: ConditionalFormatRule[]; changed: boolean } | null {
+  overflow?: "demote",
+): { rules: ConditionalFormatRule[]; changed: boolean; demoted?: ConditionalFormatRule[] } | null {
   const cut = normalizeRange(from);
   if (!cut) return null;
   const out: ConditionalFormatRule[] = [];
+  // Pieces of a rule the move split, ranked after every rule (Excel).
+  const trailing: ConditionalFormatRule[] = [];
   for (const rule of rules) {
     if (!ruleOverlaps(rule, cut)) {
       out.push(follow(rule));
@@ -4003,10 +4125,9 @@ export function planRulesForCellMove(
       ? ruleMovedBy(movedAtSource, rowDelta, colDelta, bounds)
       : null;
     if (!movedCandidate) return null;
-    const movedAreas = ruleAreas(movedCandidate);
-    const moved = follow(movedCandidate);
+    const movedShare = movedShareFollowed(movedCandidate, follow, cut, rowDelta, colDelta);
     if (keptAreas.length === 0) {
-      out.push(moved);
+      out.push(...movedShare);
       continue;
     }
     const kept: ConditionalFormatRule[] = [];
@@ -4018,35 +4139,65 @@ export function planRulesForCellMove(
       );
       if (piece) kept.push(follow(piece));
     }
-    // One rule again when the moved copy only differs by where it is written
-    // (Excel keeps P121:P122 and R120 as one Applies to for =P120>15), so a
-    // top-10, duplicate or average rule keeps a single population.
-    const first = kept[0];
-    if (
-      first &&
-      kept.length === 1 &&
-      keptAreas.length + movedAreas.length <= MAX_CONDITIONAL_AREAS &&
-      !movedAreas.some((area) => keptAreas.some((keptArea) => rangesOverlap(area, keptArea)))
-    ) {
-      const joined = ruleOnAreas(first, [...ruleAreas(first), ...movedAreas], true);
-      const rewritten = joined ? ruleOnAreas(joined, movedAreas, false) : null;
-      const { id: _id, nativePriority: _priority, nativeSequence: _sequence, ...movedBody } = moved;
-      void _id;
-      void _priority;
-      void _sequence;
-      if (joined && rewritten && JSON.stringify(rewritten) === JSON.stringify(movedBody)) {
-        out.push(joined);
-        continue;
+    // One rule again when a moved share only differs by where it is written
+    // (Excel keeps P121:P122 and R120 as one Applies to for =P120>15; A4:A6
+    // and D11:D12 for B2>0 over A1:A6 cut to D11, its D13 a rule of its own,
+    // backlog/xq829 s2), so a top-10, duplicate or average rule keeps a
+    // single population.
+    let first = kept[0];
+    const apart: ConditionalFormatRule[] = [];
+    for (const moved of movedShare) {
+      const movedAreas = ruleAreas(moved);
+      if (
+        first &&
+        kept.length === 1 &&
+        ruleAreas(first).length + movedAreas.length <= MAX_CONDITIONAL_AREAS &&
+        !movedAreas.some((area) => keptAreas.some((keptArea) => rangesOverlap(area, keptArea)))
+      ) {
+        const joined = ruleOnAreas(first, [...ruleAreas(first), ...movedAreas], true);
+        const rewritten = joined ? ruleOnAreas(joined, movedAreas, false) : null;
+        const { id: _id, nativePriority: _priority, nativeSequence: _sequence, ...movedBody } = moved;
+        void _id;
+        void _priority;
+        void _sequence;
+        if (joined && rewritten && JSON.stringify(rewritten) === JSON.stringify(movedBody)) {
+          first = joined;
+          continue;
+        }
       }
+      apart.push(moved);
     }
-    out.push(...kept, moved);
+    if (first && kept.length === 1) out.push(first);
+    else out.push(...kept);
+    trailing.push(...apart);
   }
-  if (out.length > MAX_CONDITIONAL_FORMATS) return null;
-  return {
-    rules: out,
-    changed:
-      out.length !== rules.length || out.some((rule, index) => rule !== rules[index]),
-  };
+  out.push(...trailing);
+  const changed = out.length !== rules.length || out.some((rule, index) => rule !== rules[index]);
+  if (out.length <= MAX_CONDITIONAL_FORMATS) return { rules: out, changed };
+  const demoted = out.slice(MAX_CONDITIONAL_FORMATS);
+  if (
+    overflow !== "demote" ||
+    demoted.length > MAX_DEMOTED_CONDITIONAL_FORMATS ||
+    demoted.some((rule) => !trailing.includes(rule) || ruleHasX14Part(rule))
+  ) {
+    return null;
+  }
+  return { rules: out.slice(0, MAX_CONDITIONAL_FORMATS), changed: true, demoted };
+}
+
+ 
+export const MAX_DEMOTED_CONDITIONAL_FORMATS = 64;
+
+/** Whether Excel writes a rule with an x14 part (a twin, or the rule itself):
+ *  a data bar, an icon set of custom icons, or a rule naming one. */
+function ruleHasX14Part(rule: ConditionalFormatRule): boolean {
+  const record = rule as unknown as Record<string, unknown>;
+  return (
+    rule.kind === "dataBar" ||
+    (rule.kind === "iconSet" && Array.isArray(record.customIcons) && record.customIcons.length > 0) ||
+    record.nativeX14Id !== undefined ||
+    record.nativeDataBarId !== undefined
+  );
 }
 
 /**

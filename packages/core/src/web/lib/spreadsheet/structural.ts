@@ -555,6 +555,8 @@ export interface StructuralSheet {
    * grouping): each absolute index shifts with a row op; an index ON the deleted
    * row drops, later indices move up. Untouched by a column op. */
   manuallyHiddenRows?: number[];
+  /** Reading 998: those of manuallyHiddenRows the file writes 0 points high. */
+  zeroHeightRows?: number[];
   /** Reading 944: rows past rowCount a sheet hidden by default still shows. */
   rowsShownPastEnd?: number[];
   /** Reading 945: hidden by the file's run, not by zeroHeight. */
@@ -696,6 +698,12 @@ export interface ConditionalFormatFileCopy {
   transpose?: true;
   fill?: [number, number, number, number];
   cut?: true;
+  
+
+  merge?: true;
+  
+
+  demote?: readonly object[];
 }
 
 /** How a Copy laid its block: copies of it, transposed, or filled over.
@@ -708,6 +716,8 @@ export interface ConditionalFormatFileCopyLayout {
   fill?: [number, number, number, number];
   rows?: readonly number[];
   cut?: true;
+  merge?: true;
+  demote?: readonly object[];
 }
 
 export const CF_FILE_COPY_KEY_PREFIX = "cfCopy:";
@@ -753,6 +763,7 @@ export function withConditionalFormatFileCopyRecorded<T extends object>(
         rect: [run.from, copy.rect[1], run.to, copy.rect[3]],
         at: [copy.at[0] + run.offset, copy.at[1]],
         page: copy.page,
+        ...(copy.merge ? { merge: true as const } : {}),
       });
     }
     return out;
@@ -769,6 +780,8 @@ export function withConditionalFormatFileCopyRecorded<T extends object>(
     ...(copy.transpose ? { transpose: true as const } : {}),
     ...(copy.fill ? { fill: copy.fill } : {}),
     ...(copy.cut ? { cut: true as const } : {}),
+    ...(copy.merge ? { merge: true as const } : {}),
+    ...(copy.cut && copy.demote?.length ? { demote: copy.demote } : {}),
   };
   return { ...dest, [`${CF_FILE_COPY_KEY_PREFIX}${lineMoveId()}`]: record };
 }
@@ -3024,6 +3037,9 @@ function remapOverlays<T extends StructuralSheet>(
       at,
       delta,
     );
+  // The rows 0 points high (reading 998) move with their rows likewise.
+  if (sheet.zeroHeightRows && axis === "row")
+    patch.zeroHeightRows = remapHiddenIndices(sheet.zeroHeightRows, true, at, delta);
   // A row still shown past the hidden default (reading 944, row 1,048,576)
   // moves with the rows; one an insert pushes off the grid's end goes, as
   // Excel's last row does.

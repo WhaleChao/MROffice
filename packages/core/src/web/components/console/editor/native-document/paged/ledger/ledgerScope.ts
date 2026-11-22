@@ -153,6 +153,30 @@ function openingOf(build: LedgerBuild, page: number): { block: LogicalBlock; par
  */
 /** A document of more sheets than this is not planned to its end in one pass. */
 const PLAN_TO_END_MAX_SHEETS = 400;
+/**
+ * The start a scoped pass plans from. A page opened by a forced break keeps
+ * its first paragraph's space before less the space after the page before's
+ * last paragraph in the flow (Word: Page Break Before, or a break opening
+ * the paragraph, in compatibility modes 12 and 14 and with no mode; see
+ * ledgerCut). A whole pass closes that page and carries its space after in;
+ * a scoped pass started at the page read it in `resolvePassScope` and then
+ * dropped it (only footnote documents under their progressive trial kept
+ * it), so the same page opened 10 px lower when the pass began there than
+ * when it began earlier: R347-D02 page 2 held blocks 18-27 in a key's local
+ * pass (612.12 of 620 px, block 28's line 7.88 px short) and 18-28 in the
+ * whole pass after it (620 of 620), and went between the two on every key.
+ * `window.__docsScopedLeadingAfterOff = true` drops it again outside the
+ * footnote trial (as before; A/B).
+ */
+export function scopedPlanStart(start: LedgerCutStart, notesCarry: boolean | null): LedgerCutStart {
+  const carries = scopedLeadingAfterOff() ? notesCarry === true : notesCarry !== false;
+  return carries ? start : { ...start, leadingAfterPx: 0 };
+}
+
+function scopedLeadingAfterOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsScopedLeadingAfterOff?: boolean }).__docsScopedLeadingAfterOff === true;
+}
+
 /** The pages such a pass plans at most, under docs-layout. */
 const LONG_DOCUMENT_PLAN_PAGES = 64;
 

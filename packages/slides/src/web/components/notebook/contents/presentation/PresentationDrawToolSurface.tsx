@@ -19,7 +19,7 @@ import { useCallback, useEffect, useState, type RefObject } from "react";
 
 import type { DocumentInkEffect } from "@mrnote/core/web/lib/document-ink.ts";
 import type { Point } from "@mrnote/core/web/lib/presentation-polygon-points.ts";
-import { InkLiveCanvas } from "@mrnote/ink/web/lib/office-ink-live.ts";
+import { InkLiveCanvas } from "@mrnote/core/web/lib/office-ink-live.ts";
 import { appendInkEffectSvg, inkEffectPaint, inkEffectSvgPlan, isInkEffect } from "@mrnote/core/web/lib/office-ink-effects.ts";
 import type { InkRulerState } from "@mrnote/core/web/lib/office-ink-ruler.ts";
 import { OfficeInkRuler } from "@mrnote/core/web/components/office-ribbon/OfficeInkRuler.tsx";
@@ -30,7 +30,7 @@ import {
   inkVariableWidthOutlinePathData,
 } from "@mrnote/core/web/lib/office-ink-smooth.ts";
 import { inkOpacityForTool, type InkTool } from "@mrnote/core/web/lib/presentation-annotation.ts";
-import { wetInkSvgElement, type WetInkLayer } from "@mrnote/ink/web/lib/office-wet-ink-layer.ts";
+import { wetInkSvgElement, type WetInkLayer } from "@mrnote/core/web/lib/office-wet-ink-layer.ts";
 
 /** A finished stroke the deck has not taken yet (lib/office-wet-ink). */
 export interface PresentationWetStroke {

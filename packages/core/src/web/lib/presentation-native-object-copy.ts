@@ -97,6 +97,13 @@ function crossSlide(request: PresentationNativeCopyRequest): boolean {
 /** The server cannot copy these objects to another slide (a member of a
  *  turned group, a server that does not know the target): Paste makes its
  *  redrawn copy instead. */
+/** The deck moved on between the copy's save and its plan (another save):
+ * the copy, asked again on the deck as it is now, can go ahead. */
+export function isPresentationNativeCopyStale(error: unknown): boolean {
+  const record = error !== null && typeof error === "object" ? error as { status?: unknown; code?: unknown } : null;
+  return record?.status === 409 && record.code === "native_copy_stale_page";
+}
+
 export function isPresentationNativeCopyUnsupported(error: unknown): boolean {
   const record = error !== null && typeof error === "object" ? error as { status?: unknown; code?: unknown } : null;
   return record?.status === 422 && record.code === "native_copy_unsupported";

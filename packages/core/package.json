@@ -62,7 +62,6 @@
     "dompurify": "3.4.17",
     "echarts": "6.1.0",
     "echarts-gl": "2.1.0",
-    "fflate": "0.8.2",
     "js-yaml": "4.3.0",
     "jszip": "3.10.1",
     "katex": "0.16.47",

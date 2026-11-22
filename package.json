@@ -2,7 +2,7 @@
   "name": "mrnote-editors",
   "private": true,
   "license": "AGPL-3.0-only",
-  "description": "The open-source editors of MR Office (https://mroffice.ai): documents, spreadsheets, presentations, PDF, handwriting and code, in the browser.",
+  "description": "The open-source editors of MR Office (https://mroffice.ai): documents, spreadsheets, presentations, PDF and code, in the browser.",
   "workspaces": [
     "packages/*",
     "apps/playground"

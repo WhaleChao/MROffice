@@ -15,6 +15,7 @@ import {
   pivotComputationMatrix,
   pivotIsScenarioReport,
   pivotLiveSourceRange,
+  pivotSourceRowsRead,
   pivotPlanKey,
   pivotReadsLiveCells,
   sheetPivots,
@@ -290,9 +291,10 @@ export function pivotPlanRequests(
       evaluator,
     );
     const liveMatrix: string[][] = [];
-    for (let row = liveRange.r1; row <= liveRange.r2; row += 1) {
+    const readRange = pivotSourceRowsRead(liveRange, readSheet, sourceSpill);
+    for (let row = readRange.r1; row <= readRange.r2; row += 1) {
       const values: string[] = [];
-      for (let col = liveRange.c1; col <= liveRange.c2; col += 1) {
+      for (let col = readRange.c1; col <= readRange.c2; col += 1) {
         values.push(
           resolveCellDisplay(
             readSheet.cells[`${row}:${col}`],

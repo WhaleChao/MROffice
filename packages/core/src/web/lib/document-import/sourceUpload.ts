@@ -54,6 +54,23 @@ export interface SourceUploadSession {
   expires_at: string | null;
   /** Whether this page may send the parts straight to object storage. */
   direct_parts?: boolean;
+  /** The workspace the upload lives in (its notebook's), named by every
+   * later request of the session. */
+  workspace_id?: string;
+}
+
+
+
+
+
+
+
+
+function sessionInit(session: Pick<SourceUploadSession, "workspace_id">, init: RequestInit = {}): RequestInit {
+  if (!session.workspace_id) return init;
+  const headers = new Headers(init.headers);
+  headers.set("X-Workspace-ID", session.workspace_id);
+  return { ...init, headers };
 }
 
 export type SourceImportOutcome = "pdf" | "editable" | "preview" | "original";
@@ -235,7 +252,7 @@ async function fillPartsFromLocalFile(
     await apiPost(
       `/api/v1/desktop/source-uploads/${encodeURIComponent(session.upload_id)}/from-local`,
       { token },
-      { signal },
+      sessionInit(session, { signal }),
     );
     return true;
   } catch (error) {
@@ -319,7 +336,7 @@ class DirectParts {
         parts,
         ...(parts.includes(1) ? { first_bytes: await firstBytesBase64(this.file) } : {}),
       },
-      { signal: this.signal },
+      sessionInit(this.session, { signal: this.signal }),
     );
     for (const [number, url] of Object.entries(answer.urls)) this.urls.set(Number(number), url);
   }
@@ -407,7 +424,7 @@ async function sendPart(
       await apiFetchRaw(
         // The upload proxy route, which the file host already carries.
         `/api/v1/uploads/proxy/${encodeURIComponent(session.upload_id)}?part=${part}`,
-        { method: "PUT", body, signal },
+        sessionInit(session, { method: "PUT", body, signal }),
         { contentType: "application/octet-stream" },
       );
       direct.noteProxied();
@@ -501,6 +518,7 @@ async function followImport(
   job: SourceImportJob,
   signal?: AbortSignal,
   onJob?: (job: SourceImportJob) => void,
+  session: Pick<SourceUploadSession, "workspace_id"> = {},
 ): Promise<SourceImportJob> {
   let current = job;
   onJob?.(current);
@@ -513,7 +531,7 @@ async function followImport(
         `/api/v1/notebooks/${encodeURIComponent(notebookId)}/source-imports/${encodeURIComponent(
           current.job_id,
         )}?wait_ms=5000&since=${current.revision}`,
-        { signal },
+        sessionInit(session, { signal }),
       );
       onJob?.(current);
     } catch (error) {
@@ -571,16 +589,18 @@ async function uploadInParts(
     }
     return session;
   } catch (error) {
-    if (session) cancelSourceUpload(session.upload_id);
+    if (session) cancelSourceUpload(session);
     throw asImportError(error, file);
   }
 }
 
-function cancelSourceUpload(uploadId: string): void {
+function cancelSourceUpload(session: Pick<SourceUploadSession, "upload_id" | "workspace_id">): void {
   // Give the reserved storage back; the server reclaims the parts.
-  void apiDelete(`/api/v1/source-uploads/${encodeURIComponent(uploadId)}`).catch(
-    () => undefined,
-  );
+  void apiDelete(
+    `/api/v1/source-uploads/${encodeURIComponent(session.upload_id)}`,
+    undefined,
+    sessionInit(session),
+  ).catch(() => undefined);
 }
 
 /** A stored file of a notebook (a DataItem), as an editor inserts one. */
@@ -606,10 +626,10 @@ export async function uploadEditorFileInParts(
     return await apiPost<StoredEditorFile>(
       `/api/v1/source-uploads/${encodeURIComponent(session.upload_id)}/complete`,
       {},
-      { signal: options.signal },
+      sessionInit(session, { signal: options.signal }),
     );
   } catch (error) {
-    if (isAbort(error) || options.signal?.aborted) cancelSourceUpload(session.upload_id);
+    if (isAbort(error) || options.signal?.aborted) cancelSourceUpload(session);
     throw asImportError(error, file);
   }
 }
@@ -635,10 +655,10 @@ export async function uploadPageAttachmentInParts(
     return await apiPost<UploadedPageAttachment>(
       `/api/v1/source-uploads/${encodeURIComponent(session.upload_id)}/attach`,
       { page_id: pageId, ...(options.title ? { title: options.title } : {}) },
-      { signal: options.signal },
+      sessionInit(session, { signal: options.signal }),
     );
   } catch (error) {
-    if (isAbort(error) || options.signal?.aborted) cancelSourceUpload(session.upload_id);
+    if (isAbort(error) || options.signal?.aborted) cancelSourceUpload(session);
     throw asImportError(error, file);
   }
 }
@@ -680,7 +700,7 @@ export async function importSourceFile(
         ...(options.folderId ? { folder_id: options.folderId } : {}),
         ...(options.csvConversions ? { csv_conversions: options.csvConversions } : {}),
       },
-      { signal: options.signal },
+      sessionInit(started, { signal: options.signal }),
     );
     const finished = await followImport(notebookId, job, options.signal, (current) => {
       if (current.status !== "queued" && current.status !== "running") return;
@@ -699,7 +719,7 @@ export async function importSourceFile(
             }
           : {}),
       });
-    });
+    }, started);
     // A deck held as parts opens as soon as its page exists; the import
     // goes on writing the later parts, which the editor reads as they come.
     const opened = sourceImportPageReady(finished);
@@ -720,7 +740,7 @@ export async function importSourceFile(
       : finished;
   } catch (error) {
     if (session && (isAbort(error) || options.signal?.aborted)) {
-      cancelSourceUpload(session.upload_id);
+      cancelSourceUpload(session);
     }
     throw asImportError(error, file);
   }

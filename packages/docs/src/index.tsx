@@ -26,14 +26,14 @@ const decoder = new TextDecoder();
 const encoder = new TextEncoder();
 
 function stem(name: string): string {
-  return name.replace(/\.(mrdoc|mrink)(\.json)?$|\.[^.]+$/i, "") || "Untitled";
+  return name.replace(/\.mrdoc(\.json)?$|\.[^.]+$/i, "") || "Untitled";
 }
 
 /** A local file as the editor's document JSON. */
 export function documentFromFile(name: string, bytes: Uint8Array): { title: string; content: Record<string, unknown> } {
   const lower = name.toLowerCase();
   const text = decoder.decode(bytes);
-  if (/\.(mrdoc|mrink)(\.json)?$/.test(lower)) {
+  if (/\.mrdoc(\.json)?$/.test(lower)) {
     const parsed = JSON.parse(text) as Partial<MrDocFile>;
     if (parsed.format !== MRDOC_FORMAT || !parsed.content || typeof parsed.content !== "object") {
       throw new Error(`${name} is not an MR Note document.`);

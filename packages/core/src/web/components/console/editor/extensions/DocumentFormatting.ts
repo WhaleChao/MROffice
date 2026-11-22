@@ -614,8 +614,56 @@ function documentDefaultIndent(
  * requested 0 against a default indent on that side, an explicit 0 -- the
  * paragraph's own "none", Word's `w:left="0"` -- since an absent value
  * draws the default. Without a default, 0 stays absent. */
-function statedIndentPt(value: unknown, documentDefault: number | null, signed = false): number | null {
-  const points = signed ? normalizeFirstLineIndentPt(value) : normalizeIndentPt(value);
+/**
+ * A left or right indent a command states, signed: Word's Paragraph dialog
+ * takes a negative Left or Right indent, which draws the lines into the
+ * margin (`w:ind w:left="-536"`). Clamped at 0 it was dropped, the
+ * paragraph's older indent level drew instead, and the save wrote that
+ * (corpus R497-D49 WALK1, Indentation Left -26.8 pt).
+ * `window.__docsSignedSideIndentCommandsOff = true` clamps at 0 as before.
+ */
+function sideIndentPt(value: unknown): number | null {
+  const off =
+    typeof window !== "undefined" &&
+    (window as Window & { __docsSignedSideIndentCommandsOff?: boolean }).__docsSignedSideIndentCommandsOff === true;
+  return off ? normalizeIndentPt(value) : normalizeSideIndentPt(value);
+}
+
+/**
+ * A precise left indent a command states brings the paragraph's legacy
+ * Tab level along, as the reading derives it from the same ``w:ind w:left``
+ * (one level per 0.25 in, rounded, at most 7, none at or below the margin:
+ * the API's ``docx_legacy_indent_level``). The precise indent draws; a level
+ * left from before (an import's 2 beside 38 pt) said otherwise to every
+ * comparison of the saved file (corpus R497-D49 WALK1). ``levelStated``: the
+ * caller set the level itself. Off with the signed-indent switch.
+ */
+function withIndentLevelOfLeft<T extends Record<string, unknown>>(attrs: T, levelStated = false): T {
+  const off =
+    typeof window !== "undefined" &&
+    (window as Window & { __docsSignedSideIndentCommandsOff?: boolean }).__docsSignedSideIndentCommandsOff === true;
+  const left = attrs.indentLeftPt;
+  // Only a paragraph that carries a level beside its precise indent (an
+  // import's) has one to keep in step; a level of 0 stays 0.
+  if (off || levelStated || typeof left !== "number" || !Number.isFinite(left) || normalizeIndent(attrs.indent) === 0) {
+    return attrs;
+  }
+  // Python's round() (half to even), as the reading computes it.
+  const steps = left / 18;
+  const floor = Math.floor(steps);
+  const diff = steps - floor;
+  const rounded = Math.abs(diff - 0.5) < 1e-9 ? (floor % 2 === 0 ? floor : floor + 1) : Math.round(steps);
+  const level = left <= 0 ? 0 : Math.min(7, Math.max(0, rounded));
+  return normalizeIndent(attrs.indent) === level ? attrs : { ...attrs, indent: level };
+}
+
+function statedIndentPt(
+  value: unknown,
+  documentDefault: number | null,
+  signed = false,
+  side = false,
+): number | null {
+  const points = signed ? normalizeFirstLineIndentPt(value) : side ? sideIndentPt(value) : normalizeIndentPt(value);
   if (points !== null || documentDefault === null) return points;
   if (value === null || value === undefined || value === "") return null;
   const raw = typeof value === "number" ? value : Number.parseFloat(String(value).trim().replace(/pt$/i, ""));
@@ -648,6 +696,12 @@ export function normalizeSpacing(value: unknown): number | null {
  * heading rely on. Ordinary paragraphs already inherit that size from the
  * page, so only headings need it said again, and blank paragraphs, whose
  * line has no run to carry it. Display only. */
+/** `window.__docsBlankHeadingMarkOff = true` (A/B): a blank heading draws at
+ * its style's size whatever its mark states, the older layout. */
+function blankHeadingMarkOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsBlankHeadingMarkOff?: boolean }).__docsBlankHeadingMarkOff === true;
+}
+
 function documentHeadingStyleSizeDecorations(
   doc: PmNode,
   from = 0,
@@ -656,7 +710,12 @@ function documentHeadingStyleSizeDecorations(
   const result: Decoration[] = [];
   doc.nodesBetween(from, to, (block, pos) => {
     if (!block.isTextblock) return;
-    const heading = block.type.name === "heading";
+    // A blank heading whose mark states its size is that mark's line, as a
+    // blank paragraph's is (Windows Word, corpus R485-D72: an empty Heading 1
+    // with a 3 pt mark before page 1's table stands 3.45 pt; at its style's
+    // 12 pt, 13.8 pt).
+    const markSized = paragraphHoldsNoText(block) && block.attrs.paragraphFontSize != null;
+    const heading = block.type.name === "heading" && !(markSized && !blankHeadingMarkOff());
     // A blank paragraph has no run for an imported size mark: its line is its
     // style's size unless its mark states one (`paragraphFontSize`).
     const blank = block.type.name === "paragraph" && paragraphHoldsNoText(block) && block.attrs.paragraphFontSize == null;
@@ -2862,14 +2921,16 @@ const DocumentFormatting = Extension.create<DocumentFormattingOptions>({
           return { ...attrs, indent: normalizeIndent(normalizeIndent(attrs.indent) - 1) };
         })(props),
       setIndentLeftPt: (value) => (props) =>
-        updateSelectedTextBlocks((attrs) => ({
-          ...attrs,
-          indentLeftPt: statedIndentPt(value, documentDefaultIndent(props, "defaultIndentLeftPt")),
-        }))(props),
+        updateSelectedTextBlocks((attrs) =>
+          withIndentLevelOfLeft({
+            ...attrs,
+            indentLeftPt: statedIndentPt(value, documentDefaultIndent(props, "defaultIndentLeftPt"), false, true),
+          }),
+        )(props),
       setIndentRightPt: (value) => (props) =>
         updateSelectedTextBlocks((attrs) => ({
           ...attrs,
-          indentRightPt: statedIndentPt(value, documentDefaultIndent(props, "defaultIndentRightPt")),
+          indentRightPt: statedIndentPt(value, documentDefaultIndent(props, "defaultIndentRightPt"), false, true),
         }))(props),
       setFirstLineIndentPt: (value) => (props) =>
         updateSelectedTextBlocks((attrs) => ({
@@ -2885,10 +2946,10 @@ const DocumentFormatting = Extension.create<DocumentFormattingOptions>({
           textIndent: null,
         }))(props),
       setParagraphIndents: (value) =>
-        updateSelectedTextBlocks((attrs) => ({
+        updateSelectedTextBlocks((attrs) => withIndentLevelOfLeft({
           ...attrs,
-          indentLeftPt: normalizeIndentPt(value?.indentLeftPt),
-          indentRightPt: normalizeIndentPt(value?.indentRightPt),
+          indentLeftPt: sideIndentPt(value?.indentLeftPt),
+          indentRightPt: sideIndentPt(value?.indentRightPt),
           firstLineIndentPt: normalizeFirstLineIndentPt(
             value?.firstLineIndentPt,
           ),
@@ -2896,7 +2957,7 @@ const DocumentFormatting = Extension.create<DocumentFormattingOptions>({
             ? {}
             : { indent: normalizeIndent(value.indent) }),
           ...(value?.textIndent === undefined ? {} : { textIndent: null }),
-        })),
+        }, value?.indent !== undefined)),
       setLineHeight: (value) =>
         updateSelectedTextBlocks((attrs) => ({
           ...attrs,

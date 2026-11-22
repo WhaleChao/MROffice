@@ -37,7 +37,7 @@ export interface EditorFeature {
 }
 
 export interface EditorDefinition {
-  readonly id: "code" | "pdf" | "ink" | "docs" | "sheets" | "slides";
+  readonly id: "code" | "pdf" | "docs" | "sheets" | "slides";
   readonly label: string;
   /** Extensions (lower case, with the dot) this editor opens. */
   readonly extensions: readonly string[];

@@ -21,7 +21,7 @@ import {
   DOCUMENT_INK_THICKNESSES,
   type DocumentInkPreset,
 } from "@mrnote/core/web/lib/document-ink.ts";
-import type { OfficeInkPenSpec } from "@mrnote/ink/web/lib/office-ink-pens.ts";
+import type { OfficeInkPenSpec } from "@mrnote/core/web/lib/office-ink-pens.ts";
 
 /** 1 mm is 72/25.4 pt; the outline states points to a tenth. */
 function mmToPt(mm: number): number {

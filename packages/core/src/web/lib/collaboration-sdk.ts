@@ -205,6 +205,9 @@ export async function inviteNotebookMember(
   email: string,
   role: NotebookServerRole,
   options?: MemberApiOptions,
+  /** The file the invitation is made from: the new member is let into it
+   * too (MR Office's Share). The caller must own the file. */
+  pageId?: string | null,
 ): Promise<NotebookMemberRecord> {
   try {
     const data = await runMemberRequest(
@@ -212,7 +215,7 @@ export async function inviteNotebookMember(
       (signal) =>
         apiPost<MemberWire>(
           `/api/v1/notebooks/${encodeURIComponent(notebookId)}/members`,
-          { email, role },
+          { email, role, ...(pageId ? { page_id: pageId } : {}) },
           memberInit(options, signal),
         ),
       "Notebook member invite timed out",
@@ -220,7 +223,10 @@ export async function inviteNotebookMember(
     const member = memberFromWire(data);
     if (
       normalizedEmail(member.email) !== normalizedEmail(email) ||
-      member.role !== role
+      // Invited from a file, someone already in the workspace keeps their
+      // role there and is given the file (routers/notebook_members): the
+      // answer carries their own role, not the one asked for.
+      (member.role !== role && !pageId)
     ) {
       throw new Error(
         "Notebook member invite response changed identity or role",
@@ -355,6 +361,8 @@ export interface NotebookInviteRecord {
   useCount: number;
   createdAt: string;
   createdByName: string | null;
+  /** The file the invitation opens once joined (MR Office's Share), or null. */
+  pageId: string | null;
 }
 
 /**
@@ -385,6 +393,7 @@ interface InviteWire {
   token?: unknown;
   path?: unknown;
   email_delivery?: unknown;
+  page_id?: unknown;
 }
 
 function inviteFromWire(wire: InviteWire): NotebookInviteRecord {
@@ -409,6 +418,7 @@ function inviteFromWire(wire: InviteWire): NotebookInviteRecord {
       typeof wire.created_by?.display_name === "string"
         ? wire.created_by.display_name
         : null,
+    pageId: typeof wire.page_id === "string" ? wire.page_id : null,
   };
 }
 
@@ -459,6 +469,9 @@ export async function createNotebookInviteLink(
     role: NotebookInviteRole;
     expiresInDays: NotebookInviteExpiryDays;
     maxUses: number | null;
+    /** The file the link is made from: joining lets the person into it and
+     * opens it (MR Office's Share). The caller must own the file. */
+    pageId?: string | null;
   },
   options?: MemberApiOptions,
 ): Promise<IssuedNotebookInvite> {
@@ -472,6 +485,7 @@ export async function createNotebookInviteLink(
           role: settings.role,
           expires_in_days: settings.expiresInDays,
           max_uses: settings.maxUses,
+          ...(settings.pageId ? { page_id: settings.pageId } : {}),
         },
         memberInit(options, signal),
       ),
@@ -490,13 +504,21 @@ export async function createNotebookEmailInvite(
   role: NotebookInviteRole,
   options?: MemberApiOptions,
   locale?: string,
+  /** The file the invitation is made from (see createNotebookInviteLink). */
+  pageId?: string | null,
 ): Promise<IssuedNotebookInvite> {
   const data = await runMemberRequest(
     options,
     (signal) =>
       apiPost<InviteWire>(
         invitesPath(notebookId),
-        { kind: "email", email, role, ...(locale ? { locale } : {}) },
+        {
+          kind: "email",
+          email,
+          role,
+          ...(locale ? { locale } : {}),
+          ...(pageId ? { page_id: pageId } : {}),
+        },
         memberInit(options, signal),
       ),
     "Notebook invite timed out",
@@ -559,6 +581,9 @@ export interface NotebookInvitePreview {
   inviterAvatar?: UserAvatarSource | null;
   inviterAccent?: string | null;
   expiresAt: string;
+  /** The file the invitation opens once joined (MR Office's Share). */
+  pageTitle?: string | null;
+  pageType?: string | null;
 }
 
 export interface NotebookInviteAcceptance {
@@ -566,6 +591,8 @@ export interface NotebookInviteAcceptance {
   workspaceId: string;
   role: NotebookServerRole;
   joined: boolean;
+  /** The file to open now (an invitation made from a file), or null. */
+  pageId: string | null;
 }
 
 export async function previewNotebookInvite(
@@ -597,6 +624,8 @@ export async function previewNotebookInvite(
     }),
     inviterAccent: optionalString(data.inviter_accent_color),
     expiresAt: typeof data.expires_at === "string" ? data.expires_at : "",
+    pageTitle: typeof data.page_id === "string" ? optionalString(data.page_title) ?? "" : null,
+    pageType: typeof data.page_id === "string" ? optionalString(data.page_type) : null,
   };
 }
 
@@ -620,6 +649,7 @@ export async function acceptNotebookInvite(
     workspaceId: data.workspace_id,
     role,
     joined: data.joined === true,
+    pageId: typeof data.page_id === "string" && data.page_id ? data.page_id : null,
   };
 }
 

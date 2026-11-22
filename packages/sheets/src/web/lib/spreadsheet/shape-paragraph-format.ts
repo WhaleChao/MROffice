@@ -82,6 +82,7 @@ function withLayout(shape: SpreadsheetShapeStyle, layout: OfficeTextLayout): Spr
       !paragraph.marL &&
       !paragraph.indent &&
       paragraph.lineSpacing === undefined &&
+      paragraph.lineSpacingPoints === undefined &&
       !paragraph.spaceBefore &&
       !paragraph.spaceAfter,
   );
@@ -162,7 +163,10 @@ export function spreadsheetShapeParagraphSource(
   return {
     align: shared(touched.map((paragraph) => own ?? paragraph.align ?? fallbackAlign)),
     lineSpacing: shared(touched.map((paragraph) => paragraph.lineSpacing)),
-    lineSpacingPoints: undefined,
+    // Line Spacing > Exactly, as read from the file (reading row 991) or set here.
+    lineSpacingPoints: shared(
+      touched.map((paragraph) => (paragraph.lineSpacing === undefined ? paragraph.lineSpacingPoints : undefined)),
+    ),
     spaceBefore: shared(touched.map((paragraph) => paragraph.spaceBefore)),
     spaceAfter: shared(touched.map((paragraph) => paragraph.spaceAfter)),
     marL: touched[0]?.marL ?? 0,
@@ -173,7 +177,8 @@ export function spreadsheetShapeParagraphSource(
 /**
  * The Paragraph dialog's OK on the paragraphs `range` touches: alignment,
  * Before text / Special, Spacing Before / After and Line Spacing (Single,
- * 1.5 lines, Double, Multiple). Only what the person changed is written.
+ * 1.5 lines, Double, Multiple, Exactly). Only what the person changed is
+ * written; a row holds a multiple or an Exactly height, never both.
  */
 export function spreadsheetShapeWithParagraphFormat(
   shape: SpreadsheetShapeStyle,
@@ -183,7 +188,7 @@ export function spreadsheetShapeWithParagraphFormat(
   if (!(shape.text ?? "").length) return null;
   const layout = layoutFor(shape);
   const [first, last] = linesOf(shape.text ?? "", range);
-  const { patch, indentation } = result;
+  const { patch, indentation, exactPoints } = result;
   // The shape's own alignment is drawn over every row's: a paragraph's own
   // alignment takes over from it, the other rows keeping what they drew.
   const own = patch.align ? shape.textAlign : undefined;
@@ -197,6 +202,11 @@ export function spreadsheetShapeWithParagraphFormat(
     if ("lineSpacing" in patch) {
       if (patch.lineSpacing === undefined || patch.lineSpacing === 1) delete next.lineSpacing;
       else next.lineSpacing = patch.lineSpacing;
+      delete next.lineSpacingPoints;
+    }
+    if (exactPoints !== undefined) {
+      next.lineSpacingPoints = exactPoints;
+      delete next.lineSpacing;
     }
     for (const key of ["spaceBefore", "spaceAfter"] as const) {
       if (!(key in patch)) continue;

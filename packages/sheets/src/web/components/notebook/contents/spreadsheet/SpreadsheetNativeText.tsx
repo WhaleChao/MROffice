@@ -10,6 +10,8 @@ import { officePrimaryFontFamily } from "@mrnote/core/web/components/office-ribb
 import { sheetZoomedFontSize } from "@mrnote/core/web/lib/css-zoom.ts";
 import { spreadsheetTextEngineEpoch } from "@mrnote/core/web/lib/spreadsheet/spreadsheet-text-engine.ts";
 import { nativeTextFontLead, resolveRelativePartFontSizes, type NativeTextPart } from "../../../../lib/spreadsheet/native-text-layout";
+import { nativeTextPrinterDpi } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
+import { OFFICE_ARABIC_STRETCH_FAMILY, officeArabicNaturalWidth, officeArabicStretchPieces, officeArabicStretchScale } from "../../../../lib/spreadsheet/office-arabic-stretch";
 
 function nativeDeclaredGlyphs(text: string, family: CSSProperties["fontFamily"], dpi: number) {
   if (dpi !== 72 || typeof family !== "string" || !/[\u0300-\u036f]/u.test(text)) return text;
@@ -24,6 +26,41 @@ function nativeDeclaredGlyphs(text: string, family: CSSProperties["fontFamily"],
       {base}{marks.map((mark, i) => <span key={i} style={{display:"inline-block",width:0,letterSpacing:0,fontFamily:`"${primary}", "Arial", ${family}`}}>{mark}</span>)}
     </span>;
   });
+}
+
+/** The right-to-left mark set on each side of a stretched word: an inline
+ * block is a neutral to the line's bidi order, the marks keep it Arabic. */
+const RLM = String.fromCharCode(0x200f);
+
+/**
+ * A Calibri cell's Arabic words as the API's writer prints them
+ * (office-arabic-stretch): each in Noto Sans Arabic at the cell's size,
+ * spread to Windows Calibri's width of it -- a box that wide holding the word
+ * scaled across from its start. `text` as it is where the face sets no Arabic
+ * of its own or the face the words are drawn in has not arrived.
+ */
+function nativeArabicGlyphs(text: string, style: CSSProperties, dpi: number, scale: number): ReactNode | undefined {
+  if (dpi !== 96 || typeof style.fontSize !== "number") return undefined;
+  const family = typeof style.fontFamily === "string" ? officePrimaryFontFamily(style.fontFamily) : undefined;
+  const weight = style.fontWeight ?? 400;
+  const bold = typeof weight === "number" ? weight >= 600 : weight === "bold" || Number(weight) >= 600;
+  // Printed at the printer's whole dots on the print page, as Excel prints.
+  const printer = nativeTextPrinterDpi();
+  const pieces = officeArabicStretchPieces(text, family, bold, style.fontSize, printer > 96 ? printer : 96);
+  if (!pieces) return undefined;
+  const fontStyle = typeof style.fontStyle === "string" ? style.fontStyle : "normal";
+  let stretched = false;
+  const nodes = pieces.map((piece, index) => {
+    if (piece.kind === "plain") return <Fragment key={index}>{piece.text}</Fragment>;
+    const stretch = officeArabicStretchScale(piece.width, officeArabicNaturalWidth(piece.text, fontStyle, weight, style.fontSize as number));
+    if (stretch === undefined) return <Fragment key={index}>{piece.text}</Fragment>;
+    stretched = true;
+    return <Fragment key={index}>{RLM}<span data-office-arabic-stretch="" style={{display:"inline-block",width:sheetZoomedFontSize(piece.width*scale),
+      whiteSpace:"nowrap",letterSpacing:0,lineHeight:0,direction:"ltr",textAlign:"left",textIndent:0,verticalAlign:"baseline"}}>
+      <span style={{display:"inline-block",fontFamily:`"${OFFICE_ARABIC_STRETCH_FAMILY}", ${String(style.fontFamily ?? "sans-serif")}`,direction:"rtl",
+        transform:`scaleX(${stretch.toFixed(4)})`,transformOrigin:"0 0"}}>{piece.text}</span></span>{RLM}</Fragment>;
+  });
+  return stretched ? nodes : undefined;
 }
 
 export function spreadsheetNativeFontCss(style: CSSProperties) {
@@ -145,9 +182,12 @@ export function spreadsheetNativeTextPaint(props: NativeTextProps): { style: CSS
     : {};
   return {
     style: {...partStyle,...partStroke,fontFamily:resolvedStyle.fontFamily,fontStyle:resolvedStyle.fontStyle,fontSize:sheetZoomedFontSize(typeof resolvedStyle.fontSize==="number"?resolvedStyle.fontSize*scale:resolvedStyle.fontSize),fontKerning:"none",letterSpacing:base*scale+squeeze},
-    children: runs.map((run,index)=>run.spacing===base
-      ?<Fragment key={index}>{nativeDeclaredGlyphs(run.text,resolvedStyle.fontFamily,dpi)}</Fragment>
-      :<span key={index} style={{letterSpacing:run.spacing*scale+squeeze}}>{nativeDeclaredGlyphs(run.text,resolvedStyle.fontFamily,dpi)}</span>),
+    children: runs.map((run,index)=>{
+      const glyphs=nativeArabicGlyphs(run.text,resolvedStyle,dpi,scale)??nativeDeclaredGlyphs(run.text,resolvedStyle.fontFamily,dpi);
+      return run.spacing===base
+        ?<Fragment key={index}>{glyphs}</Fragment>
+        :<span key={index} style={{letterSpacing:run.spacing*scale+squeeze}}>{glyphs}</span>;
+    }),
   };
 }
 const serverTypographyGeneration = () => 0;

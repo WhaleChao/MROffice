@@ -13,33 +13,8 @@ import {
 } from "../PdfOfficeRibbon";
 import { PdfWindowHomeTabGroups } from "./PdfWindowHomeTabGroups";
 import { PdfWindowInsertTabGroups } from "./PdfWindowInsertTabGroups";
-import { PdfWindowEditTabGroups } from "./PdfWindowEditTabGroups";
-import {
-  PdfTextEditingContextRibbon,
-  type PdfTextEditingContextRibbonAction,
-  type PdfTextEditingContextRibbonLabels,
-  type PdfTextEditingControl,
-} from "../PdfTextEditingContextRibbon";
-import { OfficeFormatPreviewProvider } from "@mrnote/core/web/components/office-ribbon/officeFormatPreview.tsx";
-import { pdfFormatPreviewAdapter } from "../pdfFormatPreview";
-import {
-  PdfWindowPictureFormatTabGroups,
-} from "./PdfWindowPictureFormatTabGroups";
-import { PdfWindowCommentToolTabGroups } from "./PdfWindowCommentToolTabGroups";
-import { PdfWindowAnnotateTabGroups } from "./PdfWindowAnnotateTabGroups";
-import { PdfWindowDrawTabGroups } from "./PdfWindowDrawTabGroups";
-import { PdfWindowPageTabGroups } from "./PdfWindowPageTabGroups";
-import {
-  PdfSurfaceRibbonGroup,
-  PdfSurfaceRibbonCommand,
-  PdfSurfaceRibbonCaption,
-} from "../PdfSurfaceRibbon";
-import {
-  ChevronLeft,
-  ChevronRight,
-  ScrollText,
-  Square,
-} from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
+import { type PdfTextEditingContextRibbonAction, type PdfTextEditingContextRibbonLabels, type PdfTextEditingControl } from "../PdfTextEditingContextRibbon";
+import { PdfSurfaceRibbonGroup } from "../PdfSurfaceRibbon";
 import type {
   useAutosavedPageDocument,
   PageSaveStatus,
@@ -61,7 +36,7 @@ import type {
 } from "../PdfTextEditor";
 import type {
   PdfTextCommentPointerTool,
-} from "../PdfCommentRibbonTab";
+} from "@/components/notebook/contents/pdf/PdfCommentRibbonTab";
 import type {
   PdfTextBoxContextAction,
   PdfTextBoxSelection,
@@ -69,7 +44,7 @@ import type {
 import type { PdfInkStroke } from "../PdfInkOverlay";
 import type {
   PdfPictureFormatContextRibbonLabels,
-} from "../PdfPictureFormatContextRibbon";
+} from "@/components/notebook/contents/pdf/PdfPictureFormatContextRibbon";
 import type { ImageEditSummary } from "../../../../../lib/pdf/embedded-image-session";
 import type { EmbeddedImageEditKind } from "@/lib/pdf/embedded-image-edits";
 import type {
@@ -182,107 +157,9 @@ export interface PdfPageWindowRibbonModel {
 // skip the window's renders that change none of them (every page change while
 // scrolling). The others take the autosave object, renewed every render.
 const MemoPdfWindowHomeTabGroups = memo(PdfWindowHomeTabGroups);
-const MemoPdfWindowPictureFormatTabGroups = memo(PdfWindowPictureFormatTabGroups);
-const MemoPdfWindowPageTabGroups = memo(PdfWindowPageTabGroups);
 
 export function PdfPageWindowRibbon({ ribbon }: { ribbon: PdfPageWindowRibbonModel }) {
-  const {
-    t,
-    textEditingRibbonLabels,
-    pictureFormatRibbonLabels,
-    workspaceWritable,
-    hasWorkspaceWriteAuthority,
-    nativeListTextPendingSelection,
-    nativeListTextDialogLease,
-    nativeListTextDraftSelection,
-    setInsertPageDialogOpen,
-    insertPageOperationBusy,
-    setInsertPageErrorMessage,
-    pendingPdfPatchbackRepairRef,
-    insertPageReturnFocusRef,
-    setNativeImageInsertRequestId,
-    nativeFileAttachmentBusy,
-    nativeFileAttachmentBusyRef,
-    nativePageImportBusy,
-    nativePageImportBusyRef,
-    cropBoxes,
-    inkTool,
-    setInkTool,
-    inkEraserKind,
-    setInkEraserKind,
-    inkPenCommands,
-    inkTrackpad,
-    penFirstHideRibbon,
-    ribbonCollapse,
-    penCompact,
-    cropOpen,
-    setCropOpen,
-    cropToggleRef,
-    cropDialogReturnFocusTargetRef,
-    editorRibbonTab,
-    editorObjectSelectionRef,
-    textEditViewMode,
-    setTextEditViewMode,
-    addTextMode,
-    setAddTextMode,
-    textCommentContextActive,
-    textCommentPointerTool,
-    picturePointerTool,
-    setPicturePointerTool,
-    textCommentFontFamily,
-    setTextCommentFontFamily,
-    textCommentFontSizePoints,
-    setTextCommentFontSizePoints,
-    textCommentFontColor,
-    setTextCommentFontColor,
-    imageEditMode,
-    setImageEditMode,
-    embeddedImageBusy,
-    activateTextCommentContext,
-    leaveTextEditModeToReader,
-    handleTextCommentPointerTool,
-    exitPictureEditing,
-    handleEditorRibbonTabChange,
-    invokeTextContextCommand,
-    handleOverlayTextRibbonAction,
-    invokeImageContextCommand,
-    invokeImageCropContextCommand,
-    embeddedImageStatus,
-    pdfPageCount,
-    currentPage,
-    setCurrentPageWithIntent,
-    autosave,
-    windowSaveStatus,
-    windowSaveStatusLabel,
-    managedInkStrokes,
-    runAfterPdfFormulaSourceFlush,
-    embeddedImagePending,
-    discardEmbeddedImageEdits,
-    handleOpenBackgroundDialog,
-    handleApplyEmbeddedImageEdits,
-    commitNativeEmbeddedImageArrange,
-    canUndoNativeReceipt,
-    canRedoNativeReceipt,
-    executeNativeUndo,
-    executeNativeRedo,
-    pdfInsertPageInventoryReady,
-    undoLastInkStroke,
-    workspaceWriteDeniedMessage,
-    overlayTextSelection,
-    overlayTextCapabilities,
-    overlayTextRibbonModel,
-    pendingNativeTextRibbonReason,
-    pendingNativeTextCapabilities,
-    pendingNativeTextRibbonModel,
-    handleExtractSelectedOriginalImage,
-    pictureFormatRibbonModel,
-    editorRibbonTabs,
-    pageStructureRibbonActions,
-    workspacePrimaryActions,
-    workspaceOverflowOnlyActions,
-    workspaceActionRail,
-    workspaceActionTail,
-  } = ribbon;
+  const { t, workspaceWritable, hasWorkspaceWriteAuthority, setInsertPageDialogOpen, insertPageOperationBusy, setInsertPageErrorMessage, pendingPdfPatchbackRepairRef, insertPageReturnFocusRef, setNativeImageInsertRequestId, nativeFileAttachmentBusy, nativeFileAttachmentBusyRef, nativePageImportBusy, nativePageImportBusyRef, ribbonCollapse, penCompact, editorRibbonTab, addTextMode, setAddTextMode, leaveTextEditModeToReader, handleEditorRibbonTabChange, autosave, windowSaveStatus, windowSaveStatusLabel, handleOpenBackgroundDialog, canUndoNativeReceipt, canRedoNativeReceipt, executeNativeUndo, executeNativeRedo, pdfInsertPageInventoryReady, editorRibbonTabs, workspacePrimaryActions, workspaceOverflowOnlyActions, workspaceActionRail, workspaceActionTail } = ribbon;
   return (
     <PdfOfficeRibbon
       collapse={ribbonCollapse}
@@ -349,204 +226,21 @@ export function PdfPageWindowRibbon({ ribbon }: { ribbon: PdfPageWindowRibbonMod
         pdfInsertPageInventoryReady={pdfInsertPageInventoryReady}
       />
 
-      <PdfWindowEditTabGroups
-        t={t}
-        workspaceWritable={workspaceWritable}
-        hasWorkspaceWriteAuthority={hasWorkspaceWriteAuthority}
-        editorRibbonTab={editorRibbonTab}
-        imageEditMode={imageEditMode}
-        setImageEditMode={setImageEditMode}
-        embeddedImageBusy={embeddedImageBusy}
-        embeddedImageStatus={embeddedImageStatus}
-        autosave={autosave}
-        embeddedImagePending={embeddedImagePending}
-        discardEmbeddedImageEdits={discardEmbeddedImageEdits}
-        handleApplyEmbeddedImageEdits={handleApplyEmbeddedImageEdits}
-      />
+      {null}
 
-      {editorRibbonTab === "text-format" &&
-      (nativeListTextDialogLease !== null || nativeListTextDraftSelection !== null) ? (
-        <span
-          data-pdf-native-list-text-ribbon-host="true"
-          data-pdf-text-target="native-list"
-          data-testid="pdf-native-list-text-ribbon-host"
-          hidden
-        />
-      ) : editorRibbonTab === "text-format" &&
-        nativeListTextPendingSelection !== null ? (
-        <PdfTextEditingContextRibbon
-          capabilities={pendingNativeTextCapabilities}
-          labels={textEditingRibbonLabels}
-          model={pendingNativeTextRibbonModel}
-          onAction={() => undefined}
-          status={
-            <span role="status" data-testid="pdf-native-text-proof-pending">
-              {pendingNativeTextRibbonReason}
-            </span>
-          }
-        />
-      ) : editorRibbonTab === "text-format" &&
-        overlayTextRibbonModel ? (
-        <OfficeFormatPreviewProvider
-          adapter={pdfFormatPreviewAdapter({
-            currentFontSizePt: () => overlayTextRibbonModel.fontSize,
-          })}
-        >
-          <PdfTextEditingContextRibbon
-            capabilities={overlayTextCapabilities}
-            labels={textEditingRibbonLabels}
-            model={overlayTextRibbonModel}
-            onAction={handleOverlayTextRibbonAction}
-          />
-        </OfficeFormatPreviewProvider>
-      ) : null}
+      {null}
 
-      <MemoPdfWindowPictureFormatTabGroups
-        t={t}
-        pictureFormatRibbonLabels={pictureFormatRibbonLabels}
-        hasWorkspaceWriteAuthority={hasWorkspaceWriteAuthority}
-        setNativeImageInsertRequestId={setNativeImageInsertRequestId}
-        editorRibbonTab={editorRibbonTab}
-        editorObjectSelectionRef={editorObjectSelectionRef}
-        picturePointerTool={picturePointerTool}
-        setPicturePointerTool={setPicturePointerTool}
-        leaveTextEditModeToReader={leaveTextEditModeToReader}
-        exitPictureEditing={exitPictureEditing}
-        invokeImageContextCommand={invokeImageContextCommand}
-        invokeImageCropContextCommand={invokeImageCropContextCommand}
-        commitNativeEmbeddedImageArrange={commitNativeEmbeddedImageArrange}
-        handleExtractSelectedOriginalImage={handleExtractSelectedOriginalImage}
-        pictureFormatRibbonModel={pictureFormatRibbonModel}
-      />
+      {null}
 
-      <PdfWindowCommentToolTabGroups
-        t={t}
-        workspaceWritable={workspaceWritable}
-        hasWorkspaceWriteAuthority={hasWorkspaceWriteAuthority}
-        editorRibbonTab={editorRibbonTab}
-        textCommentContextActive={textCommentContextActive}
-        textCommentPointerTool={textCommentPointerTool}
-        textCommentFontFamily={textCommentFontFamily}
-        setTextCommentFontFamily={setTextCommentFontFamily}
-        textCommentFontSizePoints={textCommentFontSizePoints}
-        setTextCommentFontSizePoints={setTextCommentFontSizePoints}
-        textCommentFontColor={textCommentFontColor}
-        setTextCommentFontColor={setTextCommentFontColor}
-        handleTextCommentPointerTool={handleTextCommentPointerTool}
-        invokeTextContextCommand={invokeTextContextCommand}
-        autosave={autosave}
-        workspaceWriteDeniedMessage={workspaceWriteDeniedMessage}
-        overlayTextSelection={overlayTextSelection}
-      />
+      {null}
 
-      <PdfWindowDrawTabGroups
-        t={t}
-        workspaceWritable={workspaceWritable}
-        hasWorkspaceWriteAuthority={hasWorkspaceWriteAuthority}
-        editorRibbonTab={editorRibbonTab}
-        autosave={autosave}
-        workspaceWriteDeniedMessage={workspaceWriteDeniedMessage}
-        inkTool={inkTool}
-        setInkTool={setInkTool}
-        inkEraserKind={inkEraserKind}
-        setInkEraserKind={setInkEraserKind}
-        inkPenCommands={inkPenCommands}
-        managedInkStrokes={managedInkStrokes}
-        undoLastInkStroke={undoLastInkStroke}
-        trackpad={inkTrackpad}
-        hideRibbon={penFirstHideRibbon}
-      />
+      {null}
 
-      <PdfWindowAnnotateTabGroups
-        t={t}
-        workspaceWritable={workspaceWritable}
-        editorRibbonTab={editorRibbonTab}
-        activateTextCommentContext={activateTextCommentContext}
-        autosave={autosave}
-        workspaceWriteDeniedMessage={workspaceWriteDeniedMessage}
-      />
+      {null}
 
-      <MemoPdfWindowPageTabGroups
-        t={t}
-        cropBoxes={cropBoxes}
-        cropOpen={cropOpen}
-        setCropOpen={setCropOpen}
-        cropToggleRef={cropToggleRef}
-        cropDialogReturnFocusTargetRef={cropDialogReturnFocusTargetRef}
-        editorRibbonTab={editorRibbonTab}
-        currentPage={currentPage}
-        pageStructureRibbonActions={pageStructureRibbonActions}
-      />
+      {null}
 
-      {editorRibbonTab === "tools" ? (
-        <PdfSurfaceRibbonGroup
-          label={t("toolbar.ribbonPageView")}
-          tab="tools"
-          testId="pdf-editor-tools-surface"
-        >
-          <PdfSurfaceRibbonCommand
-            controlId="PDFCTL.SURFACE.PREV_PAGE"
-            disabled={currentPage <= 1}
-            icon={<ChevronLeft size={24} />}
-            label={t("pdfViewer.prev")}
-            onClick={() =>
-              runAfterPdfFormulaSourceFlush(() =>
-                setCurrentPageWithIntent((value) =>
-                  Math.max(1, value - 1),
-                ),
-              )
-            }
-            testId="pdf-text-editor-prev-page"
-          />
-          <PdfSurfaceRibbonCaption testId="pdf-text-editor-page-of">
-            {t("pdfViewer.pageOf", {
-              current: currentPage,
-              total: pdfPageCount || currentPage,
-            })}
-          </PdfSurfaceRibbonCaption>
-          <PdfSurfaceRibbonCommand
-            controlId="PDFCTL.SURFACE.NEXT_PAGE"
-            disabled={pdfPageCount > 0 && currentPage >= pdfPageCount}
-            icon={<ChevronRight size={24} />}
-            label={t("pdfViewer.next")}
-            onClick={() =>
-              runAfterPdfFormulaSourceFlush(() =>
-                setCurrentPageWithIntent((value) =>
-                  pdfPageCount
-                    ? Math.min(pdfPageCount, value + 1)
-                    : value + 1,
-                ),
-              )
-            }
-            testId="pdf-text-editor-next-page"
-          />
-          <PdfSurfaceRibbonCommand
-            active={textEditViewMode === "continuous"}
-            controlId="PDFCTL.SURFACE.VIEW_MODE"
-            icon={
-              textEditViewMode === "continuous" ? (
-                <ScrollText size={24} />
-              ) : (
-                <Square size={24} />
-              )
-            }
-            label={
-              textEditViewMode === "continuous"
-                ? t("pdfViewer.viewModeSingle")
-                : t("pdfViewer.viewModeContinuous")
-            }
-            onClick={() =>
-              runAfterPdfFormulaSourceFlush(() =>
-                setTextEditViewMode((mode) =>
-                  mode === "continuous" ? "single" : "continuous",
-                ),
-              )
-            }
-            testId="pdf-text-editor-continuous-toggle"
-            toggle
-          />
-        </PdfSurfaceRibbonGroup>
-      ) : null}
+      {null}
     </PdfOfficeRibbon>
   );
 }

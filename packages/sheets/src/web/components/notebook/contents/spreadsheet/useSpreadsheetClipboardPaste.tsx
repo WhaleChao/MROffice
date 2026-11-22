@@ -9,7 +9,7 @@ import { writeLineBlanksIn } from "@mrnote/core/web/lib/spreadsheet/line-styles.
 import { nativeOfficeOwnsFocus } from "@mrnote/core/web/lib/native-office-focus.ts";
 import { cssPixelsToEmu } from "../../../../lib/spreadsheet/drawing-buttons";
 import { type CellMap, hasCellMetadata, copyCellMap, type SpreadsheetCell, writeCellValueInto } from "@mrnote/core/web/lib/spreadsheet/cell-buttons.ts";
-import { cutConditionalFormatFileCopy, sameSheetCutRulePlans, writePastedContentInto } from "../../../../lib/spreadsheet/paste-buttons";
+import { crossSheetCutConditionalFormats, cutConditionalFormatFileCopy, sameSheetCutRulePlans, writePastedContentInto } from "../../../../lib/spreadsheet/paste-buttons";
 import { flashFillPlan, flashFillRequestFromResolved } from "../../../../lib/spreadsheet/fill-buttons";
 import { nativeColumnCssClamp, editNativeColumns } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
 import { useCallback, useEffect, useRef, type ClipboardEvent as ReactClipboardEvent, type RefObject, type KeyboardEvent as ReactKeyboardEvent } from "react";
@@ -35,7 +35,7 @@ import { parseSpreadsheetClipboardHtml } from "../../../../lib/spreadsheet/clipb
 import { richClipboardCellHasTransferableContent, standardPasteGrid, pasteLinkSnapshotDimensions, valuesWithSourceFormatting, type PasteOptionsChoice, valuesOnlyGrid, transposedPasteGrid, pasteLinkGrid, formatsGrid, type PastedContent, type PasteSpecialDraft, settlePasteSpecialDraft, commentsGrid, formulasGrid, numberFormatsGrid, type RichClipboard, transposeClipboard, arithmeticGrid, clipboardCellContent, transposedValuesGrid, applySkipBlanks, pasteOptionsSpecialDraft, layPasteTiles } from "@mrnote/core/web/lib/spreadsheet/paste-special.ts";
 import { readSheetObjectClipboardToken, clipboardHtmlHoldsOnlyPictures } from "../../../../lib/spreadsheet/object-clipboard";
 import { type SheetChartClipboardItem, type SheetChartClipboardFrame } from "../../../../lib/spreadsheet/chart-clipboard";
-import { clearRulesInRange as clearConditionalRulesInRange, MAX_CONDITIONAL_FORMATS, normalizeRules as normalizeConditionalRules, planRulesForFormatPaste, planRulesForFormatPasteWithFile, planRulesForTiledFormatPaste, planRulesForTransposedFormatPaste, planRulesWithFile, ruleMovedBy, type ConditionalFormatRule } from "@mrnote/core/web/lib/spreadsheet/conditional-format.ts";
+import { MAX_CONDITIONAL_FORMATS, normalizeRules as normalizeConditionalRules, planRulesForFormatPaste, planRulesForFormatPasteWithFile, planRulesForTiledFormatPaste, planRulesForTransposedFormatPaste, planRulesWithFile, type ConditionalFormatRule } from "@mrnote/core/web/lib/spreadsheet/conditional-format.ts";
 import { withConditionalFormatFileCopyRecorded, type ConditionalFormatFileCopyLayout } from "@mrnote/core/web/lib/spreadsheet/structural.ts";
 import { rewriteConditionalFormatReferences, rewriteValidationReferences } from "../../../../lib/spreadsheet/sheet-formula-references";
 import { rangeLayoutToPngDataUrl, type RangeLayout } from "../../../../lib/spreadsheet/image-export";
@@ -479,7 +479,7 @@ export function useSpreadsheetClipboardPaste({
         // the moved cells follows them, any other stays). A rule the planner
         // cannot carry leaves the rules as they were.
         let moveValidationPlan: { rules: ValidationRule[]; changed: boolean } | undefined;
-        let moveConditionalFormatPlan: { rules: ConditionalFormatRule[]; changed: boolean } | undefined;
+        let moveConditionalFormatPlan: { rules: ConditionalFormatRule[]; changed: boolean; demoted?: ConditionalFormatRule[] } | undefined;
         const movedValidations = validationClipboardRef.current;
         if (sameSheetCut && movedRange) {
           // The moved cells' conditional formats and validation, and every
@@ -499,9 +499,12 @@ export function useSpreadsheetClipboardPaste({
         }
 
         // A move from another sheet carries them across: the source sheet
-        // keeps its rules without the moved cells, this one gains the moved
-        // cells' rules (written as the moved formulas are, a reference to a
-        // cell left behind naming the source sheet) and keeps its own.
+        // keeps its rules without the moved cells, what they say of the moved
+        // cells following them there; this one gains the moved cells' rules
+        // and keeps its own. Excel (Range.Cut to another sheet, xlsx-backlog
+        
+        // $A1="x" from A1 to C5 reads $A5="x", B1>B9 reads D5>D13, $A$1 stays
+        // -- not as the moved cells' own formulas, which follow what they name.
         let sourceSheetRules:
           | { conditionalFormats: ConditionalFormatRule[]; validations: ValidationRule[] }
           | undefined;
@@ -528,14 +531,16 @@ export function useSpreadsheetClipboardPaste({
             r2: row + movedRange.r2 - movedRange.r1,
             c2: col + movedRange.c2 - movedRange.c1,
           };
-          const carried = movedConditionalFormats.map((rule) => {
-            const moved = ruleMovedBy(rule, rowDelta, colDelta, bounds);
-            return moved ? rewriteConditionalFormatReferences(moved, across(true)) : null;
-          });
-          const sourceConditional = clearConditionalRulesInRange(
-            normalizeConditionalRules(crossSheetSource.conditionalFormats),
+          const { carried, source: sourceConditional } = crossSheetCutConditionalFormats({
+            movedRules: movedConditionalFormats,
+            sourceRules: normalizeConditionalRules(crossSheetSource.conditionalFormats),
             movedRange,
-          );
+            row,
+            col,
+            fromSheet,
+            toSheet,
+            bounds,
+          });
           const sourceValidations = clearRulesInRange(
             normalizeValidationRules(crossSheetSource.validations),
             movedRange,
@@ -574,7 +579,7 @@ export function useSpreadsheetClipboardPaste({
           }
         }
         const cutFileCopy = movedRange && moveConditionalFormatPlan
-          ? cutConditionalFormatFileCopy({ source: crossSheetSource, sheet, movedRange, row, col })
+          ? cutConditionalFormatFileCopy({ source: crossSheetSource, sheet, movedRange, row, col, demoted: moveConditionalFormatPlan.demoted })
           : undefined;
         setActiveCell({ row, col });
         const moved = pasteGridIntoCells(
@@ -784,7 +789,11 @@ export function useSpreadsheetClipboardPaste({
             sheet.id,
             sourceRange,
             { row: selRect.r1, col: selRect.c1 },
-            { tiles: [tileRows, tileCols], ...(origin.sourceRows ? { rows: origin.sourceRows } : {}) },
+            {
+              tiles: [tileRows, tileCols],
+              ...(origin.sourceRows ? { rows: origin.sourceRows } : {}),
+              ...(pasteOptions.mergeConditionalFormats === true ? { merge: true as const } : {}),
+            },
           );
           const tiledMerges: MergeSpan[] = [];
           for (let tileRow = 0; tileRow < tileRows; tileRow += 1) {
@@ -939,7 +948,11 @@ export function useSpreadsheetClipboardPaste({
         sheet.id,
         sourceRange,
         { row: destinationRange.r1, col: destinationRange.c1 },
-        origin.sourceRows ? { rows: origin.sourceRows } : {},
+        {
+          ...(origin.sourceRows ? { rows: origin.sourceRows } : {}),
+          
+          ...(pasteOptions.mergeConditionalFormats === true ? { merge: true as const } : {}),
+        },
       );
       const validationPlan = planRulesForValidationPaste(
         validations,

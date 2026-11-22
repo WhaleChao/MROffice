@@ -10,7 +10,7 @@ import type { Node as ProseMirrorNode, ResolvedPos } from "@tiptap/pm/model";
 import { closeHistory } from "@tiptap/pm/history";
 import type { DocumentParagraphBorders } from "../../../lib/document-borders";
 import type { DocumentDesign } from "../../../lib/document-design";
-import { loadWordStyleSets, type WordQuickStyleId } from "../../../lib/office-word-style-sets";
+import { loadWordStyleSets, wordQuickStyleIdForName, type WordQuickStyleId } from "../../../lib/office-word-style-sets";
 import { normalizeBuiltinParagraphStyleId } from "./extensions/DocumentFormatting";
 import { officePrimaryFontFamily } from "../../office-ribbon/officeTypographyCatalog";
 import {
@@ -432,6 +432,17 @@ export function applyDocumentBuiltinStyle(
           const markType = tr.doc.type.schema.marks[name];
           if (markType) tr.removeMark(pos + 1, pos + 1 + node.content.size, markType);
         }
+        // The toggles the previous gallery style's own document style gave
+        // (cascadeDocumentOwnStyleToggles) go with it, as Word's Heading 2
+        // underline does when the paragraph becomes Heading 1.
+        const previousId = node.attrs.docxStyleId ? null : galleryStyleOfBlock(node);
+        const previousRecipe = previousId ? documentStyleRecipeFor(tr.doc, design, previousId) : null;
+        const previousLooks = previousId && previousRecipe
+          ? documentOwnStyleToggleLooks(tr.doc.attrs as Record<string, unknown>, previousId, previousRecipe.run)
+          : null;
+        if (previousLooks) {
+          restyleJoinedRuns(tr, tr.doc.type.schema, pos + 1, pos + 1 + node.content.size, previousLooks.styled, previousLooks.normal);
+        }
         // An imported heading's runs say "bold as the style has it" (a bold
         // mark of value null, the page's reading of a heading run with no
         // w:b of its own). Made a paragraph of another style, the heading's
@@ -531,7 +542,94 @@ export function applyDocumentBuiltinStyle(
         underline: run.underline ?? undefined,
       }),
     )
+    .command(({ tr }) => {
+      cascadeDocumentOwnStyleToggles(tr, id as WordQuickStyleId, run);
+      return true;
+    })
     .run();
+}
+
+/**
+ * `window.__docsGalleryOwnStyleCascadeOff = true` keeps the gallery's runs to
+ * the recipe alone (the A/B arm before the cascade below).
+ */
+function galleryOwnStyleCascadeOff(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    (window as Window & { __docsGalleryOwnStyleCascadeOff?: boolean }).__docsGalleryOwnStyleCascadeOff === true
+  );
+}
+
+/** The document's own paragraph style that Word's Quick Style `id` is (by
+ *  its name, "heading 2" for Heading 2), as both DOCX writers pick it. */
+function documentOwnQuickStyleId(docAttrs: Record<string, unknown>, id: WordQuickStyleId): string | null {
+  const definitions = docAttrs.styleDefinitions as { styles?: unknown } | null | undefined;
+  const styles = Array.isArray(definitions?.styles) ? definitions.styles : [];
+  for (const style of styles) {
+    if (!style || typeof style !== "object") continue;
+    const row = style as { styleId?: unknown; name?: unknown; type?: unknown };
+    if (row.type === "paragraph" && typeof row.styleId === "string" && wordQuickStyleIdForName(row.name) === id) {
+      return row.styleId;
+    }
+  }
+  return null;
+}
+
+/**
+ * The toggles the paragraph's style gives in Word that the gallery does not
+ * write. A document of its own styles is saved with its own style of the
+ * gallery style's name (Word applies that one: an imported "heading 2" that
+ * underlines, corpus R496-D05 LIVE L4), and the gallery writes the recipe's
+ * face, size and colour on the runs, which win over the style, but a recipe
+ * toggle that is off writes nothing: the style's underline, bold, italic or
+ * raise showed in Word and not on the page. The runs take them as the
+ * import states a style's toggles (a run's own differing value stays,
+ * restyleJoinedRuns), traded from the document's Normal, which the
+ * paragraph's runs wear at this point.
+ */
+type GalleryRunToggles = { bold: boolean | null; italic: boolean | null; underline: boolean | null };
+
+/** The runs' look under the document's Normal, and with the toggles its own
+ *  style of the gallery style's name adds over the recipe; null when the
+ *  document has no such style (or the cascade is off). */
+function documentOwnStyleToggleLooks(
+  docAttrs: Record<string, unknown>,
+  id: WordQuickStyleId,
+  recipe: GalleryRunToggles,
+) {
+  if (galleryOwnStyleCascadeOff() || docAttrs.styleDefinitions == null) return null;
+  const ownStyle = documentOwnQuickStyleId(docAttrs, id);
+  const normalStyle = defaultParagraphStyleId(docAttrs);
+  if (!ownStyle || !normalStyle || ownStyle === normalStyle) return null;
+  const normal = paragraphStyleRunLook(docAttrs, normalStyle);
+  const styleLook = paragraphStyleRunLook(docAttrs, ownStyle);
+  if (!normal || !styleLook) return null;
+  // Face, size and colour are the recipe's marks: not traded.
+  const styled = {
+    ...normal,
+    bold: recipe.bold ? normal.bold : styleLook.bold,
+    italic: recipe.italic ? normal.italic : styleLook.italic,
+    underline: recipe.underline ? normal.underline : styleLook.underline,
+    vertAlign: styleLook.vertAlign,
+  };
+  return { normal, styled };
+}
+
+function cascadeDocumentOwnStyleToggles(
+  tr: Transaction,
+  id: WordQuickStyleId,
+  recipe: GalleryRunToggles,
+): void {
+  const looks = documentOwnStyleToggleLooks(tr.doc.attrs as Record<string, unknown>, id, recipe);
+  if (!looks) return;
+  const { normal: before, styled: after } = looks;
+  const builtin = normalizeBuiltinParagraphStyleId(id);
+  tr.doc.nodesBetween(tr.selection.from, tr.selection.to, (node, pos) => {
+    if (!node.isTextblock) return true;
+    if (!["paragraph", "heading"].includes(node.type.name) || node.attrs.builtinStyleId !== builtin) return false;
+    restyleJoinedRuns(tr, tr.doc.type.schema, pos + 1, pos + 1 + node.content.size, before, after);
+    return false;
+  });
 }
 
 /**

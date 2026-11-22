@@ -68,7 +68,8 @@ const MAX_MANAGED_NATIVE_TEXT_BOX_TEXT_TOKEN_CHARS = 80_000;
 const MAX_MANAGED_NATIVE_TEXT_BOX_DIRECTIVE_CHARS =
   MAX_MANAGED_NATIVE_TEXT_BOX_IMAGE_CHARS +
   MAX_MANAGED_NATIVE_TEXT_BOX_TEXT_TOKEN_CHARS +
-  65_024 + 262_144 + MAX_PDF_TEXT_BOX_RUNS_FIELD_CHARS;
+  // (The source binding's token and its wrapper's name.)
+  MAX_PDF_SOURCE_TEXT_BOX_TOKEN_CHARS + 64 + 262_144 + MAX_PDF_TEXT_BOX_RUNS_FIELD_CHARS;
 
 const UPSERT_PATTERN =
   /^\[\[MRNOTE_NATIVE_TEXT_BOX_V1\|upsert\|([A-Za-z0-9._~%\-]{1,384})\|(left|center|right|justify)\|(serif|sans|mono)\|([01])\|([01])\|([0-3])\|([0-9.]{1,20})\|([0-9A-Fa-f]{6})\|([0-9A-Fa-f]{16})\|([A-Za-z0-9_-]{1,80000})\|png\|([A-Za-z0-9+/]+={0,2})\|(auto|0|90|180|270)\|([0-9.,-]{7,256})\]\]$/;
@@ -1022,6 +1023,30 @@ export function pdfTextBoxRunsBaselineOptions(
   };
 }
 
+/** The token a record's source binding is carried in; null for a record
+ * with none, or one that does not read as a binding. */
+function sourceBindingToken(record: Pick<ManagedNativeTextBoxRecord, "sourceText" | "restoreSource">): string | null {
+  const binding = record.sourceText ? readPdfSourceTextBoxBinding(record.sourceText) : null;
+  return binding ? bytesToBase64Url(new TextEncoder().encode(JSON.stringify({
+    ...binding, ...(record.restoreSource ? {restore: true} : {}),
+  }))) : null;
+}
+
+
+
+
+
+
+
+
+
+export function managedNativeTextBoxSourceBindingTooLong(
+  record: Pick<ManagedNativeTextBoxRecord, "sourceText" | "restoreSource">,
+): boolean {
+  const token = sourceBindingToken(record);
+  return token !== null && token.length > MAX_PDF_SOURCE_TEXT_BOX_TOKEN_CHARS;
+}
+
 function nativeTextBoxDirective(
   record: ManagedNativeTextBoxRecord,
   rotation: 0 | 90 | 180 | 270 | "auto",
@@ -1030,9 +1055,7 @@ function nativeTextBoxDirective(
   if (!nativeId || !isValidPage(record.page)) return null;
   const binding = record.sourceText ? readPdfSourceTextBoxBinding(record.sourceText) : null;
   if (record.sourceText && !binding) return null;
-  const sourceToken = binding ? bytesToBase64Url(new TextEncoder().encode(JSON.stringify({
-    ...binding, ...(record.restoreSource ? {restore: true} : {}),
-  }))) : null;
+  const sourceToken = sourceBindingToken(record);
   // Refuse before HTTP instead of sending a body the source writer cannot
   // decode, then reporting its generic identity mismatch after JSON saved.
   if (sourceToken && sourceToken.length > MAX_PDF_SOURCE_TEXT_BOX_TOKEN_CHARS) return null;

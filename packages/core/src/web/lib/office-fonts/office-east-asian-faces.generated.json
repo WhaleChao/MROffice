@@ -346,5 +346,1475 @@
 "ｍｓ 明朝": -128,
 "ｍｓ ｐゴシック": -128,
 "ｍｓ ｐ明朝": -128
+},
+"lines": {
+"batang": [
+0.8584,
+0.1416
+],
+"batangche": [
+0.8584,
+0.1416
+],
+"biz udgothic": [
+0.8799,
+0.1201
+],
+"biz udmincho medium": [
+0.8799,
+0.1201
+],
+"biz udpgothic": [
+0.8799,
+0.1201
+],
+"biz udpmincho medium": [
+0.8799,
+0.1201
+],
+"biz udpゴシック": [
+0.8799,
+0.1201
+],
+"biz udp明朝 medium": [
+0.8799,
+0.1201
+],
+"biz udゴシック": [
+0.8799,
+0.1201
+],
+"biz ud明朝 medium": [
+0.8799,
+0.1201
+],
+"dengxian": [
+0.8101,
+0.2319
+],
+"dengxian bold": [
+0.8101,
+0.2319
+],
+"dengxian light": [
+0.8101,
+0.2319
+],
+"dengxian regular": [
+0.8101,
+0.2319
+],
+"dotum": [
+0.8584,
+0.1416
+],
+"dotumche": [
+0.8584,
+0.1416
+],
+"fangsong": [
+0.8594,
+0.1406
+],
+"gulim": [
+0.8584,
+0.1416
+],
+"gulimche": [
+0.8584,
+0.1416
+],
+"gungsuh": [
+0.8584,
+0.1416
+],
+"gungsuhche": [
+0.8584,
+0.1416
+],
+"hggothice": [
+0.8594,
+0.1406
+],
+"hggothicm": [
+0.8594,
+0.1406
+],
+"hggyoshotai": [
+0.8594,
+0.1406
+],
+"hgmarugothicmpro": [
+0.8594,
+0.1406
+],
+"hgminchoe": [
+0.8594,
+0.1406
+],
+"hgpgothice": [
+0.8594,
+0.1406
+],
+"hgpgothicm": [
+0.8594,
+0.1406
+],
+"hgpminchoe": [
+0.8594,
+0.1406
+],
+"hgpsoeikakugothicub": [
+0.8594,
+0.1406
+],
+"hgpsoeikakupoptai": [
+0.8594,
+0.1406
+],
+"hgp創英角ｺﾞｼｯｸub": [
+0.8594,
+0.1406
+],
+"hgp創英角ﾎﾟｯﾌﾟ体": [
+0.8594,
+0.1406
+],
+"hgp明朝e": [
+0.8594,
+0.1406
+],
+"hgpｺﾞｼｯｸe": [
+0.8594,
+0.1406
+],
+"hgpｺﾞｼｯｸm": [
+0.8594,
+0.1406
+],
+"hgseikaishotaipro": [
+0.8594,
+0.1406
+],
+"hgsgothice": [
+0.8594,
+0.1406
+],
+"hgsminchoe": [
+0.8594,
+0.1406
+],
+"hgsoeikakugothicub": [
+0.8594,
+0.1406
+],
+"hgsoeikakupoptai": [
+0.8594,
+0.1406
+],
+"hgssoeikakugothicub": [
+0.8594,
+0.1406
+],
+"hgssoeikakupoptai": [
+0.8594,
+0.1406
+],
+"hgs創英角ｺﾞｼｯｸub": [
+0.8594,
+0.1406
+],
+"hgs創英角ﾎﾟｯﾌﾟ体": [
+0.8594,
+0.1406
+],
+"hgs明朝e": [
+0.8594,
+0.1406
+],
+"hgsｺﾞｼｯｸe": [
+0.8594,
+0.1406
+],
+"hg丸ｺﾞｼｯｸm-pro": [
+0.8594,
+0.1406
+],
+"hg創英角ｺﾞｼｯｸub": [
+0.8594,
+0.1406
+],
+"hg創英角ﾎﾟｯﾌﾟ体": [
+0.8594,
+0.1406
+],
+"hg明朝e": [
+0.8594,
+0.1406
+],
+"hg正楷書体-pro": [
+0.8594,
+0.1406
+],
+"hg行書体": [
+0.8594,
+0.1406
+],
+"hgｺﾞｼｯｸe": [
+0.8594,
+0.1406
+],
+"hgｺﾞｼｯｸm": [
+0.8594,
+0.1406
+],
+"kaiti": [
+0.8594,
+0.1406
+],
+"malgun gothic": [
+1.0884,
+0.2417
+],
+"malgun gothic bold": [
+1.0884,
+0.2417
+],
+"malgun gothic semilight": [
+1.0884,
+0.2417
+],
+"meiryo": [
+1.0601,
+0.4399
+],
+"meiryo bold": [
+1.0601,
+0.4399
+],
+"meiryo bold italic": [
+1.0601,
+0.4399
+],
+"meiryo corsivo": [
+1.0601,
+0.4399
+],
+"meiryo cursief": [
+1.0601,
+0.4399
+],
+"meiryo cursiva": [
+1.0601,
+0.4399
+],
+"meiryo dőlt": [
+1.0601,
+0.4399
+],
+"meiryo etzana": [
+1.0601,
+0.4399
+],
+"meiryo fed": [
+1.0601,
+0.4399
+],
+"meiryo fed kursiv": [
+1.0601,
+0.4399
+],
+"meiryo fet": [
+1.0601,
+0.4399
+],
+"meiryo fet kursiv": [
+1.0601,
+0.4399
+],
+"meiryo fett": [
+1.0601,
+0.4399
+],
+"meiryo fett kursiv": [
+1.0601,
+0.4399
+],
+"meiryo félkövér": [
+1.0601,
+0.4399
+],
+"meiryo félkövér dőlt": [
+1.0601,
+0.4399
+],
+"meiryo gras": [
+1.0601,
+0.4399
+],
+"meiryo gras italique": [
+1.0601,
+0.4399
+],
+"meiryo grassetto": [
+1.0601,
+0.4399
+],
+"meiryo grassetto corsivo": [
+1.0601,
+0.4399
+],
+"meiryo halvfet": [
+1.0601,
+0.4399
+],
+"meiryo halvfet kursiv": [
+1.0601,
+0.4399
+],
+"meiryo italic": [
+1.0601,
+0.4399
+],
+"meiryo italique": [
+1.0601,
+0.4399
+],
+"meiryo itálico": [
+1.0601,
+0.4399
+],
+"meiryo i̇talik": [
+1.0601,
+0.4399
+],
+"meiryo kalın": [
+1.0601,
+0.4399
+],
+"meiryo kalın i̇talik": [
+1.0601,
+0.4399
+],
+"meiryo krepko": [
+1.0601,
+0.4399
+],
+"meiryo krepko poševno": [
+1.0601,
+0.4399
+],
+"meiryo kursiv": [
+1.0601,
+0.4399
+],
+"meiryo kursivoitu": [
+1.0601,
+0.4399
+],
+"meiryo kursywa": [
+1.0601,
+0.4399
+],
+"meiryo kurzíva": [
+1.0601,
+0.4399
+],
+"meiryo lihavoitu": [
+1.0601,
+0.4399
+],
+"meiryo lihavoitu kursivoi": [
+1.0601,
+0.4399
+],
+"meiryo lodi etzana": [
+1.0601,
+0.4399
+],
+"meiryo lodia": [
+1.0601,
+0.4399
+],
+"meiryo negreta": [
+1.0601,
+0.4399
+],
+"meiryo negreta cursiva": [
+1.0601,
+0.4399
+],
+"meiryo negrita": [
+1.0601,
+0.4399
+],
+"meiryo negrita cursiva": [
+1.0601,
+0.4399
+],
+"meiryo negrito": [
+1.0601,
+0.4399
+],
+"meiryo negrito itálico": [
+1.0601,
+0.4399
+],
+"meiryo pogrubiona kursywa": [
+1.0601,
+0.4399
+],
+"meiryo pogrubiony": [
+1.0601,
+0.4399
+],
+"meiryo poševno": [
+1.0601,
+0.4399
+],
+"meiryo tučná kurzíva": [
+1.0601,
+0.4399
+],
+"meiryo tučné": [
+1.0601,
+0.4399
+],
+"meiryo tučné kurzíva": [
+1.0601,
+0.4399
+],
+"meiryo ui": [
+1.0601,
+0.21
+],
+"meiryo ui bold": [
+1.0601,
+0.21
+],
+"meiryo ui bold italic": [
+1.0601,
+0.21
+],
+"meiryo ui corsivo": [
+1.0601,
+0.21
+],
+"meiryo ui cursief": [
+1.0601,
+0.21
+],
+"meiryo ui cursiva": [
+1.0601,
+0.21
+],
+"meiryo ui dőlt": [
+1.0601,
+0.21
+],
+"meiryo ui etzana": [
+1.0601,
+0.21
+],
+"meiryo ui fed": [
+1.0601,
+0.21
+],
+"meiryo ui fed kursiv": [
+1.0601,
+0.21
+],
+"meiryo ui fet": [
+1.0601,
+0.21
+],
+"meiryo ui fet kursiv": [
+1.0601,
+0.21
+],
+"meiryo ui fett": [
+1.0601,
+0.21
+],
+"meiryo ui fett kursiv": [
+1.0601,
+0.21
+],
+"meiryo ui félkövér": [
+1.0601,
+0.21
+],
+"meiryo ui félkövér dőlt": [
+1.0601,
+0.21
+],
+"meiryo ui gras": [
+1.0601,
+0.21
+],
+"meiryo ui gras italique": [
+1.0601,
+0.21
+],
+"meiryo ui grassetto": [
+1.0601,
+0.21
+],
+"meiryo ui grassetto corsivo": [
+1.0601,
+0.21
+],
+"meiryo ui halvfet": [
+1.0601,
+0.21
+],
+"meiryo ui halvfet kursiv": [
+1.0601,
+0.21
+],
+"meiryo ui italic": [
+1.0601,
+0.21
+],
+"meiryo ui italique": [
+1.0601,
+0.21
+],
+"meiryo ui itálico": [
+1.0601,
+0.21
+],
+"meiryo ui i̇talik": [
+1.0601,
+0.21
+],
+"meiryo ui kalın": [
+1.0601,
+0.21
+],
+"meiryo ui kalın i̇talik": [
+1.0601,
+0.21
+],
+"meiryo ui krepko": [
+1.0601,
+0.21
+],
+"meiryo ui krepko poševno": [
+1.0601,
+0.21
+],
+"meiryo ui kursiv": [
+1.0601,
+0.21
+],
+"meiryo ui kursivoitu": [
+1.0601,
+0.21
+],
+"meiryo ui kursywa": [
+1.0601,
+0.21
+],
+"meiryo ui kurzíva": [
+1.0601,
+0.21
+],
+"meiryo ui lihavoitu": [
+1.0601,
+0.21
+],
+"meiryo ui lihavoitu kursivoi": [
+1.0601,
+0.21
+],
+"meiryo ui lodi etzana": [
+1.0601,
+0.21
+],
+"meiryo ui lodia": [
+1.0601,
+0.21
+],
+"meiryo ui negreta": [
+1.0601,
+0.21
+],
+"meiryo ui negreta cursiva": [
+1.0601,
+0.21
+],
+"meiryo ui negrita": [
+1.0601,
+0.21
+],
+"meiryo ui negrita cursiva": [
+1.0601,
+0.21
+],
+"meiryo ui negrito": [
+1.0601,
+0.21
+],
+"meiryo ui negrito itálico": [
+1.0601,
+0.21
+],
+"meiryo ui pogrubiona kursywa": [
+1.0601,
+0.21
+],
+"meiryo ui pogrubiony": [
+1.0601,
+0.21
+],
+"meiryo ui poševno": [
+1.0601,
+0.21
+],
+"meiryo ui tučná kurzíva": [
+1.0601,
+0.21
+],
+"meiryo ui tučné": [
+1.0601,
+0.21
+],
+"meiryo ui tučné kurzíva": [
+1.0601,
+0.21
+],
+"meiryo ui vet": [
+1.0601,
+0.21
+],
+"meiryo ui vet cursief": [
+1.0601,
+0.21
+],
+"meiryo ui έντονα": [
+1.0601,
+0.21
+],
+"meiryo ui έντονα πλάγια": [
+1.0601,
+0.21
+],
+"meiryo ui πλάγια": [
+1.0601,
+0.21
+],
+"meiryo ui курсив": [
+1.0601,
+0.21
+],
+"meiryo ui полужирный": [
+1.0601,
+0.21
+],
+"meiryo ui полужирный курсив": [
+1.0601,
+0.21
+],
+"meiryo vet": [
+1.0601,
+0.4399
+],
+"meiryo vet cursief": [
+1.0601,
+0.4399
+],
+"meiryo έντονα": [
+1.0601,
+0.4399
+],
+"meiryo έντονα πλάγια": [
+1.0601,
+0.4399
+],
+"meiryo πλάγια": [
+1.0601,
+0.4399
+],
+"meiryo курсив": [
+1.0601,
+0.4399
+],
+"meiryo полужирный": [
+1.0601,
+0.4399
+],
+"meiryo полужирный курсив": [
+1.0601,
+0.4399
+],
+"microsoft gothicneo": [
+0.9609,
+0.2358
+],
+"microsoft jhenghei": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei bold": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei fed": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei fet": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei fett": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei félkövér": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei gras": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei grassetto": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei halvfet": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei kalın": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei krepko": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei lihavoitu": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei lodia": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei negreta": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei negrita": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei negrito": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei pogrubiony": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei tučné": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei ui": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui bold": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui fed": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui fet": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui fett": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui félkövér": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui gras": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui grassetto": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui halvfet": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui kalın": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui krepko": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui lihavoitu": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui lodia": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui negreta": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui negrita": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui negrito": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui pogrubiony": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui tučné": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui vet": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui έντονα": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei ui полужирный": [
+1.0156,
+0.2544
+],
+"microsoft jhenghei vet": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei έντονα": [
+1.0757,
+0.2544
+],
+"microsoft jhenghei полужирный": [
+1.0757,
+0.2544
+],
+"microsoft yahei": [
+1.0581,
+0.2617
+],
+"microsoft yahei bold": [
+1.0581,
+0.2617
+],
+"microsoft yahei fed": [
+1.0581,
+0.2617
+],
+"microsoft yahei fet": [
+1.0581,
+0.2617
+],
+"microsoft yahei fett": [
+1.0581,
+0.2617
+],
+"microsoft yahei félkövér": [
+1.0581,
+0.2617
+],
+"microsoft yahei gras": [
+1.0581,
+0.2617
+],
+"microsoft yahei grassetto": [
+1.0581,
+0.2617
+],
+"microsoft yahei halvfet": [
+1.0581,
+0.2617
+],
+"microsoft yahei kalın": [
+1.0581,
+0.2617
+],
+"microsoft yahei krepko": [
+1.0581,
+0.2617
+],
+"microsoft yahei light": [
+1.0156,
+0.2617
+],
+"microsoft yahei lihavoitu": [
+1.0581,
+0.2617
+],
+"microsoft yahei lodia": [
+1.0581,
+0.2617
+],
+"microsoft yahei negreta": [
+1.0581,
+0.2617
+],
+"microsoft yahei negrita": [
+1.0581,
+0.2617
+],
+"microsoft yahei negrito": [
+1.0581,
+0.2617
+],
+"microsoft yahei pogrubiony": [
+1.0581,
+0.2617
+],
+"microsoft yahei tučné": [
+1.0581,
+0.2617
+],
+"microsoft yahei ui": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui bold": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui fed": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui fet": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui fett": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui félkövér": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui gras": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui grassetto": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui halvfet": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui kalın": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui krepko": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui light": [
+1.0581,
+0.2544
+],
+"microsoft yahei ui lihavoitu": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui lodia": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui negreta": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui negrita": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui negrito": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui pogrubiony": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui tučné": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui vet": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui έντονα": [
+1.0156,
+0.2544
+],
+"microsoft yahei ui полужирный": [
+1.0156,
+0.2544
+],
+"microsoft yahei vet": [
+1.0581,
+0.2617
+],
+"microsoft yahei έντονα": [
+1.0581,
+0.2617
+],
+"microsoft yahei полужирный": [
+1.0581,
+0.2617
+],
+"microsoft 고딕neo": [
+0.9609,
+0.2358
+],
+"mingliu": [
+0.8008,
+0.1992
+],
+"mingliu-extb": [
+0.8008,
+0.1992
+],
+"mingliu_hkscs": [
+0.8008,
+0.1992
+],
+"mingliu_hkscs-extb": [
+0.8008,
+0.1992
+],
+"ms gothic": [
+0.8594,
+0.1406
+],
+"ms mincho": [
+0.8594,
+0.1406
+],
+"ms pgothic": [
+0.8594,
+0.1406
+],
+"ms pmincho": [
+0.8594,
+0.1406
+],
+"ms ui gothic": [
+0.8594,
+0.1406
+],
+"nsimsun": [
+0.8594,
+0.1406
+],
+"pmingliu": [
+0.8008,
+0.1992
+],
+"pmingliu-extb": [
+0.8008,
+0.1992
+],
+"simhei": [
+0.8594,
+0.1406
+],
+"simsun": [
+0.8594,
+0.1406
+],
+"simsun-extb": [
+0.8594,
+0.1406
+],
+"stcaiyun": [
+0.81,
+0.226
+],
+"stfangsong": [
+0.86,
+0.26
+],
+"sthupo": [
+0.798,
+0.233
+],
+"stliti": [
+0.752,
+0.259
+],
+"stxihei": [
+0.871,
+0.208
+],
+"stxingkai": [
+0.761,
+0.289
+],
+"stxinwei": [
+0.781,
+0.236
+],
+"stzhongsong": [
+0.912,
+0.225
+],
+"ud digi kyokasho n-b": [
+0.8799,
+0.2769
+],
+"ud digi kyokasho n-r": [
+0.8799,
+0.2769
+],
+"ud digi kyokasho nk-b": [
+0.8799,
+0.2769
+],
+"ud digi kyokasho nk-r": [
+0.8799,
+0.2769
+],
+"ud digi kyokasho np-b": [
+0.8799,
+0.2769
+],
+"ud digi kyokasho np-r": [
+0.8799,
+0.2769
+],
+"ud デジタル 教科書体 n-b": [
+0.8799,
+0.2769
+],
+"ud デジタル 教科書体 n-r": [
+0.8799,
+0.2769
+],
+"ud デジタル 教科書体 nk-b": [
+0.8799,
+0.2769
+],
+"ud デジタル 教科書体 nk-r": [
+0.8799,
+0.2769
+],
+"ud デジタル 教科書体 np-b": [
+0.8799,
+0.2769
+],
+"ud デジタル 教科書体 np-r": [
+0.8799,
+0.2769
+],
+"yu gothic": [
+0.9883,
+0.2988
+],
+"yu gothic bold": [
+0.9883,
+0.2988
+],
+"yu gothic light": [
+0.9893,
+0.2979
+],
+"yu gothic medium": [
+0.9902,
+0.2969
+],
+"yu gothic regular": [
+0.9849,
+0.3022
+],
+"yu gothic ui": [
+1.0791,
+0.251
+],
+"yu gothic ui bold": [
+1.0791,
+0.251
+],
+"yu gothic ui light": [
+1.0791,
+0.251
+],
+"yu gothic ui regular": [
+1.0791,
+0.251
+],
+"yu gothic ui semibold": [
+1.0791,
+0.251
+],
+"yu gothic ui semilight": [
+1.0791,
+0.251
+],
+"yu mincho": [
+0.9951,
+0.292
+],
+"yu mincho demibold": [
+0.979,
+0.3081
+],
+"yu mincho light": [
+0.9951,
+0.292
+],
+"yu mincho regular": [
+0.9951,
+0.292
+],
+"メイリオ": [
+1.0601,
+0.4399
+],
+"メイリオ イタリック": [
+1.0601,
+0.4399
+],
+"メイリオ ボールド": [
+1.0601,
+0.4399
+],
+"メイリオ ボールド イタリック": [
+1.0601,
+0.4399
+],
+"仿宋": [
+0.8594,
+0.1406
+],
+"华文中宋": [
+0.912,
+0.225
+],
+"华文仿宋": [
+0.86,
+0.26
+],
+"华文新魏": [
+0.781,
+0.236
+],
+"华文琥珀": [
+0.798,
+0.233
+],
+"华文细黑": [
+0.871,
+0.208
+],
+"华文行楷": [
+0.761,
+0.289
+],
+"华文隶书": [
+0.752,
+0.259
+],
+"宋体": [
+0.8594,
+0.1406
+],
+"微軟正黑體": [
+1.0757,
+0.2544
+],
+"微軟正黑體 bold": [
+1.0757,
+0.2544
+],
+"微软雅黑": [
+1.0581,
+0.2617
+],
+"微软雅黑 bold": [
+1.0581,
+0.2617
+],
+"微软雅黑 light": [
+1.0156,
+0.2617
+],
+"新宋体": [
+0.8594,
+0.1406
+],
+"新細明體": [
+0.8008,
+0.1992
+],
+"新細明體-extb": [
+0.8008,
+0.1992
+],
+"楷体": [
+0.8594,
+0.1406
+],
+"游ゴシック": [
+0.9883,
+0.2988
+],
+"游ゴシック bold": [
+0.9883,
+0.2988
+],
+"游ゴシック light": [
+0.9893,
+0.2979
+],
+"游ゴシック medium": [
+0.9902,
+0.2969
+],
+"游ゴシック regular": [
+0.9849,
+0.3022
+],
+"游明朝": [
+0.9951,
+0.292
+],
+"游明朝 demibold": [
+0.979,
+0.3081
+],
+"游明朝 light": [
+0.9951,
+0.292
+],
+"游明朝 regular": [
+0.9951,
+0.292
+],
+"等线": [
+0.8101,
+0.2319
+],
+"等线 bold": [
+0.8101,
+0.2319
+],
+"等线 light": [
+0.8101,
+0.2319
+],
+"細明體": [
+0.8008,
+0.1992
+],
+"細明體-extb": [
+0.8008,
+0.1992
+],
+"細明體_hkscs": [
+0.8008,
+0.1992
+],
+"細明體_hkscs-extb": [
+0.8008,
+0.1992
+],
+"黑体": [
+0.8594,
+0.1406
+],
+"굴림": [
+0.8584,
+0.1416
+],
+"굴림체": [
+0.8584,
+0.1416
+],
+"궁서": [
+0.8584,
+0.1416
+],
+"궁서체": [
+0.8584,
+0.1416
+],
+"돋움": [
+0.8584,
+0.1416
+],
+"돋움체": [
+0.8584,
+0.1416
+],
+"맑은 고딕": [
+1.0884,
+0.2417
+],
+"맑은 고딕 bold": [
+1.0884,
+0.2417
+],
+"맑은 고딕 semilight": [
+1.0884,
+0.2417
+],
+"바탕": [
+0.8584,
+0.1416
+],
+"바탕체": [
+0.8584,
+0.1416
+],
+"ｍｓ ゴシック": [
+0.8594,
+0.1406
+],
+"ｍｓ 明朝": [
+0.8594,
+0.1406
+],
+"ｍｓ ｐゴシック": [
+0.8594,
+0.1406
+],
+"ｍｓ ｐ明朝": [
+0.8594,
+0.1406
+]
 }
 }

@@ -45,7 +45,7 @@ import { officeTextPaintEffect } from "@mrnote/core/web/lib/document-wordart-sty
 import { Spline } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import { MAX_TABLE_FRAME_CM } from "@mrnote/core/web/lib/presentation-table-size.ts";
 import { presentationMeasurementCmDraft, type PresentationMeasurementUnit } from "@mrnote/core/web/lib/presentation-measurement.ts";
-import type { OfficeShapeFormatAdapter, OfficeShapeFormatLabels } from "@mrnote/core/web/components/office-ribbon/OfficeShapeFormatTab.tsx";
+import type { OfficeShapeFormatAdapter, OfficeShapeFormatLabels } from "@/components/office-ribbon/OfficeShapeFormatTab";
 import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
 import type { OfficeShapeStyleRecipe } from "@mrnote/core/web/lib/office-shape-style-catalog.ts";

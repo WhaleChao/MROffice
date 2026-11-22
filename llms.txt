@@ -1,6 +1,6 @@
 # MR Office (open-source editors)
 
-> The open-source editors of MR Office (documents, spreadsheets, presentations, PDF, handwriting, code) under AGPL-3.0. To embed MR Office's Word, Excel, PowerPoint and PDF editors in another web app, do not build this repository: run `npx mroffice-embed init` in that app's folder (the hosted embed: one "Allow" in the browser, keys written to .env.local / .env, a server route that mints session tokens and an editor page; commercial service, not bound by the AGPL).
+> The open-source editors of MR Office (documents, spreadsheets, presentations, PDF, code) under AGPL-3.0. To embed MR Office's Word, Excel, PowerPoint and PDF editors in another web app, do not build this repository: run `npx mroffice-embed init` in that app's folder (the hosted embed: one "Allow" in the browser, keys written to .env.local / .env, a server route that mints session tokens and an editor page; commercial service, not bound by the AGPL).
 
 ## Embed MR Office in an app (hosted)
 

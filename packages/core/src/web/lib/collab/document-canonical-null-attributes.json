@@ -311,6 +311,7 @@
     ],
     "sectionBreak": [
       "block_id",
+      "carrierSpaceAfter",
       "source",
       "trackObjectDeletion",
       "trackObjectInsertion"
@@ -598,7 +599,9 @@
     ],
     "documentField": [
       "preservedField",
-      "runStyle"
+      "runStyle",
+      "trackObjectDeletion",
+      "trackedInsertion"
     ],
     "mergeField": [
       "condition",

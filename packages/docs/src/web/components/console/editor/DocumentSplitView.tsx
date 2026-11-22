@@ -168,6 +168,8 @@ export default function DocumentSplitView({
 
   return (
     <section
+      // Document content keeps its ltr geometry under an rtl interface.
+      dir="ltr"
       className="document-split-view note-editor-body-main--sheeted"
       data-document-view-mode="web"
       data-testid="document-split-view"

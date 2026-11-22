@@ -7341,3 +7341,45 @@
     user-select: text;
   }
 }
+
+/* A finger's 44 px hit area (styles/touch-hit-area.css). */
+@media (pointer: coarse) {
+  /* The bar is as tall as a finger's area: on a phone it scrolls (clips). */
+  .zoomStatusBar {
+    flex-basis: 44px;
+    min-height: 44px;
+  }
+  .zoomStatusButton.zoomStatusButton {
+    position: relative;
+  }
+  .zoomStatusButton.zoomStatusButton::before {
+    content: "";
+    position: absolute;
+    inset: min(0px, calc((100% - var(--touch-hit-min, 44px)) / 2));
+  }
+}
+
+/* A phone (and an embedded mobile editor): the bar's items are wider than
+   the screen -- the slide counter and Accessibility stood off its left edge,
+   out of reach. The zoom slider narrows and the bar scrolls sideways under
+   a finger, every item reachable, starting from the left as PowerPoint's. */
+@media (max-width: 600px) {
+  .zoomStatusBar {
+    justify-content: flex-start;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+  .zoomStatusControls {
+    --continuous-zoom-width: 96px;
+  }
+}
+:global(html[data-mobile-layout="on"]) .zoomStatusBar {
+  justify-content: flex-start;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+:global(html[data-mobile-layout="on"]) .zoomStatusControls {
+  --continuous-zoom-width: 96px;
+}

@@ -58,6 +58,71 @@ const LATIN_SET_IDEOGRAPH = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakan
 /** Marks Word keeps a set-as-letter word whole across (ideographsAsLetters). */
 const WORD_KEEPS_AFTER = new Set(["?", "!", "‐"]);
 
+/** Closing punctuation and the opening brackets Word keeps together. */
+const WORD_CLOSING_BEFORE_OPEN = new Set(Array.from(".,:;!?)]}"));
+const WORD_OPENING = new Set(Array.from("([{"));
+
+/**
+ * Whether Word keeps closing punctuation and an opening bracket together
+ * ("neutrino.[6]", "survey.(12)", "a,[3]", "(a)(b)"): Windows Word breaks a
+ * Latin line only after a space or a hyphen, never between a stop, comma or
+ * closing bracket and the bracket after it -- left-aligned, the whole
+ * "neutrino.[123456]" goes down even where "neutrino." alone fits; justified,
+ * "neutrino.[6]" stays on its line by narrowing the spaces (docx-rounds
+ * work-I/probe25 brk2, Windows Word; corpus R477-D53, whose extra line took
+ * Fig. 6 to the next page). UAX #14 (IS/CP ÷ OP) and Chromium break there.
+ * `window.__docsBracketJoinOff = true`: broken there, as before.
+ */
+export function wordJoinsBeforeOpening(before: string | undefined, after: string | undefined): boolean {
+  return before !== undefined && after !== undefined && WORD_CLOSING_BEFORE_OPEN.has(before) && WORD_OPENING.has(after) && !bracketJoinOff();
+}
+
+function bracketJoinOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsBracketJoinOff?: boolean }).__docsBracketJoinOff === true;
+}
+
+/** Marks Word keeps with what follows them in a word: "what?now", "stop!123",
+ * "wait…now", "index.php?id=3". */
+const WORD_KEEPS_NEXT = new Set(["?", "!", "\u2026"]);
+/** Dashes Word keeps with what is before them: "word—word" breaks after the
+ * em dash only (an en dash, UAX #14's BA, is kept so already). */
+const WORD_KEEPS_PREVIOUS = new Set(["\u2014"]);
+/** A grapheme of Latin (non-East-Asian) text that is not a space or break. */
+function latinWordGrapheme(grapheme: string): boolean {
+  if (!grapheme || /^\s/u.test(grapheme) || grapheme === "\u200b" || grapheme === "\u2060" || grapheme === "\ufffc") return false;
+  const code = String.fromCodePoint(grapheme.codePointAt(0) ?? 0x20);
+  return !HAN_LIKE.test(code) && !EAST_ASIAN_MARK.test(code);
+}
+
+/**
+ * Whether Word keeps the two graphemes of a Latin word together where UAX #14
+ * (and Chromium) would break between them: closing punctuation before an
+ * opening bracket (wordJoinsBeforeOpening); a question or exclamation mark or
+ * an ellipsis before what follows it with no space ("what?now", "stop!123456",
+ * "wait…now", "watch?v=abc", "what?“now”"); and an em dash after what is
+ * before it ("wordword—word" goes down whole where "wordword—" no longer
+ * fits; it still breaks after the dash); and a hyphen that opens a word with
+ * what follows it. Windows Word, mode 15, left aligned,
+ * right indent swept 0-1160 twips (docx-look/brk17/probes jn1/jn2: a break
+ * after a hyphen or an en dash, before digits too, and after an em dash;
+ * none after "?", "!" or "…", nor before "—").
+ * `window.__docsPunctJoinOff = true`: only the brackets are kept, as before.
+ */
+export function wordJoins(before: string | undefined, after: string | undefined, previous?: string): boolean {
+  if (wordJoinsBeforeOpening(before, after)) return true;
+  if (before === undefined || after === undefined || punctJoinOff()) return false;
+  // A hyphen that opens a word keeps it ("word -based" breaks at the space
+  // only: Windows Word, brk17 jn3; UAX #14's LB20a, which Chromium skips).
+  if (before === "-" && previous !== undefined && /^\s$/u.test(previous)) return /^\p{L}/u.test(after);
+  if (WORD_KEEPS_NEXT.has(before)) return latinWordGrapheme(after) && !WORD_KEEPS_NEXT.has(after);
+  if (WORD_KEEPS_PREVIOUS.has(after)) return latinWordGrapheme(before) && !WORD_KEEPS_PREVIOUS.has(before);
+  return false;
+}
+
+function punctJoinOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsPunctJoinOff?: boolean }).__docsPunctJoinOff === true;
+}
+
 /** East Asian marks (the ideographic space aside), eastAsianMarksAsIdeographs. */
 const EAST_ASIAN_MARK = /[\u3001-\u303f\ufe10-\ufe6f\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]/u;
 
@@ -244,6 +309,8 @@ export function lineBreakOpportunities(graphemes: readonly string[], options: Li
     // it, as the browsers do; UAX #14's "SP* x SY" took "FP" down with it.
     // (One place in the corpus; no fixture yet.)
     if (!out[i] && options.word && after === "SY" && before === "SP") out[i] = true;
+    // Nor where Word keeps a word's punctuation together (wordJoins).
+    if (out[i] && options.word && wordJoins(graphemes[i - 1], graphemes[i], graphemes[i - 2])) out[i] = false;
     if (out[i] && options.powerpoint && (before === "SY" || before === "EX") && (after === "AL" || after === "NU") && i >= 2 && classes[i - 2] !== "SP") out[i] = false;
     // Ideographs set as letters (Windows Word, mode 13 and earlier): a
     // question or exclamation mark or a U+2010 hyphen between letters keeps

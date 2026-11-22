@@ -904,6 +904,8 @@ export function PresentationSlideView({
     <PresentationSlideNumberContext.Provider value={slideNumber}>
     <div
       ref={projectionFrameRef}
+      // The slide keeps its ltr geometry under an rtl interface.
+      dir="ltr"
       className={className}
       style={{ ...style, display: "block", padding: 0,
         // Words that state no colour draw in the slide's own ink, as on the

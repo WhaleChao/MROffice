@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { onlyofficeAllowsFilterChange } from "@mrnote/core/web/lib/embed/onlyoffice-frame.ts";
 import {
   checkEnabledFeatureCommandRegistry,
   createFeatureCommandBindingContract,
@@ -28,6 +29,9 @@ export type SpreadsheetVisibleCommandReason =
   | "spreadsheet.capability.activeCommentRequired"
   | "spreadsheet.capability.activeNoteRequired"
   | "spreadsheet.capability.activeFilterRequired"
+  /** An embedded editor whose integration keeps the filter as it is
+   * (ONLYOFFICE's permissions.modifyFilter false; lib/embed/onlyoffice-frame). */
+  | "spreadsheet.capability.filterLockedByHost"
   | "spreadsheet.capability.actionPenUnavailable"
   | "spreadsheet.capability.analyzeDataUnavailable"
   | "spreadsheet.capability.clipboardUnavailable"
@@ -5745,6 +5749,10 @@ export const SPREADSHEET_VISIBLE_CONTROL_DEFINITIONS = Object.freeze([
     ],
     // Excel greys Spelling on a protected sheet.
     ["XLSCTL.REVIEW.PROOF.SPELL", "spelling", 8, "sheet-editable"],
+    // Review > Thesaurus (Shift+F7): the shared Thesaurus pane on the active
+    // cell's word. Looking a word up writes nothing, so a protected sheet
+    // still opens it; Insert is the cell edit and answers to the lock.
+    ["XLSCTL.REVIEW.PROOF.THESAURUS", "thesaurus", 9, "always"],
     ["XLSCTL.REVIEW.PROOF.WORKBOOK_STATS", "statistics", 10, "always"],
     ["XLSCTL.REVIEW.PROOF.ACCESSIBILITY_MENU", "accessibility", 11, "always"],
     ["XLSCTL.REVIEW.PROOF.PERFORMANCE", "performance", 12, "always"],
@@ -5770,6 +5778,7 @@ export const SPREADSHEET_VISIBLE_CONTROL_DEFINITIONS = Object.freeze([
         String(suffix).includes("Selection")
           ? "XLS-REV-PROTECT-01"
           : String(suffix) === "spelling" ||
+              String(suffix) === "thesaurus" ||
               String(suffix) === "accessibility" ||
               String(suffix) === "performance" ||
               String(suffix) === "statistics"
@@ -5815,7 +5824,6 @@ export const SPREADSHEET_VISIBLE_CONTROL_DEFINITIONS = Object.freeze([
     });
   }),
   ...[
-    ["XLSCTL.REVIEW.PROOF.THESAURUS", "thesaurus", 9],
     ["XLSCTL.REVIEW.PROOF.SMART_LOOKUP", "smartLookup", 13],
     ["XLSCTL.REVIEW.PROOF.TRANSLATE", "translate", 14],
   ].map(([controlId, suffix, order]) =>
@@ -8691,10 +8699,11 @@ function predicateDecision(
   // One Protect Sheet permission on the active sheet. Without the resolved
   // map a protected sheet allows none (the reading before permissions).
   const allows = (permission: keyof SheetProtectionPermissions): boolean =>
-    !context.sheetProtected ||
+    (permission !== "autoFilter" || onlyofficeAllowsFilterChange()) &&
+    (!context.sheetProtected ||
     (context.protectionAllows
       ? context.protectionAllows[permission]
-      : permission === "formatCells" && context.formatCellsAllowed === true);
+      : permission === "formatCells" && context.formatCellsAllowed === true));
   const editableFamily = (available: boolean | undefined) => {
     // Formatting is its own permission on a protected sheet: an unlocked
     // cell may be entered, not restyled (live audit B138), and with Format
@@ -8992,6 +9001,8 @@ function predicateDecision(
             fallbackReason ?? "spreadsheet.capability.writerUnavailable",
           );
     case "active-filter":
+      if (!onlyofficeAllowsFilterChange())
+        return blocked("spreadsheet.capability.filterLockedByHost");
       // Excel: with protection on, filters change only under Use AutoFilter;
       // Clear changes criteria, never the AutoFilter itself.
       if (!allows("autoFilter"))
@@ -9853,6 +9864,8 @@ function predicateDecision(
         ? { enabled: true, reasonKey: null }
         : blocked("spreadsheet.capability.selectionRequired");
     case "filter-editable":
+      if (!onlyofficeAllowsFilterChange())
+        return blocked("spreadsheet.capability.filterLockedByHost");
       // Excel "Protect a worksheet": an AutoFilter can never be applied or
       // removed on a protected sheet, whatever Use AutoFilter says (that
       // permission only opens the criteria of an existing one).

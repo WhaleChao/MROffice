@@ -345,6 +345,24 @@ export function preferenceWithTemplate(
 }
 
 /**
+ * A cover picked at random from the shelf for a notebook made without the
+ * cover picker (MR Office's "New workspace": the person types only a name,
+ * and the notebook still has a cover of its own in MR Note's library).
+ * Any cover that needs no picture, in a random colour, or in its own colours
+ * when it has them (preferenceWithTemplate). `random` is for tests.
+ */
+export function randomCoverPreference(random: () => number = Math.random): CoverPreference {
+  const pick = <T,>(items: readonly T[]): T =>
+    items[Math.min(items.length - 1, Math.floor(random() * items.length))];
+  const swatch = pick(COLOR_SWATCHES);
+  const template = pick(TEMPLATE_OPTIONS.filter((option) => !option.needsImage)).id;
+  return preferenceWithTemplate(
+    { template: "solid", color: swatch.color, spineColor: swatch.spine, textTheme: swatch.text, colorPicked: false },
+    template,
+  );
+}
+
+/**
  * The preference as the notebook wears it. Following its cover, it wears
  * the cover's colour as the palette has it now. One saved before covers had
  * colours of their own, with a picture cover and still the default black,

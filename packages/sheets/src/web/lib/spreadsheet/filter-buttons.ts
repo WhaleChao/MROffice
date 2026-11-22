@@ -44,7 +44,14 @@ export interface FilterButtonSheet {
   advancedFilterState?: unknown;
   /** Rows hidden by hand (0-based; lib/spreadsheet/manual-hidden). */
   manuallyHiddenRows?: readonly number[];
+  /** Those of them the file writes 0 points high (reading 998). */
+  zeroHeightRows?: readonly number[];
 }
+
+
+
+
+
 
 
 
@@ -75,7 +82,8 @@ export function withAutoFilterRowsShown<S extends FilterButtonSheet>(
     ? groups.filter((g) => g.axis === "row" && g.collapsed === true && g.start <= range.r2 && g.end > range.r1)
     : [];
   const hidden = Array.isArray(sheet.manuallyHiddenRows) ? sheet.manuallyHiddenRows : [];
-  const kept = hidden.filter((row) => !inData(row));
+  const zeroHigh = new Set(Array.isArray(sheet.zeroHeightRows) ? sheet.zeroHeightRows : []);
+  const kept = hidden.filter((row) => !inData(row) || zeroHigh.has(row));
   if (opened.length === 0 && kept.length === hidden.length) return sheet;
   const next: S = { ...sheet };
   if (opened.length > 0) {
@@ -188,9 +196,13 @@ export function autoFilterToggledSheet<S extends FilterButtonSheet>(
   ) {
     return "overlapsTable";
   }
-  // Filter on shows the rows hidden by hand under its range as well (Excel 16
+  // Filter on, no criterion yet, leaves the rows hidden by hand under its
+  // range hidden: Windows Excel 16 (office-truth autofilter_toggle, xlsx-rounds
   
-  return withAutoFilterRowsShown({ ...sheet, autoFilterRef: rangeA1(range) }, range);
+  
+  // filtering, then shows them, as above). Excel 16 for Mac showed them
+  
+  return { ...sheet, autoFilterRef: rangeA1(range) };
 }
 
 /**

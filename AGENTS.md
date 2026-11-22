@@ -109,8 +109,8 @@ the secret key, claims `iss` (app id), `aud: "mroffice-embed"`, `iat`, `exp`
 
 Only when the task is to change, build or self-host these open-source editors:
 
-- `packages/`: `@mrnote/core` and the six editors (docs, sheets, slides, pdf,
-  ink, code); `apps/playground` runs them together; `apps/desktop` is the
+- `packages/`: `@mrnote/core` and the five editors (docs, sheets, slides, pdf,
+  code); `apps/playground` runs them together; `apps/desktop` is the
   desktop shell; `apps/mcp` is the MCP server.
 - `npm install && npm run fonts && npm run build && npm run preview`
   (http://localhost:5178); `npm run smoke` checks a build.

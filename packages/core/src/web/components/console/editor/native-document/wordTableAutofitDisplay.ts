@@ -1071,10 +1071,12 @@ function contentColumns(
     // The cell's own border sits inside its column in the collapsed model
     // (half on each side), so the content box was one border narrower than
     
-    const chrome =
-      (entry.marginLeft ?? (Number.parseFloat(padding?.paddingLeft ?? "") || 0)) +
-      (entry.marginRight ?? (Number.parseFloat(padding?.paddingRight ?? "") || 0)) +
-      (usedBorderWidth(entry.element, "left") + usedBorderWidth(entry.element, "right")) / 2;
+    const lines = (usedBorderWidth(entry.element, "left") + usedBorderWidth(entry.element, "right")) / 2;
+    const chrome = entry.marginLeft !== null && entry.marginRight !== null && !autofitMarginLinesOld()
+      ? wordMarginChrome(entry.marginLeft + entry.marginRight, entry.element, lines)
+      : (entry.marginLeft ?? (Number.parseFloat(padding?.paddingLeft ?? "") || 0)) +
+        (entry.marginRight ?? (Number.parseFloat(padding?.paddingRight ?? "") || 0)) +
+        lines;
     if (entry.span > 1) {
       merged.push({ column, span: entry.span, min: entry.min + chrome, max: entry.max + chrome, chrome });
       continue;
@@ -1102,11 +1104,45 @@ function enlargeColumns(columns: { minPx: number; maxPx: number }[], side: "minP
   }
 }
 
+/** `window.__docsAutofitMarginLinesOld = true`: a Word cell's column also
+ * holds its two half lines beside its margins, as before (A/B). */
+function autofitMarginLinesOld(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsAutofitMarginLinesOld?: boolean }).__docsAutofitMarginLinesOld === true;
+}
+
+/**
+ * What a Word cell's column holds beside its text: its two margins, which
+ * Word measures from the grid line, so the lines stand in them (ISO 29500
+ * 17.4.42 tblCellMar; the table view draws the cell's padding as its margin
+ * less half the used line, tableBorders.ts). Charged for its lines as well
+ * every column of an AutoFit table asked half a point more than Word's, and
+ * the one column whose word set its width took the others' share: R484-D95's
+ * first column drew 61.12 pt where Word draws 60.48, and "who does a
+ * thorough" kept "a thorough" on the line Word ends at "does" (Windows Word,
+ * probes tbl23 a1: each column its longest word plus its two margins,
+ * +-0.2 pt). Where the padding drawn and the lines need more than the margins
+ * (a margin narrower than half its line), that is what the column holds.
+ */
+function wordMarginChrome(margins: number, cell: HTMLElement | null, lines: number): number {
+  if (!cell) return margins;
+  const box = usedCellBox(cell);
+  return Math.max(margins, box.paddingLeft + box.paddingRight + lines);
+}
+
 /** A cell's used border widths, by what the stylesheet can see of the cell and
  * its table: every table a page pass touched asked in the middle of the view's
  * update, each asking a style pass of the whole page (28 s of a 30-page
  * document of tables opening). */
-const usedBorders = new Map<string, { left: number; right: number }>();
+/** A cell's used border widths and the padding drawn inside them, CSS px. */
+interface UsedCellBox {
+  readonly left: number;
+  readonly right: number;
+  readonly paddingLeft: number;
+  readonly paddingRight: number;
+}
+
+const usedBorders = new Map<string, UsedCellBox>();
 const USED_BORDERS_KEPT = 512;
 
 /** Attributes that name a place rather than say anything a border rule reads:
@@ -1128,20 +1164,21 @@ function attributesText(element: Element | null): string {
   return text;
 }
 
-function readUsedBorders(cell: HTMLElement): { left: number; right: number } {
+function readUsedBorders(cell: HTMLElement): UsedCellBox {
   const style = getComputedStyle(cell);
   const width = (line: string, value: string) => (line === "none" || line === "hidden" ? 0 : Number.parseFloat(value) || 0);
   return {
     left: width(style.borderLeftStyle, style.borderLeftWidth),
     right: width(style.borderRightStyle, style.borderRightWidth),
+    paddingLeft: Number.parseFloat(style.paddingLeft) || 0,
+    paddingRight: Number.parseFloat(style.paddingRight) || 0,
   };
 }
 
-function usedBorderWidth(cell: Element | null | undefined, side: "left" | "right"): number {
-  if (!(cell instanceof HTMLElement)) return 0;
+function usedCellBox(cell: HTMLElement): UsedCellBox {
   // Out of the document a cell has no style to read, which says nothing of
   // the same cell in the page.
-  if (!cell.isConnected) return readUsedBorders(cell)[side];
+  if (!cell.isConnected) return readUsedBorders(cell);
   const row = cell.parentElement;
   const key = `${cell.tagName}\u0002${(cell as HTMLTableCellElement).cellIndex}\u0002${attributesText(cell)}\u0002${attributesText(row)}\u0002${attributesText(cell.closest("table"))}`;
   let borders = usedBorders.get(key);
@@ -1150,7 +1187,12 @@ function usedBorderWidth(cell: Element | null | undefined, side: "left" | "right
     if (usedBorders.size >= USED_BORDERS_KEPT) usedBorders.clear();
     usedBorders.set(key, borders);
   }
-  return borders[side];
+  return borders;
+}
+
+function usedBorderWidth(cell: Element | null | undefined, side: "left" | "right"): number {
+  if (!(cell instanceof HTMLElement)) return 0;
+  return usedCellBox(cell)[side];
 }
 
 /** The table's widths in its current container, from its content columns. */

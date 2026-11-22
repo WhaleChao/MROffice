@@ -3030,10 +3030,12 @@ function shiftedFormulaPieces(formula: string, rowDelta: number, colDelta: numbe
         return `"${tok.value.replace(/"/g, '""')}"`;
       }
       if (tok.type === "wholeref") {
-        // A broken whole column is written bare: `Sheet2!#REF!` would not
-        // parse back, where #REF! evaluates to the error Excel shows.
+        // A whole column pushed off the grid keeps its sheet, as a cell does:
+        // Windows Excel writes =INDEX('Data Sheet'!#REF!,...) for a copy of
+        // =INDEX('Data Sheet'!A:A,...) one column left (office-truth copy
+        
         const shifted = shiftWholeAxisRef(tok, rowDelta, colDelta);
-        return shifted === ERRORS.REF.code ? shifted : `${sheetPrefixOf(tok)}${shifted}`;
+        return `${sheetPrefixOf(tok)}${shifted}`;
       }
       if (tok.type === "tableref") return tok.raw ?? tok.value;
       return tok.value;

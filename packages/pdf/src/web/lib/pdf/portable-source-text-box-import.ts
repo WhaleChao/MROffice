@@ -10,7 +10,7 @@ import { PDF_JS_DOCUMENT_ASSETS, loadCompatiblePdfJs } from "@mrnote/core/web/li
 import { createPdfSessionDestroyer, releasePdfCanvasBackingStore } from "./render-lifecycle";
 import { rotatedBoundingBox } from "@mrnote/core/web/lib/pdf/rotated-box.ts";
 import { readPdfPortableTextLayout, type PdfPortableTextLayout } from "./portable-text-layout";
-import { readPortablePdfSourceTextBoxBinding, type PdfSourceTextBoxBinding } from "./source-text-box";
+import { MAX_PDF_SOURCE_TEXT_BOX_STORED_BINDING_CHARS, readPortablePdfSourceTextBoxBinding, type PdfSourceTextBoxBinding } from "./source-text-box";
 import type { PdfNativePlanners } from "./remote/pdf-native-planners";
 import { managedNativeTextBoxAnnotationName, managedNativeTextBoxStyleKey, sanitizeManagedNativeTextBoxImage,
   MAX_MANAGED_NATIVE_TEXT_BOX_IMAGE_TOTAL_CHARS, type ManagedNativeTextBoxAnnotation } from "./native-text-box-roundtrip";
@@ -106,7 +106,9 @@ export async function importPortableSourceTextBoxes(input: {
       const bindingJson = stringValue(dict.get(PDFName.of("MRNoteSourceTextBinding")));
       const specJson = stringValue(dict.get(PDFName.of("MRNoteSourceTextSpec")));
       const seal = stringValue(dict.get(PDFName.of("MRNoteSourceTextSeal")));
-      if (!bindingJson || bindingJson.length > 50_000 || !specJson || specJson.length > 100_000 || !seal)
+      // (The spec states the box's words once, in ASCII: six characters a word character at most.)
+      if (!bindingJson || bindingJson.length > MAX_PDF_SOURCE_TEXT_BOX_STORED_BINDING_CHARS ||
+        !specJson || specJson.length > 200_000 || !seal)
         throw Error("PDF portable text metadata is unavailable");
       const binding = readPortablePdfSourceTextBoxBinding(JSON.parse(bindingJson), input, seal);
       const spec = JSON.parse(specJson) as Record<string, unknown>;

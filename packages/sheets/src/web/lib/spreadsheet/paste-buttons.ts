@@ -32,9 +32,11 @@ import { normalizeCellRuns, textFromRuns } from "@mrnote/core/web/lib/spreadshee
 import { withRecordFontIfPlain } from "@mrnote/core/web/lib/spreadsheet/cell-record-font.ts";
 import { cloneCellCommentForPaste } from "@mrnote/core/web/lib/spreadsheet/comments.ts";
 import {
+  clearRulesInRange as clearConditionalRulesInRange,
   MAX_CONDITIONAL_FORMATS,
   normalizeRule as normalizeConditionalRule,
   planRulesForCellMove,
+  ruleMovedBy,
   ruleOverlaps as conditionalRuleOverlaps,
   type ConditionalFormatRule,
 } from "@mrnote/core/web/lib/spreadsheet/conditional-format.ts";
@@ -495,7 +497,7 @@ export function sameSheetCutRulePlans(args: {
   bounds: { maxRow: number; maxCol: number };
 }): {
   validationPlan?: { rules: ValidationRule[]; changed: boolean };
-  conditionalFormatPlan?: { rules: ConditionalFormatRule[]; changed: boolean };
+  conditionalFormatPlan?: { rules: ConditionalFormatRule[]; changed: boolean; demoted?: ConditionalFormatRule[] };
 } {
   const { conditionalFormats, validations, movedValidations, movedRange, row, col, bounds } = args;
   const operation = {
@@ -519,6 +521,8 @@ export function sameSheetCutRulePlans(args: {
     operation.colDelta,
     (rule) => rewriteConditionalFormatReferences(rule, followMove),
     bounds,
+    
+    "demote",
   );
   if (conditionalPlan) out.conditionalFormatPlan = conditionalPlan;
   // The rules left behind keep reading what they read: the source and the
@@ -565,18 +569,65 @@ export function sameSheetCutRulePlans(args: {
 
 
 
+
+export function crossSheetCutConditionalFormats(args: {
+  movedRules: readonly ConditionalFormatRule[];
+  sourceRules: readonly ConditionalFormatRule[];
+  movedRange: Rect;
+  row: number;
+  col: number;
+  fromSheet: string;
+  toSheet: string;
+  bounds: { maxRow: number; maxCol: number };
+}): { carried: (ConditionalFormatRule | null)[]; source: ConditionalFormatRule[] } {
+  const { movedRange, fromSheet, toSheet } = args;
+  const rowDelta = args.row - movedRange.r1;
+  const colDelta = args.col - movedRange.c1;
+  const carried = args.movedRules.map((rule) => {
+    const moved = ruleMovedBy(rule, rowDelta, colDelta, args.bounds);
+    return moved ? rewriteConditionalFormatReferences(moved, (formula) => shiftFormula(formula, rowDelta, colDelta)) : null;
+  });
+  const source = clearConditionalRulesInRange(args.sourceRules, movedRange).map((rule) =>
+    rewriteConditionalFormatReferences(rule, (formula) =>
+      adjustFormulaForCrossSheetMove(formula, {
+        from: movedRange,
+        rowDelta,
+        colDelta,
+        fromSheet,
+        toSheet,
+        hostSheet: fromSheet,
+        movedFormula: false,
+      }),
+    ),
+  );
+  return { carried, source };
+}
+
+
+
+
+
+
+
+
+
+
 export function cutConditionalFormatFileCopy(args: {
   source: { id: string; conditionalFormats?: unknown } | null;
   sheet: { id: string; conditionalFormats?: unknown };
   movedRange: Rect;
   row: number;
   col: number;
+  /** The pieces the page's plan ranked past its bound, for the file to hold
+   *  where the move left them (planRulesForCellMove "demote"). */
+  demoted?: readonly ConditionalFormatRule[];
 }): {
   source: object | null;
   rect: [number, number, number, number];
   at: [number, number];
   page: true;
   cut: true;
+  demote?: readonly ConditionalFormatRule[];
 } | undefined {
   const listed = (candidate: { conditionalFormats?: unknown } | null) =>
     candidate && Array.isArray(candidate.conditionalFormats) ? candidate.conditionalFormats.length : 0;
@@ -585,7 +636,10 @@ export function cutConditionalFormatFileCopy(args: {
     return undefined;
   }
   const { r1, c1, r2, c2 } = args.movedRange;
-  return { source, rect: [r1, c1, r2, c2], at: [args.row, args.col], page: true, cut: true };
+  return {
+    source, rect: [r1, c1, r2, c2], at: [args.row, args.col], page: true, cut: true,
+    ...(args.demoted?.length ? { demote: args.demoted } : {}),
+  };
 }
 
 /** One bulk write: values from a top-left cell, and what travels with them. */

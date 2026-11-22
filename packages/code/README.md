@@ -4,7 +4,7 @@
 
 On npm as [`mroffice-code`](https://www.npmjs.com/package/mroffice-code): compiled, with its types and stylesheet, no build setup needed (`npm i mroffice-code mroffice-core`; built from this tree by `npm run pack:npm`, scripts/npm/).
 
-The code editor of [MR Office](https://mroffice.ai): CodeMirror 6 with MR Office's ribbon, syntax highlighting for many languages, an outline, find and replace, formatting, problems, and code that runs right in the browser.
+The code editor of [MR Office](https://mroffice.ai): CodeMirror 6 with MR Office's Home ribbon, syntax highlighting for many languages, an outline, find, quick open, a file explorer and problems.
 
 This package is generated from MR Office's own source (see the repository README, "How this repository is made").
 
@@ -31,19 +31,11 @@ const { Component: CodeEditor } = codeEditor;
 
 | Feature | Status |
 |---|---|
-| Open and edit text and source files (.js .ts .py .sql .lua .sh .rb .go .c .cpp .cs .java .rs .tex .json .yaml .html .css .md and more) | Available |
+| Open and edit text and source files (.js .ts .py .sql .lua .sh .rb .go .c .cpp .cs .java .rs .tex .json .yaml .html .css .md and more) | Available, verified |
 | Syntax highlighting, folding, bracket matching, multiple cursors, outline, breadcrumbs | Available |
-| Find / replace, go to line, quick open (over the files open in this page) | Available |
-| Format document (JavaScript/TypeScript/JSON/CSS/HTML/Markdown/YAML via Prettier, SQL, Python) | Available |
-| Problems (JavaScript/TypeScript diagnostics, Python lint) and inlay hints | Available |
-| Run JavaScript and TypeScript (sandboxed in the browser) | Available, verified |
-| Run Python (Pyodide, loaded from the jsDelivr CDN on first run) | Available, verified (needs internet the first time) |
-| Run SQL (SQLite, sql.js), Lua and shell scripts (WebAssembly, served by the page) | Available, verified |
-| Run Ruby, C#, Go | The editor offers them, but their WebAssembly runtimes are not wired into the playground |
-| Run C, C++, Java, Rust, compile LaTeX | Need MR Office's execution service; not available in the open-source build |
+| Home: undo and redo, import and download, the file's language and name, the file explorer, quick open, find and problems | Available |
 | Save | The host saves: the playground downloads the file |
-| AI (Copilot, explain and fix), version history, collaboration, notebooks | Part of the MR Office service; not included |
 
 ## Size
 
-About 115,000 lines of the editor's own code (packages/code/src/web), on top of the shared layer in @mrnote/core. In the playground's production build the code editor is a lazily loaded chunk; the in-browser runtimes (Pyodide, sql.js, the shell and Lua WebAssembly) load only when a file of that language is run.
+About 100,000 lines of the editor's own code (packages/code/src/web), on top of the shared layer in @mrnote/core. In the playground's production build the code editor is a lazily loaded chunk.

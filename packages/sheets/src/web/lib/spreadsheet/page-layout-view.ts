@@ -1266,6 +1266,11 @@ export function resolveSpreadsheetPageLayoutGeometry(input: {
     rowSizes: projectSizes(rowProjection, sourceRowSizes, baseRowHeight),
     colSizes: projectSizes(colProjection, sourceColSizes, baseColWidth),
     hiddenLedCols: hiddenLedPositions(colProjection, input.hiddenCols, printArea?.c1 ?? 0),
+    // The range runs on past its last shown column into hidden ones (a wide
+    // column's text spilling over them): a blank band (the API's hidden_tail_cols).
+    hiddenTailCols: !printArea && totalCols > 0 && input.hiddenCols?.has(totalCols - 1) === true
+      && colProjection.paginateCount > colProjection.repeatCount
+      && (mapLocalAxisIndex(colProjection, colProjection.paginateCount - 1) ?? totalCols) < totalCols - 1,
     settings: paginationSettings,
   };
   const contentScale = resolveContentScale(unscaledPaginateInput, input.contentScaleOverride, {

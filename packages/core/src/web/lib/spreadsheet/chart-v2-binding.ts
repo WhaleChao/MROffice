@@ -594,9 +594,16 @@ function parseCategoryTable(
     maxColumns === 1
       ? [boundedRows[0]?.[0]]
       : boundedRows[0].slice(1, valueColumnCount + 1);
+  // Excel's Insert Chart reads a selection whose top-left cell is blank as
+  // labelled on both lines whatever they hold (`excelChartRangeLabelLines`'s
+  // corner): a row of numbers over a blank corner names the series too
+  // (xlsx-rounds R470-X19: A1 blank, A2 0 over B1:D1 file names plotted A2
+  // as a point and the part's references ran one column past the range).
+  const blankCorner =
+    maxColumns > 1 && String(boundedRows[0]?.[0] ?? "").trim() === "";
   const hasHeader =
     boundedRows.length > 1 &&
-    (headerRow ?? firstValueCells.some((value) => finiteNumber(value) === null));
+    (headerRow ?? (blankCorner || firstValueCells.some((value) => finiteNumber(value) === null)));
   const headers = Array.from({ length: valueColumnCount }, (_, index) =>
     hasHeader
       ? boundedText(

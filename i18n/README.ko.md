@@ -2,13 +2,13 @@
 
 <p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
-<p align="center"><b>MR Office의 오픈 소스 편집기: 문서, 스프레드시트, 프레젠테이션, PDF, 필기, 코드가 브라우저에서 실행됩니다.</b></p>
+<p align="center"><b>Microsoft Office에 가장 가까운 에디터, MR Office의 오픈소스 에디터 — 문서, 스프레드시트, 프레젠테이션, PDF, 코드를 브라우저에서 실행합니다.</b></p>
 
 <p align="center"><a href="https://mroffice.ai/ko"><b>▶ 온라인 체험</b></a> · <a href="https://mroffice.ai/ko/office/download"><b>⬇ 다운로드</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/ko/developers">🧑‍💻 개발자</a> · <a href="https://mroffice.ai/ko/developers/embed">🧩 임베드</a> · <a href="https://mroffice.ai/ko/developers/mcp">🤖 AI 앱용 MCP</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm SDK</a> · <a href="https://mroffice.ai/ko/developers/oauth">🔑 MR Office로 로그인</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
-<p align="center"><a href="https://mroffice.ai/ko"><img src="../docs/media/mr-office-demo.webp" alt="MR Office의 오픈 소스 편집기: 문서, 스프레드시트, 프레젠테이션, PDF, 필기, 코드가 브라우저에서 실행됩니다." width="100%"></a></p>
+<p align="center"><a href="https://mroffice.ai/ko"><img src="../docs/media/mr-office-demo.webp" alt="Microsoft Office에 가장 가까운 에디터, MR Office의 오픈소스 에디터 — 문서, 스프레드시트, 프레젠테이션, PDF, 코드를 브라우저에서 실행합니다." width="100%"></a></p>
 
 <p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 50초 소개 영상 보기 (소리 포함)</a></p>
 
@@ -22,12 +22,11 @@
 <td align="center" width="50%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
 </tr>
 <tr>
-<td align="center" width="50%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/ink.png" alt="필기" width="100%"></a><br><b>필기</b></td>
 <td align="center" width="50%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/code.png" alt="코드" width="100%"></a><br><b>코드</b></td>
 </tr>
 </table>
 
-MR Office는 노트, AI, 실제 파일을 한곳에 모은 작업 공간입니다. 이 저장소는 그 편집기의 소스 코드를 공개합니다. MR Office에서 실행되는 것과 같은 편집기이며, 직접 빌드하고 실행하고 포함할 수 있습니다. 이것은 오픈 소스 편집기이지 완전한 오픈 소스 Office 제품군이 아닙니다. Microsoft Office 파일의 읽기와 쓰기는 MR Office가 제공합니다(아래 참고).
+MR Office는 노트, AI, 실제 파일을 위한 워크스페이스입니다. 이 저장소는 MR Office가 구동하는 편집기의 소스 코드를 공개합니다. 직접 빌드하고 실행하고 임베드할 수 있는 동일한 편집기입니다. 무료 MR Office 데스크톱 앱 또는 호스팅 임베드와 함께 사용하면 실제 Word, Excel, PowerPoint 파일을 열고 저장할 수 있습니다.
 
 ## 개발자용
 
@@ -35,7 +34,7 @@ MR Office는 노트, AI, 실제 파일을 한곳에 모은 작업 공간입니�
 
 ### 웹 앱에 편집기 임베드하기(권장)
 
-편집기는 MR Office가 호스팅합니다. 서버가 짧게 유효한 세션 토큰에 서명하면 페이지가 그것으로 편집기를 엽니다. 실제 Word, Excel, PowerPoint, PDF 파일(.docx, .xlsx, .pptx, .pdf)을 편집하며 공동 편집, 업로드, 모든 내보내기 형식, 인쇄를 지원하고, 저장된 파일은 서명된 콜백으로 서버에 전달됩니다. 무료 플랜: localhost 개발 월 1,000회, 운영 도메인 월 100회, 앱 최대 2개. 호스팅되는 상용 서비스이므로 여러분의 앱은 이 저장소의 AGPL 라이선스에 구속되지 않습니다.
+MR Office가 편집기를 호스팅합니다. 서버가 짧은 수명의 세션 토큰에 서명하면 페이지가 편집기를 엽니다. 실제 Word, Excel, PowerPoint, PDF 파일(.docx, .xlsx, .pptx, .pdf)을 공동 편집, 업로드, 모든 내보내기 형식, 인쇄와 함께 편집하고, 저장 내용은 서명된 콜백으로 서버에 전송됩니다. 무료 플랜: localhost에서 월 1,000 세션, 자체 도메인에서 100, 앱 2개까지. 호스팅 서비스이므로 여러분의 앱에는 AGPL 의무가 없습니다.
 
 1. 프로젝트 폴더에서 `npx mroffice-embed init`를 실행하세요(또는 개발자 콘솔에서 앱을 만드세요). 브라우저에서 "허용"을 한 번 누르면 앱의 키가 `.env.local` / `.env`에 기록됩니다.
 2. 서버는 `mroffice-embed/server`의 `createSessionToken`으로 세션 토큰을 발급합니다. 시크릿 키는 서버를 떠나지 않습니다.
@@ -69,28 +68,27 @@ MR Office는 OAuth 2.1 인가 서버입니다(PKCE, 클라이언트 ID 메타데
 
 ### 오픈 소스 편집기 직접 호스팅하기
 
-이 저장소의 편집기 6개는 AGPL-3.0에 따라 여러분의 제품에 넣을 수 있습니다. 수정한 버전을 네트워크로 제공한다면 전체 소스 코드를 제공하고 "MR Office" 표기(NOTICE.md)를 유지해야 합니다. 자체 형식, CSV, HTML, Markdown, PDF를 엽니다. Word, Excel, PowerPoint 파일은 오픈 소스 편집기에 포함되지 않습니다(위의 호스팅 임베드에서 지원). 상용 라이선스는 support@mr-note.com으로 문의하세요. [오픈 소스 가이드 →](https://mroffice.ai/ko/developers/open-source)
+이 저장소의 다섯 개 에디터는 AGPL-3.0에 따라 여러분의 제품에 빌드할 수 있습니다. 수정한 버전을 네트워크로 제공하는 경우 전체 소스 코드를 제공해야 하며 "MR Office" 표시(NOTICE.md)를 유지해야 합니다. 자체 형식, CSV, HTML, Markdown, PDF를 열 수 있으며, Word, Excel, PowerPoint 파일은 위의 호스팅 임베드를 사용하세요. 상용 라이선스는 support@mr-note.com에서 문의할 수 있습니다. [오픈 소스 가이드 →](https://mroffice.ai/ko/developers/open-source)
 
-에디터는 React 컴포넌트로 npm에 있습니다: `npm i mroffice-docs mroffice-core` (그 밖에 `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`). 임베드 방법은 각 패키지의 README에 있습니다.
+에디터는 React 컴포넌트로 npm에 있습니다: `npm i mroffice-docs mroffice-core`(및 `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-code`). 각 패키지의 README에서 임베드 방법을 확인하세요.
 
 ## 편집기
 
 이 저장소에서 각 편집기가 하는 일:
 
-- **문서** — 페이지 단위 워드 프로세서: 스타일, 글꼴, 목록, 표, 머리글과 바닥글, 구역과 단, 도형과 수식, 표지와 목차, 메모와 변경 내용 추적, 페이지 위 필기. 고유 형식(.mrdoc)으로 저장하며 HTML, Markdown, 일반 텍스트를 엽니다.
-- **스프레드시트** — 셀과 수식, 숫자 서식, 조건부 서식, 정렬과 필터, 틀 고정, 여러 시트, 선택 영역의 합계와 평균. 셀 사이의 사칙연산(=A1*B1+10 등)은 입력하면 브라우저에서 계산되고, 함수를 쓰는 수식(SUM, IF, VLOOKUP 등)은 쓴 그대로 보존됩니다. 고유 형식(.mrsheet)으로 저장하며 CSV와 TSV를 열고 저장합니다.
-- **프레젠테이션** — 고유 테마 8개가 있는 슬라이드: 레이아웃, 슬라이드 마스터와 레이아웃 보기, 텍스트, 도형, 텍스트 상자, 표, WordArt와 수식, 메모, 구역, 화면 전환과 애니메이션(미리 보기), 슬라이드 쇼. 고유 형식(.mrslides)으로 저장합니다.
-- **PDF** — PDF 읽기, 검색, 프레젠테이션, 인쇄, 텍스트 복사와 소리 내어 읽기. 파일이 열려 있는 동안 선택한 텍스트에 강조 표시, 밑줄, 취소선, 물결선을 달고 메모와 메모 창을 쓸 수 있습니다. 저장하면 연 그대로의 파일을 돌려줍니다.
-- **필기** — 압력 감지 펜, 형광펜, 지우개, 올가미, 눈금자. 잉크를 도형으로 바꿉니다. 고유 형식(.mrink)으로 저장합니다.
-- **코드** — 여러 언어의 구문 강조, 개요, 찾기 및 바꾸기를 갖춘 가벼운 코드 편집기. JavaScript/TypeScript, Python, SQL, Lua, 셸을 브라우저에서 바로 실행합니다.
+- **문서** — 페이지 기반 워드 프로세서: 홈 탭에서 글꼴, 단락 서식, 목록, 스타일을, 삽입 탭에서 표지 및 빈 페이지, 페이지 나누기, 표, 그림, 도형, SmartArt, 차트, 링크, 책갈피, 메모, 머리글, 바닥글, 페이지 번호, 수식, 기호, 텍스트 상자, WordArt를 다룹니다. 자체 형식(.mrdoc)으로 저장하며 HTML, Markdown, 일반 텍스트를 엽니다.
+- **스프레드시트** — 홈 탭에서 글꼴, 맞춤, 숫자 형식, 조건부 서식, 셀 스타일, 셀 삽입/삭제가 가능한 셀과 수식; 삽입 탭에서 표, 그림, 도형, 아이콘, 확인란, 차트, 스파크라인; 여러 시트와 선택 영역의 합계 및 평균. 셀 간 산술 연산(=A1*B1+10)은 입력하는 대로 브라우저에서 계산되며, 함수가 포함된 수식(SUM, IF, VLOOKUP …)은 작성한 그대로 유지됩니다. 자체 형식(.mrsheet)으로 저장하며 CSV와 TSV를 열고 저장합니다.
+- **프레젠테이션** — 홈 탭에서 레이아웃과 구역이 있는 슬라이드, 텍스트, 글꼴과 단락, 도형과 그 배치; 삽입 탭에서 표, 그림, 아이콘, SmartArt, 차트, 텍스트 상자, WordArt, 머리글과 바닥글, 수식, 기호, 동영상; 발표자 노트, 메모, 발표 기능. 자체 형식(.mrslides)으로 저장합니다.
+- **PDF** — PDF 파일 읽기, 발표, 인쇄: 단일 및 두 페이지 보기, 연속 스크롤, 회전, 썸네일, 읽기 모드, 텍스트 검색과 복사, 파일을 연 상태에서 메모 작성; 저장 시 열었던 그대로의 파일을 돌려줍니다.
+- **코드** — 다양한 언어의 구문 강조, 개요, 찾기, 빠른 열기, 파일 탐색기, 문제 목록을 갖춘 가벼운 코드 에디터.
 
-함수가 들어간 수식 계산, 차트 그리기, SmartArt 레이아웃은 MR Office 자체 엔진이 처리하며 MR Office 데스크톱 앱에서 제공됩니다. 오픈 소스 편집기는 파일에 있는 수식, 차트, SmartArt를 그대로 보존하고 SmartArt는 저장된 모습대로 표시합니다.
+함수, 차트, SmartArt가 포함된 수식은 무료 데스크톱 앱과 호스팅 서비스에서 MR Office 엔진이 계산하고 그립니다. 여기 있는 편집기는 파일에 담긴 모든 수식, 차트, SmartArt를 그대로 유지하며 SmartArt는 저장된 모습대로 표시합니다.
 
 ## 편집기 실행
 
 **▶ [라이브 데모 체험 (설치 불필요)](https://mroffice.ai/ko)**
 
-여섯 편집기는 `packages/`(`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, 공통 `@mrnote/core`)에 있으며 `apps/playground`에서 함께 실행됩니다:
+다섯 개의 에디터는 `packages/`(`@mrnote/docs`, `sheets`, `slides`, `pdf`, `code`, `@mrnote/core` 공유)에 있으며 `apps/playground`에서 함께 실행됩니다:
 
 ```bash
 npm install
@@ -103,7 +101,7 @@ npm run preview   # http://localhost:5178
 
 ## 데스크톱 앱
 
-[`apps/desktop`](../apps/desktop)에는 **MR Office Editors**가 있습니다. MR Office 데스크톱 앱 셸(Electron)의 소스 코드이며 고유한 앱 ID를 사용합니다. Releases의 무료 MR Office 구성 요소를 설치하면 MR Office 데스크톱 앱이 되어 Word, Excel, PowerPoint, PDF 파일과 로그인, AI를 쓸 수 있습니다. 구성 요소가 없으면 오픈 소스 편집기만 실행되며 .mrdoc, .mrsheet, .mrslides, .mrink 파일과 CSV, HTML, Markdown, PDF를 엽니다. 셸과 편집기는 AGPL 소스 코드이고, 구성 요소는 컴파일된 것으로 무료로 쓸 수 있지만 오픈 소스가 아닙니다. `npm run build` 후 다음으로 실행합니다:
+[`apps/desktop`](../apps/desktop)에는 **MR Office Editors**가 있습니다. 이는 MR Office 데스크톱 앱 셸(Electron)의 소스로, 자체 아이덴티티를 가집니다. Releases의 무료 MR Office 구성 요소와 함께 사용하면 Word, Excel, PowerPoint, PDF 파일, 로그인, AI를 갖춘 MR Office 데스크톱 앱이 됩니다. 구성 요소 없이도 오픈소스 에디터만으로 실행되며, .mrdoc, .mrsheet, .mrslides 파일과 CSV, HTML, Markdown, PDF를 엽니다. 셸과 에디터는 AGPL 소스 코드이며, 구성 요소는 Releases에서 무료로 내려받을 수 있습니다. `npm run build` 후 다음으로 시작하세요:
 
 ```bash
 npm run desktop
@@ -111,7 +109,7 @@ npm run desktop
 
 ## 모든 기능을 사용하려면 MR Office 데스크톱 앱(무료)을 설치하세요
 
-MR Office 데스크톱 앱은 무료이며 이 편집기들과 전체 서비스를 갖추고 있고, 내 컴퓨터에서 오프라인으로도 작동합니다. 오픈 소스 편집기에 없는 다음 기능을 제공합니다:
+MR Office 데스크톱 앱은 무료이며 이 편집기들과 전체 서비스를 갖추고 내 컴퓨터에서 오프라인으로 동작합니다. 편집기 위에 다음을 더합니다:
 
 - Word, Excel, PowerPoint 파일(.docx, .xlsx, .pptx) 열기와 저장
 - 함수가 들어간 수식(SUM, IF, VLOOKUP 등) 계산
@@ -123,7 +121,7 @@ MR Office 데스크톱 앱은 무료이며 이 편집기들과 전체 서비스�
 
 ### Word, Excel, PowerPoint, PDF 파일
 
-Word, Excel, PowerPoint 파일(.docx, .xlsx, .pptx) 열기와 저장, PDF 편집 내용을 파일에 다시 저장하는 기능은 무료 MR Office 데스크톱 앱이 제공합니다. 데스크톱 앱에는 이 편집기들이 모두 들어 있으며 내 컴퓨터에서 오프라인으로도 작동합니다:
+실제 Word, Excel, PowerPoint 파일(.docx, .xlsx, .pptx)을 작업하고 PDF 편집 내용을 파일에 바로 저장하세요. 이 모든 편집기를 갖추고 내 컴퓨터에서 오프라인으로 동작하는 무료 MR Office 데스크톱 앱으로 가능합니다:
 
 ## 구성
 
@@ -131,12 +129,12 @@ Word, Excel, PowerPoint 파일(.docx, .xlsx, .pptx) 열기와 저장, PDF 편집
 flowchart LR
   subgraph OSS["오픈 소스 · AGPL-3.0"]
     direction LR
-    core["@mrnote/core"] --> E["여섯 가지 편집기<br/>문서 · 스프레드시트 · 프레젠테이션 · PDF · 필기 · 코드"]
+    core["@mrnote/core"] --> E["다섯 개의 에디터<br/>문서 · 스프레드시트 · 프레젠테이션 · PDF · 코드"]
     E --> PG["apps/playground<br/>브라우저"]
     E --> DS["apps/desktop<br/>데스크톱 셸"]
     MCP["apps/mcp<br/>AI 앱용 MCP 서버"]
   end
-  COMP["MR Office 구성 요소: Word, Excel, PowerPoint 파일 · 무료, 비공개 소스"] -.-> DS
+  COMP["MR Office 컴포넌트: Word, Excel, PowerPoint 파일 · 무료"] -.-> DS
 ```
 
 ## 라이선스

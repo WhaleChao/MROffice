@@ -12,8 +12,8 @@ two ways:
   ships: the API, the web app, the file engines and their runtime. It is
   free, but it is not open source.
 - **Without the component**, it runs the open-source editors in this
-  repository on their own. They open `.mrdoc`, `.mrsheet`, `.mrslides` and
-  `.mrink` files, CSV, HTML, Markdown and PDF, and save the editors' own
+  repository on their own. They open `.mrdoc`, `.mrsheet` and `.mrslides`
+  files, CSV, HTML, Markdown and PDF, and save the editors' own
   formats and CSV back into the same file. When you open a Word, Excel or
   PowerPoint file, the app tells you where to get the component.
 

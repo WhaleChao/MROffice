@@ -9,7 +9,7 @@ import { officePrimaryFontFamily } from "../../components/office-ribbon/officeTy
 import { officeFaceName } from "../office-fonts/face-names";
 import { setPrintedCellScripts } from "./cell-text-effects";
 import { excelCutFamilyEmboldens, excelCutFamilyOf, isExcelCutFamily, withoutLeadingExcelCutFamilies } from "../office-fonts/excel-cut-families";
-import { stackPrimaryFamily } from "../office-fonts/hangul-em";
+import { sheetHangulEmFamily, stackPrimaryFamily } from "../office-fonts/hangul-em";
 import { ensureOfficeFauxBoldProbe, officeFamilyHasNoBold } from "../office-fonts/faux-bold";
 import { ensureExcelCutFamily, ensureOfficeFontFaces, loadOfficeFamilySpace, officeFontDeclared, officeFontSubstitutes, setOfficeEmboldenedRegularCuts } from "../office-fonts/substitutes";
 import { columnBaseWidthToPixels, columnFileWidthToPixels } from "./grid-sizing";
@@ -349,6 +349,14 @@ export function subscribeNativeTypography(listener: () => void): () => void {
     typographyListeners.delete(listener);
   };
 }
+/** A family a text waits for (drawn meanwhile as it can): its arrival moves
+ * the generation, as a face read as unavailable does (office-arabic-stretch). */
+export function awaitSpreadsheetFamily(family: string): void {
+  if (typeof document === "undefined") return;
+  watchFontLoads();
+  if (faceAvailability.size > 512) faceAvailability.clear();
+  faceAvailability.set(family, false);
+}
 let availabilityContext: CanvasRenderingContext2D | null | undefined;
 export function spreadsheetFontAvailable(family: string): boolean | undefined {
   if (typeof document === "undefined") return undefined;
@@ -478,6 +486,11 @@ function buildSpreadsheetFontStack(family: string | undefined): string {
     ensureExcelCutFamily(cut.face);
     loadOfficeFamilySpace(cut.alias);
   }
+  // A Korean face's Hangul at its full em, as Windows Excel sets it in
+  // every Korean face (the stand-in's is 0.92 em): the sheet's own family
+  // of its clone, declared with the face (hangul-em.ts sheetHangulEmFamily).
+  // It holds Hangul alone; every other character falls through to the face.
+  const hangul = cut ? null : sheetHangulEmFamily(face);
   const standIns = face ? officeFontSubstitutes(face) : [];
   const substitutes = standIns.map((name) => `"${name}", `).join("");
   // Han text in a Latin face has no glyphs of its own and takes the system's
@@ -504,7 +517,7 @@ function buildSpreadsheetFontStack(family: string | undefined): string {
   // Regional indicators as Excel's letters (office-regional-letters.ts),
   // ahead of every stand-in and fallback that would draw a flag or a box.
   const regional = officeRegionalLettersStack();
-  return servedStack(`${face ? `${cut ? `"${cut.alias}", ` : ""}"${face}", ${complex}${regional}${substitutes}${scriptSerif}${hanSerif}` : ""}"Calibri","Microsoft YaHei", "Malgun Gothic", "Mangal", "Tahoma", "PingFang SC", sans-serif`);
+  return servedStack(`${face ? `${cut ? `"${cut.alias}", ` : hangul ? `"${hangul}", ` : ""}"${face}", ${complex}${regional}${substitutes}${scriptSerif}${hanSerif}` : ""}"Calibri","Microsoft YaHei", "Malgun Gothic", "Mangal", "Tahoma", "PingFang SC", sans-serif`);
 }
 
 /** The system faces a stack's Han and kana fall to when its own faces lack them. */
@@ -891,14 +904,17 @@ export function nativeTextAdvances(text: string, fontCss: string, dpi: number, s
  *   character one half-width cell, half the em rounded up to a whole dot,
  *   whatever stand-in draws it, and a character an em wide two cells: 76 dots
  *   at 9 pt where the em is 75, 118 at 14 pt (lookwin p186-lw; 宋体 and ＭＳ Ｐ
- *   ゴシック set theirs at the em);
+ *   ゴシック set theirs at the em) -- but the ideographic space at the em;
  * - `setShort`: the half dot rounded down from 51 dots an em.
  */
 export function printedAdvanceDots(character: string, units: number, ppem: number, cells: boolean, setShort = false): number {
   const code = character.length <= 2 && [...character].length === 1 ? character.codePointAt(0) ?? 0 : 0;
   if ((code >= 0xac00 && code <= 0xd7a3) || (code >= 0x3131 && code <= 0x318e)) units = 1000;
   else if (cells && ((code >= 0x20 && code <= 0x7e) || code === 0x20a9)) units = 500;
-  if (cells && Math.abs(units - 1000) < 0.5) return 2 * Math.floor(ppem / 2 + 0.5);
+  // The ideographic space is no cell's: it prints at the em (ＭＳ 明朝, ＭＳ
+  // ゴシック, 新宋体 at 9 pt: 75 dots where their Han stand 76; xlsx backlog
+  // bl5/r70 r70r).
+  if (cells && Math.abs(units - 1000) < 0.5 && code !== 0x3000) return 2 * Math.floor(ppem / 2 + 0.5);
   const exact = units / 1000 * ppem;
   // `setShort`: a landscape print's pure-ASCII string in a GDI East Asian
   // face, as the printer sets it (setNativeTextLandscapePrint).

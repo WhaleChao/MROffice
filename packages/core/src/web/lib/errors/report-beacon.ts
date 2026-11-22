@@ -277,12 +277,38 @@ export function sendErrorBeacon(body: ErrorReportBeacon): boolean {
  * (false when suppressed by DNT or no transport). Never throws — a failure here
  * must not compound the error the boundary is already handling.
  */
+/** A stack frame that runs code the page did not ship: a browser extension
+ * or a user script injected into it. */
+const THIRD_PARTY_FRAME = /(?:^|[\s@(])(?:user-script:|chrome-extension:\/\/|moz-extension:\/\/|safari(?:-web)?-extension:\/\/|webkit-masked-url:\/\/)/;
+
+
+
+
+
+
+
+
+export function thrownByThirdPartyScript(error: ReportableError): boolean {
+  const stack = error && typeof error === "object" ? (error as ErrorLike).stack : undefined;
+  if (typeof stack !== "string") return false;
+  const frames = stack
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && (line.startsWith("at ") || line.includes("@")));
+  // Frames the engine itself adds ("getPrototypeOf@[native code]") say nothing.
+  const first = frames.find((line) => !line.includes("[native code]"));
+  return Boolean(first && THIRD_PARTY_FRAME.test(first));
+}
+
 export function reportClientError(
   error: ReportableError,
   context?: ErrorReportContext,
 ): boolean {
   try {
     if (isDoNotTrackEnabled()) {
+      return false;
+    }
+    if (thrownByThirdPartyScript(error)) {
       return false;
     }
     const body = buildErrorBeacon(error, context);

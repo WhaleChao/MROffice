@@ -26,6 +26,38 @@ function textOfRuns(value: unknown): string | null {
   return text;
 }
 
+interface CellParagraphIndent {
+  readonly marginLeftPx: number;
+  readonly marginRightPx: number;
+  readonly indentPx: number;
+}
+
+/**
+ * A cell's paragraph indents when one of its paragraphs states a right indent
+ * (`paragraphIndents`, readings row 1028, TRIAGE 111): one per paragraph of
+ * `text` (its "\n"-separated paragraphs), a paragraph typed past the last read
+ * taking the last's; null when the cell states none. PowerPoint for Windows
+ * takes them from the cell's room on top of the cell's own margins
+ * (office-truth/probes/tp-cellmar): centred words between them, right-aligned
+ * and justified ones ending at both.
+ */
+export function presentationTableCellParagraphIndents(
+  cell: { readonly paragraphIndents?: unknown },
+  text: string,
+): CellParagraphIndent[] | null {
+  const raw = cell.paragraphIndents;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const read: CellParagraphIndent[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") return null;
+    const { marginLeftPx, marginRightPx, indentPx } = entry as Record<string, unknown>;
+    const number = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+    read.push({ marginLeftPx: Math.max(0, number(marginLeftPx)), marginRightPx: Math.max(0, number(marginRightPx)), indentPx: number(indentPx) });
+  }
+  const count = text.split("\n").length;
+  return Array.from({ length: count }, (_, index) => read[Math.min(index, read.length - 1)]);
+}
+
 export function presentationTableCellParagraphStyles(
   cell: {
     readonly text?: unknown;
@@ -33,9 +65,22 @@ export function presentationTableCellParagraphStyles(
     readonly nativeText?: unknown;
     readonly align?: unknown;
     readonly fontSize?: unknown;
+    readonly paragraphIndents?: unknown;
   },
   text: string,
 ): PresentationCellParagraphStyle[] | undefined {
+  const indents = presentationTableCellParagraphIndents(cell, text);
+  if (indents) {
+    // A cell whose paragraphs state a right indent (readings row 1028): its
+    // indents as the bulleted cells above take theirs (margins, a first-line indent).
+    return indents.map((indent) => ({
+      block: {
+        ...(indent.marginLeftPx ? { marginInlineStart: `${indent.marginLeftPx}px` } : {}),
+        ...(indent.marginRightPx ? { marginInlineEnd: `${indent.marginRightPx}px` } : {}),
+        ...(indent.indentPx ? { textIndent: `${indent.indentPx}px` } : {}),
+      },
+    }));
+  }
   const layout = normalizeOfficeTextLayout(cell.textLayout);
   if (!layout) return undefined;
   const readWith = textOfRuns(cell.nativeText) ?? (typeof cell.text === "string" ? cell.text : text);
@@ -84,11 +129,24 @@ export function presentationTableCellParagraphStyles(
 
 
 export function presentationTableCellParagraphSpacing(
-  cell: { readonly text?: unknown; readonly textLayout?: unknown; readonly nativeText?: unknown },
+  cell: { readonly text?: unknown; readonly textLayout?: unknown; readonly nativeText?: unknown; readonly paragraphIndents?: unknown },
   text: string,
   /** Paragraph margins and first-line indents taken too (else they are the browser's to draw). */
   withIndents = false,
-): { spaceBeforePt: number; spaceAfterPt: number; marginLeftPt: number; indentPt: number; lineSpacing?: number }[] | "drawn" | null {
+): { spaceBeforePt: number; spaceAfterPt: number; marginLeftPt: number; marginRightPt?: number; indentPt: number; lineSpacing?: number }[] | "drawn" | null {
+  const indents = presentationTableCellParagraphIndents(cell, text);
+  if (indents) {
+    // Readings row 1028: the indents the cell states (the text layout is never
+    // read for such a cell: the importer's reader refuses its right indents).
+    if (!withIndents) return "drawn";
+    return indents.map((indent) => ({
+      spaceBeforePt: 0,
+      spaceAfterPt: 0,
+      marginLeftPt: indent.marginLeftPx * 0.75,
+      marginRightPt: indent.marginRightPx * 0.75,
+      indentPt: indent.indentPx * 0.75,
+    }));
+  }
   const layout = normalizeOfficeTextLayout(cell.textLayout);
   if (!layout) return null;
   const readWith = textOfRuns(cell.nativeText) ?? (typeof cell.text === "string" ? cell.text : text);

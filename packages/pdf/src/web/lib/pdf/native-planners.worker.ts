@@ -80,7 +80,7 @@ import {
   resolvePdfNativeVectorStyleHistoryRoute,
 } from "./native-vector-style-selection-edit";
 import { planPdfNativeTextDecoration } from "./native-text-decoration";
-import { planPdfNativeTextObjectDelete } from "./native-text-object-delete";
+import { planPdfNativeTextObjectDelete, readPdfNativeSameContentDeleteStreams } from "./native-text-object-delete";
 import { planMraiNativeEmbeddedImageClipEscape, planPdfNativeEmbeddedImageReorder } from "./native-embedded-image-reorder";
 import { listMraiNativePageContentUnits, planMraiNativeContentUnitReorder } from "./engine/native/vector-content-transaction";
 import {
@@ -178,6 +178,7 @@ export const PDF_NATIVE_BROWSER_PLANNERS: Readonly<Record<string, Entry>> = Obje
   resolvePdfNativeVectorStyleHistoryRoute,
   planPdfNativeTextDecoration,
   planPdfNativeTextObjectDelete,
+  readPdfNativeSameContentDeleteStreams,
   planPdfNativeEmbeddedImageReorder,
   planMraiNativeEmbeddedImageClipEscape,
   listMraiNativePageContentUnits,

@@ -38,6 +38,7 @@ import type { Node as PmNode } from "@tiptap/pm/model";
 import { isDocumentLayoutStatusAttribute } from "../../documentLayoutStatus";
 import type { LedgerCut } from "./ledgerTypes";
 import { noteFacesAfterMeasure } from "./ledgerFaceScan";
+import type { ColumnLineBreak } from "../unequalColumnProjection";
 
 /** Everything the ledger reads off one fragment. */
 export interface LedgerFragmentMeasure {
@@ -64,6 +65,9 @@ export interface LedgerFragmentMeasure {
   /** In a stacked column region: its height in each of the region's columns
    * (unequal columns wrap the same text into different heights). */
   regionHeightsPx?: readonly number[];
+  /** In a balanced column region, a list of uneven lines: where it can be
+   * cut (`ColumnRegionCharge.breaksPx`), px from this fragment's top. */
+  regionBreaksPx?: readonly ColumnLineBreak[];
 }
 
 export interface LedgerEdgeMargins {

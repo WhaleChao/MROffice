@@ -128,6 +128,11 @@ export interface PdfPageWindowAnnotationsPanelModel {
   replyInFlight: Readonly<{ annotationId: string; text: string }> | null;
   setReplyDrafts: Dispatch<SetStateAction<Record<string, string>>>;
   submitReply: (annotationId: string) => Promise<void>;
+  /** Resolve or reopen a note's discussion (a review state record). */
+  toggleResolved?: (annotation: PdfAnnotation) => Promise<void>;
+  /** Whether this person may edit a note's words, and resolve or delete it
+   * (an embed comment session's own comments, or manageComments). */
+  commentPermission?: (annotation: PdfAnnotation) => { edit: boolean; manage: boolean };
 }
 
 /** One card of the pane: a note of the page (replies, review states,
@@ -255,6 +260,8 @@ export function PdfPageWindowAnnotationsPanel({ panel }: { panel: PdfPageWindowA
     replyInFlight,
     setReplyDrafts,
     submitReply,
+    toggleResolved,
+    commentPermission,
   } = panel;
   const paneRef = useRef<HTMLElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
@@ -583,6 +590,18 @@ export function PdfPageWindowAnnotationsPanel({ panel }: { panel: PdfPageWindowA
   // Not a sign-in matter (the reader is signed in): a PDF comment keeps no
   // reactions in the file, as in WPS (user audit PDF 0077).
   const likeUnavailable = t("comments.reactionUnsupportedPdf");
+  // Resolving writes a review state record into the note's thread: not on a
+  // markup, a nested thread, a note cut short, or one whose file holds a
+  // review history of its own (the writer writes the thread whole).
+  const noteResolvable = (annotation: PdfAnnotation): boolean =>
+    Boolean(toggleResolved) &&
+    writable &&
+    !annotationMutationBusy &&
+    !isNativeMarkupAnnotation(annotation) &&
+    !(annotation.nativeSource?.kind === "pdf_text_annotation" && annotation.nativeSource.nestedReplies) &&
+    !annotation.nativeSource?.textTruncated &&
+    ((annotation as { reviewStates?: PdfAnnotationReply[] }).reviewStates ?? []).length === 0 &&
+    (commentPermission?.(annotation).manage ?? true);
   const renderMessageActions = (entry: PdfPaneItem, message: PdfCommentMessage, index: number, resolved: boolean) => {
     const id = entry.kind === "note" ? entry.annotation.id : entry.item.id;
     const messageId = messageAdapter.getKey(message, index);
@@ -592,20 +611,25 @@ export function PdfPageWindowAnnotationsPanel({ panel }: { panel: PdfPageWindowA
     const unavailable = { disabled: true, onSelect: () => undefined };
     let edit: { disabled: boolean; disabledReason?: string; onSelect: () => void } = unavailable;
     let remove: { disabled: boolean; disabledReason?: string; onSelect: () => void } = unavailable;
+    let resolve: { disabled: boolean; disabledReason?: string; onSelect: () => void } = unavailable;
     if (index === 0 && entry.kind === "note" && message.kind === "root") {
       const { annotation } = entry;
       if (!isManagedMarkupAnnotation(annotation)) {
         const protection = nativeAnnotationProtection(annotation);
+        const allowed = commentPermission?.(annotation) ?? { edit: true, manage: true };
         edit = {
-          disabled: annotationMutationBusy || protection.contentsLocked || resolved,
+          disabled: annotationMutationBusy || protection.contentsLocked || resolved || !allowed.edit,
           disabledReason: protection.contentsLocked ? protection.label : undefined,
           onSelect: () => beginAnnotationEdit(annotation),
         };
         remove = {
-          disabled: annotationMutationBusy || protection.deleteLocked,
+          disabled: annotationMutationBusy || protection.deleteLocked || !allowed.manage,
           disabledReason: protection.deleteLocked ? protection.label : undefined,
           onSelect: () => void deleteAnnotation(annotation),
         };
+        if (noteResolvable(annotation)) {
+          resolve = { disabled: false, onSelect: () => void toggleResolved?.(annotation) };
+        }
       }
     } else if (index === 0 && entry.kind === "reader") {
       const { item } = entry;
@@ -624,7 +648,7 @@ export function PdfPageWindowAnnotationsPanel({ panel }: { panel: PdfPageWindowA
         like={like}
         link={unavailable}
         edit={edit}
-        resolve={unavailable}
+        resolve={resolve}
         remove={remove}
         labels={actionLabels}
         testIds={{
@@ -714,6 +738,7 @@ export function PdfPageWindowAnnotationsPanel({ panel }: { panel: PdfPageWindowA
       Boolean(annotation.nativeSource.nestedReplies);
     const truncated = Boolean(annotation.nativeSource?.textTruncated);
     const canPost = !markup && !nested && !truncated && !entry.resolved;
+    const canResolve = noteResolvable(annotation);
     const disabledReason = nested
       ? t("pdf.replyNestedUnsupported")
       : truncated
@@ -735,7 +760,7 @@ export function PdfPageWindowAnnotationsPanel({ panel }: { panel: PdfPageWindowA
         ) : null}
         {renderNoteStatus(annotation)}
         <OfficeCommentThread
-          canMutateThread={false}
+          canMutateThread={canResolve}
           canPost={canPost}
           cellLabel={anchorLabel(entry)}
           classNames={commentsClassNames}
@@ -757,7 +782,9 @@ export function PdfPageWindowAnnotationsPanel({ panel }: { panel: PdfPageWindowA
             if (replyInFlight?.annotationId === annotation.id && replyInFlight.text === replyDraft.trim()) return;
             void submitReply(annotation.id);
           }}
-          onToggleResolved={() => undefined}
+          onToggleResolved={() => {
+            if (canResolve) void toggleResolved?.(annotation);
+          }}
           renderMessageActions={(message, index, resolved) => renderMessageActions(entry, message, index, resolved)}
           replyDraft={replyDraft}
           testIdPrefix={`pdf-annotation-${annotation.id}`}

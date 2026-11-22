@@ -180,8 +180,15 @@ export function pdfInkCoverRectOutsideFrame(
 
 export const normalizedText = (text: string) => text.replace(/\s+/gu, " ").trim();
 
-// Keep the transport within the existing server's decoded source-proof budget.
-export const MAX_PDF_SOURCE_TEXT_BOX_TOKEN_CHARS = 50_000;
+// The server's budget for a binding, as the token a directive carries it in
+// and as the record the file keeps of it (source_text_box_context.py:
+// MAX_SOURCE_TEXT_BOX_TOKEN_CHARS, ..._STORED_BINDING_CHARS). Sized for the
+// longest box a page holds: a binding states the box's words three times
+// over and a piece for every stretch of the stream that draws them. At
+// 50,000 a paragraph of thirty lines set a word a show did not fit
+
+export const MAX_PDF_SOURCE_TEXT_BOX_TOKEN_CHARS = 600_000;
+export const MAX_PDF_SOURCE_TEXT_BOX_STORED_BINDING_CHARS = 800_000;
 
 /** Glyph quads are a disposable rendering cache, not part of the source-show
  * witness. Keep native operators/resources/property proofs intact in durable

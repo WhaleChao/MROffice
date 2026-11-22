@@ -124,6 +124,23 @@ export interface UnequalColumnPlacement {
    * float pushes aside do (the paragraph itself starts where the flow
    * stands). Its pictures are placed from where it starts. */
   floatPushPx?: number;
+  /** How much of the block's own top margin this plan did not set it down by
+   * (px): all of it at a column's top, the part its neighbour's space after
+   * covers where the two collapse. Its box stands that much higher than the
+   * margin says, and a float pass that reads "the box less the margin it
+   * has" for its place in the flow takes it off (floatingTextBoxLayout
+   * `givenTopMarginPx`): read whole, a Top and Bottom text box opening a
+   * column was set its drop again from a place a drop higher on every pass
+   * (R460-D16 p3: 3052, 948, 1422 px, page 4 between two openings). */
+  marginDroppedPx?: number;
+}
+
+/** A place a block can be cut between two of its lines: the head ends at
+ * `endPx` (its bottom chrome included), the rest starts at `nextPx` (px from
+ * the block's top). */
+export interface ColumnLineBreak {
+  endPx: number;
+  nextPx: number;
 }
 
 export interface ColumnRegionCharge {
@@ -142,6 +159,10 @@ export interface ColumnRegionCharge {
   /** A list balanced by its lines (`ColumnRegionBlockMetric.listRows`): the
    * lines either side of a cut in it (1), for the planner's own balance. */
   minSplitLines?: number;
+  /** A list balanced at its drawn line breaks
+   * (`ColumnRegionBlockMetric.breaksPx`): the same breaks for the planner's
+   * own balance. */
+  breaksPx?: readonly ColumnLineBreak[];
 }
 
 export interface UnequalColumnSplitCandidate {
@@ -827,6 +848,13 @@ export function planUnequalColumnFlow(
     const widthPx = Math.max(1, track.widthPx - horizontalMargins);
     const flowStartPx = columnIndex * capacityPx + topPx;
     const flowEndPx = flowStartPx + heightPx;
+    // The gap a block of no top margin of its own would have had here.
+    const ownTopPx = Number.isFinite(block.marginTopPx) ? block.marginTopPx : 0;
+    const bareGapPx = cursorPx <= 0
+      ? blockIndex === 0 && columnIndex === 0 && options.leadPx !== undefined
+        ? Math.max(0, Number.isFinite(options.leadPx) ? options.leadPx : 0)
+        : 0
+      : collapseUnequalColumnMargins(previousBottomMarginPx, 0);
     placements.push({
       columnIndex,
       topPx,
@@ -835,6 +863,7 @@ export function planUnequalColumnFlow(
       flowStartPx,
       flowEndPx,
       clipInline: false,
+      marginDroppedPx: ownTopPx - (gapBeforePx - bareGapPx),
       ...(block.keepLines && tracks.length > 1 ? { wholeTrackHeightsPx: tracks.map((_track, column) => heightFor(column)) } : {}),
     });
     physicalOverflowPx = Math.max(
@@ -944,6 +973,11 @@ export interface ColumnRegionBlockMetric extends UnequalColumnBlockMetric {
   /** A list of even lines, balanced by them (`listRowPitchPx`): `splittable`
    * with the list's pitch, cut between any two lines. */
   listRows?: boolean;
+  /** A list whose lines are not even (space between its items, lines of
+   * different heights): where it can be cut, read off its drawn lines at the
+   * region's (equal) track width (`listLineBreaksPx`). It is balanced at
+   * those breaks, as the container splitter then cuts it. */
+  breaksPx?: readonly ColumnLineBreak[];
   /** A float of a single-column region the text wraps beside (wrap square,
    * tight or through, floated left or right): the side it stands at and its
    * drawn width, its margins (Word's distL/distR) not included. */
@@ -999,6 +1033,9 @@ interface BalancePiece {
   marginBottomPx: number;
   splittable: boolean;
   lineHeightPx: number;
+  /** Where it can be cut (`ColumnRegionBlockMetric.breaksPx`), at the first
+   * column's width; null when it is not balanced at drawn breaks. */
+  breaks: ColumnLineBreak[] | null;
   /** Rows the piece must keep with the paragraph's first line (orphan
    * floor) and leave for its last line (widow floor). */
   headFloor: number;
@@ -1029,6 +1066,16 @@ function balancePieces(columns: number, blocks: readonly ColumnRegionBlockMetric
       continue;
     }
     if (joining && previous && block.continuesPrevious) {
+      // A list cut by an earlier pass joins its breaks too: the old seam is
+      // one more place it can be cut, the tail's breaks follow the head.
+      const headPx = previous.heightsPx[0] ?? 0;
+      previous.breaks = previous.breaks && block.breaksPx
+        ? [
+            ...previous.breaks,
+            { endPx: headPx, nextPx: headPx },
+            ...block.breaksPx.map((cut) => ({ endPx: headPx + cut.endPx, nextPx: headPx + cut.nextPx })),
+          ]
+        : null;
       previous.heightsPx = previous.heightsPx.map((height, column) => height + heightsPx[column]);
       previous.marginBottomPx = block.marginBottomPx;
       previous.tailFloor = block.continuesNext ? 1 : floor;
@@ -1041,6 +1088,7 @@ function balancePieces(columns: number, blocks: readonly ColumnRegionBlockMetric
         marginBottomPx: block.marginBottomPx,
         splittable: block.splittable && !block.keepLines,
         lineHeightPx: block.lineHeightPx && block.lineHeightPx > 0 ? block.lineHeightPx : 0,
+        breaks: block.breaksPx && block.splittable && !block.keepLines ? [...block.breaksPx] : null,
         headFloor: block.continuesPrevious ? 1 : floor,
         tailFloor: block.continuesNext ? 1 : floor,
         keepNext: Boolean(block.keepNext) && !block.continuesNext,
@@ -1171,6 +1219,48 @@ export function balancedColumnHeightPx(
         cursor += gap + height;
         placedPx += gap + height;
         placedRows += rowsOf(piece, column);
+      } else if (piece.breaks) {
+        // A list of uneven lines is cut where its lines end (the container
+        // splitter cuts it there): each column takes its lines up to the
+        // last break that fits, the next column the rest from the line after.
+        // Balanced by a pitch it does not have, it moved whole (R494-D03 p6:
+        // a two-column list drawn 540 | 43 under a plan of 292 | 291, the
+        // page's last blocks moved off and back on every key).
+        const breaks = piece.breaks;
+        const totalPx = height;
+        let startPx = 0;
+        let base = cursor + gap;
+        let atTop = cursor <= 0;
+        for (;;) {
+          const restPx = totalPx - startPx;
+          if (base + restPx <= cap(column) + 1e-6) {
+            placedPx += (atTop ? restPx : gap + restPx);
+            cursor = base + restPx;
+            placedRows += 1;
+            break;
+          }
+          const room = cap(column) - base;
+          let taken: ColumnLineBreak | null = null;
+          for (const cut of breaks) {
+            if (cut.endPx <= startPx + 1e-6) continue;
+            if (cut.endPx - startPx > room + 1e-6) break;
+            taken = cut;
+          }
+          if (taken) {
+            placedPx += (atTop ? 0 : gap) + (taken.endPx - startPx);
+            placedRows += 1;
+            tallestPx = Math.max(tallestPx, base + taken.endPx - startPx);
+            startPx = taken.nextPx;
+          } else {
+            // Not one line fits: a column it opens cannot hold it.
+            if (atTop) return false;
+            tallestPx = Math.max(tallestPx, cursor);
+          }
+          column += 1;
+          if (column >= columns) return false;
+          base = 0;
+          atTop = true;
+        }
       } else if (piece.splittable && piece.lineHeightPx > 0) {
         // A column holds whole lines (Word balances line by line: 41 lines
         // in three columns read 14, 14, 13), under the paragraph's floors.
@@ -1304,6 +1394,10 @@ export function balancedColumnHeightPx(
 /** Harness switch (`window.__docsColumnSeamHeadOff = true`): a balanced
  * region keeps the balanced height when a cut paragraph's head no longer
  * fits it (as before; an A/B of one build). */
+function staleSeamGrowthOn(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsListBalanceBreaksOff?: boolean }).__docsListBalanceBreaksOff === true;
+}
+
 function columnSeamHeadOff(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsColumnSeamHeadOff?: boolean }).__docsColumnSeamHeadOff === true;
 }
@@ -1323,6 +1417,12 @@ export function seamHeadColumnHeightPx(
     const head = blocks[index];
     const tail = blocks[index + 1];
     if (!head.continuesNext || !tail.continuesPrevious || head.flowless) continue;
+    // A middle piece under its own head's column: the seam after it is an
+    // older cut (a column filled to the foot before the section was
+    // balanced), which the page planner joins; the head before it is the cut
+    // this balance made. Grown to hold it, the columns drew the old cut
+    // again (R494-D03 p6: 540 | 43 for a list balanced 292 | 291).
+    if (head.continuesPrevious && blocks[index - 1]?.continuesNext && head.breaksPx && !staleSeamGrowthOn()) continue;
     // A block past the last track is drawn in it (the region's placement
     // clamps it there), over what stands in it.
     const columnOf = (at: number) => {
@@ -1515,6 +1615,7 @@ export function planColumnRegionFlow(
                 clipInline: false,
                 regionColumns: 1,
                 floatAdvancePx: 0,
+                marginDroppedPx: (block.marginTopPx || 0) - Math.max(0, block.marginTopPx || 0),
               };
               continue;
             }
@@ -1528,6 +1629,7 @@ export function planColumnRegionFlow(
           }
           const height = heightAt(block, 0);
           const top = Math.max(floatBase + Math.max(0, block.marginTopPx || 0), floatBottom);
+          const bareTop = Math.max(floatBase, floatBottom);
           const outerBottom = top + height + Math.max(0, block.marginBottomPx || 0);
           const horizontal = (block.marginLeftPx || 0) + (block.marginRightPx || 0);
           // Still at its side when it pushes the flow (a right float was
@@ -1542,6 +1644,7 @@ export function planColumnRegionFlow(
             clipInline: false,
             regionColumns: 1,
             floatAdvancePx: Math.max(0, outerBottom - floatBottom),
+            marginDroppedPx: (block.marginTopPx || 0) - (top - bareTop),
           };
           floatBottom = Math.max(floatBottom, outerBottom);
           continue;
@@ -1572,6 +1675,7 @@ export function planColumnRegionFlow(
         }
         const height = heightAt(block, 0);
         const top = previous === null ? cursor : cursor + collapseUnequalColumnMargins(previous, block.marginTopPx);
+        const bareTop = previous === null ? cursor : cursor + collapseUnequalColumnMargins(previous, 0);
         const horizontal = (block.marginLeftPx || 0) + (block.marginRightPx || 0);
         placements[index] = {
           columnIndex: 0,
@@ -1582,6 +1686,7 @@ export function planColumnRegionFlow(
           flowEndPx: top + height,
           clipInline: false,
           regionColumns: 1,
+          marginDroppedPx: (block.marginTopPx || 0) - (top - bareTop),
           ...(pushedFromPx !== null && top - pushedFromPx > 0 ? { floatPushPx: top - pushedFromPx } : {}),
         };
         cursor = top + height;
@@ -1722,7 +1827,8 @@ export function planColumnRegionFlow(
         trackHeightsPx: region.tracks.map((_track, column) => (block.flowless ? 0 : heightAt(block, column))),
         columns: region.tracks.length,
         linePitchPx: block.lineHeightPx && block.lineHeightPx > 0 ? block.lineHeightPx : 0,
-        ...(block.listRows ? { minSplitLines: 1 } : {}),
+        ...(block.listRows || block.breaksPx ? { minSplitLines: 1 } : {}),
+        ...(block.breaksPx && !block.flowless ? { breaksPx: block.breaksPx } : {}),
       };
     });
     pageCursor = regionBottom;
@@ -2195,6 +2301,85 @@ export function blockLinePitchPx(block: HTMLElement): number {
   return Number.isFinite(auto) && auto > 0 ? auto : 0;
 }
 
+/** Harness switch (`window.__docsListBalanceBreaksOff = true`): a list of
+ * uneven lines in a balanced section moves whole between its columns, and a
+ * middle piece of one grows its column to stay over its tail (as before; an
+ * A/B of one build). */
+function listBalanceBreaksOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsListBalanceBreaksOff?: boolean }).__docsListBalanceBreaksOff === true;
+}
+
+const LIST_BREAK_TEXT = "p, h1, h2, h3, h4, h5, h6";
+
+/** The drawn lines of a text block: [top, bottom] px from `originPx`. */
+function drawnLineSpans(block: HTMLElement, originPx: number, scale: number): Array<[number, number]> {
+  const doc = block.ownerDocument;
+  const range = doc?.createRange?.();
+  if (!range || typeof range.getClientRects !== "function") return [];
+  range.selectNodeContents(block);
+  const rects = Array.from(range.getClientRects())
+    .filter((rect) => rect.width > 0.5 && rect.height > 0)
+    .map((rect) => [rect.top / scale - originPx, rect.bottom / scale - originPx] as [number, number])
+    .sort((a, b) => a[0] - b[0]);
+  range.detach?.();
+  const lines: Array<[number, number]> = [];
+  for (const [top, bottom] of rects) {
+    const line = lines[lines.length - 1];
+    // A rect starting above the current line's bottom is on that line.
+    if (line && top < line[1] - 1) {
+      line[0] = Math.min(line[0], top);
+      line[1] = Math.max(line[1], bottom);
+    } else {
+      lines.push([top, bottom]);
+    }
+  }
+  return lines;
+}
+
+/**
+ * Where a list can be cut between its lines, as the container splitter cuts
+ * it (`planContainerHead`): after any block of an item, and inside a
+ * paragraph between two lines that leave its widow/orphan floor on each
+ * side. Px from the list's top; a head's end counts the list's bottom
+ * chrome it then carries. Null when there is nothing to read.
+ */
+function listLineBreaksPx(list: HTMLElement, scale: number): ColumnLineBreak[] | null {
+  const drawn = scale > 0 ? scale : 1;
+  const listRect = list.getBoundingClientRect();
+  if (!(listRect.height > 0)) return null;
+  const origin = listRect.top / drawn;
+  const items = (Array.from(list.children) as HTMLElement[]).filter((child) => child.matches("li"));
+  if (items.length === 0) return null;
+  const blocks = items.flatMap((item) => {
+    const host = item.matches('[data-type="taskItem"]')
+      ? (Array.from(item.children) as HTMLElement[]).find((child) => child.tagName === "DIV") ?? item
+      : item;
+    return (Array.from(host.children) as HTMLElement[]).filter((child) => !child.classList.contains("ProseMirror-widget") && child.tagName !== "LABEL");
+  });
+  const lastBottom = items[items.length - 1].getBoundingClientRect().bottom / drawn - origin;
+  const chrome = Math.max(0, listRect.height / drawn - lastBottom);
+  const rects = blocks.map((block) => block.getBoundingClientRect());
+  const breaks: ColumnLineBreak[] = [];
+  blocks.forEach((block, index) => {
+    const rect = rects[index];
+    if (!(rect.height > 0)) return;
+    if (block.matches(LIST_BREAK_TEXT) && !domKeepFlag(block, "keepLines")) {
+      const floor = block.getAttribute("data-widow-control") === "false" ? 1 : 2;
+      const lines = drawnLineSpans(block, origin, drawn);
+      for (let head = floor; head <= lines.length - floor; head += 1) {
+        if (head >= lines.length) break;
+        breaks.push({ endPx: lines[head - 1][1] + chrome, nextPx: lines[head][0] });
+      }
+    }
+    let next = index + 1;
+    while (next < rects.length && !(rects[next].height > 0)) next += 1;
+    if (next >= rects.length) return;
+    breaks.push({ endPx: rect.bottom / drawn - origin + chrome, nextPx: rects[next].top / drawn - origin });
+  });
+  breaks.sort((a, b) => a.endPx - b.endPx);
+  return breaks.filter((cut) => cut.endPx > 0 && cut.nextPx >= cut.endPx - chrome - 1);
+}
+
 /** Harness switch (`window.__docsListBalanceRowsOff = true`): a list of a
  * balanced section moves whole between its columns' heights (as before; an
  * A/B of one build). */
@@ -2347,6 +2532,9 @@ function projectColumnRegionSheet(sheet: HTMLElement, sheetOptions: UnequalColum
   // width: the float moves the flow only when one reaches into it.
   const inkRegions = new Set(blocks.flatMap((_block, blockIndex) => (sideFloats[blockIndex] ? [regionOf[blockIndex]] : [])));
   const inkSpans = new Map<number, readonly [number, number] | null>();
+  // Lists of a balanced section of equal columns: where they can be cut.
+  const listBreaks = new Map<number, ColumnLineBreak[] | null>();
+  const breaksOff = listBalanceBreaksOff();
   const widths = new Set<number>();
   regionTracks.forEach((tracks) => tracks.forEach((track) => widths.add(track.widthPx)));
   widths.forEach((widthPx) => {
@@ -2365,6 +2553,10 @@ function projectColumnRegionSheet(sheet: HTMLElement, sheetOptions: UnequalColum
       tracks.forEach((track, trackIndex) => {
         if (track.widthPx === widthPx) heightsByBlock[blockIndex][trackIndex] = laidOutHeightPx(block, scale);
       });
+      if (!breaksOff && tracks.length > 1 && regions[regionOf[blockIndex]]?.balance &&
+          tracks.every((track) => track.widthPx === widthPx) && block.matches("ul, ol")) {
+        listBreaks.set(blockIndex, listLineBreaksPx(block, scale));
+      }
       if (inkRegions.has(regionOf[blockIndex]) && tracks[0]?.widthPx === widthPx) {
         const span = blockInkSpanPx(block, scale);
         if (span !== undefined) inkSpans.set(blockIndex, span);
@@ -2375,6 +2567,9 @@ function projectColumnRegionSheet(sheet: HTMLElement, sheetOptions: UnequalColum
     const margins = blockMargins[blockIndex];
     // A list of even lines is balanced by its lines, cut between any two.
     const listPitchPx = regionTracks[regionOf[blockIndex]].length > 1 ? listRowPitchPx(block, heightsByBlock[blockIndex]) : 0;
+    // (An empty list of breaks still counts: a piece of a list cut before
+    // joins its neighbours' breaks with the seam between them.)
+    const breaks = listPitchPx > 0 ? null : listBreaks.get(blockIndex) ?? null;
     return {
       heightsPx: heightsByBlock[blockIndex],
       marginTopPx: margins.top,
@@ -2388,13 +2583,14 @@ function projectColumnRegionSheet(sheet: HTMLElement, sheetOptions: UnequalColum
       ...(block.matches('[data-type="section-break"]') && heightsByBlock[blockIndex].every((height) => !(height > 0.5))
         ? { sectionBreak: true }
         : {}),
-      splittable: block.matches(SPLITTABLE_TEXT_SELECTOR) || listPitchPx > 0,
+      splittable: block.matches(SPLITTABLE_TEXT_SELECTOR) || listPitchPx > 0 || breaks !== null,
       lineHeightPx: listPitchPx > 0 ? listPitchPx : blockLinePitchPx(block),
       footCreditPx: trailingAutoLeadingCreditPx(block),
       ...(block.getAttribute("data-page-split-continues") === "true" ? { continuesNext: true } : {}),
       ...(block.hasAttribute("data-page-split-continuation") ? { continuesPrevious: true } : {}),
       // minimumTextSplitLines: widow control unless the paragraph turns it off.
-      minSplitLines: listPitchPx > 0 || block.getAttribute("data-widow-control") === "false" ? 1 : 2,
+      minSplitLines: listPitchPx > 0 || breaks !== null || block.getAttribute("data-widow-control") === "false" ? 1 : 2,
+      ...(breaks ? { breaksPx: breaks } : {}),
       ...(listPitchPx > 0 ? { listRows: true } : {}),
       ...(domKeepFlag(block, "keepLines") ? { keepLines: true } : {}),
       ...(domKeepFlag(block, "keepNext") ? { keepNext: true } : {}),

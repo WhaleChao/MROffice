@@ -50,6 +50,7 @@ export function OfficePictureEffectsFrame({
   testId,
   shadowTestIds,
   shadowBlurDeviation,
+  evenScaleShadowUnder,
   children,
 }: {
   effects: unknown;
@@ -61,10 +62,15 @@ export function OfficePictureEffectsFrame({
   shadowTestIds?: { readonly under: string; readonly over: string };
   /** The Gaussian deviation an outer shadow's blur radius draws, per unit of it (a slide's picture: `POWERPOINT_SHADOW_BLUR_DEVIATION`). */
   shadowBlurDeviation?: number;
+  /** An evenly scaled outer shadow is scaled about its alignment point (a slide's picture, as PowerPoint draws it). */
+  evenScaleShadowUnder?: boolean;
   children: ReactNode;
 }) {
   const filterId = `office-picture-3d-${useId().replace(/:/g, "")}`;
-  const css = officePictureEffectsCss(effects, size, shadowBlurDeviation === undefined ? {} : { shadowBlurDeviation });
+  const css = officePictureEffectsCss(effects, size, {
+    ...(shadowBlurDeviation === undefined ? {} : { shadowBlurDeviation }),
+    ...(evenScaleShadowUnder ? { evenScaleShadowUnder: true } : {}),
+  });
   const threeD = officePictureThreeDPaint(effects, size);
   if (!css && !threeD) return <>{children}</>;
   const block: CSSProperties = fillParent ? { display: "block", width: "100%", height: "100%" } : { display: "inline-block" };

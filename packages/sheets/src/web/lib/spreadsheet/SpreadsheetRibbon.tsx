@@ -256,17 +256,7 @@ export interface SpreadsheetRibbonMenuActionProps {
   onNotice?: () => void;
 }
 
-export const SPREADSHEET_RIBBON_TAB_MESSAGE_KEYS = {
-  home: "toolbar.ribbonHome",
-  insert: "toolbar.ribbonInsert",
-  pageLayout: "spreadsheet.view.pageLayout",
-  formulas: "spreadsheet.review.formulas",
-  data: "spreadsheet.chartFormatPane.dataTab",
-  review: "toolbar.ribbonReview",
-  view: "toolbar.ribbonView",
-  draw: "toolbar.ribbonDraw",
-  automate: "spreadsheet.ribbon.automate",
-} as const satisfies Record<SpreadsheetRibbonCoreTabId, string>;
+export const SPREADSHEET_RIBBON_TAB_MESSAGE_KEYS = { home: "toolbar.ribbonHome", insert: "toolbar.ribbonInsert" } as const satisfies Record<SpreadsheetRibbonCoreTabId, string>;
 
 
 
@@ -274,17 +264,7 @@ export const SPREADSHEET_RIBBON_TAB_MESSAGE_KEYS = {
 
 
 
-export const SPREADSHEET_WEB_BASE_TAB_IDS = [
-  "home",
-  "insert",
-  "draw",
-  "pageLayout",
-  "formulas",
-  "data",
-  "review",
-  "view",
-  "automate",
-] as const satisfies readonly SpreadsheetRibbonCoreTabId[];
+export const SPREADSHEET_WEB_BASE_TAB_IDS = ["home", "insert"] as const satisfies readonly SpreadsheetRibbonCoreTabId[];
 
 export function isSpreadsheetWebBaseRibbonTabId(
   tab: SpreadsheetRibbonTabId,
@@ -752,7 +732,7 @@ export function SpreadsheetRibbon({
                     : usesPersistentSecondaryHitLane
                       ? spreadsheetHomeStyles.persistentSecondaryHitLane
                       : undefined,
-                  activeTab === "view" ? spreadsheetHomeStyles.viewCompact : undefined,
+                  undefined,
                 ].filter(Boolean).join(" ")
           }
           activeTab={activeTab}

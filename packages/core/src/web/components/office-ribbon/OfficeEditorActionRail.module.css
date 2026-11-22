@@ -445,3 +445,45 @@
   --console-accent-strong: var(--docs-ribbon-accent, #6b9df7);
   --office-ribbon-border: rgb(255 255 255 / 12%);
 }
+
+/* The compact chrome's face (a phone, an embedded mobile editor): Undo, Redo
+   and Save's ring in the row -- Save's words stay its accessible status --
+   and the rest worded under More, one finger-sized row each. */
+.core[data-compact-rail] .saveLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.core[data-compact-rail] .action.action,
+.core[data-compact-rail] .save.save {
+  min-width: 40px;
+  min-height: 40px;
+}
+.core[data-compact-rail] .save.save {
+  width: 44px;
+  padding: 0;
+  justify-content: center;
+}
+.utilities[data-compact-rail-overflow] {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 2px;
+}
+.utilities[data-compact-rail-overflow] > .leading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--docs-ribbon-divider, rgb(15 23 42 / 8%));
+}
+.utilities[data-compact-rail-overflow] > .action.action {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  gap: 10px;
+}

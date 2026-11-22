@@ -138,6 +138,15 @@ export const MIN_IMAGE_PX = 16;
 
 /** On the wrapper of a picture stored with both a width and a height. */
 const PICTURE_FIXED_SIZE_ATTR = "data-picture-fixed-size";
+/** An in-line picture its Exactly line clips (note-editor.css). */
+const EXACT_LINE_PICTURE_ATTR = "data-exact-line-picture";
+
+/** `window.__docsExactLinePictureOff = true`: an in-line picture on an
+ * Exactly line raises the line to its own height, as before (A/B). */
+function exactLinePictureOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsExactLinePictureOff?: boolean }).__docsExactLinePictureOff === true;
+}
 
 export interface ImageRuntimeStatusLabels {
   readonly loading: string;
@@ -1459,6 +1468,19 @@ export function createImageResizeNodeView(
       else img.removeAttribute("width");
       if (heightPx) img.setAttribute("height", heightPx);
       else img.removeAttribute("height");
+    }
+    // An in-line picture on an Exactly line rises no higher than its
+    // baseline and is cut to the line (note-editor.css): its stated height,
+    // for the stylesheet. `window.__docsExactLinePictureOff = true` lets the
+    // picture raise its line, as before (A/B).
+    if (current.isInline && !hasPercent && widthPx && heightPx && !exactLinePictureOff()) {
+      if (!wrapper.hasAttribute(EXACT_LINE_PICTURE_ATTR)) wrapper.setAttribute(EXACT_LINE_PICTURE_ATTR, "");
+      if (wrapper.style.getPropertyValue("--picture-box-height") !== `${heightPx}px`) {
+        wrapper.style.setProperty("--picture-box-height", `${heightPx}px`);
+      }
+    } else if (wrapper.hasAttribute(EXACT_LINE_PICTURE_ATTR)) {
+      wrapper.removeAttribute(EXACT_LINE_PICTURE_ATTR);
+      wrapper.style.removeProperty("--picture-box-height");
     }
 
     const crop = documentImageCropInsets(attrs);

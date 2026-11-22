@@ -860,6 +860,25 @@ export function joinedTextRebreak(head: HTMLElement, tail: HTMLElement, rows: nu
         if (nodeIndex < 0) return rebreakWhy("engine-node");
         starts.push(all.slice(0, nodeIndex).reduce((sum, text) => sum + text.length, 0) + row.offset);
       }
+      // A hard line break always starts a row after it, the empty one
+      // between two breaks too, which the engine reports no start for (no
+      // character opens it): R488-D02's paragraph ends "questions." <w:br/>
+      // <w:br/> <w:tab/> " ", rows starting at 383, (406) and 407 -- read as
+      // one row after the seam, under the floor of two the page's own cut
+      // counts (41 px, two rows), so the seam was cut a row higher and the
+      // next pass cut it back at every key typed in the row above it.
+      // (The break closing the text is the mark row's, counted below.)
+      // `window.__docsSeamRebreakBreakRowsOff` reads the engine's starts only.
+      if (!seamRebreakBreakRowsOff(head)) {
+        let offset = 0;
+        for (const text of all) {
+          for (let at = text.data.indexOf("\n"); at >= 0; at = text.data.indexOf("\n", at + 1)) {
+            const next = offset + at + 1;
+            if (next < total && !starts.includes(next)) starts.push(next);
+          }
+          offset += text.length;
+        }
+      }
       starts.sort((a, b) => a - b);
       // The head's rows above its last are the engine's too, or it is not read so.
       const own = starts.indexOf(rowStart);
@@ -893,6 +912,10 @@ function endsInLineBreak(texts: readonly Text[]): boolean {
     if (texts[index].data.length) return texts[index].data.endsWith("\n");
   }
   return false;
+}
+
+function seamRebreakBreakRowsOff(element: HTMLElement): boolean {
+  return (element.ownerDocument.defaultView as (Window & { __docsSeamRebreakBreakRowsOff?: boolean }) | null)?.__docsSeamRebreakBreakRowsOff === true;
 }
 
 function seamRebreakMarkRowOff(element: HTMLElement): boolean {

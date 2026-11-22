@@ -9,6 +9,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -20,7 +21,9 @@ import {
   OFFICE_CONTEXT_MENU_PART as PART,
   officeContextMenuClassName,
 } from "../../lib/office-context-menu";
+import { isDocumentRtl } from "../../lib/document-direction";
 import { viewportPointInFixedParent } from "../../lib/pin-fixed-to-viewport";
+import { takePluginContextMenu } from "../../lib/plugins/context-menu";
 import { latestPointerIsTouchLike } from "../../lib/pointer-capability";
 
 import styles from "./PointerContextMenu.module.css";
@@ -149,13 +152,16 @@ export interface PointerMenuPlacement {
  * its top-left corner on the point; flipped to the point's left when the
  * window's right edge is too close, above the point when the bottom edge is;
  * and, when neither side fits (a menu taller than the space either way),
- * slid back inside the window's gutter.
+ * slid back inside the window's gutter. Under an rtl interface (`rtl`) it
+ * grows leftwards instead, its top-right corner on the point, as Windows
+ * opens a menu in a right-to-left language, and flips to the right.
  */
 export function placePointerMenu(
   point: { readonly x: number; readonly y: number },
   size: { readonly width: number; readonly height: number },
   viewport: { readonly width: number; readonly height: number },
   gutter = EDGE_GUTTER,
+  rtl = false,
 ): PointerMenuPlacement {
   const along = (at: number, length: number, room: number) => {
     if (at + length <= room - gutter) return { start: at, flipped: false };
@@ -165,12 +171,24 @@ export function placePointerMenu(
       flipped: false,
     };
   };
-  const x = along(point.x, size.width, viewport.width);
+  const backwards = (at: number, length: number, room: number) => {
+    if (at - length >= gutter) return { start: at - length, flipped: false };
+    if (at + length <= room - gutter) return { start: at, flipped: true };
+    return {
+      start: Math.max(gutter, Math.min(at - length, room - length - gutter)),
+      flipped: false,
+    };
+  };
+  const x = rtl
+    ? backwards(point.x, size.width, viewport.width)
+    : along(point.x, size.width, viewport.width);
   const y = along(point.y, size.height, viewport.height);
+  // The corner it grows from: the point's side of the card.
+  const pointOnRight = rtl ? !x.flipped : x.flipped;
   return {
     left: x.start,
     top: y.start,
-    origin: `${y.flipped ? "bottom" : "top"} ${x.flipped ? "right" : "left"}`,
+    origin: `${y.flipped ? "bottom" : "top"} ${pointOnRight ? "right" : "left"}`,
   };
 }
 
@@ -205,6 +223,8 @@ function placeOnScreen(
     { x, y },
     { width, height },
     { width: window.innerWidth, height: window.innerHeight },
+    EDGE_GUTTER,
+    isDocumentRtl(),
   );
   const local = parent
     ? viewportPointInFixedParent(parent, placed.left, placed.top)
@@ -228,13 +248,28 @@ export function PointerContextMenu({
   y,
   label,
   heading,
-  entries,
+  entries: ownEntries,
   onClose,
   testId,
   container,
   ownerWindowId,
   onEscape,
 }: PointerContextMenuProps) {
+  // An editor plugin's items (lib/plugins/context-menu), below the
+  // editor's own, when this menu was opened by a right-click in an editor
+  // with plugins. Taken once, when the menu opens.
+  const [pluginItems] = useState(takePluginContextMenu);
+  const entries = useMemo<readonly PointerContextMenuEntry[]>(
+    () =>
+      pluginItems.length
+        ? [
+            ...ownEntries,
+            { id: "separator-plugins", separator: true },
+            ...pluginItems.map((item) => ({ id: `plugin-${item.id}`, label: item.label, onSelect: item.onSelect, testId: `plugin-context-${item.id}` })),
+          ]
+        : ownEntries,
+    [ownEntries, pluginItems],
+  );
   const menuRef = useRef<HTMLDivElement | null>(null);
   const submenuRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState({
@@ -417,23 +452,28 @@ export function PointerContextMenu({
         active instanceof Element
           ? active.closest<HTMLElement>("[data-pointer-menu-icon-row]")
           : null;
+      // Under an rtl interface the inline axis runs leftwards: Left opens a
+      // submenu and walks an icon row forwards, Right closes the submenu.
+      const rtl = isDocumentRtl();
+      const forwardKey = rtl ? "ArrowLeft" : "ArrowRight";
+      const backKey = rtl ? "ArrowRight" : "ArrowLeft";
       if (iconRow && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
         event.preventDefault();
         const items = Array.from(
           iconRow.querySelectorAll<HTMLButtonElement>(ITEM_SELECTOR),
         );
         const current = items.indexOf(active as HTMLButtonElement);
-        const step = event.key === "ArrowRight" ? 1 : -1;
+        const step = event.key === forwardKey ? 1 : -1;
         items[(current + step + items.length) % items.length]?.focus();
         return;
       }
-      if (event.key === "ArrowLeft" && inSubmenu) {
+      if (event.key === backKey && inSubmenu) {
         event.preventDefault();
         closeSubmenu(true);
         return;
       }
       if (
-        event.key === "ArrowRight" &&
+        event.key === forwardKey &&
         active instanceof HTMLElement &&
         active.dataset.pointerMenuSubmenuTrigger
       ) {

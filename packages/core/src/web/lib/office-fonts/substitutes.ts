@@ -19,7 +19,7 @@
 import generated from "./substitutes.generated.json";
 import cjkLatinFaces from "./cjk-latin-faces.json";
 import { excelCutFamilyOf, excelCutRangeIsEastAsian, isExcelCutFamily } from "./excel-cut-families";
-import { HANGUL_EM_PREFIX, hangulEmFamilyOf, stackPrimaryFamily } from "./hangul-em";
+import { HANGUL_EM_PREFIX, hangulEmFamilyOf, sheetHangulEmFamily, stackPrimaryFamily } from "./hangul-em";
 import powerPointTable from "./powerpoint-substitutes.json";
 import { notedFontFaces, noteFamilyRegistration, noteFontFaceSource, type DeclaredFontFace } from "../font-face-declarations";
 import { loadOfficeDataParts, officeDataObtainable, officeDataPartKnown } from "../office-data/store";
@@ -1251,6 +1251,7 @@ export function ensureOfficeFontFaces(
       // at the weights the Office family has (a bold of one without is
       // emboldened from the regular, as Word does).
       const hangul = hangulEmFamilyOf(key) ?? hangulEmFamilyOf(name);
+      const sheetHangul = sheetHangulEmFamily(family.trim().replace(/^["']|["']$/g, "").trim());
       if (hangul) {
         const declared = new Set<number>();
         for (const { faces } of registry.families[name] ?? []) {
@@ -1260,6 +1261,9 @@ export function ensureOfficeFontFaces(
             const localSources = locals.map((local) => `local("${local.replace(/["\\]/g, "\\$&")}")`);
             for (const [file, range] of hangul.slices(weight)) {
               addFace(doc, hangul.alias, weight, 0, [...localSources, `url(${HANGUL_EM_PREFIX}${file}) format("woff2")`], range, undefined, overrides ?? undefined);
+              // The sheet's own family of it, the same faces under the name
+              // a sheet's stack gives them (sheetHangulEmFamily).
+              if (sheetHangul) addFace(doc, sheetHangul, weight, 0, [...localSources, `url(${HANGUL_EM_PREFIX}${file}) format("woff2")`], range, undefined, overrides ?? undefined);
             }
           }
         }

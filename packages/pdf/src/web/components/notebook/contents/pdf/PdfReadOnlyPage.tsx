@@ -421,6 +421,8 @@ export function PdfReadOnlyPage({
   return (
     <div
       ref={frameRef}
+      // The PDF page keeps its ltr geometry under an rtl interface.
+      dir="ltr"
       data-pdf-page={descriptor.pageNumber}
       onDoubleClick={
         onPointDoubleClick

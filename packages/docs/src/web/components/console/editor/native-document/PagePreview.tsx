@@ -726,6 +726,8 @@ export default function PagePreview({
 
   return (
     <div
+      // Document content keeps its ltr geometry under an rtl interface.
+      dir="ltr"
       className="note-editor-page-preview"
       data-testid="note-editor-page-preview"
       data-page-size={pageSize}

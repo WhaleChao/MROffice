@@ -11,7 +11,6 @@ import { canonicalDocumentFontSizePx } from "@mrnote/core/web/components/console
 import { msSinceTyping } from "@mrnote/core/web/lib/typing-session.ts";
 import { pxToPt, pxToPtRounded, WORD_LINE_MULTIPLE_MAX, WORD_LINE_MULTIPLE_MIN } from "@mrnote/core/web/lib/office-units.ts";
 import { commentsWritable } from "@mrnote/core/web/components/console/editor/native-document/commentOnlyLane.ts";
-import { officeGalleryMenuStyles } from "@mrnote/core/web/components/office-ribbon/OfficeGalleryMenu.tsx";
 import type { Awareness } from "y-protocols/awareness";
 import {
   createInkPresencePublisher,
@@ -19,13 +18,7 @@ import {
   type InkPresenceStroke,
 } from "@mrnote/core/web/lib/collab/ink-presence.ts";
 import { DocumentDialogIcon } from "@mrnote/core/web/components/console/editor/native-document/DocumentDialogIcon.tsx";
-import { DOCUMENT_INK_PRESENCE_SURFACE } from "./native-document/DocumentPeerInkLayer";
-import { OfficePictureEffectsMenu } from "@mrnote/core/web/components/office-ribbon/OfficePictureEffectsMenu.tsx";
-import { presentationEffectsMenuLabels } from "@mrnote/core/web/components/notebook/contents/presentation/presentationEffectsLabels.ts";
-import { OFFICE_GLOW_ACCENTS, OFFICE_GLOW_SIZES_PT, officeGlowVariation, withOfficePictureEffect } from "@mrnote/core/web/lib/office-picture-effects.ts";
-import { OFFICE_TEXT_EFFECT_KINDS, officeTextPaintOfficeEffects, withOfficeTextEffect } from "@mrnote/core/web/lib/office-text-effects.ts";
 import { documentThemeColorsForExport, type OfficeWordThemeColors } from "@mrnote/core/web/lib/office-table-style-word.ts";
-import { officeMenuDashOf } from "@mrnote/core/web/lib/office-stroke-dash.ts";
 import { cachedComputedStyle } from "@mrnote/core/web/lib/computed-style-cache.ts";
 import {
   resolveInternalLinkTarget,
@@ -62,12 +55,7 @@ import { skipDevOwnerStacksForThisRender } from "@mrnote/core/web/lib/react/dev-
 import {OfficeShapeFormatStyleGroup} from "@mrnote/core/web/components/office-ribbon/OfficeShapeFormatStyleGroup.tsx";
 import { OfficeShapeQuickGallery } from "@mrnote/core/web/components/office-ribbon/OfficeShapeQuickGallery.tsx";
 import { OfficeChartColorPaletteMenuItems } from "@mrnote/core/web/components/office-ribbon/OfficeChartColorPaletteMenu.tsx";
-import { OfficeChartQuickLayoutGallery } from "@mrnote/core/web/components/office-ribbon/OfficeChartQuickLayoutPreview.tsx";
-import {
-  OfficeChartDesignRibbon,
-  OfficeChartElementMenuItems,
-  officeChartHiddenEmptyCellsMenu,
-} from "@mrnote/core/web/components/office-ribbon/OfficeChartDesignRibbon.tsx";
+import { OfficeChartElementMenuItems } from "@mrnote/core/web/components/office-ribbon/OfficeChartDesignRibbon.tsx";
 import {
   OfficeChartContextMenu,
   activateOfficeControl,
@@ -92,10 +80,6 @@ import {
   officeChartFilterNames,
   type OfficeChartStylesSlot,
 } from "@mrnote/core/web/components/office-ribbon/OfficeChartQuickButtons.tsx";
-import {
-  OfficeChartTypeMenuItems,
-  officeChartTypeFamilyGroups,
-} from "@mrnote/core/web/components/office-ribbon/OfficeChartTypeMenu.tsx";
 import { OfficeChartComboDialog } from "@mrnote/core/web/components/office-ribbon/OfficeChartComboDialog.tsx";
 import {
   officeChartFilterControls,
@@ -106,21 +90,12 @@ import {
   type OfficeChartCombinationRow,
 } from "@mrnote/core/web/lib/office-charts/chart-type.ts";
 import {
-  officeChartActiveQuickLayout,
-  officeChartQuickLayoutAvailable,
-  officeChartQuickLayoutCalibrated,
-  officeChartQuickLayoutPatch,
-} from "@mrnote/core/web/lib/office-charts/quick-layout.ts";
-import {
   chartTakesColorPalette,
   type ChartColorPaletteId,
 } from "@mrnote/core/web/lib/office-charts/chart-color-palettes.ts";
 import {OfficeShapeSizeFields} from "@mrnote/core/web/components/office-ribbon/OfficeShapeSizeFields.tsx";
-import { officeShapeStyleRecipes, OFFICE_WEB_SHAPE_ACCENTS } from "@mrnote/core/web/lib/office-shape-style-catalog.ts";
-import { documentShapeMatchesStyle } from "@mrnote/core/web/lib/document-shape-style-adapter.ts";
 import { OfficeWordArtInsertGallery } from "@mrnote/core/web/components/office-ribbon/OfficeWordArtStyleGallery.tsx";
 import { OFFICE_WORDART_STYLE_RECIPES, type OfficeWordArtRecipe } from "@mrnote/core/web/lib/office-wordart-style-catalog.ts";
-import { documentWordArtStylePatch, documentWordArtMatchesStyle, officeTextPaintEffect } from "@mrnote/core/web/lib/document-wordart-style-adapter.ts";
 import { saveOfficeShapeAsPicture } from "@mrnote/core/web/lib/office-save-as-picture.ts";
 import { OfficeZoomDialog } from "@mrnote/core/web/components/office-ribbon/OfficeZoomDialog.tsx";
 import {
@@ -133,26 +108,8 @@ import {
 import {
   documentDefaultShapeStyleFromAttrs,
 } from "@mrnote/core/web/lib/document-wordart-style-adapter.ts";
-import {
-  Children,
-  Fragment,
-  cloneElement,
-  createContext,
-  createElement,
-  isValidElement,
-  memo,
-  useCallback,
-  useContext,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
-import { createPortal, flushSync } from "react-dom";
+import { Children, Fragment, cloneElement, createContext, createElement, isValidElement, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { useScrollportToolbarInset } from "@mrnote/core/web/components/console/editor/scrollportToolbarInset.ts";
 import {
   DocumentDockedPane,
@@ -217,43 +174,7 @@ import {
 import type { DocumentWindowChoice } from "@mrnote/core/web/components/console/editor/documentWindowCommands.ts";
 import { requestChatPrefill } from "@mrnote/core/web/__cut__/m809fa6700a.ts";
 import { serialize as serializeMarkdown } from "@mrnote/core/web/lib/markdown/index.ts";
-import {
-  DOCUMENT_SHAPE_MAX_EDGE_EMU,
-  DOCUMENT_SHAPE_MAX_GROUP_MEMBERS,
-  DOCUMENT_SHAPE_MIN_EDGE_EMU,
-  DOCUMENT_SHAPE_RECENT_STORAGE_KEY,
-  DOCUMENT_SHAPE_DEFAULT_FILL,
-  DOCUMENT_SHAPE_DEFAULT_OUTLINE,
-  DOCUMENT_SHAPE_DEFAULT_OUTLINE_WIDTH_PT,
-  documentShapeConnectorCanvasAttrs,
-  documentShapeMindMapCanvasAttrs,
-  documentShapeDefaultAttrs,
-  documentShapeDefinition,
-  documentShapeEmuToPx,
-  documentShapeGroupIsEditable,
-  documentShapeIsPreservedNativeSmartArt,
-  documentShapeNativeSmartArtTextBlocker,
-  documentShapeSmartArtIdentity,
-  documentShapeLineEnds,
-  documentShapeLineEndsPatch,
-  documentShapeTakesLineEnds,
-  documentShapeTextBoxDefaultAttrs,
-  documentTextBoxClickSizePx,
-  documentShapeUngroupAttrs,
-  documentShapeOfficeEffects,
-  documentShapeHasGluedConnectors,
-  documentFloatingStack,
-  normalizeDocumentShapeAttrs,
-  resolveDocumentShapeStack,
-  type DocumentShapeAttrs,
-  type DocumentShapeFlipAxis,
-  type DocumentShapePositionAction,
-  type DocumentShapePreset,
-  type DocumentShapeRotationAction,
-  type DocumentShapeSizeAxis,
-  type DocumentShapeTextDirection,
-  type DocumentShapeZOrderAction,
-} from "@mrnote/core/web/lib/document-shapes.ts";
+import { DOCUMENT_SHAPE_MAX_GROUP_MEMBERS, DOCUMENT_SHAPE_MIN_EDGE_EMU, DOCUMENT_SHAPE_RECENT_STORAGE_KEY, DOCUMENT_SHAPE_DEFAULT_FILL, DOCUMENT_SHAPE_DEFAULT_OUTLINE, DOCUMENT_SHAPE_DEFAULT_OUTLINE_WIDTH_PT, documentShapeConnectorCanvasAttrs, documentShapeMindMapCanvasAttrs, documentShapeDefaultAttrs, documentShapeDefinition, documentShapeEmuToPx, documentShapeIsPreservedNativeSmartArt, documentShapeNativeSmartArtTextBlocker, documentShapeSmartArtIdentity, documentShapeLineEnds, documentShapeLineEndsPatch, documentShapeTakesLineEnds, documentShapeTextBoxDefaultAttrs, documentTextBoxClickSizePx, documentShapeUngroupAttrs, normalizeDocumentShapeAttrs, resolveDocumentShapeStack, type DocumentShapeAttrs, type DocumentShapeFlipAxis, type DocumentShapePositionAction, type DocumentShapePreset, type DocumentShapeRotationAction, type DocumentShapeSizeAxis, type DocumentShapeTextDirection, type DocumentShapeZOrderAction } from "@mrnote/core/web/lib/document-shapes.ts";
 import {
   documentShapeHighlightPatch,
   documentShapeTextCommandPatch,
@@ -283,62 +204,18 @@ import {
   officeChartWithTitleRangeCommand,
   type OfficeChartTextElement,
 } from "@mrnote/core/web/lib/office-charts/chart-element-text.ts";
-import {
-  keepOfficeChartSelections,
-  officeChartHostKey,
-  officeChartSelectedArea,
-  selectOfficeChartHit,
-  setOfficeChartSelectedArea,
-  useOfficeChartSelectedArea,
-} from "@mrnote/core/web/lib/office-charts/chart-selection-store.ts";
+import { keepOfficeChartSelections, officeChartHostKey, officeChartSelectedArea, selectOfficeChartHit } from "@mrnote/core/web/lib/office-charts/chart-selection-store.ts";
 import type { PresentationCustomGeometryTool } from "@mrnote/core/web/lib/presentation-freeform.ts";
-import { OfficeArtisticEffectsMenu } from "@mrnote/core/web/components/office-ribbon/OfficeArtisticEffectsMenu.tsx";
-import { normalizeOfficeArtisticEffect } from "@mrnote/core/web/lib/office-artistic-effects.ts";
-import { loadOfficeImageNaturalSize } from "@mrnote/core/web/lib/office-picture-fit.ts";
 import { OfficeLineEndsPicker } from "@mrnote/core/web/components/office-ribbon/OfficeLineEndsPicker.tsx";
 import type { OfficeLineEndsState } from "@mrnote/core/web/lib/office-line-ends.ts";
 import {
   OfficeShapeCatalogPanel,
   officeShapeCatalogStyles,
 } from "@mrnote/core/web/components/office-ribbon/OfficeShapeCatalogPanel.tsx";
-import {
-  officeShapeDefinition,
-  officeShapePresetFromDrawingMl,
-} from "@mrnote/core/web/lib/office-shape-catalog.ts";
-import {
-  documentShapeMultiSelection,
-  documentShapeMultiSelectionGroupState,
-  selectDocumentShapes,
-  deleteDocumentShapes,
-  documentShapeLassoSelection,
-  groupDocumentShapes,
-  DOCUMENT_SMARTART_ITEM_RESIZE_EVENT,
-  DOCUMENT_SMARTART_MEMBER_SELECTION_EVENT,
-  DOCUMENT_SHAPE_GROUP_MEMBER_PICK_EVENT,
-  documentShapePickedGroupMember,
-  DOCUMENT_SMARTART_PICTURE_SLOT_EVENT,
-  documentShapeEditPointsAvailable,
-  type DocumentSmartArtItemResizeDetail,
-  type DocumentSmartArtMemberSelectionDetail,
-  type DocumentSmartArtPictureSlotDetail,
-  lastDocumentSmartArtMemberSelection,
-  ungroupDocumentShape,
-  documentShapeRegroupPositions,
-  documentShapeMergeInputs,
-  applyDocumentShapeMerge,
-  alignDocumentShapes,
-} from "@mrnote/core/web/components/console/editor/native-document/documentShapeExtension.ts";
-import {
-  documentShapeReorderLayers,
-  type DocumentShapeReorderLayer,
-} from "./native-document/documentShapeReorder";
-import { PresentationReorderObjectsDialog } from "@mrnote/slides/web/lib/presentation/PresentationReorderObjectsDialog.tsx";
-import { OfficeReorderLayerPreview } from "@mrnote/core/web/components/office-ribbon/OfficeReorderLayerPreview.tsx";
-import {
-  OFFICE_MERGE_SHAPES_OPERATIONS,
-  requestOfficeShapeMerge,
-  type OfficeMergeShapesOperation,
-} from "@mrnote/core/web/lib/office-shape-merge-client.ts";
+import { officeShapeDefinition } from "@mrnote/core/web/lib/office-shape-catalog.ts";
+import { documentShapeMultiSelection, documentShapeMultiSelectionGroupState, deleteDocumentShapes, documentShapeLassoSelection, groupDocumentShapes, DOCUMENT_SMARTART_ITEM_RESIZE_EVENT, DOCUMENT_SMARTART_MEMBER_SELECTION_EVENT, DOCUMENT_SHAPE_GROUP_MEMBER_PICK_EVENT, documentShapePickedGroupMember, DOCUMENT_SMARTART_PICTURE_SLOT_EVENT, documentShapeEditPointsAvailable, type DocumentSmartArtItemResizeDetail, type DocumentSmartArtMemberSelectionDetail, type DocumentSmartArtPictureSlotDetail, lastDocumentSmartArtMemberSelection, ungroupDocumentShape } from "@mrnote/core/web/components/console/editor/native-document/documentShapeExtension.ts";
+import { type DocumentShapeReorderLayer } from "./native-document/documentShapeReorder";
+import { type OfficeMergeShapesOperation } from "@mrnote/core/web/lib/office-shape-merge-client.ts";
 import {
   documentShapePositionOutsideList,
   insertDocumentShapeContent,
@@ -347,78 +224,7 @@ import {
   PresentationShapePreview,
 } from "@mrnote/core/web/components/notebook/contents/ribbon/PresentationHomeShapeGallery.tsx";
 import { LoaderCircle } from "lucide-react";
-import {
-  Accessibility,
-  ArrowDownToLine,
-  ArrowDownAZ,
-  ArrowRightLeft,
-  ArrowUpAZ,
-  ArrowUpToLine,
-  Asterisk,
-  Ban,
-  BarChart3,
-  Boxes,
-  Bookmark,
-  BookmarkCheck,
-  BookMarked,
-  BookOpen,
-  CalendarDays,
-  Check,
-  CheckCheck,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  Circle,
-  Code2,
-  Database,
-  Diamond,
-  Eraser,
-  Paintbrush,
-  Pencil,
-  Download,
-  FileDown,
-  FileText,
-  Hash,
-  Heading,
-  Info,
-  LayoutGrid,
-  History,
-  Printer,
-  PaintBucket,
-  Square,
-  Volume2,
-  Languages,
-  Link2,
-  ListFilter,
-  MessageSquare,
-  MessageSquarePlus,
-  Minus,
-  Plus,
-  AlignHorizontalDistributeCenter,
-  PanelBottom,
-  PanelRight,
-  PanelTop,
-  Pilcrow,
-  Proportions,
-  Quote,
-  Radical,
-  Redo2,
-  RefreshCw,
-  Settings2,
-  SlidersHorizontal,
-  SeparatorHorizontal,
-  SeparatorVertical,
-  Sigma,
-  Triangle,
-  Table2,
-  Users,
-  Trash2,
-  Unlink,
-  Undo2,
-  X,
-  Shapes,
-} from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
+import { ArrowDownAZ, ArrowRightLeft, ArrowUpAZ, Ban, BarChart3, Boxes, Bookmark, BookmarkCheck, Check, ChevronDown, Circle, Code2, Diamond, Paintbrush, Pencil, Download, FileDown, FileText, Hash, Info, LayoutGrid, History, Printer, PaintBucket, ListFilter, MessageSquare, Plus, PanelRight, Pilcrow, Redo2, RefreshCw, Triangle, Table2, Trash2, Unlink, Undo2, X, Shapes } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import type { HouseIcon } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import { editorViewDom } from "@mrnote/core/web/components/console/editor/native-document/editorViewDom.ts";
 import { usePageCountIsEstimate } from "@mrnote/core/web/components/console/editor/native-document/paged/pageCountSettled.ts";
@@ -468,6 +274,7 @@ import {
   normalizeCharScale,
   normalizeFitTextTwips,
   normalizeCharSpacing,
+  CHAR_SPACING_LIMIT_PT,
   normalizeCharacterStyle,
   normalizeFontFamily,
   normalizeFontSize,
@@ -509,9 +316,6 @@ import {
   equationPayloadForInsertion,
   planEquationInsertion,
 } from "@mrnote/core/web/components/console/editor/extensions/equationPlacement.ts";
-import {
-  convertInlineDrawingToBlock,
-} from "@mrnote/core/web/components/console/editor/extensions/objectPlacement.ts";
 import { documentWordRangeAt } from "@mrnote/core/web/lib/document-word-at.ts";
 import {
   isPictureNode,
@@ -526,57 +330,15 @@ import {
   VISUAL_MATH_HISTORY_CONTROL_SELECTOR,
 } from "@mrnote/core/web/components/console/editor/extensions/visualMathEditor.ts";
 import { DocumentEquationGalleryMenu } from "@mrnote/core/web/components/console/editor/native-document/DocumentEquationGalleryMenu.tsx";
-import { DocumentStyleSetGallery } from "./DocumentStyleSetGallery";
-import {
-  DocsDesignIcon,
-  DocsParagraphSpacingPreview,
-} from "./DocumentDesignRibbonIcons";
-import {
-  SpreadsheetThemeGallery,
-} from "@mrnote/sheets/web/components/notebook/contents/spreadsheet/SpreadsheetThemeGallery.tsx";
-import {
-  SpreadsheetThemeColorGallery,
-  SpreadsheetThemeFontGallery,
-} from "@mrnote/sheets/web/components/notebook/contents/spreadsheet/SpreadsheetThemeAxisGallery.tsx";
-import spreadsheetThemeAxisStyles from "@mrnote/sheets/web/components/notebook/contents/spreadsheet/SpreadsheetThemeAxisGallery.module.css";
-import { OFFICE_THEME_FILE_ACCEPT, readOfficeThemeFile } from "@mrnote/core/web/lib/office-theme-file.ts";
-import {
-  nextCustomThemeFontsName,
-  OfficeCreateThemeFontsDialog,
-  type OfficeThemeFontsDraft,
-} from "@mrnote/core/web/components/office-ribbon/OfficeCreateThemeFontsDialog.tsx";
-import { customizedSpreadsheetNativeThemeFonts } from "@mrnote/core/web/lib/spreadsheet/workbook-theme.ts";
-import {
-  DEFAULT_DOCUMENT_DESIGN,
-  DOCUMENT_DESIGN_FONT_GALLERY,
-  documentDesignBase,
-  documentDesignFonts,
-  documentDesignFontStack,
-  documentThemeBodyLatin,
-  wordThemeColorRefForSwatch,
-  documentDesignThemeId,
-  normalizeDocumentDesign,
-  type DocumentDesign,
-} from "@mrnote/core/web/lib/document-design.ts";
+import { type OfficeThemeFontsDraft } from "@/components/office-ribbon/OfficeCreateThemeFontsDialog";
+import { DEFAULT_DOCUMENT_DESIGN, documentDesignFonts, documentDesignFontStack, documentThemeBodyLatin, wordThemeColorRefForSwatch, normalizeDocumentDesign, type DocumentDesign } from "@mrnote/core/web/lib/document-design.ts";
 import { documentDesignStylePreviewCss } from "@mrnote/core/web/lib/document-design-preview.ts";
 import { useOfficeDataVersion } from "@mrnote/core/web/lib/office-data/use-office-data.ts";
-import { saveDefaultDocumentDesign } from "@mrnote/core/web/lib/document-default-design.ts";
-import { PointerContextMenu } from "@mrnote/core/web/components/ui/PointerContextMenu.tsx";
-import {
-  customThemeTileColors,
-  deleteCustomTheme,
-  saveCustomTheme,
-  useCustomThemes,
-} from "@mrnote/core/web/lib/document-custom-themes.ts";
-import {
-  deleteCustomStyleSet,
-  saveCustomStyleSet,
-  useCustomStyleSets,
-} from "@mrnote/core/web/lib/document-custom-style-sets.ts";
-import { wordStyleSet, type WordQuickStyleId } from "@mrnote/core/web/lib/office-word-style-sets.ts";
+import { saveCustomTheme } from "@mrnote/core/web/lib/document-custom-themes.ts";
+import { saveCustomStyleSet } from "@mrnote/core/web/lib/document-custom-style-sets.ts";
+import { type WordQuickStyleId } from "@mrnote/core/web/lib/office-word-style-sets.ts";
 import { officeThemeColorGrid } from "@mrnote/core/web/lib/office-theme-color-grid.ts";
 import { OfficeColorPaletteThemeProvider } from "@mrnote/core/web/components/office-ribbon/OfficeColorPalettePanel.tsx";
-import { OFFICE_THEMES, officeThemeLabel } from "@mrnote/core/web/lib/office-theme-catalog.ts";
 import { DocsHomeIcon, type DocsHomeIconName } from "@mrnote/core/web/components/console/editor/DocumentHomeRibbonIcons.tsx";
 import {
   TOC_CONTROL_REQUEST_EVENT,
@@ -589,25 +351,12 @@ import DocumentBordersMenu from "./native-document/DocumentBordersMenu";
 import DocumentTableBordersMenu, {
   type DocumentTableBordersMenuHandle,
 } from "./native-document/DocumentTableBordersMenu";
-import {
-  DocumentPictureStyleGallery,
-  readDocumentPictureStyleTarget,
-} from "@mrnote/core/web/components/console/editor/native-document/DocumentPictureStyleGallery.tsx";
-import { DocumentTableStyleGallery } from "./native-document/DocumentTableStyleGallery";
-import {
-  DocumentOfficeTableColorMenu,
-  readDocumentOfficeTableColorTarget,
-} from "./native-document/DocumentOfficeTableColorMenu";
-import {
-  DocumentEquationContextRibbon,
-  readDocumentEquationSelection,
-  type DocumentEquationSelection,
-} from "./native-document/DocumentEquationContextRibbon";
+import { readDocumentPictureStyleTarget } from "@mrnote/core/web/components/console/editor/native-document/DocumentPictureStyleGallery.tsx";
+import { readDocumentEquationSelection, type DocumentEquationSelection } from "./native-document/DocumentEquationContextRibbon";
 import {
   DocumentTablePropertiesDialog,
   type TablePropertiesTab,
 } from "./native-document/DocumentTablePropertiesDialog";
-import { DocumentTableReplaceTextDialog } from "./native-document/DocumentTableReplaceTextDialog";
 import { DocumentTableSplitCellsDialog } from "./native-document/DocumentTableSplitCellsDialog";
 import { DocumentTableDeleteCellsDialog } from "./native-document/DocumentTableDeleteCellsDialog";
 import {
@@ -617,24 +366,13 @@ import {
   type DocumentTableDeleteCellsMode,
   type DocumentTableDeleteCellsRequest,
 } from "@mrnote/core/web/components/console/editor/native-document/tableSelectionDelete.ts";
-import { DocumentPictureCompressionDialog } from "./native-document/DocumentPictureCompressionDialog";
-import {
-  DocumentPictureDrawDialog,
-  DocumentPictureDrawIcon,
-  type DocumentPictureDrawMime,
-} from "./native-document/DocumentPictureDrawDialog";
+import { type DocumentPictureDrawMime } from "./native-document/DocumentPictureDrawDialog";
 import {
   DocumentChartSelectDataDialog,
   documentChartSupportsSelectData,
 } from "./native-document/DocumentChartSelectDataDialog";
-import {
-  DocumentChartFormatRibbon,
-  type DocumentChartAreaStyleKey,
-} from "@mrnote/core/web/components/console/editor/native-document/DocumentChartFormatRibbon.tsx";
-import {
-  compressDocumentPictureDataUrl,
-  type DocumentPictureCompressionPresetId,
-} from "@mrnote/core/web/components/console/editor/native-document/documentPictureCompression.ts";
+import { type DocumentChartAreaStyleKey } from "@mrnote/core/web/components/console/editor/native-document/DocumentChartFormatRibbon.tsx";
+import { type DocumentPictureCompressionPresetId } from "@mrnote/core/web/components/console/editor/native-document/documentPictureCompression.ts";
 import { DocumentSignatureLineDialog } from "./native-document/DocumentSignatureLineDialog";
 import {
   DocumentDropCapDialog,
@@ -697,26 +435,8 @@ import {
   type DocumentTranscriptionInsertionTarget,
   type DocumentTranscriptionPayload,
 } from "./native-document/documentTranscription";
-import {
-  readDocumentTableReplaceTextTarget,
-  replaceDocumentTableText,
-  type DocumentTableReplaceTextOptions,
-  type DocumentTableReplaceTextTarget,
-} from "./native-document/documentTableReplaceText";
+import { type DocumentTableReplaceTextOptions, type DocumentTableReplaceTextTarget } from "./native-document/documentTableReplaceText";
 import { DocsInsertIcon } from "@mrnote/core/web/components/console/editor/DocumentInsertRibbonIcons.tsx";
-import { DocumentHeaderFooterRibbonIcon } from "./DocumentHeaderFooterRibbonIcons";
-import {
-  applyDocumentColors,
-  applyDocumentFonts,
-  applyDocumentParagraphSpacing,
-  applyDocumentCustomFonts,
-  applyDocumentStyleSet,
-  applyDocumentTheme,
-  applyDocumentThemeFile,
-  applyDocumentCustomStyleSet,
-  resetDocumentStyleSet,
-  resetDocumentTheme,
-} from "./native-document/documentDesignThemes";
 import {
   DocumentCoverPageGallery,
 } from "./DocumentCoverPageGallery";
@@ -760,23 +480,7 @@ import {
   type ChartSubtype,
   type ChartTrendline,
 } from "@mrnote/core/web/components/console/editor/extensions/chartBlockShared.ts";
-import {
-  CHART_ELEMENT_TRENDLINES,
-  CHART_TRENDLINE_FORECASTS,
-  CHART_TRENDLINE_NAMES,
-  CHART_TRENDLINE_OPTION_NAMES,
-  chartDataLabelPlacement,
-  chartDataLabelPlacementName,
-  chartDataLabelPlacements,
-  chartTrendlineOfKind,
-  chartTrendlineTakesOptions,
-  chartWithDataLabels,
-  chartWithTrendline,
-  chartWithTrendlineOption,
-  chartWithElementIntent,
-  type ChartDataLabelPlacement,
-  type ChartTrendlineOptionKey,
-} from "@mrnote/core/web/lib/office-charts/chart-elements.ts";
+import { CHART_ELEMENT_TRENDLINES, CHART_TRENDLINE_FORECASTS, CHART_TRENDLINE_NAMES, CHART_TRENDLINE_OPTION_NAMES, chartDataLabelPlacement, chartDataLabelPlacementName, chartDataLabelPlacements, chartTrendlineOfKind, chartTrendlineTakesOptions, chartWithDataLabels, chartWithTrendline, chartWithTrendlineOption, type ChartDataLabelPlacement, type ChartTrendlineOptionKey } from "@mrnote/core/web/lib/office-charts/chart-elements.ts";
 import {
   type PresentationChartAreaPaint,
   type PresentationChartAreaStyle,
@@ -807,11 +511,7 @@ import {
 } from "@mrnote/core/web/lib/office-charts/chart-template-store.ts";
 import { CHART_INSERT_ENHANCEMENT_FAMILIES, CHART_INSERT_OFFICE_FAMILIES } from "@mrnote/core/web/components/office-ribbon/OfficeChartInsertGallery.tsx";
 import { documentChartStyleAttrs, documentChartStyleLabel, type DocumentChartStyleId } from "@mrnote/core/web/components/console/editor/native-document/documentChartStyles.ts";
-import {
-  DOCUMENT_SMARTART_EDIT_ITEMS_EVENT,
-  sanitizeSmartArtAltText,
-  type DocumentSmartArtEditItemsEventDetail,
-} from "@mrnote/core/web/components/console/editor/extensions/SmartArtBlock.tsx";
+import { sanitizeSmartArtAltText, type DocumentSmartArtEditItemsEventDetail } from "@mrnote/core/web/components/console/editor/extensions/SmartArtBlock.tsx";
 import {
   canonicalSmartArtLayoutId,
   OFFICE_SMARTART_DEFAULT_LAYOUT_ID,
@@ -836,12 +536,7 @@ import {
   useOfficeSmartArtPlaceholders,
   useOfficeSmartArtTextPaneLabels,
 } from "@mrnote/core/web/components/office-ribbon/officeSmartArtPlaceholders.ts";
-import {
-  OfficeSmartArtDesignTab,
-  type OfficeSmartArtDesignTabDiagram,
-  type OfficeSmartArtDesignTabDiagramState,
-  type OfficeSmartArtDesignTabPreserved,
-} from "@mrnote/core/web/components/office-ribbon/OfficeSmartArtDesignTab.tsx";
+import { type OfficeSmartArtDesignTabDiagram, type OfficeSmartArtDesignTabDiagramState, type OfficeSmartArtDesignTabPreserved } from "@mrnote/core/web/components/office-ribbon/OfficeSmartArtDesignTab.tsx";
 import {
   OfficeSmartArtContextMenu,
   openOfficeSmartArtLayoutGallery,
@@ -959,65 +654,11 @@ import {
   type ToolbarReadContext,
 } from "./native-document/toolbarReadContext";
 import type { SectionBreakType } from "@mrnote/core/web/components/console/editor/extensions/SectionBreak.ts";
-import {
-  CELL_MARGIN_VALUES,
-  DOCUMENT_CELL_BACKGROUND_CSS_VARIABLE,
-  cellBorderAttributes,
-  cellMarginsEqual,
-  normalizeCellBackgroundColor,
-  normalizeCellBorderStyle,
-  normalizeCellFormula,
-  normalizeCellFormulaNumberFormat,
-  normalizeCellMargins,
-  normalizeTableCellSpacingPx,
-  normalizeCellTextDirection,
-  normalizeCellTextAlign,
-  normalizeCellVerticalAlign,
-  tableInheritedCellMargins,
-  uniformCellMarginPreset,
-  type CellBorderStyle,
-  type CellFormulaNumberFormat,
-  type CellMargin,
-  type CellMargins,
-  type CellTextDirection,
-  type CellTextAlign,
-  type CellVerticalAlign,
-} from "@mrnote/core/web/components/console/editor/native-document/tableCellStyle.ts";
+import { DOCUMENT_CELL_BACKGROUND_CSS_VARIABLE, cellMarginsEqual, normalizeCellBackgroundColor, normalizeCellBorderStyle, normalizeCellFormula, normalizeCellFormulaNumberFormat, normalizeCellMargins, normalizeTableCellSpacingPx, normalizeCellTextDirection, normalizeCellTextAlign, normalizeCellVerticalAlign, tableInheritedCellMargins, type CellBorderStyle, type CellFormulaNumberFormat, type CellMargin, type CellMargins, type CellTextDirection, type CellTextAlign, type CellVerticalAlign } from "@mrnote/core/web/components/console/editor/native-document/tableCellStyle.ts";
 import { wordTableContentFit } from "@mrnote/core/web/components/console/editor/native-document/wordTableLayout.ts";
-import {
-  DEFAULT_DOCUMENT_TABLE_BORDER,
-  documentTableGridlinesVisible,
-  setDocumentTableGridlinesVisible,
-  type DocumentTableBorderPen,
-} from "@mrnote/core/web/components/console/editor/native-document/tableBorders.ts";
-import {
-  commitDocumentTableColumnWidth,
-  commitDocumentTableRowHeight,
-  documentTableSelectionScope,
-  readDocumentTableColumnWidthTarget,
-  readDocumentTableRowHeightTarget,
-  selectDocumentTableScope,
-  type DocumentTableColumnWidthTarget,
-  type DocumentTableRowHeightTarget,
-  type DocumentTableSelectionScope,
-} from "@mrnote/core/web/components/console/editor/native-document/tableStructureExtension.ts";
-import {
-  MAX_ROW_HEIGHT_PX,
-  MIN_ROW_HEIGHT_PX,
-} from "@mrnote/core/web/components/console/editor/native-document/tableRowStyle.ts";
-import {
-  TABLE_STYLE_COLOR_FAMILIES,
-  TABLE_STYLE_THEMES,
-  defaultTableStyleOptionsForTheme,
-  getTableStyleTheme,
-  locateTableStyleCells,
-  tableCellThemePatch,
-  tableStyleColorFamilyFromTheme,
-  tableStyleOptionsFromAttrs,
-  tableStyleThemeForColorFamily,
-  tableStyleThemeFromAttrs,
-  type TableStyleColorFamilyId,
-} from "@mrnote/core/web/components/console/editor/native-document/tableStyleGallery.ts";
+import { DEFAULT_DOCUMENT_TABLE_BORDER, documentTableGridlinesVisible, type DocumentTableBorderPen } from "@mrnote/core/web/components/console/editor/native-document/tableBorders.ts";
+import { documentTableSelectionScope, readDocumentTableColumnWidthTarget, readDocumentTableRowHeightTarget, selectDocumentTableScope, type DocumentTableColumnWidthTarget, type DocumentTableRowHeightTarget, type DocumentTableSelectionScope } from "@mrnote/core/web/components/console/editor/native-document/tableStructureExtension.ts";
+import { locateTableStyleCells, tableStyleOptionsFromAttrs, type TableStyleColorFamilyId } from "@mrnote/core/web/components/console/editor/native-document/tableStyleGallery.ts";
 
 // A strict #rrggbb matcher used only to decide whether to seed the native OS
 // picker with the active color. Color values handed to the editor are validated
@@ -1063,13 +704,6 @@ const HOME_FONT_SET_FAMILIES: Readonly<Record<DocumentFontSetId, string>> = {
   cjkSerif: '"SimSun", "宋体", "Songti SC", "Noto Serif SC", serif',
   cjkSans: '"Microsoft YaHei", "微软雅黑", "PingFang SC", sans-serif',
   mono: '"Courier New", Courier, monospace',
-};
-
-/** Line Numbers menu: the picture of each numbering mode. */
-const LINE_NUMBER_MODE_ICON: Record<LineNumberRestart, DocsLayoutIconName> = {
-  continuous: "lineNumbersContinuous",
-  newPage: "lineNumbersRestartPage",
-  newSection: "lineNumbersRestartSection",
 };
 
 function textEffectPreviewStyle(preset: TextEffectPresetValue): CSSProperties {
@@ -1206,28 +840,7 @@ function paragraphLineSpacingPreviewValue(
   }
   return paragraphLineSpacingValue(mode, valueDraft) ?? "1.15";
 }
-import {
-  blockBeforeAcrossSheets,
-  normalizeBuiltinParagraphStyleId,
-  LINE_HEIGHT_VALUES,
-  MAX_PARAGRAPH_SPACING_PT,
-  PARAGRAPH_SHADING_SWATCHES,
-  PARAGRAPH_SPACING_VALUES,
-  normalizeBorderPreset,
-  dropCapPositionOf,
-  normalizeDropCapDistancePt,
-  normalizeDropCapLines,
-  type DropCapOptions,
-  type DropCapPosition,
-  normalizeLineHeight,
-  normalizeLineHeightPt,
-  normalizeLineHeightRule,
-  normalizeParagraphTextAlignment,
-  normalizeShadingColor,
-  normalizeSpacing,
-  normalizeTextIndent,
-  type ParagraphTextAlignment,
-} from "@mrnote/core/web/components/console/editor/extensions/DocumentFormatting.ts";
+import { blockBeforeAcrossSheets, normalizeBuiltinParagraphStyleId, MAX_PARAGRAPH_SPACING_PT, PARAGRAPH_SHADING_SWATCHES, normalizeBorderPreset, dropCapPositionOf, normalizeDropCapDistancePt, normalizeDropCapLines, type DropCapOptions, type DropCapPosition, normalizeLineHeight, normalizeLineHeightPt, normalizeLineHeightRule, normalizeParagraphTextAlignment, normalizeShadingColor, normalizeSpacing, normalizeTextIndent, type ParagraphTextAlignment } from "@mrnote/core/web/components/console/editor/extensions/DocumentFormatting.ts";
 import {
   documentDefaultLineMultiple,
   setParagraphFormatAsDocumentDefault,
@@ -1237,14 +850,7 @@ import {
   DocumentSetAsDefaultDialog,
   type DocumentSetAsDefaultKind,
 } from "./native-document/DocumentSetAsDefaultDialog";
-import {
-  legacyPresetFromParagraphBorders,
-  normalizeDocumentParagraphBorders,
-  normalizeDocumentTextBoxFill,
-  normalizeDocumentTextBoxOutline,
-  paragraphBordersFromLegacyPreset,
-  type DocumentParagraphBorders,
-} from "@mrnote/core/web/lib/document-borders.ts";
+import { legacyPresetFromParagraphBorders, normalizeDocumentParagraphBorders, paragraphBordersFromLegacyPreset, type DocumentParagraphBorders } from "@mrnote/core/web/lib/document-borders.ts";
 import {
   OFFICE_LINE_WEIGHT_PT,
   formatOfficeLineWeightPt,
@@ -1254,10 +860,7 @@ import {
   twipsToPx,
   type TabStop,
 } from "@mrnote/core/web/lib/document-tabstops.ts";
-import {
-  DOCUMENT_PARAGRAPH_SPACING_PRESETS,
-  normalizeDocumentParagraphSpacing,
-} from "@mrnote/core/web/lib/document-paragraph-spacing.ts";
+import { normalizeDocumentParagraphSpacing } from "@mrnote/core/web/lib/document-paragraph-spacing.ts";
 import {
   DOCUMENT_FONT_SETS,
   type DocumentFontSetId,
@@ -1268,12 +871,7 @@ import {
 } from "@mrnote/core/web/lib/document-readability.ts";
 import CompareDocumentsPanel from "@mrnote/core/web/components/console/editor/CompareDocumentsPanel.tsx";
 import SourceDocumentsPane from "@mrnote/core/web/components/console/editor/SourceDocumentsPane.tsx";
-import {
-  DEFAULT_SOURCE_DOCUMENTS_MODE,
-  isSourceDocumentsMode,
-  type CompareResultSources,
-  type SourceDocumentsMode,
-} from "@mrnote/core/web/lib/document/sourceDocuments.ts";
+import { DEFAULT_SOURCE_DOCUMENTS_MODE, type CompareResultSources, type SourceDocumentsMode } from "@mrnote/core/web/lib/document/sourceDocuments.ts";
 import { useCloseOnEscape } from "@mrnote/core/web/components/console/editor/useCloseOnEscape.ts";
 import { useEditorSurfaceEditable } from "@mrnote/core/web/components/console/editor/useEditorSurfaceEditable.ts";
 import { commitOpenEquationDrafts } from "@mrnote/core/web/components/console/editor/extensions/equationDraftCommit.ts";
@@ -1291,44 +889,10 @@ import {
   applySectionLayoutPatchTo,
   sectionApplyToPointForwardAvailable,
 } from "@mrnote/core/web/components/console/editor/native-document/sectionApplyTo.ts";
-import {
-  activeSectionLayout,
-  applyCurrentSectionLayoutPatch,
-  lineNumberStartAt,
-  runColumnSeparatorButton,
-  runColumnsButton,
-  runColumnsDialog,
-  runColumnsPresetButton,
-  runCustomPageMarginsButton,
-  runCustomPageSizeButton,
-  runLineNumberFieldUpdate,
-  runLineNumberMode,
-  runLineNumbersDialog,
-  runLineNumberStart,
-  runLineNumbersToggle,
-  runManuscriptGridButton,
-  runMarginGalleryButton,
-  runPageMarginsButton,
-  runPageOrientationButton,
-  runPageSizeButton,
-  runVerticalAlignmentButton,
-  runVerticalTextButton,
-  toolbarLineNumbersFromSection,
-} from "./native-document/layoutButtons";
+import { activeSectionLayout, applyCurrentSectionLayoutPatch, lineNumberStartAt, runColumnsButton, runCustomPageMarginsButton, runCustomPageSizeButton, runLineNumbersDialog, runPageMarginsButton, runPageOrientationButton, runPageSizeButton, runVerticalAlignmentButton, toolbarLineNumbersFromSection } from "./native-document/layoutButtons";
 import { watermarkTextArea } from "./native-document/designButtons";
-import {
-  pageNumberDialogContext,
-  readHeaderFooterNativeContextState,
-  runPageNumberFormatDialog,
-  runPageNumbersDialog,
-  runPageNumberStoryWrite as runSharedPageNumberStoryWrite,
-  runRemovePageNumbers,
-} from "./native-document/headerFooterButtons";
-import {
-  liveCommentReviewState,
-  removeCurrentComment,
-  toggleCurrentCommentResolved,
-} from "./native-document/reviewButtons";
+import { pageNumberDialogContext, runPageNumberFormatDialog, runPageNumbersDialog, runPageNumberStoryWrite as runSharedPageNumberStoryWrite, runRemovePageNumbers } from "./native-document/headerFooterButtons";
+import { liveCommentReviewState } from "./native-document/reviewButtons";
 import {
   BIBLIOGRAPHY_CONTENT,
   applyNoteSettings,
@@ -1365,167 +929,14 @@ import {
   manualTableOfContentsContent,
   firstManualTableOfContentsTarget,
 } from "@mrnote/core/web/components/console/editor/native-document/referencesButtons.ts";
-import {
-  applyTableStyleTheme,
-  convertTableToText,
-  findSelectedTable,
-  findTableContextTarget,
-  runTableAutoFit,
-  setCellAlignment as setSharedCellAlignment,
-  setCellMargins,
-  setCellShading,
-  setCellTextDirection as setSharedCellTextDirection,
-  tableAutoFitWindowWidth,
-  toggleTableDesignLook,
-  writeTableCellFormula,
-  documentTableCellMarginsAttrs,
-  tableAutoResizes,
-} from "./native-document/tableButtons";
-import {
-  type LiveImageAltTarget,
-  commitLiveImageAltText,
-  commitLiveImageAttachment,
-  commitLiveImagePictureSource,
-  documentPictureAltPaneKey,
-  imageHasResettablePictureFormatting,
-  liveImageAltTarget,
-  liveImagePlacementTarget,
-  liveImportedImageAnchor,
-  resetLiveImagePictureAndSize,
-  resetLiveImagePictureFormatting,
-  resetLiveImageSize,
-  sameLiveImageAltTarget,
-  setLiveImageAlign,
-  setLiveImageAspectRatioLock,
-  setLiveImageDimension,
-  livePictureDrawnSize,
-  setLiveImageFloat,
-  toggleLiveImageHostList,
-  updateLiveImageFormatting,
-  flipPicture,
-  resetPictureCrop,
-  applyPictureCropFill,
-  applyPictureCropResult,
-  cropPictureToShape,
-  rotatePicture,
-  setPictureBorder,
-  setPicture3dEffect,
-  setPictureLookEffect,
-  setPictureShadowEffect,
-  setPictureCorrections,
-  setPictureRecolor,
-  setPictureSaturation,
-  setPictureTransparency,
-  canonicalDocumentPictureMime,
-  documentAttachmentPictureChangeAuthority,
-  documentPictureChangeAuthority,
-  documentPictureCompressionAuthority,
-  type DocumentPictureMime,
-} from "./native-document/pictureButtons";
-import {
-  commitLiveDocumentShapePatch,
-  documentShapeCentimetersToPx,
-  documentShapePxToCentimeters,
-  linkLiveDocumentTextBoxes,
-  liveDocumentShapeMemberId,
-  liveDocumentShapeTarget,
-  liveDocumentSmartArtGraphicSelected,
-  liveShapeTextTarget,
-  setLiveDocumentSmartArtGraphicFill,
-  setLiveDocumentSmartArtGraphicFormat,
-  setLiveDocumentShapeAlign,
-  setLiveDocumentShapeExactRotation,
-  setLiveDocumentShapeFlip,
-  setLiveDocumentShapeFormat,
-  setLiveDocumentShapePaint,
-  pickLiveDocumentShapeFillPicture,
-  setLiveDocumentShapePosition,
-  setLiveDocumentShapePreset,
-  liveDocumentSmartArtSlotPicture,
-  setLiveDocumentSmartArtSlotPictureFormat,
-  setLiveDocumentShapeRotation,
-  setLiveDocumentShapeSize,
-  setLiveDocumentShapeStyle,
-  setLiveDocumentShapeWrap,
-  setLiveDocumentShapePositionPreset,
-  setLiveDocumentShapeMoveWithText,
-  liveDocumentShapeMovesWithText,
-  liveDocumentShapePositionPreset,
-  setLiveDocumentShapeZOrder,
-  liveDocumentShapeZOrderAtBoundary,
-  liveDocumentStackMemberPos,
-  startLiveDocumentShapeEditPoints,
-  toggleLiveDocumentShapeAspectRatio,
-  reorderLiveDocumentStack,
-  rerouteLiveDocumentShapeConnectors,
-  commitLiveDocumentSmartArt,
-  liveDocumentFileSmartArtNode,
-  liveDocumentShapeSmartArtTarget,
-  type LiveDocumentShapeSmartArtTarget,
-} from "@mrnote/core/web/components/console/editor/native-document/shapeButtons.ts";
-import {
-  enterSelectedTextBoxForEquation,
-  liveTextBoxFrameTarget,
-  setLiveTextBoxBody,
-  setLiveTextBoxFill,
-  setLiveTextBoxOutline,
-  setLiveTextBoxSize,
-  setLiveTextBoxWrap,
-  setLiveTextBoxPositionPreset,
-  setLiveTextBoxAlign,
-  setLiveTextBoxMoveWithText,
-  liveTextBoxPlacement,
-  setLiveTextBoxZOrder,
-  textBoxFrameSizeEmu,
-  textBoxOutlineStyleOf,
-  textBoxZOrderAtBoundary,
-} from "./native-document/textBoxFrameCommands";
-import { documentTextBoxDirectionOf, documentTextBoxWrapOf } from "@mrnote/core/web/lib/document-text-box-frame.ts";
-import { normalizeFloatFrameBody } from "@mrnote/core/web/lib/office-float-anchor.ts";
-import {
-  documentChartPlacementState,
-  liveDocumentDrawingPlacementState,
-  setLiveDocumentChartPlacement,
-  setLiveDocumentDrawingPlacement,
-  type DocumentChartPlacementCommand,
-} from "@mrnote/core/web/components/console/editor/native-document/chartPlacement.ts";
-import { DocumentChartPlacementControls, POSITION_KEYS, PositionGlyph } from "@mrnote/core/web/components/console/editor/native-document/DocumentChartPlacementControls.tsx";
+import { convertTableToText, findSelectedTable, findTableContextTarget, runTableAutoFit, setCellMargins, tableAutoFitWindowWidth, documentTableCellMarginsAttrs, tableAutoResizes } from "./native-document/tableButtons";
+import { type LiveImageAltTarget, commitLiveImageAltText, commitLiveImageAttachment, commitLiveImagePictureSource, documentPictureAltPaneKey, imageHasResettablePictureFormatting, liveImageAltTarget, liveImagePlacementTarget, liveImportedImageAnchor, resetLiveImagePictureFormatting, sameLiveImageAltTarget, setLiveImageAlign, setLiveImageAspectRatioLock, setLiveImageDimension, livePictureDrawnSize, setLiveImageFloat, toggleLiveImageHostList, updateLiveImageFormatting, flipPicture, rotatePicture, canonicalDocumentPictureMime, documentAttachmentPictureChangeAuthority, documentPictureChangeAuthority, type DocumentPictureMime } from "./native-document/pictureButtons";
+import { commitLiveDocumentShapePatch, documentShapeCentimetersToPx, documentShapePxToCentimeters, linkLiveDocumentTextBoxes, liveDocumentShapeMemberId, liveDocumentShapeTarget, liveDocumentSmartArtGraphicSelected, liveShapeTextTarget, setLiveDocumentShapeExactRotation, setLiveDocumentShapeFlip, setLiveDocumentShapeFormat, setLiveDocumentShapePaint, pickLiveDocumentShapeFillPicture, setLiveDocumentShapePosition, setLiveDocumentShapeRotation, setLiveDocumentShapeSize, setLiveDocumentShapeWrap, setLiveDocumentShapeZOrder, liveDocumentShapeZOrderAtBoundary, startLiveDocumentShapeEditPoints, toggleLiveDocumentShapeAspectRatio, commitLiveDocumentSmartArt, liveDocumentFileSmartArtNode, liveDocumentShapeSmartArtTarget, type LiveDocumentShapeSmartArtTarget } from "@mrnote/core/web/components/console/editor/native-document/shapeButtons.ts";
+import { enterSelectedTextBoxForEquation, liveTextBoxFrameTarget } from "./native-document/textBoxFrameCommands";
+import { documentChartPlacementState, setLiveDocumentChartPlacement, type DocumentChartPlacementCommand } from "@mrnote/core/web/components/console/editor/native-document/chartPlacement.ts";
 import { OfficeFloatLayoutDialog, type OfficeFloatLayoutDialogLabels } from "@mrnote/core/web/components/office-ribbon/OfficeFloatLayoutDialog.tsx";
 import { liveDocumentFloatLayoutTarget } from "./native-document/floatLayoutTarget";
-import { FLOAT_POSITION_PRESETS } from "@mrnote/core/web/lib/office-float-anchor-edit.ts";
-import {
-  type DocumentChartQuickLayoutId,
-  type LiveDocumentChartTarget,
-  applyLiveDocumentChartQuickLayout,
-  canonicalDocumentChartNodeAttrs,
-  commitDocumentChartStyleId,
-  commitLiveDocumentChartAttrs,
-  dispatchDocumentChartNodeViewEvent,
-  documentChartQuickLayoutAttrs,
-  documentChartTypeAttrs,
-  liveDocumentChartTarget,
-  refreshLiveDocumentChartData,
-  resetLiveDocumentChartAreaStyle,
-  sameLiveDocumentChartTarget,
-  setLiveDocumentChartAreaEffect,
-  setLiveDocumentChartAreaPaint,
-  setLiveDocumentChartAreaStyle,
-  setLiveDocumentChartAxisOptions,
-  setLiveDocumentChartModel,
-  setLiveDocumentChartDataLabelContents,
-  setLiveDocumentChartTextStyle,
-  setLiveDocumentChartType,
-  switchLiveDocumentChartRowsAndColumns,
-  transposedDocumentChartAttrs,
-  DOCUMENT_CHART_TRANSPOSE_FAMILIES,
-  documentChartActiveColorPaletteId,
-  documentChartNativeLook,
-  documentChartStylePaint,
-  documentChartThemeAccents,
-  documentChartWithColorPalette,
-  setLiveDocumentChartColorPalette,
-} from "@mrnote/core/web/components/console/editor/native-document/chartButtons.ts";
-import { calculateDocumentChartWorkbookSettled } from "@mrnote/core/web/components/console/editor/extensions/documentChartWorkbookCalculation.ts";
+import { type DocumentChartQuickLayoutId, type LiveDocumentChartTarget, canonicalDocumentChartNodeAttrs, commitDocumentChartStyleId, commitLiveDocumentChartAttrs, dispatchDocumentChartNodeViewEvent, documentChartQuickLayoutAttrs, documentChartTypeAttrs, liveDocumentChartTarget, sameLiveDocumentChartTarget, setLiveDocumentChartModel, setLiveDocumentChartType, DOCUMENT_CHART_TRANSPOSE_FAMILIES, documentChartActiveColorPaletteId, documentChartNativeLook, documentChartStylePaint, documentChartThemeAccents, documentChartWithColorPalette, setLiveDocumentChartColorPalette } from "@mrnote/core/web/components/console/editor/native-document/chartButtons.ts";
 import {
   normalizeWordDocumentSettings,
   wordDefaultTabStopTwips,
@@ -1537,7 +948,6 @@ import {
   type DocumentHyperlinkRequest,
 } from "./native-document/DocumentHyperlinkDialog";
 import { DocumentPropertiesDialog } from "./native-document/DocumentPropertiesDialog";
-import { DocumentHyphenationOptionsDialog } from "./native-document/DocumentHyphenationOptionsDialog";
 import { normalizeCustomProperties, type CustomProperty } from "@mrnote/core/web/components/console/editor/native-document/documentCustomProperties.ts";
 import { DocumentPageBordersDialog } from "./native-document/DocumentBordersShadingPanels";
 import {
@@ -1547,9 +957,7 @@ import {
   renderedLineCount,
   wordCountText,
 } from "./native-document/documentWordCount";
-import UnequalColumnsDialog, {
-  type ColumnsDialogApplyOptions,
-} from "@mrnote/core/web/components/console/editor/UnequalColumnsDialog.tsx";
+import { type ColumnsDialogApplyOptions } from "@mrnote/core/web/components/console/editor/UnequalColumnsDialog.tsx";
 import DocumentFindReplace, {
   type DocumentFindReplaceFocusIntent,
 } from "./DocumentFindReplace";
@@ -1566,15 +974,6 @@ import {
   removePhoneticGuides,
   type PhoneticGuideTarget,
 } from "./native-document/phoneticGuideCommands";
-import {
-  PICTURE_LOOK_EFFECT_KINDS,
-  normalizePicture3d,
-  picture3dBlocker,
-  pictureLookEffects,
-  pictureLookEffectsBlocker,
-  pictureShadowBlocker,
-  pictureShadowEffect,
-} from "@mrnote/core/web/components/console/editor/native-document/pictureEffects.ts";
 import DocumentPictureFormatPane from "./native-document/DocumentPictureFormatPane";
 import {
   DocumentContextMenu,
@@ -1583,11 +982,9 @@ import {
 import DocumentParagraphAsianTypography from "./native-document/DocumentParagraphAsianTypography";
 import DocumentShapeFormatPane from "./native-document/DocumentShapeFormatPane";
 import DocumentTextEffectsPane from "./native-document/DocumentTextEffectsPane";
-import DocumentAccessibilityPanel from "./DocumentAccessibilityPanel";
 import { DocumentFocusModeExit } from "./native-document/DocumentFocusModeExit";
 import { DocumentFitTextDialog } from "./native-document/DocumentFitTextDialog";
 import { presentationMeasurementUnit } from "@mrnote/core/web/lib/presentation-measurement.ts";
-import { parseDocumentLengthPx, parseDocumentLengthTwips } from "@mrnote/core/web/lib/document-length-fields.ts";
 import DocumentEditorPane, {
   type DocumentEditorPaneView,
 } from "./native-document/DocumentEditorPane";
@@ -1605,160 +1002,29 @@ import {
   measureDocumentRuler,
   type RulerIndentPatch,
 } from "./native-document/documentRulerGeometry";
-import {
-  selectDocumentAccessibilityIssue,
-  type DocumentAccessibilityIssue,
-} from "./native-document/documentAccessibility";
+import { type DocumentAccessibilityIssue } from "./native-document/documentAccessibility";
 import {
   detectActiveParagraphStyle,
   normalizeDocxStyleId,
   type ParagraphStylePreset,
 } from "@mrnote/core/web/components/console/editor/native-document/paragraphStyles.ts";
-import {
-  clampImageWidthPercent,
-  documentPictureGeometry,
-  IMAGE_WIDTH_PRESETS,
-  normalizeImageAlign,
-  normalizeImageBorderColor,
-  normalizeImageBorderStyle,
-  normalizeImageBorderWidth,
-  normalizeImageCropPercent,
-  normalizeImageFloat,
-  normalizeImageFlip,
-  normalizeImageRotation,
-  MAX_IMAGE_ALT_CHARS,
-  type ImageAlign,
-  type ImageBorderStyle,
-  type ImageFloat,
-  type ImageRotation,
-  type ImageWidthPreset,
-} from "@mrnote/core/web/components/console/editor/native-document/imageControls.ts";
-import {
-  IMAGE_CORRECTION_PRESET_DELTAS,
-  IMAGE_SATURATION_PRESETS,
-  IMAGE_TRANSPARENCY_PRESETS,
-  NATIVE_IMAGE_RECOLOR_MODES,
-  imageCorrectionDeltaFromStored,
-  imageCorrectionStoredFromDelta,
-  imageFilterCss,
-  imageTransparencyFromOpacity,
-  isImageCorrectionDelta,
-  isNativeImageRecolorMode,
-  normalizeImageAdjust,
-  normalizeImageOpacity,
-  normalizeImageSaturation,
-  resolveImageEffects,
-  type NativeImageRecolorMode,
-} from "@mrnote/core/web/lib/presentation-image-effects.ts";
-import {
-  EMU_PER_PX,
-  MIN_IMAGE_PX,
-} from "@mrnote/core/web/components/console/editor/native-document/ImageResizeNodeView.ts";
-import {
-  documentImageAspectRatioCrop,
-  documentImageCropInsets,
-  documentImageFitCrop,
-  enterDocumentImageCrop,
-  exitDocumentImageCrop,
-  isDocumentImageCropActive,
-  readDocumentImageFrame,
-  type DocumentImageCropInsets,
-  type DocumentImageCropResult,
-  type DocumentImageFrame,
-} from "@mrnote/core/web/components/console/editor/native-document/documentImageCrop.ts";
-import { OfficePictureCropAspectRatioMenu } from "@mrnote/core/web/components/office-ribbon/OfficePictureCropAspectRatioMenu.tsx";
+import { clampImageWidthPercent, normalizeImageAlign, normalizeImageBorderColor, normalizeImageBorderStyle, normalizeImageBorderWidth, normalizeImageCropPercent, normalizeImageFloat, normalizeImageFlip, normalizeImageRotation, MAX_IMAGE_ALT_CHARS, type ImageAlign, type ImageBorderStyle, type ImageFloat, type ImageRotation, type ImageWidthPreset } from "@mrnote/core/web/components/console/editor/native-document/imageControls.ts";
+import { isNativeImageRecolorMode, normalizeImageAdjust, normalizeImageOpacity, normalizeImageSaturation, type NativeImageRecolorMode } from "@mrnote/core/web/lib/presentation-image-effects.ts";
+import { EMU_PER_PX } from "@mrnote/core/web/components/console/editor/native-document/ImageResizeNodeView.ts";
+import { enterDocumentImageCrop, exitDocumentImageCrop, isDocumentImageCropActive, type DocumentImageCropInsets, type DocumentImageCropResult, type DocumentImageFrame } from "@mrnote/core/web/components/console/editor/native-document/documentImageCrop.ts";
 import type { PictureCropAspectRatioId } from "@mrnote/core/web/lib/presentation-crop-group.ts";
-import {
-  CUSTOM_PAGE_MARGIN_MAX_IN,
-  CUSTOM_PAGE_SIZE_MAX_IN,
-  LINE_NUMBER_RESTART_VALUES,
-  PAGE_MARGIN_PRESET_VALUES,
-  MARGIN_GALLERY_PRESETS,
-  marginGalleryPresetFor,
-  readLastCustomMargins,
-  rememberLastCustomMargins,
-  type LastCustomMargins,
-  type MarginGalleryPresetId,
-  type MarginTwips,
-  PAGE_ORIENTATION_VALUES,
-  PAGE_SIZE_PRESET_VALUES,
-  PAGE_SIZE_PX,
-  PX_PER_INCH,
-  pageSizePresetDimensionsLabel,
-  pageMarginsSelectionFromSectionTwips,
-  pageGeometryTwips,
-  pageSizeSelectionFromSectionTwips,
-  normalizeCustomPageMargins,
-  normalizeCustomPageSize,
-  normalizeLineNumbers,
-  normalizePageBackgroundColor,
-  normalizeInkPaper,
-  type InkPaper,
-  normalizePageBorder,
-  resolvePageDimensionsPx,
-  resolvePageMargins,
-  resolvePageMarginsPx,
-  resolvePageOrientation,
-  resolvePageSize,
-  type CustomPageMarginsInches,
-  type CustomPageSizeInches,
-  type LineNumberRestart,
-  type LineNumbers,
-  type PageBorder,
-  type PageMargins,
-  type PageOrientation,
-  type PageSize,
-} from "@mrnote/core/web/components/console/editor/native-document/pageSetup.ts";
+import { CUSTOM_PAGE_MARGIN_MAX_IN, CUSTOM_PAGE_SIZE_MAX_IN, rememberLastCustomMargins, type LastCustomMargins, type MarginGalleryPresetId, type MarginTwips, PAGE_ORIENTATION_VALUES, PX_PER_INCH, pageMarginsSelectionFromSectionTwips, pageGeometryTwips, pageSizeSelectionFromSectionTwips, normalizeCustomPageMargins, normalizeCustomPageSize, normalizeLineNumbers, normalizePageBackgroundColor, normalizeInkPaper, type InkPaper, normalizePageBorder, resolvePageDimensionsPx, resolvePageMargins, resolvePageMarginsPx, resolvePageOrientation, resolvePageSize, type CustomPageMarginsInches, type CustomPageSizeInches, type LineNumberRestart, type LineNumbers, type PageBorder, type PageMargins, type PageOrientation, type PageSize } from "@mrnote/core/web/components/console/editor/native-document/pageSetup.ts";
 import { mathLatexForRender, previewTypesetsAsDisplay, renderKatexCached } from "@mrnote/core/web/components/console/editor/extensions/lazyKatex.ts";
-import {
-  COLUMN_COUNT_VALUES,
-  isManuscriptGridEnabled,
-  isVerticalWritingMode,
-  resolveColumns,
-  resolveColumnSeparator,
-  resolveDir,
-  resolveManuscriptGrid,
-  resolveWritingMode,
-  type ColumnCount,
-  type ManuscriptGrid,
-  type TextDirection,
-  type WritingMode,
-} from "@mrnote/core/web/components/console/editor/native-document/documentLayout.ts";
-import {
-  columnsPresetOfSection,
-  effectiveSectionPageBorders,
-  normalizeSectionLayouts,
-  resolveSectionAtSelection,
-  shownSectionLayoutAtSelection,
-  type SectionLayout,
-  type SectionLayoutPatch,
-  type SectionVerticalAlignment,
-} from "@mrnote/core/web/components/console/editor/native-document/sectionLayouts.ts";
-import { officeBorderWeightLabel } from "@mrnote/core/web/components/office-ribbon/OfficeBordersMenu.tsx";
-import DocumentPageBorderMenu, {
-  type DocumentPageBorderMenuCommands,
-} from "./native-document/DocumentPageBorderMenu";
-import {
-  pageBorderAllEdgesTogglePatch,
-  pageBorderApplyToPatch,
-  pageBorderColorPen,
-  pageBorderAllEdgesState,
-  pageBorderPenPatch,
-  pageBorderSideTogglePatch,
-  pageBorderSpacePt,
-  pageBorderStyle,
-  pageBorderWeightPt,
-  PAGE_BORDER_MENU_STYLES,
-  PAGE_BORDER_WEIGHT_POINTS,
-  type PageBorderApplyScope,
-  type PageBordersPatch,
-} from "./native-document/documentPageBorder";
+import { resolveColumns, resolveColumnSeparator, resolveDir, resolveManuscriptGrid, resolveWritingMode, type ColumnCount, type ManuscriptGrid, type TextDirection, type WritingMode } from "@mrnote/core/web/components/console/editor/native-document/documentLayout.ts";
+import { effectiveSectionPageBorders, normalizeSectionLayouts, resolveSectionAtSelection, shownSectionLayoutAtSelection, type SectionLayout, type SectionLayoutPatch, type SectionVerticalAlignment } from "@mrnote/core/web/components/console/editor/native-document/sectionLayouts.ts";
+import { type DocumentPageBorderMenuCommands } from "./native-document/DocumentPageBorderMenu";
+import { pageBorderAllEdgesTogglePatch, pageBorderApplyToPatch, pageBorderColorPen, pageBorderPenPatch, pageBorderSideTogglePatch, type PageBorderApplyScope, type PageBordersPatch } from "./native-document/documentPageBorder";
 import type { SectionStoryVariant } from "@mrnote/core/web/components/console/editor/native-document/sectionStoryGraph.ts";
 import type {
   HeaderFooterEditingContext,
   HeaderFooterNavigationTarget,
 } from "./native-document/paged/SheetBandEditLayer";
-import { normalizeAutoHyphenation, normalizeHyphenationOptions } from "@mrnote/core/web/components/console/editor/native-document/documentHyphenation.ts";
+import { normalizeAutoHyphenation } from "@mrnote/core/web/components/console/editor/native-document/documentHyphenation.ts";
 import {
   MAX_HEADER_FOOTER_LENGTH,
   documentFootersOwnPageNumber,
@@ -1766,15 +1032,7 @@ import {
   normalizeBandRichTabStops,
   bandParagraphStyleId,
 } from "@mrnote/core/web/components/console/editor/native-document/headerFooter.ts";
-import {
-  DEFAULT_PAGE_NUMBER_FORMAT,
-  DEFAULT_PAGE_NUMBER_START,
-  MAX_PAGE_NUMBER_DIALOG_START,
-  normalizePageNumberFormat,
-  normalizePageNumberStart,
-  normalizePageNumberStartSection,
-  type PageNumberFormat,
-} from "@mrnote/core/web/components/console/editor/native-document/pageNumberFormat.ts";
+import { DEFAULT_PAGE_NUMBER_FORMAT, DEFAULT_PAGE_NUMBER_START, normalizePageNumberFormat, normalizePageNumberStart, normalizePageNumberStartSection, type PageNumberFormat } from "@mrnote/core/web/components/console/editor/native-document/pageNumberFormat.ts";
 import {
   DocumentPageNumberFormatDialog,
   DocumentPageNumbersDialog,
@@ -1796,10 +1054,6 @@ import {
   normalizeDocumentProtection,
   type DocumentProtection,
 } from "@mrnote/core/web/components/console/editor/native-document/documentProtection.ts";
-import {
-  editableRangesPresent,
-  editableRegionHighlightOn,
-} from "@mrnote/core/web/components/console/editor/native-document/rangePermissionExtension.ts";
 import {
   normalizeDocumentMetadata,
   type DocumentMetadata,
@@ -1848,18 +1102,7 @@ import {
   stripPrintEditorChrome,
 } from "./native-document/printDocument";
 import { printWindowWhenReady, PRINT_ASSET_TIMEOUT_MS, renderPrintReadinessFailure, waitForDocumentPrintSource } from "./native-document/printReadiness";
-import {
-  TRACKED_CHANGE_DISPLAY_FILTERS,
-  TRACKED_CHANGE_TYPE_FILTERS,
-  getTrackedChangeMarkupFilter,
-  getShownTrackedChanges,
-  getTrackedChanges,
-  trackedChangeIsShown,
-  getTrackChangesMode,
-  hasShownTrackedChanges,
-  isSuggestingActive,
-  type TrackedChangeMarkupFilter,
-} from "@mrnote/core/web/components/console/editor/native-document/trackChangesExtension.ts";
+import { getTrackedChangeMarkupFilter, getShownTrackedChanges, getTrackedChanges, trackedChangeIsShown, getTrackChangesMode, hasShownTrackedChanges, isSuggestingActive, type TrackedChangeMarkupFilter } from "@mrnote/core/web/components/console/editor/native-document/trackChangesExtension.ts";
 import type { TrackChangesMode } from "@mrnote/core/web/components/console/editor/native-document/trackChangesMode.ts";
 import {
   adjacentTrackedChange,
@@ -1871,10 +1114,7 @@ import {
   createDocumentFeatureCommandRegistry,
   type ResolvedDocumentFeatureCommand,
 } from "@mrnote/core/web/components/console/editor/ribbon/commandRegistry.ts";
-import {
-  convertSelectionChinese,
-  type ChineseConversionDirection,
-} from "./native-document/simplifiedTraditional";
+import { type ChineseConversionDirection } from "./native-document/simplifiedTraditional";
 import {
   applyCaseTransformToSelection,
   applyCharacterWidthTransformToSelection,
@@ -1887,16 +1127,7 @@ import {
   type CharacterWidthMode,
   type SortOptions,
 } from "./native-document/documentTextTransforms";
-import {
-  repeatHeaderRowsCommandState,
-  rowBreakAcrossPagesCommandState,
-  setRepeatHeaderRows,
-  toggleRowBreakAcrossPages,
-} from "./native-document/tableHeaderRows";
-import {
-  DocumentTableSortDialog,
-  type DocumentTableSortSettings,
-} from "./native-document/DocumentTableSortDialog";
+import { type DocumentTableSortSettings } from "./native-document/DocumentTableSortDialog";
 import {
   DocumentTableCellMarginsDialog,
   type DocumentTableCellMarginsScope,
@@ -1906,10 +1137,7 @@ import {
   DocumentLineNumbersDialog,
   type DocumentLineNumbersValue,
 } from "./native-document/DocumentLineNumbersDialog";
-import {
-  DocumentTableFormulaDialog,
-  type DocumentTableFormulaSettings,
-} from "./native-document/DocumentTableFormulaDialog";
+import { type DocumentTableFormulaSettings } from "./native-document/DocumentTableFormulaDialog";
 import { OfficeSymbolDialog } from "@mrnote/core/web/components/office-ribbon/OfficeSymbolDialog.tsx";
 import {
   insertTextIntoNoteBody,
@@ -1939,6 +1167,7 @@ import {
   runNumberingLibraryButton,
 } from "./native-document/listButtons";
 import { canIndentWholeList, indentWholeList } from "@mrnote/core/web/components/console/editor/native-document/listWholeIndent.ts";
+import { liftListItemKeepingLists } from "@mrnote/core/web/components/console/editor/native-document/listLevelCommands.ts";
 import {
   applyHyperlink,
   applyPictureHyperlink,
@@ -2007,7 +1236,6 @@ import {
   type OfficeRecentSymbol,
   type OfficeSymbolInsertion,
 } from "@mrnote/core/web/lib/office-symbols.ts";
-import { runParagraphCleanup } from "./native-document/paragraphCleanup";
 import {
   LIST_STYLE_TYPES,
   normalizeListStyleType,
@@ -2091,10 +1319,6 @@ import {
   textTableSelectionText,
 } from "./native-document/textTableConvert";
 import {
-  MAX_TABLE_COLUMN_WIDTH,
-  MIN_TABLE_COLUMN_WIDTH,
-} from "@mrnote/core/web/components/console/editor/native-document/tableStructure.ts";
-import {
   QUICK_TABLE_GRID_COLUMNS,
   QUICK_TABLE_GRID_ROWS,
   quickTableGridNavigationTarget,
@@ -2105,15 +1329,7 @@ import {
   DocumentTableConversionDialog,
   type DocumentTableConversionSettings,
 } from "./native-document/DocumentTableConversionDialog";
-import {
-  ADD_COMMENT_EVENT,
-  FOCUS_COMMENT_EVENT,
-  adjacentAnchoredCommentThread,
-  commentThreadAtPosition,
-  getCommentThreads,
-  orderedAnchoredCommentThreads,
-  type CommentNavigationDirection,
-} from "@mrnote/core/web/components/console/editor/native-document/commentExtension.ts";
+import { ADD_COMMENT_EVENT, FOCUS_COMMENT_EVENT, commentThreadAtPosition, getCommentThreads, orderedAnchoredCommentThreads, type CommentNavigationDirection } from "@mrnote/core/web/components/console/editor/native-document/commentExtension.ts";
 import { useDocumentContextSpelling } from "./native-document/documentContextSpelling";
 import {
   INSERT_ENDNOTE_EVENT,
@@ -2144,11 +1360,7 @@ import {
   type NoteStream,
 } from "@mrnote/core/web/components/console/editor/native-document/footnotes.ts";
 import { noteSettingsAtSection } from "@mrnote/core/web/components/console/editor/native-document/noteSectionSettings.ts";
-import {
-  CITATION_STYLE_LABELS,
-  CITATION_STYLES,
-  type CitationStyle,
-} from "@mrnote/core/web/components/console/editor/native-document/citations.ts";
+import { type CitationStyle } from "@mrnote/core/web/components/console/editor/native-document/citations.ts";
 import {
   INSERT_CROSS_REFERENCE_EVENT,
   type OpenCrossReferencePickerDetail,
@@ -2213,13 +1425,7 @@ import {
   type TocOutlineLevelValue,
   type TocUpdateMode,
 } from "@mrnote/core/web/components/console/editor/native-document/tableOfContents.ts";
-import {
-  INSERT_MERGE_FIELD_EVENT,
-  OPEN_MAIL_MERGE_RECIPIENTS_EVENT,
-  type MailMergeDialogAction,
-  type OpenMailMergeDialogDetail,
-  type OpenMergeFieldPickerDetail,
-} from "@mrnote/core/web/components/console/editor/native-document/mergeFieldExtension.tsx";
+import { INSERT_MERGE_FIELD_EVENT, type MailMergeDialogAction, type OpenMailMergeDialogDetail, type OpenMergeFieldPickerDetail } from "@mrnote/core/web/components/console/editor/native-document/mergeFieldExtension.tsx";
 import {
   GO_TO_BOOKMARK_EVENT,
   INSERT_BOOKMARK_EVENT,
@@ -2237,7 +1443,6 @@ import {
   type PageExportMarkupView,
 } from "@mrnote/core/web/lib/page-export.ts";
 import { downloadBlobFile } from "@mrnote/core/web/lib/download-file.ts";
-import { DocumentFormsRibbon } from "./native-document/DocumentFormsRibbon";
 import {
   askOfficePassword,
   documentOpenPassword,
@@ -2254,21 +1459,7 @@ import {
 import { uploadPageAttachment } from "@mrnote/core/web/lib/page-attachment-upload.ts";
 import { canonicalDocxExportSourceFingerprint } from "../../../lib/document-export/canonical-docx-export-authority";
 import { isApiRequestError } from "@mrnote/core/web/lib/api.ts";
-import {
-  BROWSER_PRINT_EXPORT_INTENT,
-  BROWSER_PRINT_MARKUP_EXPORT_INTENT,
-  CANONICAL_DOCUMENT_EXPORT_INTENTS,
-  FILLABLE_PDF_EXPORT_INTENT,
-  defaultPrintIntent,
-  INITIAL_EXPORT_STATUS,
-  OFFLINE_DOCUMENT_EXPORT_INTENTS,
-  documentExportMenuIntents,
-  documentExportSourceFingerprint,
-  exportErrorMessage,
-  exportStatusReducer,
-  isPdfExportUnsupportedObjectError,
-  type ExportIntent,
-} from "../../../lib/document-export/export-intent";
+import { BROWSER_PRINT_EXPORT_INTENT, BROWSER_PRINT_MARKUP_EXPORT_INTENT, CANONICAL_DOCUMENT_EXPORT_INTENTS, defaultPrintIntent, INITIAL_EXPORT_STATUS, OFFLINE_DOCUMENT_EXPORT_INTENTS, documentExportMenuIntents, documentExportSourceFingerprint, exportErrorMessage, exportStatusReducer, isPdfExportUnsupportedObjectError, type ExportIntent } from "../../../lib/document-export/export-intent";
 import {
   createBrowserQuickPartsGallery,
   type QuickPartEntry,
@@ -2286,7 +1477,6 @@ import {
   type DocumentDateTimeLocale,
   type DocumentDateTimePicture,
 } from "@mrnote/core/web/components/console/editor/native-document/documentDateTime.ts";
-import { decodeDocumentPictureDataUrl } from "@mrnote/core/web/lib/document-picture-data-url.ts";
 import {
   docxFilename,
   isDocxExportNeedsConnectionError,
@@ -2309,12 +1499,6 @@ import { mergePagedRuntimeContinuationsJson } from "@mrnote/core/web/components/
 import { applyPrintMarkupToSheet } from "./native-document/paged/printRevisionMarkup";
 import { isActiveAcrossSheets } from "@mrnote/core/web/components/console/editor/native-document/paged/crossSheetEditing.ts";
 import { REBALANCE_META } from "@mrnote/core/web/components/console/editor/native-document/paged/pageRebalanceExtension.ts";
-import {
-  bandFieldAtCaret,
-  insertBandNewField,
-  setBandFieldNumberFormat,
-} from "./native-document/paged/bandFieldCommands";
-import { insertBandStoryPicture } from "./native-document/paged/bandStoryPictures";
 import {
   exportPlainText,
   projectTrackedChanges,
@@ -2361,18 +1545,8 @@ import {
 } from "@mrnote/core/web/components/office-ribbon/OfficeEditorActionRail.tsx";
 import { OfficeColorPalettePopover } from "@mrnote/core/web/components/office-ribbon/OfficeColorPalettePopover.tsx";
 import { OfficeNativeColorInput } from "@mrnote/core/web/components/office-ribbon/OfficeNativeColorInput.tsx";
-import {
-  OfficeShapeFormatTab,
-  type OfficeShapeFormatAdapter,
-  type OfficeShapeFormatLabels,
-} from "@mrnote/core/web/components/office-ribbon/OfficeShapeFormatTab.tsx";
-import {
-  smartArtEditIn2dKey,
-  smartArtEditingIn2d,
-  smartArtGraphicHasScene,
-  toggleSmartArtEditingIn2d,
-  useSmartArtEditIn2dVersion,
-} from "@mrnote/core/web/lib/office-smartart/edit-in-2d.ts";
+import { type OfficeShapeFormatAdapter, type OfficeShapeFormatLabels } from "@/components/office-ribbon/OfficeShapeFormatTab";
+import { smartArtEditIn2dKey, smartArtEditingIn2d, smartArtGraphicHasScene, useSmartArtEditIn2dVersion } from "@mrnote/core/web/lib/office-smartart/edit-in-2d.ts";
 import {
   OfficeShapeContextMenu,
   useOfficeShapeContextMenuLabels,
@@ -2384,42 +1558,16 @@ import {
   OfficeListGalleryPreview as ListGalleryPreview,
   OfficeListGalleryTile as GalleryTileButton,
 } from "@mrnote/core/web/components/office-ribbon/OfficeListGallery.tsx";
-import {
-  OfficeRibbonNumberField,
-  type OfficeRibbonNumberFieldProps,
-} from "@mrnote/core/web/components/office-ribbon/OfficeRibbonNumberField.tsx";
-import {
-  CHART_HOST_EMU_PER_PX,
-  documentChartEditableWorkbook,
-  documentChartHostWithWorkbook,
-  documentChartLayout,
-  documentChartSize,
-  normalizeDocumentChartHost,
-  type DocumentChartLayout,
-  type DocumentChartSize,
-} from "@mrnote/core/web/components/console/editor/extensions/documentChartHost.ts";
+import { type OfficeRibbonNumberFieldProps } from "@mrnote/core/web/components/office-ribbon/OfficeRibbonNumberField.tsx";
+import { CHART_HOST_EMU_PER_PX, documentChartEditableWorkbook, documentChartHostWithWorkbook, normalizeDocumentChartHost, type DocumentChartLayout, type DocumentChartSize } from "@mrnote/core/web/components/console/editor/extensions/documentChartHost.ts";
 import {
   chartQuickData,
   chartWithQuickDataEdit,
   type ChartQuickDataEdit,
 } from "@mrnote/core/web/lib/office-charts/quick-data.ts";
 import { importedChartWorkbook, seedDocumentChartWorkbook } from "@mrnote/core/web/components/console/editor/extensions/documentChartWorkbook.ts";
-import {
-  OfficeTableCellAlignmentMenu,
-  type OfficeTableCellAlignmentValue,
-} from "@mrnote/core/web/components/office-ribbon/OfficeTableCellAlignmentMenu.tsx";
-import {
-  OfficeHomeClipboardComposite,
-  OfficeHomeCheckbox,
-  OfficeHomeCommand,
-  OfficeHomeCommandRow,
-  OfficeHomeCommandStack,
-  OfficeHomeMenuTrigger,
-  OfficeHomeRibbonGroup,
-  OfficeHomeLargeSplitLayout,
-  OfficeHomeSplitLayout,
-  OfficeHomeUndoRail,
-} from "@mrnote/core/web/components/office-ribbon/OfficeHomeRibbon.tsx";
+import { type OfficeTableCellAlignmentValue } from "@mrnote/core/web/components/office-ribbon/OfficeTableCellAlignmentMenu.tsx";
+import { OfficeHomeClipboardComposite, OfficeHomeCommand, OfficeHomeCommandRow, OfficeHomeCommandStack, OfficeHomeMenuTrigger, OfficeHomeRibbonGroup, OfficeHomeSplitLayout, OfficeHomeUndoRail } from "@mrnote/core/web/components/office-ribbon/OfficeHomeRibbon.tsx";
 import officeHomeStyles from "@mrnote/core/web/components/office-ribbon/OfficeHomeRibbon.module.css";
 import { OfficeRibbonSurfaceStrip } from "@mrnote/core/web/components/office-ribbon/OfficeRibbonSurfaceStrip.tsx";
 import { OfficeRibbonGallery } from "@mrnote/core/web/components/office-ribbon/OfficeRibbonGallery.tsx";
@@ -2440,12 +1588,7 @@ import {
   officeDialogClassName,
   officeDialogParts,
 } from "@mrnote/core/web/components/office-ribbon/officeDialogChrome.tsx";
-import {
-  DocumentTocCustomDialog,
-  DocumentTocGalleryMenu,
-  DocumentTocOptionsDialog,
-  DocumentTocStylesDialog,
-} from "@mrnote/core/web/components/console/editor/native-document/DocumentTocDialogs.tsx";
+import { DocumentTocCustomDialog, DocumentTocOptionsDialog, DocumentTocStylesDialog } from "@mrnote/core/web/components/console/editor/native-document/DocumentTocDialogs.tsx";
 import {
   DocumentAlignmentTabDialog,
   alignmentTabStop,
@@ -2462,133 +1605,37 @@ import PageExportLossConfirmDialog from "@mrnote/core/web/components/ui/PageExpo
 import { downloadLastGoodCopy, preferredLastGoodCopy } from "@mrnote/core/web/lib/page-export-last-good.ts";
 import SectionLayoutRepairPrompt from "./native-document/SectionLayoutRepairPrompt";
 import { OfficeSemanticIcon } from "@mrnote/core/web/components/office-ribbon/icons/OfficeSemanticIcon.tsx";
-import { DocumentInkAudioControls } from "./native-document/DocumentInkAudioControls";
-import { DocumentInkTapeCommand, documentInkTapePreset } from "./native-document/DocumentInkTapeCommand";
-import { DocumentStickersCommand } from "./native-document/DocumentStickersCommand";
-import { DOCUMENT_STICKER_PAGE_PX, documentStickerFile, type DocumentStickerId } from "@mrnote/core/web/lib/document-stickers.ts";
-import type { InkRecordingSession } from "@mrnote/ink/web/lib/ink-audio-recording.ts";
-import { useDeviceHasTouch } from "@mrnote/core/web/lib/draw-with-touch.ts";
+import { type DocumentStickerId } from "@/lib/document-stickers";
+import type { InkRecordingSession } from "@/lib/ink-audio-recording";
 import { usePenFirstDraw } from "@mrnote/core/web/lib/pen-first-draw.ts";
-import { useInkFingerTaps } from "@mrnote/ink/web/lib/ink-finger-taps.ts";
+import { useInkFingerTaps } from "@mrnote/core/web/lib/ink-finger-taps.ts";
 import { pencilScribblePossible } from "@mrnote/core/web/lib/ink-scribble-guard.ts";
 import { OfficePenPalette } from "@mrnote/core/web/components/office-ribbon/OfficePenPalette.tsx";
-import DocumentInkReplay, { type DocumentInkReplayState } from "./native-document/DocumentInkReplay";
+import { type DocumentInkReplayState } from "./native-document/DocumentInkReplay";
 import type { InkRulerState } from "@mrnote/core/web/lib/office-ink-ruler.ts";
-import { inkLandsAtLift } from "@mrnote/core/web/lib/office-wet-ink.ts";
-import {
-  IconInkPaperDot,
-  IconInkPaperGrid,
-  IconInkPaperRule,
-  IconInkRuler,
-} from "@mrnote/core/web/components/notebook/contents/PresentationRibbonIcons.tsx";
 import { DocumentInkLassoSelection } from "./native-document/DocumentInkLassoSelection";
-import { HandwritingPaperCommands, useHandwritingSetting } from "./native-document/HandwritingPaperCommands";
-import {
-  handwritingPageInView,
-  handwritingSheetIndexAt,
-  insertHandwritingPictures,
-  insertPicturesOverPageInView,
-} from "./native-document/handwritingDocument";
-import { handwritingInkColor, handwritingInkColorOnDark, handwritingPageIsDark } from "@mrnote/core/web/lib/handwriting-paper.ts";
-import DocumentInkSurface, {
-  DOCUMENT_INK_FLUSH_EVENT,
-  DocumentFreeformSurface,
-  type DocumentInkMode,
-  DocumentShapeDrawSurface,
-} from "./native-document/DocumentInkSurface";
+import { useHandwritingSetting } from "./native-document/HandwritingPaperCommands";
+import { handwritingPageInView, insertHandwritingPictures } from "./native-document/handwritingDocument";
+import { handwritingInkColor } from "@mrnote/core/web/lib/handwriting-paper.ts";
+import { DOCUMENT_INK_FLUSH_EVENT, DocumentFreeformSurface, type DocumentInkMode, DocumentShapeDrawSurface } from "./native-document/DocumentInkSurface";
 import DocumentInkTrackpad from "./native-document/DocumentInkTrackpad";
-import {
-  OfficeInkAddPenMenuItems,
-  OfficeInkEraserMenuItems,
-  OfficeInkPenGallery,
-  OfficeInkHideRibbonCommand,
-  OfficeInkTouchDrawCommand,
-  useInkDrawTools,
-  OfficeInkTrackpadSwitch,
-} from "@mrnote/core/web/components/office-ribbon/OfficeInkRibbon.tsx";
 import { useOfficeInkConversion } from "@mrnote/core/web/components/office-ribbon/useOfficeInkConversion.tsx";
 import {
   pressOfficeInkConvert,
   toggledOfficeInkConversionMode,
   type OfficeInkConversionMode,
 } from "@mrnote/core/web/lib/office-ink-conversion.ts";
-import {
-  DOCUMENT_INK_MAX_PENS,
-  DOCUMENT_INK_PEN_PROFILE_STORAGE_KEY,
-  DOCUMENT_INK_PRESETS,
-  documentInkPenProfileFromStorage,
-  documentInkPresetById,
-  serializeDocumentInkPenProfile,
-  withDocumentInkPen,
-  withDocumentInkPenAdded,
-  withDocumentInkPenRemoved,
-  type DocumentInkEraser,
-  type DocumentInkPenProfile,
-  type DocumentInkPreset,
-  type DocumentInkTool,
-  DOCUMENT_INK_TAPE_WIDTHS_PT,
-  isDocumentInkShapeAttrs,
-} from "@mrnote/core/web/lib/document-ink.ts";
+import { DOCUMENT_INK_PEN_PROFILE_STORAGE_KEY, DOCUMENT_INK_PRESETS, documentInkPenProfileFromStorage, documentInkPresetById, serializeDocumentInkPenProfile, withDocumentInkPen, withDocumentInkPenRemoved, type DocumentInkEraser, type DocumentInkPenProfile, type DocumentInkPreset, type DocumentInkTool, DOCUMENT_INK_TAPE_WIDTHS_PT, isDocumentInkShapeAttrs } from "@mrnote/core/web/lib/document-ink.ts";
 import type { TapeInkEffect } from "@mrnote/core/web/lib/office-ink-effects.ts";
-import {
-  documentHasInk,
-  documentHasInkErasable,
-  eraseDocumentInkSegments,
-  insertDocumentFreeformShape,
-  documentInkPageIn,
-  insertDocumentInkStroke,
-  insertDocumentInkStrokes,
-  flipDocumentInkTapeAt,
-  convertDocumentInkToShapes,
-  documentInkClientStrokes,
-  documentInkFlightStrokes,
-  documentInkPositionsOf,
-  removeDocumentInk,
-  insertDocumentDrawnShape,
-  replaceDocumentInkWithReading,
-  replaceDocumentInkWithTextBox,
-  documentInkEquationPosition,
-  extendDocumentInkEquation,
-  documentInkRangeRetyped,
-  documentInkRangeRowAt,
-  DOCUMENT_INK_READING_META,
-  documentInkRangeText,
-  replaceDocumentInkRangeText,
-  setDocumentInkPagesJoined,
-  keepDocumentPagesCentred,
-  DOCUMENT_INK_LANDING_META,
-  type DocumentInkReadingPlacement,
-  type DocumentInkTextRange,
-} from "@mrnote/core/web/components/console/editor/native-document/documentInk.ts";
-import { OfficePictureMenuIcon } from "@mrnote/core/web/components/office-ribbon/icons/OfficePictureMenuIcon.tsx";
-import {
-  OFFICE_PICTURE_STYLE_SAMPLE_SRC,
-  OfficePictureStyleGallery,
-} from "@mrnote/core/web/components/office-ribbon/OfficePictureStyleGallery.tsx";
+import { documentHasInk, documentHasInkErasable, insertDocumentFreeformShape, documentInkPageIn, insertDocumentInkStroke, convertDocumentInkToShapes, documentInkClientStrokes, documentInkFlightStrokes, documentInkPositionsOf, insertDocumentDrawnShape, replaceDocumentInkWithReading, replaceDocumentInkWithTextBox, documentInkEquationPosition, extendDocumentInkEquation, documentInkRangeRetyped, documentInkRangeRowAt, DOCUMENT_INK_READING_META, documentInkRangeText, replaceDocumentInkRangeText, setDocumentInkPagesJoined, keepDocumentPagesCentred, DOCUMENT_INK_LANDING_META, type DocumentInkReadingPlacement, type DocumentInkTextRange } from "@mrnote/core/web/components/console/editor/native-document/documentInk.ts";
 import {
   applyDocumentShapeFormat,
   captureDocumentShapeFormat,
   documentShapeFormatTargetReady,
   type DocumentShapeFormatPayload,
 } from "./native-document/shapeFormatPainter";
-import {
-  smartArtSlotPictureFormatAfter,
-  type SmartArtSlotPictureCommand,
-} from "@mrnote/core/web/lib/office-smartart/slot-picture-format.ts";
-
-import { OFFICE_PAGE_ORIENTATION_ICON_IDS } from "@mrnote/core/web/components/office-ribbon/icons/officeIconRegistry.ts";
-import {
-  OfficePaperSizePreview,
-  OfficePageSetupPresetRow,
-  officePageSetupMenuClassNames,
-} from "@mrnote/core/web/components/office-ribbon/OfficePageSetupMenu.tsx";
-import {
-  DOCS_BREAK_ICON_NAMES,
-  DOCS_COLUMNS_PRESET_ICON_NAMES,
-  DocsLayoutIcon,
-  DocsMarginsPreview,
-  type DocsLayoutIconName,
-} from "@mrnote/core/web/components/console/editor/DocumentLayoutRibbonIcons.tsx";
+import { type SmartArtSlotPictureCommand } from "@mrnote/core/web/lib/office-smartart/slot-picture-format.ts";
+import { type DocsLayoutIconName } from "@mrnote/core/web/components/console/editor/DocumentLayoutRibbonIcons.tsx";
 import { normalizeOfficeFontFace, type OfficeFontFace } from "@mrnote/core/web/components/office-ribbon/officeFontFace.ts";
 import { attachOfficeFontFamily, installDocumentFontRules } from "@mrnote/core/web/components/office-ribbon/officeFontAssets.ts";
 import {
@@ -2615,13 +1662,9 @@ import {
   type LinkPlaceOption,
 } from "@mrnote/core/web/components/console/editor/native-document/linkPlaces.ts";
 import { pictureLink, pictureLinkAttrs } from "@mrnote/core/web/components/console/editor/native-document/pictureLink.ts";
-import { patchOfficeTextPaint, type OfficeTextPaint } from "@mrnote/core/web/lib/office-text-paint.ts";
+import { type OfficeTextPaint } from "@mrnote/core/web/lib/office-text-paint.ts";
 import type { RunStyle } from "@mrnote/core/web/lib/presentation-runs.ts";
 import { openCitationHref } from "@mrnote/core/web/lib/answer-citation-links.ts";
-
-// Corrections / Color / Transparency presets preview on the same landscape
-// the Picture Styles thumbnails use, with the preset's own filter applied.
-const PICTURE_ADJUSTMENT_PREVIEW_BACKGROUND = `center / cover no-repeat url("${OFFICE_PICTURE_STYLE_SAMPLE_SRC}")`;
 
 
 
@@ -2869,117 +1912,12 @@ function officeCommandAccessibleLabel(
     : commandLabel;
 }
 
-const WEB_BASE_RIBBON_TAB_IDS = new Set<BaseRibbonTabId>([
-  "home",
-  "insert",
-  "draw",
-  "design",
-  "layout",
-  "references",
-  "review",
-  "view",
-  
-  // out well yet); a saved "forms" tab opens Home. Restore with the tab below.
-]);
-
-const TABLE_CONTEXT_RIBBON_TAB_IDS = new Set<TableContextRibbonTabId>([
-  "tableDesign",
-  "tableLayout",
-]);
-
-const PICTURE_CONTEXT_RIBBON_TAB_IDS = new Set<PictureContextRibbonTabId>([
-  "picture",
-]);
-
-const EQUATION_CONTEXT_RIBBON_TAB_IDS = new Set<EquationContextRibbonTabId>([
-  "equation",
-]);
-
-const SHAPE_CONTEXT_RIBBON_TAB_IDS = new Set<ShapeContextRibbonTabId>([
-  "shape",
-]);
-
-const SMART_ART_CONTEXT_RIBBON_TAB_IDS = new Set<SmartArtContextRibbonTabId>([
-  "smartArt",
-]);
-
-const CHART_CONTEXT_RIBBON_TAB_IDS = new Set<ChartContextRibbonTabId>([
-  "chartDesign",
-  "chartFormat",
-]);
-
-const HEADER_FOOTER_CONTEXT_RIBBON_TAB_IDS =
-  new Set<HeaderFooterContextRibbonTabId>(["headerFooter"]);
+const WEB_BASE_RIBBON_TAB_IDS = new Set<BaseRibbonTabId>(["home", "insert"]);
 
 function isBaseRibbonTab(value: unknown): value is BaseRibbonTabId {
   return (
     typeof value === "string" &&
     WEB_BASE_RIBBON_TAB_IDS.has(value as BaseRibbonTabId)
-  );
-}
-
-function isTableContextRibbonTab(
-  value: unknown,
-): value is TableContextRibbonTabId {
-  return (
-    typeof value === "string" &&
-    TABLE_CONTEXT_RIBBON_TAB_IDS.has(value as TableContextRibbonTabId)
-  );
-}
-
-function isPictureContextRibbonTab(
-  value: unknown,
-): value is PictureContextRibbonTabId {
-  return (
-    typeof value === "string" &&
-    PICTURE_CONTEXT_RIBBON_TAB_IDS.has(value as PictureContextRibbonTabId)
-  );
-}
-
-function isEquationContextRibbonTab(
-  value: unknown,
-): value is EquationContextRibbonTabId {
-  return (
-    typeof value === "string" &&
-    EQUATION_CONTEXT_RIBBON_TAB_IDS.has(value as EquationContextRibbonTabId)
-  );
-}
-
-function isShapeContextRibbonTab(
-  value: unknown,
-): value is ShapeContextRibbonTabId {
-  return (
-    typeof value === "string" &&
-    SHAPE_CONTEXT_RIBBON_TAB_IDS.has(value as ShapeContextRibbonTabId)
-  );
-}
-
-function isSmartArtContextRibbonTab(
-  value: unknown,
-): value is SmartArtContextRibbonTabId {
-  return (
-    typeof value === "string" &&
-    SMART_ART_CONTEXT_RIBBON_TAB_IDS.has(value as SmartArtContextRibbonTabId)
-  );
-}
-
-function isChartContextRibbonTab(
-  value: unknown,
-): value is ChartContextRibbonTabId {
-  return (
-    typeof value === "string" &&
-    CHART_CONTEXT_RIBBON_TAB_IDS.has(value as ChartContextRibbonTabId)
-  );
-}
-
-function isHeaderFooterContextRibbonTab(
-  value: unknown,
-): value is HeaderFooterContextRibbonTabId {
-  return (
-    typeof value === "string" &&
-    HEADER_FOOTER_CONTEXT_RIBBON_TAB_IDS.has(
-      value as HeaderFooterContextRibbonTabId,
-    )
   );
 }
 
@@ -2995,21 +1933,7 @@ function normalizeWebRibbonTab(
   fallbackBaseTab: BaseRibbonTabId = "home",
 ): RibbonTabId {
   if (isBaseRibbonTab(value)) return value;
-  if (pictureContextVisible && isPictureContextRibbonTab(value)) return value;
-  if (equationContextVisible && isEquationContextRibbonTab(value)) return value;
-  if (shapeContextVisible && isShapeContextRibbonTab(value)) return value;
-  if (smartArtContextVisible && isSmartArtContextRibbonTab(value)) return value;
-  if (chartContextVisible && isChartContextRibbonTab(value)) return value;
-  if (headerFooterContextVisible && isHeaderFooterContextRibbonTab(value)) {
-    return value;
-  }
-  if (tableContextVisible && isTableContextRibbonTab(value)) return value;
   return fallbackBaseTab;
-}
-
-/** `1″`, `0.5″` — the inch measurement as Word prints it in the gallery. */
-function formatMarginInches(inches: number): string {
-  return `${Number(inches.toFixed(2))}″`;
 }
 
 /**
@@ -3043,68 +1967,6 @@ const WORD_STYLE_CHINESE_NAMES: Record<DocumentBuiltinStyleId, string> = {
   bookTitle: "书籍标题",
   listParagraph: "列表段落",
 };
-
-const COLUMN_GALLERY_ROWS = [
-  { id: "1", count: 1, labelKey: "toolbar.columnsPreset_one" },
-  { id: "2", count: 2, labelKey: "toolbar.columnsPreset_two" },
-  { id: "3", count: 3, labelKey: "toolbar.columnsPreset_three" },
-  { id: "left", count: null, labelKey: "toolbar.columnsPreset_left" },
-  { id: "right", count: null, labelKey: "toolbar.columnsPreset_right" },
-] as const satisfies ReadonlyArray<{
-  id: "1" | "2" | "3" | "left" | "right";
-  count: ColumnCount | null;
-  labelKey:
-    | "toolbar.columnsPreset_one"
-    | "toolbar.columnsPreset_two"
-    | "toolbar.columnsPreset_three"
-    | "toolbar.columnsPreset_left"
-    | "toolbar.columnsPreset_right";
-}>;
-
-/**
- * Word's Breaks gallery ▸ Section Breaks group. Each row keeps the section-break
- * kind its command already takes and the test id it already had, and adds Word's
- * own title plus its one-sentence description.
- */
-const SECTION_BREAK_GALLERY_ROWS = [
-  {
-    kind: "nextPage",
-    testId: "document-toolbar-ribbon-break-section-next-page",
-    titleKey: "toolbar.sectionBreakTitle_nextPage",
-    descriptionKey: "toolbar.sectionBreakDescription_nextPage",
-  },
-  {
-    kind: "continuous",
-    testId: "document-toolbar-ribbon-break-section-continuous",
-    titleKey: "toolbar.sectionBreakTitle_continuous",
-    descriptionKey: "toolbar.sectionBreakDescription_continuous",
-  },
-  {
-    kind: "evenPage",
-    testId: "document-toolbar-ribbon-break-section-even-page",
-    titleKey: "toolbar.sectionBreakTitle_evenPage",
-    descriptionKey: "toolbar.sectionBreakDescription_evenPage",
-  },
-  {
-    kind: "oddPage",
-    testId: "document-toolbar-ribbon-break-section-odd-page",
-    titleKey: "toolbar.sectionBreakTitle_oddPage",
-    descriptionKey: "toolbar.sectionBreakDescription_oddPage",
-  },
-] as const satisfies ReadonlyArray<{
-  kind: "nextPage" | "continuous" | "evenPage" | "oddPage";
-  testId: string;
-  titleKey:
-    | "toolbar.sectionBreakTitle_nextPage"
-    | "toolbar.sectionBreakTitle_continuous"
-    | "toolbar.sectionBreakTitle_evenPage"
-    | "toolbar.sectionBreakTitle_oddPage";
-  descriptionKey:
-    | "toolbar.sectionBreakDescription_nextPage"
-    | "toolbar.sectionBreakDescription_continuous"
-    | "toolbar.sectionBreakDescription_evenPage"
-    | "toolbar.sectionBreakDescription_oddPage";
-}>;
 
 type OfficeChain = ReturnType<Editor["chain"]> & {
   addColumnAfter: () => OfficeChain;
@@ -3290,17 +2152,6 @@ type OfficeChain = ReturnType<Editor["chain"]> & {
     restart?: NoteRestart,
   ) => OfficeChain;
 };
-
-// Page background color (Word/WPS 页面颜色) quick swatches — soft document-page
-// tints (Word's "Page Color" gallery leans pale so body text stays readable).
-const PAGE_BACKGROUND_COLOR_SWATCHES = [
-  "fef9c3", // pale yellow
-  "dcfce7", // pale green
-  "dbeafe", // pale blue
-  "fce7f3", // pale pink
-  "f3e8ff", // pale lavender
-  "f1f5f9", // light slate
-] as const;
 
 type RuntimeEditor = Editor & {
   can?: () => {
@@ -4137,8 +2988,6 @@ function documentPictureSources(editor: Editor): string[] {
   return [...sources];
 }
 
-const SECTION_BORDER_EDGES = ["top", "left", "bottom", "right"] as const;
-
 const REVIEW_SLICE_FEATURE_IDS = [
   "review.trackChanges",
   "review.lockTracking",
@@ -4210,21 +3059,6 @@ const REFERENCE_SLICE_FEATURE_IDS = [
   "references.authorityRemove",
 ] as const;
 type ReferenceSliceFeatureId = (typeof REFERENCE_SLICE_FEATURE_IDS)[number];
-const MAILINGS_SLICE_FEATURE_IDS = [
-  "mailings.recipients",
-  "mailings.mergeField",
-  "mailings.envelopes",
-  "mailings.labels",
-  "mailings.mergeType",
-  "mailings.filterSort",
-  "mailings.addressBlock",
-  "mailings.greetingLine",
-  "mailings.matchFields",
-  "mailings.rules",
-  "mailings.preview",
-  "mailings.finishDocx",
-  "mailings.sendEmail",
-] as const;
 type MailingsSliceFeatureId = (typeof MAILINGS_SLICE_FEATURE_IDS)[number];
 const LAYOUT_SLICE_FEATURE_IDS = [
   "layout.section.verticalAlignment",
@@ -4251,16 +3085,6 @@ type DocumentShapeSizeRequest =
     }>
   | Readonly<{ toggleAspectRatio: true }>
   | Readonly<{ setImageAspectRatio: boolean }>;
-const DOCUMENT_SHAPE_POSITION_DIRECTIONS = [
-  ["left", "presentation.transition.directionLeft", ChevronLeft],
-  ["right", "presentation.transition.directionRight", ChevronRight],
-  ["up", "presentation.transition.directionUp", ChevronUp],
-  ["down", "presentation.transition.directionDown", ChevronDown],
-] as const satisfies readonly (readonly [
-  Exclude<DocumentShapePositionAction, "reset">,
-  string,
-  HouseIcon,
-])[];
 const INSERT_DRAWING_FEATURE_IDS = [
   "insert.drawingCanvas",
   "insert.shape",
@@ -4309,40 +3133,6 @@ const requestedTocOutlineChoiceByEditor = new WeakMap<
   TocOutlineChoice
 >();
 
-function tocOutlineMenuValueForNode(node: ProseMirrorNode): string {
-  const direct = normalizeTocOutlineLevel(node.attrs?.tocOutlineLevel);
-  if (direct === "none") return "none";
-  if (direct === 1 || direct === 2 || direct === 3) return String(direct);
-  if (direct !== null) return "";
-  if (node.type.name === "paragraph") return "none";
-  const structural = Number(node.attrs?.level);
-  return node.type.name === "heading" &&
-    (structural === 1 || structural === 2 || structural === 3)
-    ? String(structural)
-    : "";
-}
-
-/** Current/mixed state for References → Add Text without changing selection. */
-function selectedTocOutlineMenuValue(editor: Editor): string {
-  const { doc, selection } = editor.state;
-  const values = new Set<string>();
-  const record = (node: ProseMirrorNode): boolean => {
-    if (node.type.name !== "paragraph" && node.type.name !== "heading") {
-      return true;
-    }
-    values.add(tocOutlineMenuValueForNode(node));
-    return false;
-  };
-  if (selection.empty) {
-    for (let depth = selection.$from.depth; depth > 0; depth -= 1) {
-      if (!record(selection.$from.node(depth))) break;
-    }
-  } else {
-    doc.nodesBetween(selection.from, selection.to, record);
-  }
-  return values.size === 1 ? [...values][0] : "";
-}
-
 function paragraphOutlineLevelForNode(
   node: ProseMirrorNode,
 ): TocOutlineLevelValue {
@@ -4377,25 +3167,6 @@ function selectedParagraphOutlineLevel(
     doc.nodesBetween(selection.from, selection.to, record);
   }
   return values.size === 1 ? [...values][0] : "mixed";
-}
-
-function dispatchMailMergeDialog(
-  action: MailMergeDialogAction,
-  presetMergeType?: OpenMailMergeDialogDetail["presetMergeType"],
-): void {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(
-    new CustomEvent<OpenMailMergeDialogDetail>(
-      OPEN_MAIL_MERGE_RECIPIENTS_EVENT,
-      {
-        detail: {
-          action,
-          presetMergeType,
-          opener: stableDialogReturnFocusTarget(),
-        },
-      },
-    ),
-  );
 }
 
 function dispatchMergeFieldPicker(): void {
@@ -4460,32 +3231,6 @@ function navigateTrackedChange(
     .setTextSelection({ from: target.from, to: target.to })
     .scrollIntoView()
     .run();
-}
-
-function navigateComment(
-  editor: Editor,
-  direction: CommentNavigationDirection,
-): boolean {
-  try {
-    const state = liveCommentReviewState(editor);
-    const target = adjacentAnchoredCommentThread(
-      state.anchoredThreads,
-      state.selectionFrom,
-      direction,
-    );
-    if (!target) return false;
-    return editor
-      .chain()
-      .focus()
-      .setTextSelection({
-        from: target.ranges[0].from,
-        to: target.ranges[target.ranges.length - 1].to,
-      })
-      .scrollIntoView()
-      .run();
-  } catch {
-    return false;
-  }
 }
 
 type StoredSelection = { from: number; to: number };
@@ -6724,23 +5469,6 @@ function imageState(
  * the page takes any file: the new one is uploaded beside it too.
  */
 const documentPictureReplacementMaxBytes = officePictureFileByteCeiling;
-/** Draw-on-picture flattens ink back into the same browser-encodable media. */
-function documentPictureDrawMime(
-  attrs: Readonly<Record<string, unknown>>,
-): DocumentPictureDrawMime | null {
-  const authority = documentPictureChangeAuthority(attrs);
-  const decoded = decodeDocumentPictureDataUrl(attrs.src);
-  if (!authority || !decoded) return null;
-  if (
-    decoded.format.contentType === authority.mimeType &&
-    (authority.mimeType === "image/png" ||
-      authority.mimeType === "image/jpeg" ||
-      authority.mimeType === "image/webp")
-  ) {
-    return authority.mimeType;
-  }
-  return null;
-}
 
 function documentPictureFileMime(file: File): DocumentPictureMime | null {
   const declared = canonicalDocumentPictureMime(file.type);
@@ -7071,15 +5799,6 @@ async function commitServedDocumentSmartArt(
   return committed === true;
 }
 
-function sameLiveDocumentSmartArtTarget(
-  current: LiveDocumentSmartArtTarget | null,
-  expected: LiveDocumentSmartArtTarget,
-): current is LiveDocumentSmartArtTarget {
-  return Boolean(
-    current && current.pos === expected.pos && current.node === expected.node,
-  );
-}
-
 // The family glyph is shared with the deck's chart ribbons (chartBlockShared).
 const documentChartFamilyIcon = chartFamilyIcon;
 
@@ -7208,36 +5927,6 @@ function openShapeTextHistory(editor: Editor): OfficeShapeTextHistory | null {
     if (field) return officeShapeTextHistory(field);
   }
   return officeShapeTextHistory(null);
-}
-
-
-
-
-
-
-
-function liveTypedShapeWords(editor: Editor): PaintableShapeTextField | null {
-  const shape = liveShapeTextTarget(editor);
-  if (!shape) return null;
-  const field = liveOpenShapeTextField(editor, shape.pos) as
-    | (ShapeTextFieldFormatting & Partial<PaintableShapeTextField>)
-    | null;
-  return field && typeof field.formatCharacterPaint === "function"
-    ? (field as PaintableShapeTextField)
-    : null;
-}
-
-/** The paint a typed word wears now: its own, else the shape's, else one
- * of its colour (Text Fill, Outline and Effects then edit that). */
-function typedWordsPaint(
-  paint: OfficeTextPaint | null,
-  style: RunStyle | undefined,
-  shape: { textPaint?: OfficeTextPaint | null; textFill?: string },
-): OfficeTextPaint {
-  if (paint) return paint;
-  if (shape.textPaint) return shape.textPaint;
-  const fill = style?.color ?? (shape.textFill && shape.textFill !== "none" ? shape.textFill : "#000000");
-  return { fill, outline: "none", outlineWidthPt: 0 };
 }
 
 type PaintableShapeTextField = ShapeTextFieldFormatting & {
@@ -7516,35 +6205,6 @@ function cellState(
 interface SelectedFormulaCellTarget {
   readonly pos: number;
   readonly node: ProseMirrorNode;
-}
-
-/** Resolve exactly one live table cell; multi-cell selections fail closed. */
-function selectedFormulaCellTarget(
-  editor: Editor,
-): SelectedFormulaCellTarget | null {
-  const { selection } = editor.state;
-  if (selection instanceof CellSelection) {
-    let target: SelectedFormulaCellTarget | null = null;
-    let count = 0;
-    selection.forEachCell((node, pos) => {
-      count += 1;
-      if (count === 1) target = { node, pos };
-    });
-    return count === 1 ? target : null;
-  }
-
-  for (let depth = selection.$from.depth; depth > 0; depth -= 1) {
-    const node = selection.$from.node(depth);
-    if (node.type.name !== "tableCell" && node.type.name !== "tableHeader") {
-      continue;
-    }
-    const pos = selection.$from.before(depth);
-    if (selection.from <= pos || selection.to >= pos + node.nodeSize) {
-      return null;
-    }
-    return { node, pos };
-  }
-  return null;
 }
 
 // Display label for a font stack option: the first (primary) family with any
@@ -8175,106 +6835,6 @@ function restoreLocalTableStylePreview(
   }
 }
 
-// The stable cell NodeView ignores its own attribute mutations, so this local
-// preview is view-only; applyTableStyleTheme remains the sole document writer.
-function createLocalTableStylePreview(
-  editor: Editor,
-  themeId: string,
-): LocalTableStylePreviewSnapshot | null {
-  if (editor.isDestroyed) return null;
-  const root = editor.view.dom;
-  if (!root.isConnected) return null;
-  const theme = getTableStyleTheme(themeId);
-  const target = findSelectedTable(editor);
-  if (!theme || !target) return null;
-  const options = tableStyleThemeFromAttrs(target.node.attrs)
-    ? tableStyleOptionsFromAttrs(target.node.attrs)
-    : defaultTableStyleOptionsForTheme(theme);
-  const { cells, geometry } = locateTableStyleCells(target.node, target.pos);
-  if (cells.length === 0) return null;
-
-  const snapshot: LocalTableStylePreviewSnapshot = { root, cells: [] };
-  for (const cell of cells) {
-    const nodeDom = editor.view.nodeDOM(cell.pos);
-    if (!(nodeDom instanceof HTMLElement) || !nodeDom.isConnected || !root.contains(nodeDom)) {
-      restoreLocalTableStylePreview(snapshot);
-      return null;
-    }
-    const previewCell: LocalTableStylePreviewCell = {
-      element: nodeDom,
-      attributes: TABLE_PREVIEW_ATTRS.map((name) => {
-        const original = nodeDom.getAttribute(name);
-        return { original, painted: original };
-      }),
-      styles: TABLE_PREVIEW_STYLES.map((name) => {
-        const original = readInlineStyle(nodeDom, name);
-        return { original, painted: original };
-      }),
-      hadStyle: nodeDom.hasAttribute("style"),
-    };
-    snapshot.cells.push(previewCell);
-
-    const patch = tableCellThemePatch(theme, geometry, cell.rowIndex, cell.columnIndex, options);
-    const background =
-      patch.backgroundColor === null
-        ? null
-        : normalizeCellBackgroundColor(patch.backgroundColor);
-    try {
-      setOptionalAttribute(nodeDom, "data-cell-bg", background);
-      previewCell.attributes[0].painted = nodeDom.getAttribute("data-cell-bg");
-      if (background === null) {
-        nodeDom.style.removeProperty(TABLE_PREVIEW_BG_VAR);
-      } else {
-        nodeDom.style.setProperty(TABLE_PREVIEW_BG_VAR, background);
-      }
-      previewCell.styles[0].painted = readInlineStyle(
-        nodeDom,
-        TABLE_PREVIEW_BG_VAR,
-      );
-
-      if (patch.borderStyle !== null) {
-        const border = cellBorderAttributes(patch.borderStyle);
-        if ("data-cell-border" in border) {
-          nodeDom.setAttribute("data-cell-border", border["data-cell-border"]);
-          previewCell.attributes[1].painted =
-            nodeDom.getAttribute("data-cell-border");
-          nodeDom.style.setProperty(
-            "border",
-            border.style.slice("border:".length),
-          );
-          previewCell.styles[1].painted = readInlineStyle(nodeDom, "border");
-        }
-      }
-    } catch {
-      restoreLocalTableStylePreview(snapshot);
-      return null;
-    }
-  }
-  return snapshot;
-}
-
-/** Maps a table-style theme id → its i18n label key (gallery display name). */
-const TABLE_STYLE_LABEL_KEY: Record<string, string> = {
-  plain: "toolbar.tableStylePlain",
-  "grid-grey": "toolbar.tableStyleGridGrey",
-  "grid-blue": "toolbar.tableStyleGridBlue",
-  "grid-green": "toolbar.tableStyleGridGreen",
-  "banded-grey": "toolbar.tableStyleBandedGrey",
-  "banded-blue": "toolbar.tableStyleBandedBlue",
-  "banded-green": "toolbar.tableStyleBandedGreen",
-  "header-grey": "toolbar.tableStyleHeaderGrey",
-  "header-blue": "toolbar.tableStyleHeaderBlue",
-  "header-green": "toolbar.tableStyleHeaderGreen",
-};
-
-const TABLE_STYLE_COLOR_LABEL_KEY: Partial<
-  Record<TableStyleColorFamilyId, string>
-> = {
-  grey: "toolbar.tableColorGrey",
-  blue: "toolbar.tableColorBlue",
-  green: "toolbar.tableColorGreen",
-};
-
 function toolbarBrowserOnline(): boolean {
   return typeof navigator === "undefined" || navigator.onLine !== false;
 }
@@ -8419,9 +6979,6 @@ const WORD_WEB_EXCLUDED_RIBBONS: ReadonlySet<string> = new Set([
   "mailings",
   "shape",
 ]);
-const WORD_WEB_EXCLUDED_RIBBONS_WITH_SHAPE: ReadonlySet<string> = new Set([
-  "mailings",
-]);
 
 function collectAllowedRibbonChildren(
   nodes: ReactNode,
@@ -8553,30 +7110,15 @@ function RibbonStrip({
   // written out twice and drifted. This keeps the toolbar's own test ids.
   const usesObjectRibbonAnatomy =
     activeTab === "insert" ||
-    activeTab === "layout" ||
-    activeTab === "references";
+    false ||
+    false;
   const contextualChildren =
-    activeTab === "headerFooter" || activeTab === "smartArt" ||
-    activeTab === "chartDesign"
-      ? collectContextualRibbonChildren(children, activeTab)
-      : children;
+    children;
   const renderedChildren =
     excludedRibbons && excludedRibbons.size > 0
       ? collectAllowedRibbonChildren(contextualChildren, excludedRibbons)
       : Children.toArray(contextualChildren);
-  const chartGroupOrder = [
-    "document-toolbar-chart-design-layout-group",
-    "document-toolbar-chart-design-styles-group",
-    "document-toolbar-chart-design-data-group",
-    "document-toolbar-chart-design-type-group",
-  ];
-  const orderedChildren = activeTab === "chartDesign"
-    ? [...renderedChildren].sort((left, right) => {
-        const order = (node: ReactNode) => isValidElement<{testId?: string}>(node)
-          ? chartGroupOrder.indexOf(node.props.testId ?? "") : -1;
-        return order(left) - order(right);
-      })
-    : orderReviewRibbonChildren(orderInsertRibbonChildren(renderedChildren));
+  const orderedChildren = orderReviewRibbonChildren(orderInsertRibbonChildren(renderedChildren));
   // One strip for both anatomies: Insert/Layout/References used to be a
   // different component from Home, so crossing between them unmounted the
   // strip with every group of every tab and inserted it all again.
@@ -8759,9 +7301,6 @@ function ParagraphSpaceToggleItems({
   );
 }
 
-const LAYOUT_INDENT_POINTS_PER_INCH = 72;
-const LAYOUT_INDENT_MAX_INCHES = 10;
-
 /** The armed Format Painter's pointer: a text I-beam with a small brush. */
 const FORMAT_PAINTER_CURSOR =
   'url("data:image/svg+xml,' +
@@ -8774,134 +7313,6 @@ const FORMAT_PAINTER_CURSOR =
       "</svg>",
   ) +
   '") 7 12, text';
-
-function layoutIndentInchesFromPoints(points: number | null): string {
-  const boundedPoints = Math.min(
-    LAYOUT_INDENT_POINTS_PER_INCH * LAYOUT_INDENT_MAX_INCHES,
-    Math.max(0, Number.isFinite(points) ? (points ?? 0) : 0),
-  );
-  return String(
-    Number((boundedPoints / LAYOUT_INDENT_POINTS_PER_INCH).toFixed(3)),
-  );
-}
-
-function layoutIndentPointsFromInches(
-  raw: string,
-): number | null | undefined {
-  const trimmed = raw.trim();
-  if (trimmed === "") return null;
-  const inches = Number(trimmed);
-  if (!Number.isFinite(inches)) return undefined;
-  const boundedInches = Math.min(
-    LAYOUT_INDENT_MAX_INCHES,
-    Math.max(0, inches),
-  );
-  return Number(
-    (boundedInches * LAYOUT_INDENT_POINTS_PER_INCH).toFixed(3),
-  );
-}
-
-function layoutRibbonClassName(
-  base: string,
-  override: string | undefined,
-): string {
-  return override ? `${base} ${override}` : base;
-}
-
-function LayoutRibbonNumberField({
-  classNames,
-  resetGeneration = 0,
-  ...props
-}: OfficeRibbonNumberFieldProps & { resetGeneration?: number }) {
-  // OfficeRibbonNumberField intentionally owns its draft. Bind the local
-  // adapter instance to the authenticated external value so a rapid
-  // edit→Undo (value A→B→A before the shared effect observes B) still resets
-  // the draft. The generation suffix covers rejected invalid/stale commits
-  // where the external value correctly stays unchanged.
-  const instanceKey = `${props.controlId ?? props.testId}:${props.value}:${resetGeneration}`;
-  return (
-    <OfficeRibbonNumberField
-      key={instanceKey}
-      {...props}
-      classNames={{
-        field: layoutRibbonClassName(
-          homeStyles.layoutValueField,
-          classNames?.field,
-        ),
-        icon: layoutRibbonClassName(
-          homeStyles.layoutValueIcon,
-          classNames?.icon,
-        ),
-        input: layoutRibbonClassName(
-          homeStyles.layoutValueInput,
-          classNames?.input,
-        ),
-        label: classNames?.label,
-        unit: layoutRibbonClassName(
-          homeStyles.layoutValueUnit,
-          classNames?.unit,
-        ),
-      }}
-    />
-  );
-}
-
-function PageNumberStartField({
-  value,
-  onCommit,
-  disabled = false,
-}: {
-  value: number;
-  onCommit: (value: number) => void;
-  disabled?: boolean;
-}) {
-  const [draft, setDraft] = useState(() => String(value));
-  const [isFocused, setIsFocused] = useState(false);
-  const [lastSyncedValue, setLastSyncedValue] = useState(value);
-
-  if (!isFocused && lastSyncedValue !== value) {
-    setLastSyncedValue(value);
-    setDraft(String(value));
-  }
-
-  const commitDraft = useCallback(
-    (raw: string = draft) => {
-      if (disabled) return;
-      const next = normalizePageNumberStart(raw) ?? DEFAULT_PAGE_NUMBER_START;
-      setDraft(String(next));
-      onCommit(next);
-    },
-    [disabled, draft, onCommit],
-  );
-
-  return (
-    <input
-      type="number"
-      min={1}
-      max={MAX_PAGE_NUMBER_DIALOG_START}
-      className="note-editor-office-toolbar__input"
-      data-testid="document-toolbar-page-number-start-input"
-      value={draft}
-      disabled={disabled}
-      onFocus={() => setIsFocused(true)}
-      onChange={(event) => {
-        setDraft(event.target.value);
-      }}
-      onBlur={() => {
-        setIsFocused(false);
-        commitDraft();
-      }}
-      onKeyDown={(event) => {
-        event.stopPropagation();
-        if (event.key === "Enter") {
-          event.preventDefault();
-          commitDraft();
-          event.currentTarget.blur();
-        }
-      }}
-    />
-  );
-}
 
 function SwatchButton({
   active,
@@ -9082,35 +7493,6 @@ function CustomColorControl({
   );
 }
 
-const PICTURE_RIBBON_GROUP_ORDER = new Map<string, number>([
-  ["document-toolbar-picture-styles-group", 10],
-  ["document-toolbar-picture-arrange-group", 20],
-  ["document-toolbar-picture-size-group", 30],
-  ["document-toolbar-picture-adjust-group", 40],
-  ["document-toolbar-picture-draw-group", 45],
-  ["document-toolbar-picture-alt-group", 50],
-]);
-
-function PictureRibbonGroupOrder({ children }: { children: ReactNode }) {
-  const rank = (child: ReactNode) => {
-    if (!isValidElement<{ testId?: string }>(child)) {
-      return Number.MAX_SAFE_INTEGER;
-    }
-    return (
-      PICTURE_RIBBON_GROUP_ORDER.get(child.props.testId ?? "") ??
-      Number.MAX_SAFE_INTEGER
-    );
-  };
-
-  return (
-    <>
-      {Children.toArray(children).sort(
-        (left, right) => rank(left) - rank(right),
-      )}
-    </>
-  );
-}
-
 /**
  * Memoized: the toolbar is an ~8k-line subtree and NoteEditor re-renders on
  * every pagination commit (several per edit on large documents). With stable
@@ -9136,46 +7518,6 @@ type DocumentToolbarCommandsProps = Omit<
   DocumentToolbarProps, "quickSave" | "headerExtras"
 > & { hasQuickSave: boolean; hasHeaderExtras: boolean };
 
-/**
- * Document dark mode for one window: the window takes the app's dark theme
- * attribute, and the menus, popovers and dialogs it opens (portalled to the
- * body or the console root, outside the window) take it too while it is the
- * focused window. Returns the undo.
- */
-function scopeDocumentDarkMode(wrapper: HTMLElement): () => void {
-  const windowRoot = wrapper.closest<HTMLElement>("[data-window-id]") ?? wrapper;
-  const themed = new Set<HTMLElement>();
-  const theme = (element: HTMLElement) => {
-    if (element.hasAttribute("data-theme-mode")) return;
-    element.setAttribute("data-theme-mode", "dark");
-    themed.add(element);
-  };
-  theme(windowRoot);
-  windowRoot.setAttribute("data-document-dark-mode", "true");
-  const popup = (node: Node): node is HTMLElement =>
-    node instanceof HTMLElement &&
-    (node.matches("[data-radix-popper-content-wrapper], [role='dialog'], [role='menu'], .docs-cupertino-menu") ||
-      node.querySelector("[role='dialog'], [role='menu'], [role='listbox'], .docs-cupertino-menu") !== null);
-  const observer = new MutationObserver((records) => {
-    const focused =
-      windowRoot === wrapper ||
-      windowRoot.dataset.focused === "true" ||
-      windowRoot.contains(document.activeElement);
-    if (!focused) return;
-    for (const record of records) record.addedNodes.forEach((node) => { if (popup(node)) theme(node); });
-  });
-  // Menus portal to the body; dialogs to the console root.
-  const hosts = new Set<Element>([document.body]);
-  const consoleRoot = document.querySelector("[data-theme='console']");
-  if (consoleRoot) hosts.add(consoleRoot);
-  hosts.forEach((host) => observer.observe(host, { childList: true }));
-  return () => {
-    observer.disconnect();
-    windowRoot.removeAttribute("data-document-dark-mode");
-    themed.forEach((element) => element.removeAttribute("data-theme-mode"));
-  };
-}
-
 /** Whether `target` is in the editor's body text (false while its view is still attaching: tiptap's getter throws then). */
 function editorBodyContains(editor: Editor, target: Node): boolean {
   try {
@@ -9195,52 +7537,7 @@ function documentChartAltPaneKey(target: {
   return `chart:${target.pos}:${typeof blockId === "string" ? blockId : ""}`;
 }
 
-function DocumentToolbar({
-  editor: documentEditor,
-  footerPortalTarget,
-  liveInkAwareness = null,
-  onCircleSelection,
-  onGuestAiRequest,
-  circleSelectionActive = false,
-  smartArtMayConvertOnEdit = false,
-  docsOfficeParityV2 = false,
-  desktopInteroperabilityTools = false,
-  documentTitle,
-  pageId,
-  contentVersion,
-  onBeforeVersionWrite,
-  workspaceId,
-  onContentRestored,
-  spellcheckEnabled,
-  onToggleSpellcheck,
-  autoCorrectEnabled,
-  onToggleAutoCorrect,
-  onEditBandOnPage,
-  headerFooterContext = null,
-  headerFooterDocumentTextVisible = true,
-  onToggleHeaderFooterDocumentText,
-  onNavigateHeaderFooter,
-  pagePreviewEnabled,
-  onTogglePagePreview,
-  onPrintDocument,
-  onGuestExportRequest,
-  pasteMode,
-  onPasteModeChange,
-  serverExportEnabled,
-  onBeforeServerExport,
-  hasHeaderExtras,
-  hasQuickSave,
-  panes,
-  zoom,
-  documentView,
-  onInsertImageFiles,
-  imageInsertBusy = false,
-  notebookId,
-  initialRibbonTab,
-  handwriting = false,
-  inkMayWaitForRoom = false,
-  sourcePackageBound = false,
-}: DocumentToolbarCommandsProps) {
+function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAwareness = null, onCircleSelection, onGuestAiRequest, circleSelectionActive = false, smartArtMayConvertOnEdit = false, docsOfficeParityV2 = false, desktopInteroperabilityTools = false, documentTitle, pageId, contentVersion, onBeforeVersionWrite, workspaceId, onContentRestored, onEditBandOnPage, headerFooterContext = null, onTogglePagePreview, onPrintDocument, onGuestExportRequest, pasteMode, onPasteModeChange, serverExportEnabled, onBeforeServerExport, hasHeaderExtras, hasQuickSave, panes, zoom, documentView, onInsertImageFiles, imageInsertBusy = false, notebookId, initialRibbonTab, handwriting = false, inkMayWaitForRoom = false, sourcePackageBound = false }: DocumentToolbarCommandsProps) {
   // A render body this large makes React's dev-only owner-stack capture
   // the slowest thing in the editor; see lib/react/dev-owner-stacks.ts.
   skipDevOwnerStacksForThisRender();
@@ -9262,13 +7559,6 @@ function DocumentToolbar({
   const smartArtContextMenuLabels = useOfficeSmartArtContextMenuLabels();
   const shapeContextMenuLabels = useOfficeShapeContextMenuLabels();
   const smartArtTextPaneLabels = useOfficeSmartArtTextPaneLabels();
-  // A header/footer story holds lines, list items and tables (its band has no
-  // quote, code block or rule): those commands are off while one is open,
-  // and say why, instead of making a line its save would drop.
-  const bandStoryStructureLocked = Boolean(headerFooterContext?.storyEditor);
-  const bandStoryStructureReason = bandStoryStructureLocked
-    ? t("toolbar.headerFooterStructureLocked")
-    : undefined;
   const locale = useLocale();
   const isChineseLocale = locale.toLowerCase().startsWith("zh");
   const desktopInteroperabilityVisible =
@@ -9282,43 +7572,6 @@ function DocumentToolbar({
     docsLengthUnit === "cm"
       ? t("toolbar.indentUnitCm")
       : t("toolbar.pageSetupUnitInches");
-  /** CSS px per field unit (96 px to the inch). */
-  const docsPxPerLengthUnit = docsLengthUnit === "cm" ? 96 / 2.54 : 96;
-  // Layout > Indent Left/Right: Chinese Word counts 字符 (w:leftChars), other
-  // Word counts the system length unit.
-  const layoutIndentField = isChineseLocale
-    ? {
-        unit: "char" as const,
-        unitLabel: t("toolbar.indentUnitChar"),
-        step: 0.5,
-        max: Math.round((LAYOUT_INDENT_MAX_INCHES * 72) / DEFAULT_CHARACTER_UNIT_PT),
-      }
-    : {
-        unit: docsLengthUnit,
-        unitLabel: docsLengthUnitLabel,
-        step: 0.1,
-        max:
-          docsLengthUnit === "cm"
-            ? LAYOUT_INDENT_MAX_INCHES * 2.54
-            : LAYOUT_INDENT_MAX_INCHES,
-      };
-  const pictureSizeScale = docsOfficeParityV2 ? docsPxPerLengthUnit : 1;
-  const pictureSizeUnit = docsOfficeParityV2
-    ? docsLengthUnit === "cm"
-      ? docsLengthUnitLabel
-      : "in"
-    : "px";
-  const pictureSizeDecimals = docsOfficeParityV2
-    ? docsLengthUnit === "cm"
-      ? 2
-      : 3
-    : 0;
-  const pictureSizeValue = (pixels: number | null) =>
-    pixels === null
-      ? ""
-      : String(
-          Number((pixels / pictureSizeScale).toFixed(pictureSizeDecimals)),
-        );
   const noUndoReason = t("toolbar.noUndoReason");
   const noRedoReason = t("toolbar.noRedoReason");
   const noSelectionReason = t("toolbar.noSelectionReason");
@@ -9412,7 +7665,6 @@ function DocumentToolbar({
   useEffect(() => (pageId ? registerSmartArtDefinitionPage(pageId) : undefined), [pageId]);
   const immersiveReaderReturnFocusRef = useRef<HTMLButtonElement | null>(null);
   const [rulerVisible, setRulerVisible] = useState(false);
-  const [documentDarkMode, setDocumentDarkMode] = useState(false);
   // A page or column break the caret's place cannot hold (a text box, a
   // content control, a table row that cannot start a page) is refused with
   // its reason, from the ribbon, the shortcut and the slash menu alike.
@@ -9430,18 +7682,18 @@ function DocumentToolbar({
     const surface = connectedEditorSurface(editor);
     const wrapper = surface?.closest<HTMLElement>(".note-editor-wrapper");
     if (!wrapper) return;
-    wrapper.classList.toggle(homeStyles.documentDarkMode, documentDarkMode);
+    wrapper.classList.toggle(homeStyles.documentDarkMode, false);
     // Word's dark page lives inside a dark window (Office theme Black, macOS
     // Dark, Word for the web's View > Dark Mode): the ribbon, title bar,
     // status bar, panes and menus go dark with it. Only this window: the
     // app's dark theme is keyed on [data-theme-mode="dark"], so the window
     // takes it without the global theme changing.
-    const release = documentDarkMode ? scopeDocumentDarkMode(wrapper) : null;
+    const release = null;
     return () => {
       wrapper.classList.remove(homeStyles.documentDarkMode);
       release?.();
     };
-  }, [documentDarkMode, editor]);
+  }, [false, editor]);
   // The frame Focus took full screen, while it is (its Exit Focus strip is
   // drawn inside it), or null.
   const [focusModeFrame, setFocusModeFrame] = useState<HTMLElement | null>(null);
@@ -9557,12 +7809,6 @@ function DocumentToolbar({
     useChangedState<DocumentTableDesignTarget | null>(() =>
       readDocumentTableDesignTarget(editor),
     );
-  /**
-   * Id base for the Layout galleries' `aria-describedby` targets (a preset row's
-   * measurements, a break row's description). One `useId` keeps them unique even
-   * when two document windows are open on the same canvas.
-   */
-  const layoutGalleryId = useId();
   const selectedSectionLayout = docsOfficeParityV2
     ? (() => {
         const resolved = resolveSectionAtSelection(editor.state);
@@ -9571,8 +7817,6 @@ function DocumentToolbar({
         return resolved.layouts?.[sectionIndex] ?? null;
       })()
     : null;
-  const currentPageOrientation =
-    selectedSectionLayout?.pageSize.orientation ?? snapshot.pageOrientation;
   const currentSectionPageSize = selectedSectionLayout
     ? pageSizeSelectionFromSectionTwips(
         selectedSectionLayout.pageSize.widthTwips,
@@ -9600,44 +7844,8 @@ function DocumentToolbar({
   const currentCustomPageMargins = currentSectionPageMargins
     ? currentSectionPageMargins.customPageMargins
     : snapshot.customPageMargins;
-  const currentColumns =
-    selectedSectionLayout &&
-    COLUMN_COUNT_VALUES.includes(
-      selectedSectionLayout.columns.count as ColumnCount,
-    )
-      ? (selectedSectionLayout.columns.count as ColumnCount)
-      : snapshot.columns;
-  const currentColumnSeparator =
-    selectedSectionLayout?.columns.separator ?? snapshot.columnSeparator;
-  /**
-   * Which Columns gallery row is highlighted. Word highlights Left/Right only
-   * for their exact two-column unequal shape; any other unequal sequence (an
-   * import, or the More Columns dialog) highlights its column count instead.
-   */
-  const currentColumnsPreset: "1" | "2" | "3" | "left" | "right" =
-    (selectedSectionLayout
-      ? columnsPresetOfSection(selectedSectionLayout)
-      : null) ?? (String(currentColumns) as "1" | "2" | "3");
-  // A legacy document-wide `pageBorder` box still paints (and exports) until
-  // the first section-layout write migrates it, so the menu reads it as present.
-  const currentSectionPageBorders = docsOfficeParityV2
-    ? effectiveSectionPageBorders(editor.state, headerFooterContext?.sectionIndex)
-    : null;
-  const currentLineNumbers = selectedSectionLayout
-    ? toolbarLineNumbersFromSection(selectedSectionLayout)
-    : snapshot.lineNumbers;
-  const currentSectionLineNumberStart = lineNumberStartAt(
-    selectedSectionLayout?.lineNumbers?.start,
-  );
   const currentSectionVerticalAlignment =
     selectedSectionLayout?.verticalAlignment ?? "top";
-  const currentSectionPageNumber = selectedSectionLayout?.pageNumber;
-  const currentSectionPageNumberFormat =
-    normalizePageNumberFormat(currentSectionPageNumber?.format) ??
-    snapshot.pageNumberFormat;
-  const currentSectionPageNumberStart =
-    normalizePageNumberStart(currentSectionPageNumber?.start) ??
-    snapshot.pageNumberStart;
   const requestedSectionVerticalAlignment = useRef<SectionVerticalAlignment>(
     currentSectionVerticalAlignment,
   );
@@ -9689,7 +7897,6 @@ function DocumentToolbar({
     setCompareResultSources(result);
     setSourceDocumentsMode(DEFAULT_SOURCE_DOCUMENTS_MODE);
   }, []);
-  const compareDocumentsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const compareDocumentsReturnFocusRef = useRef<HTMLElement | null>(null);
   const closeVersionHistory = useCallback(() => {
     const returnFocus = versionHistoryReturnFocusRef.current;
@@ -9729,11 +7936,6 @@ function DocumentToolbar({
     setCompareDocumentsKind("compare");
     setCompareDocumentsOpen(true);
   }, [closeCompareDocuments, compareDocumentsKind, compareDocumentsOpen]);
-  const openCombineDocuments = useCallback(() => {
-    compareDocumentsReturnFocusRef.current ??= stableDialogReturnFocusTarget();
-    setCompareDocumentsKind("combine");
-    setCompareDocumentsOpen(true);
-  }, []);
   const [proofingLanguageTarget, setProofingLanguageTarget] =
     useState<DocumentProofingLanguageTarget | null>(null);
   const proofingLanguageReturnFocusRef = useRef<HTMLButtonElement | null>(
@@ -10047,42 +8249,6 @@ function DocumentToolbar({
         : undefined,
     [t],
   );
-  /**
-   * Word's Track Changes menu: For Everyone (the document's setting, saved
-   * and shared with every co-author) and Just Mine (this author only) are one
-   * choice. Each shows the mode in effect for this author: a document
-   * tracking For Everyone shows For Everyone checked and Just Mine not,
-   * whoever turned it on; a tracking lock keeps both disabled.
-   */
-  const renderTrackChangesModeItems = () => {
-    const decision = reviewCommandDecisions["review.trackChanges"];
-    const choose = (mode: TrackChangesMode) => {
-      if (!decision.enabled) return;
-      chain(editor).setTrackChangesMode(mode).run();
-    };
-    return (
-      <>
-        <DropdownMenuCheckboxItem
-          checked={snapshot.trackChangesMode === "everyone"}
-          data-testid="document-toolbar-ribbon-track-for-everyone"
-          disabled={!decision.enabled}
-          title={reviewUnavailableTitle(decision)}
-          onSelect={() => choose("everyone")}
-        >
-          {t("toolbar.trackForEveryone")}
-        </DropdownMenuCheckboxItem>
-        <DropdownMenuCheckboxItem
-          checked={snapshot.trackChangesMode === "mine"}
-          data-testid="document-toolbar-ribbon-track-just-mine"
-          disabled={!decision.enabled}
-          title={reviewUnavailableTitle(decision)}
-          onSelect={() => choose("mine")}
-        >
-          {t("toolbar.trackJustMine")}
-        </DropdownMenuCheckboxItem>
-      </>
-    );
-  };
   const viewCommandRegistry = useMemo(
     () =>
       createDocumentFeatureCommandRegistry([
@@ -10284,16 +8450,6 @@ function DocumentToolbar({
       ),
     ]),
   ) as Record<ViewSliceFeatureId, ResolvedDocumentFeatureCommand>;
-  const viewWindowGroupVisible = (
-    [
-      "view.split",
-      "view.sideBySide",
-      "view.synchronousScrolling",
-      "view.newWindow",
-      "view.arrangeAll",
-      "view.switchWindows",
-    ] as const
-  ).some((featureId) => viewCommandDecisions[featureId].visible);
   const executeViewFeature = useCallback(
     (featureId: ViewSliceFeatureId) => {
       void viewCommandRegistry.execute(
@@ -10303,100 +8459,6 @@ function DocumentToolbar({
       );
     },
     [liveDocumentCommandContext, reviewCommandRuntime, viewCommandRegistry],
-  );
-  const [documentWindowMenuItems, setDocumentWindowMenuItems] = useState<
-    DocumentWindowChoice[]
-  >([]);
-  const refreshDocumentWindowMenu = useCallback(
-    (open: boolean) => {
-      if (!open) return;
-      setDocumentWindowMenuItems(documentView?.listWindows?.() ?? []);
-    },
-    [documentView],
-  );
-  const switchDocumentWindow = useCallback(
-    (windowId: string) => {
-      if (documentView?.switchWindow?.(windowId) !== true) return;
-      setDocumentWindowMenuItems(documentView.listWindows?.() ?? []);
-    },
-    [documentView],
-  );
-  const mailingsCommandRegistry = useMemo(
-    () =>
-      createDocumentFeatureCommandRegistry([
-        {
-          featureId: "mailings.recipients",
-          execute: () => dispatchMailMergeDialog("recipients"),
-        },
-        {
-          featureId: "mailings.mergeField",
-          execute: () => {
-            if (typeof window === "undefined") return false;
-            dispatchMergeFieldPicker();
-          },
-        },
-        {
-          featureId: "mailings.envelopes",
-          gate: "docs_office_parity_v2",
-          execute: () => dispatchMailMergeDialog("mergeType", "envelopes"),
-        },
-        {
-          featureId: "mailings.labels",
-          gate: "docs_office_parity_v2",
-          execute: () => dispatchMailMergeDialog("mergeType", "labels"),
-        },
-        ...(
-          [
-            ["mailings.mergeType", "mergeType"],
-            ["mailings.filterSort", "filterSort"],
-            ["mailings.addressBlock", "addressBlock"],
-            ["mailings.greetingLine", "greetingLine"],
-            ["mailings.matchFields", "matchFields"],
-            ["mailings.rules", "rules"],
-            ["mailings.preview", "preview"],
-            ["mailings.finishDocx", "finishDocx"],
-          ] as const
-        ).map(([featureId, action]) => ({
-          featureId,
-          gate: "docs_office_parity_v2" as const,
-          execute: () => dispatchMailMergeDialog(action),
-        })),
-        // mailings.sendEmail intentionally has no binding. The capability
-        // resolver therefore exposes its connector-required reason instead of
-        // dispatching a pretend local email action.
-      ]),
-    [],
-  );
-  const mailingsCommandDecisions = Object.fromEntries(
-    MAILINGS_SLICE_FEATURE_IDS.map((featureId) => [
-      featureId,
-      mailingsCommandRegistry.resolve(
-        featureId,
-        reviewCommandContext,
-        reviewCommandRuntime,
-      ),
-    ]),
-  ) as Record<MailingsSliceFeatureId, ResolvedDocumentFeatureCommand>;
-  const executeMailingsFeature = useCallback(
-    (featureId: MailingsSliceFeatureId) => {
-      void mailingsCommandRegistry.execute(
-        featureId,
-        liveDocumentCommandContext(),
-        reviewCommandRuntime,
-      );
-    },
-    [
-      liveDocumentCommandContext,
-      mailingsCommandRegistry,
-      reviewCommandRuntime,
-    ],
-  );
-  const mailingsUnavailableTitle = useCallback(
-    (decision: ResolvedDocumentFeatureCommand) =>
-      decision.reasonKey
-        ? t(decision.reasonKey as "document.capability.unavailable")
-        : undefined,
-    [t],
   );
   const [exportStatus, dispatchExportStatus] = useReducer(
     documentExportStatusReducer,
@@ -10450,21 +8512,6 @@ function DocumentToolbar({
   const selectedSectionLayoutJson = columnsSectionLayout
     ? JSON.stringify(columnsSectionLayout)
     : null;
-  const openUnequalColumns = useCallback(() => {
-    if (
-      editor.isDestroyed ||
-      !editor.isEditable ||
-      !selectedSectionLayoutJson
-    ) {
-      return;
-    }
-    unequalColumnsReturnFocusRef.current = stableDialogReturnFocusTarget();
-    unequalColumnsAuthorityRef.current = {
-      editor,
-      layoutJson: selectedSectionLayoutJson,
-    };
-    setUnequalColumnsOpen(true);
-  }, [editor, selectedSectionLayoutJson]);
   const closeUnequalColumns = useCallback(() => {
     const returnFocus = unequalColumnsReturnFocusRef.current;
     unequalColumnsReturnFocusRef.current = null;
@@ -10473,7 +8520,7 @@ function DocumentToolbar({
     restoreStableDialogReturnFocus(editor, returnFocus);
   }, [editor]);
   useEffect(() => {
-    if (!unequalColumnsOpen) return;
+    return;
     const authority = unequalColumnsAuthorityRef.current;
     if (
       !authority ||
@@ -10488,24 +8535,8 @@ function DocumentToolbar({
     closeUnequalColumns,
     editor,
     selectedSectionLayoutJson,
-    unequalColumnsOpen,
+    false,
   ]);
-  const applyUnequalColumnsPatch = useCallback(
-    (patch: SectionLayoutPatch, options: ColumnsDialogApplyOptions): boolean => {
-      const authority = unequalColumnsAuthorityRef.current;
-      if (
-        !authority ||
-        authority.editor !== editor ||
-        authority.layoutJson !== selectedSectionLayoutJson ||
-        editor.isDestroyed ||
-        !editor.isEditable
-      ) {
-        return false;
-      }
-      return runColumnsDialog(editor, patch, options.applyTo, options.startNewColumn);
-    },
-    [editor, selectedSectionLayoutJson],
-  );
   // Readability statistics (Word Review ▸ Word Count + readability scores),
   // computed on demand from the live text selection (or the whole document).
   const [readabilityStats, setReadabilityStats] = useState<
@@ -10674,19 +8705,6 @@ function DocumentToolbar({
   const pictureReplaceFileInputRef = useRef<HTMLInputElement>(null);
   /** The picker behind the SmartArt tab's picture menu (one slot at a time). */
   const smartArtPictureFileInputRef = useRef<HTMLInputElement>(null);
-  const pictureChangeMenuReturnFocusRef = useRef<HTMLButtonElement | null>(
-    null,
-  );
-  const pictureResetMenuReturnFocusRef = useRef<HTMLButtonElement | null>(null);
-  const pictureWrapMenuReturnFocusRef = useRef<HTMLButtonElement | null>(null);
-  const pictureAlignMenuReturnFocusRef = useRef<HTMLButtonElement | null>(null);
-  const pictureRotateMenuReturnFocusRef = useRef<HTMLButtonElement | null>(
-    null,
-  );
-  const pictureCompressionReturnFocusRef = useRef<HTMLButtonElement | null>(
-    null,
-  );
-  const pictureDrawReturnFocusRef = useRef<HTMLButtonElement | null>(null);
   const pictureFilterPreviewRef = useRef<{
     readonly element: HTMLImageElement;
     readonly originalFilter: string;
@@ -10694,11 +8712,6 @@ function DocumentToolbar({
   } | null>(null);
   const pendingPictureReplaceTargetRef = useRef<LiveImageAltTarget | null>(null);
   const [pictureReplaceBusy, setPictureReplaceBusy] = useState(false);
-  const [pictureCompressionTarget, setPictureCompressionTarget] = useState<{
-    readonly target: LiveImageAltTarget;
-    readonly displayWidth: number;
-    readonly displayHeight: number;
-  } | null>(null);
   const [pictureDrawTarget, setPictureDrawTarget] = useState<{
     readonly target: LiveImageAltTarget;
     readonly mimeType: DocumentPictureDrawMime;
@@ -10730,14 +8743,6 @@ function DocumentToolbar({
   const [selectionPaneGroupAction, setSelectionPaneGroupAction] = useState<{
     readonly run: () => void;
   } | null>(null);
-  // Shape Format > Reorder Objects: the floating stack the dialog lists, as
-  // it stood when the dialog opened (the slide's PresentationReorderObjectsDialog).
-  const [shapeReorderSession, setShapeReorderSession] = useState<{
-    readonly key: number;
-    readonly doc: ProseMirrorNode;
-    readonly layers: readonly DocumentShapeReorderLayer[];
-  } | null>(null);
-  const shapeReorderReturnFocusRef = useRef<HTMLElement | null>(null);
   // The editor's task pane docks (documentTaskPaneDock.tsx). Opening one of
   // these panes no longer closes another: each keeps a tab in the dock, as
   // Word's task panes do.
@@ -10768,12 +8773,6 @@ function DocumentToolbar({
   const [shapeFormatPaneSection, setShapeFormatPaneSection] = useState<
     "shape" | "effects" | "text" | "alt" | "link"
   >("shape");
-  // Shape Effects > "... Options": the Effects page's section to bring into
-  // view (a new serial asks again).
-  const [shapeFormatPaneReveal, setShapeFormatPaneReveal] = useState<{
-    readonly section: string;
-    readonly serial: number;
-  } | null>(null);
   const [accessibilityOpen, setAccessibilityOpen] = useState(false);
   // Review > Editor / Spelling & Grammar: where the Editor pane opens; a new
   // object reopens it there (null = closed).
@@ -10781,12 +8780,6 @@ function DocumentToolbar({
     useState<DocumentEditorPaneView | null>(null);
   const openDocumentEditor = useCallback((view: DocumentEditorPaneView) => {
     setDocumentEditorView(view);
-  }, []);
-  const viewMoreTriggerRef = useRef<HTMLButtonElement>(null);
-  const toggleAccessibilityPanel = useCallback(() => {
-    setFindReplaceOpen(false);
-    setGoToMode(null);
-    setAccessibilityOpen((value) => !value);
   }, []);
   const openFindReplace = useCallback((initialFocus: "find" | "replace") => {
     setAccessibilityOpen(false);
@@ -10820,12 +8813,7 @@ function DocumentToolbar({
   const textColorTriggerRef = useRef<HTMLButtonElement | null>(null);
   const highlightColorTriggerRef = useRef<HTMLButtonElement | null>(null);
   const paragraphShadingTriggerRef = useRef<HTMLButtonElement | null>(null);
-  // The Layout ribbon's Page Color panel anchors exactly like the Font Color
-  // one: it is portalled to document.body, so it can only find its button
-  // through an explicit ref (see OfficeColorPalettePopover).
-  const pageColorTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [underlineMenuOpen, setUnderlineMenuOpen] = useState(false);
-  const [pageColorMenuOpen, setPageColorMenuOpen] = useState(false);
   const [tableShadingPaletteTarget, setTableShadingPaletteTarget] = useState<{
     readonly selection: ProseMirrorSelection;
     readonly tableNode: ProseMirrorNode;
@@ -11097,7 +9085,6 @@ function DocumentToolbar({
     useState<DocumentTableDeleteCellsRequest | null>(null);
   const [tableSplitCellsTarget, setTableSplitCellsTarget] =
     useState<DocumentTableSplitCellsTarget | null>(null);
-  const tableReplaceTextReturnFocusRef = useRef<HTMLElement | null>(null);
   const [tableReplaceTextTarget, setTableReplaceTextTarget] =
     useState<DocumentTableReplaceTextTarget | null>(null);
   const tableColumnWidthTargetRef =
@@ -11521,7 +9508,6 @@ function DocumentToolbar({
   // The picture the last edit wrote to: a first edit to a picture starts its
   // own Undo step, later keystrokes join it the way typed text does.
   const altPaneLastWriteRef = useRef<string | null>(null);
-  const formulaReturnFocusRef = useRef<HTMLElement | null>(null);
   const [formulaDialogTarget, setFormulaDialogTarget] = useState<{
     readonly pos: number;
     readonly nodeSize: number;
@@ -11532,13 +9518,6 @@ function DocumentToolbar({
     readonly bookmarkNames: readonly string[];
   } | null>(null);
   const cellMarginsReturnFocusRef = useRef<HTMLButtonElement | null>(null);
-  const designColorsReturnFocusRef = useRef<HTMLButtonElement | null>(null);
-  const designFontSetReturnFocusRef = useRef<HTMLButtonElement | null>(null);
-  const designParagraphSpacingReturnFocusRef = useRef<HTMLButtonElement | null>(
-    null,
-  );
-  const designThemesReturnFocusRef = useRef<HTMLButtonElement | null>(null);
-  const [designSetDefaultOpen, setDesignSetDefaultOpen] = useState(false);
   // The document theme's heading and body fonts, for the font list's Theme
   // Fonts section (only once the document has a design).
   const designThemeFonts = useMemo(() => {
@@ -11606,27 +9585,6 @@ function DocumentToolbar({
         : undefined,
     [snapshot.documentDesign, wordStyleSetsVersion],
   );
-  // The Design tab reads the document's design, or Word's new document's
-  // before the first Design command (which then gives the document one).
-  const designState = snapshot.documentDesign ?? DEFAULT_DOCUMENT_DESIGN;
-  const designThemeValue = documentDesignThemeId(designState) ?? "";
-  const designStyleSet = wordStyleSet(designState.styleSet);
-  const designStyleSetName =
-    designStyleSet && designStyleSet.id !== "default"
-      ? officeThemeLabel(designStyleSet.label, locale)
-      : t("toolbar.designParagraphSpacing_default");
-  const designStyleSetSpacing = useMemo(() => {
-    const base =
-      wordStyleSetsVersion >= 0 ? documentDesignBase({ ...designState, paragraphSpacing: null }) : null;
-    return base
-      ? {
-          beforePt: base.defaultParagraphSpaceBefore,
-          afterPt: base.defaultParagraphSpaceAfter,
-          lineHeight: base.defaultLineHeight,
-        }
-      : null;
-  }, [designState, wordStyleSetsVersion]);
-  const layoutMarginsTriggerRef = useRef<HTMLButtonElement | null>(null);
   type CellMarginsDialogTarget = {
     readonly pos: number;
     readonly nodeSize: number;
@@ -11660,7 +9618,6 @@ function DocumentToolbar({
     useState<DocumentTablePropertiesTarget | null>(null);
   const [tablePropertiesInitialTab, setTablePropertiesInitialTab] =
     useState<TablePropertiesTab>("table");
-  const tableSortReturnFocusRef = useRef<HTMLElement | null>(null);
   const [tableSortTarget, setTableSortTarget] = useState<{
     readonly pos: number;
     readonly nodeSize: number;
@@ -11684,15 +9641,15 @@ function DocumentToolbar({
     readonly sourceText: string;
   } | null>(null);
   const [pageNumberIncludeCount, setPageNumberIncludeCount] = useState(false);
-  const headerFooterPageNumberTriggerRef = useRef<HTMLButtonElement>(null);
   // Word Web keeps the seven document tabs stable and appends object-owned
   // contextual tabs only while one live selection owns them. A direct image
   // NodeSelection takes activation priority over a containing table, while the
   // table tabs remain visible. Remember the last base tab separately so a
   // contextual tab can never become hidden or sticky after selection leaves.
-  const [ribbonTabState, setRibbonTabState] = useState<RibbonTabId>(
+  const [ribbonTabStateUnchecked, setRibbonTabState] = useState<RibbonTabId>(
     () => initialRibbonTab ?? "home",
   );
+  const ribbonTabState = (["home","insert"] as readonly unknown[]).includes(ribbonTabStateUnchecked) ? ribbonTabStateUnchecked : "home";
   // Draw tab ink: which tool is armed, which pen it inks with, and the strokes
   // a lasso holds (by document position; any edit re-numbers them, so an edit
   // drops the selection).
@@ -11743,10 +9700,6 @@ function DocumentToolbar({
   // the pen pauses. One conversion mode is on at a time.
   const [inkConversionMode, setInkConversionMode] = useState<OfficeInkConversionMode | null>(null);
   const inkToShape = inkConversionMode === "shape";
-  // Draw with Touch where a finger can draw, Draw with Trackpad where it
-  // cannot (lib/draw-with-touch): one of the two, never both.
-  const deviceHasTouchScreen = useDeviceHasTouch();
-  const inkDrawTools = useInkDrawTools(inkMode === "draw");
   const inkToShapeRef = useRef(false);
   inkToShapeRef.current = inkToShape;
   const selectedInkPositions = useCallback((): number[] => {
@@ -11950,12 +9903,7 @@ function DocumentToolbar({
     }),
     [inkStrokeLanded],
   );
-  const inkStrokesRoot = useCallback(
-    () => (editor.isDestroyed ? null : (editor.view.dom as HTMLElement)),
-    [editor],
-  );
   const [inkMoreColorsPenId, setInkMoreColorsPenId] = useState<string | null>(null);
-  const inkPenRefs = useRef(new Map<string, HTMLButtonElement | null>());
   // The pen palette's pens: More Colors opens from there while the ribbon is folded.
   const palettePenRefs = useRef(new Map<string, HTMLButtonElement | null>());
   // Each pen's colour and thickness are the user's (Word: the pen's drop
@@ -11973,7 +9921,6 @@ function DocumentToolbar({
   const lastBaseRibbonTabRef = useRef<BaseRibbonTabId>(
     initialRibbonTab ?? "home",
   );
-  const headerFooterContextVisible = headerFooterContext !== null;
   const headerFooterContextIdentity = headerFooterContext
     ? `${headerFooterContext.sheetIndex}:${headerFooterContext.sectionIndex}:${headerFooterContext.kind}:${headerFooterContext.variant}`
     : null;
@@ -11994,15 +9941,6 @@ function DocumentToolbar({
       runtime.off?.("transaction", refresh);
     };
   }, [editor, headerFooterContext]);
-  const headerFooterNativeState = useMemo(
-    // Section settings (Different First Page, odd/even, linked to previous,
-    // header distance, a band's text) belong to the document's sections: the
-    // header story editor the ribbon otherwise acts on has one page and no
-    // section breaks, so a section command run on it was refused (its index
-    // out of range, or the mirrored bands not matching its one section).
-    () => readHeaderFooterNativeContextState(documentEditor, headerFooterContext),
-    [documentEditor, headerFooterContext, headerFooterContextRevision],
-  );
   // Word keeps the caret in the header after a Header & Footer option is
   // clicked (Different First Page, Link to Previous, ...): typing and Esc go
   // on to the header. A checkbox otherwise keeps the focus it took, so the
@@ -12010,76 +9948,6 @@ function DocumentToolbar({
   // variant), so the open story is looked up once the change has rendered.
   const headerFooterStoryRef = useRef<Editor | null>(null);
   headerFooterStoryRef.current = headerFooterContext?.storyEditor ?? null;
-  const returnFocusToHeaderFooterStory = useCallback(() => {
-    let frames = 0;
-    const focus = () => {
-      const story = headerFooterStoryRef.current;
-      if (story && !story.isDestroyed) {
-        story.commands.focus();
-        return;
-      }
-      if (frames++ < 6) requestAnimationFrame(focus);
-    };
-    requestAnimationFrame(() => requestAnimationFrame(focus));
-  }, []);
-  const setContextDifferentFirstPage = useCallback(
-    (enabled: boolean) => {
-      if (!headerFooterContext) return;
-      if (
-        documentEditor.commands.setSectionDifferentFirstPage(
-          headerFooterContext.sectionIndex,
-          enabled,
-        ) &&
-        !enabled &&
-        headerFooterContext.variant === "first"
-      ) {
-        onNavigateHeaderFooter?.("normal");
-      }
-    },
-    [documentEditor, headerFooterContext, onNavigateHeaderFooter],
-  );
-  const setContextDifferentOddEven = useCallback(
-    (enabled: boolean) => {
-      if (
-        documentEditor.commands.setDifferentOddEven(enabled) &&
-        !enabled &&
-        headerFooterContext?.variant === "even"
-      ) {
-        onNavigateHeaderFooter?.("normal");
-      }
-    },
-    [documentEditor, headerFooterContext?.variant, onNavigateHeaderFooter],
-  );
-  const setContextLinkedToPrevious = useCallback(
-    (linked: boolean) => {
-      if (!headerFooterContext) return;
-      const variant: SectionStoryVariant =
-        headerFooterContext.variant === "normal"
-          ? "default"
-          : headerFooterContext.variant;
-      documentEditor.commands.setSectionStoryLinkedToPrevious(
-        headerFooterContext.sectionIndex,
-        headerFooterContext.kind,
-        variant,
-        linked,
-      );
-    },
-    [documentEditor, headerFooterContext],
-  );
-  const setContextBandDistance = useCallback(
-    (raw: string) => {
-      if (!headerFooterContext) return;
-      // In the field's unit, or one typed with the value ("1.5 cm", "36 pt").
-      const twips = parseDocumentLengthTwips(raw, docsLengthUnit);
-      if (twips === null || twips > 22 * 1_440) return;
-      documentEditor.commands.setSectionHeaderFooterDistance(
-        headerFooterContext.sectionIndex,
-        headerFooterContext.kind,
-        twips,
-      );
-    },
-    [docsLengthUnit, documentEditor, headerFooterContext],
-  );
   // Remove Header / Remove Footer. A document still painting one header for
   // every page empties that one story: written per section it became a
   // page-scoped band, after which the OTHER band (the footer kept when the
@@ -12109,39 +9977,9 @@ function DocumentToolbar({
     },
     [documentEditor],
   );
-  const deleteContextBand = useCallback(
-    (kind: "header" | "footer") => {
-      if (!headerFooterContext || !canWriteEditor()) return;
-      removeBandStories(kind, headerFooterContext.sectionIndex, [headerFooterContext.variant]);
-    },
-    [canWriteEditor, headerFooterContext, removeBandStories],
-  );
   // Insert > Header > a built-in design: Word opens the header and fills it
   // with the design. The story editor exists once the pane has opened.
   const pendingBandGalleryRef = useRef<{ kind: "header" | "footer"; columns: 1 | 3 } | null>(null);
-  const contextBandDeleteDisabledReason = (kind: "header" | "footer") => {
-    if (!editor.isEditable) return readOnlyReason;
-    if (
-      !headerFooterContext ||
-      !editor
-        .can()
-        .setSectionBand(
-          headerFooterContext.sectionIndex,
-          kind,
-          headerFooterContext.variant,
-          "",
-        )
-    ) {
-      return kind === "header"
-        ? t("toolbar.headerCannotBeRemovedSafely")
-        : t("toolbar.footerCannotBeRemovedSafely");
-    }
-    return null;
-  };
-  const deleteContextHeaderDisabledReason =
-    contextBandDeleteDisabledReason("header");
-  const deleteContextFooterDisabledReason =
-    contextBandDeleteDisabledReason("footer");
   const pageNumberStoryTarget = useCallback(() => {
     const sectionIndex =
       headerFooterContext?.sectionIndex ??
@@ -12153,74 +9991,6 @@ function DocumentToolbar({
         : "default";
     return { sectionIndex, variant };
   }, [editor, headerFooterContext]);
-  // Word's Page Number > Current Position: the field goes in at the caret of
-  // the open header or footer (the on-page Insert Page Number / Page Count
-  // chips moved here with Word's header pane).
-  const insertHeaderFooterField = useCallback(
-    (field: "PAGE" | "NUMPAGES") => {
-      const story = headerFooterContext?.storyEditor;
-      if (!story || story.isDestroyed || !story.isEditable) return;
-      (story.chain().focus() as unknown as {
-        insertDocumentField: (type: string) => { run: () => boolean };
-      })
-        .insertDocumentField(field)
-        .run();
-    },
-    [headerFooterContext],
-  );
-  /** Word's Field dialog in the open header/footer: SECTIONPAGES, STYLEREF
-   * of a heading level, DOCPROPERTY of a document property, as fields of
-   * Word's own part. The result shown until Word updates it is what the
-   * document knows now. */
-  const insertHeaderFooterNewField = useCallback(
-    (field: { type: "SECTIONPAGES" | "STYLEREF" | "DOCPROPERTY"; arg?: string }) => {
-      const story = headerFooterContext?.storyEditor;
-      if (!story) return;
-      let result = "";
-      if (field.type === "SECTIONPAGES") result = "1";
-      else if (field.type === "DOCPROPERTY") {
-        const metadata = snapshot.documentMetadata as unknown as Record<string, unknown>;
-        const key = (field.arg ?? "").toLowerCase();
-        result = typeof metadata[key] === "string" ? (metadata[key] as string) : "";
-      } else {
-        // STYLEREF n: the first paragraph of that heading level, as Word
-        // finds it searching from the top of the document for a header.
-        const level = Number(field.arg);
-        documentEditor.state.doc.descendants((node) => {
-          if (result) return false;
-          if (node.type.name === "heading" && node.attrs.level === level) {
-            result = node.textContent.slice(0, 255);
-            return false;
-          }
-          return true;
-        });
-      }
-      insertBandNewField(story, field, result);
-    },
-    [documentEditor, headerFooterContext, snapshot.documentMetadata],
-  );
-  /** Insert > Pictures with a header/footer open: the picture goes into the
-   * open story, at the end of the caret's line. */
-  const openHeaderFooterPicturePicker = useCallback(() => {
-    const story = headerFooterContext?.storyEditor;
-    if (!story || typeof document === "undefined") return;
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/png,image/jpeg,image/gif";
-    input.addEventListener("change", () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      void insertBandStoryPicture(story, file).then(
-        (inserted) => {
-          if (!inserted) {
-            toast({ title: t("toolbar.pictureReplaceUnreadable"), variant: "destructive" });
-          }
-        },
-        () => toast({ title: t("toolbar.pictureReplaceUnreadable"), variant: "destructive" }),
-      );
-    });
-    input.click();
-  }, [headerFooterContext, t]);
   /**
    * What the Page Numbers dialog and Remove Page Numbers act on: the section
    * at the caret (or the open header/footer), its Different First Page and
@@ -12322,7 +10092,6 @@ function DocumentToolbar({
     const { sectionIndex, context } = pageNumberDialogTarget();
     return runRemovePageNumbers(documentEditor, sectionIndex, context);
   }, [canWriteEditor, documentEditor, pageNumberDialogTarget]);
-  const tableContextVisible = snapshot.tableContext;
   const initialPictureContextTarget = liveImageAltTarget(editor);
   const pictureContextTargetRef = useRef<{
     readonly editor: Editor;
@@ -12349,7 +10118,6 @@ function DocumentToolbar({
   const [pictureCropModeActive, setPictureCropModeActive] = useChangedState(() =>
     isDocumentImageCropActive(editor.state),
   );
-  const pictureContextVisible = pictureContextSelectionIdentity !== null;
   const previousPictureContextSelectionIdentityRef =
     useRef<ProseMirrorNode | null>(null);
   const initialEquationContextTarget = liveEquationContextTarget(editor);
@@ -12375,9 +10143,6 @@ function DocumentToolbar({
     useChangedState<DocumentEquationSelection | null>(
       initialEquationContextTarget?.selection ?? null,
     );
-  const equationContextVisible =
-    equationContextSelectionIdentity !== null &&
-    equationContextSelection !== null;
   const previousEquationContextSelectionIdentityRef =
     useRef<ProseMirrorNode | null>(null);
   // A selected shape, or a selected Word text box frame: both own Shape Format.
@@ -12401,7 +10166,6 @@ function DocumentToolbar({
   // while mapping the same immutable atom does not steal a chosen base tab.
   const [shapeContextSelectionIdentity, setShapeContextSelectionIdentity] =
     useChangedState<ProseMirrorNode | null>(initialShapeContextTarget?.node ?? null);
-  const shapeContextVisible = shapeContextSelectionIdentity !== null;
   const previousShapeContextSelectionIdentityRef =
     useRef<ProseMirrorNode | null>(null);
   const initialSmartArtContextTarget = liveDocumentSmartArtTarget(editor);
@@ -12481,9 +10245,6 @@ function DocumentToolbar({
       prepareDocumentSmartArt(editor, smartArtFileNode, pageId);
     }
   }, [editor, pageId, smartArtFileNode, smartArtMayConvertOnEdit]);
-  const smartArtContextVisible =
-    smartArtContextSelectionIdentity !== null ||
-    shapeSmartArtContextTarget !== null;
   const previousSmartArtContextSelectionIdentityRef =
     useRef<ProseMirrorNode | null>(null);
   const initialChartContextTarget = liveDocumentChartTarget(editor);
@@ -12515,10 +10276,6 @@ function DocumentToolbar({
     useChangedState<LiveDocumentChartTarget | null>(initialChartContextTarget);
   const [chartContextSelectionIdentity, setChartContextSelectionIdentity] =
     useChangedState<ProseMirrorNode | null>(initialChartContextTarget?.node ?? null);
-  
-  // contextual workflow. This does not enable the other desktop-only ribbons
-  // or alter the independently owned Spreadsheet/Presentation contracts.
-  const chartContextVisible = chartContextSelectionIdentity !== null;
   const previousChartContextSelectionIdentityRef =
     useRef<ProseMirrorNode | null>(null);
   // Fast Refresh can preserve a tab id from an older client bundle. Normalize
@@ -12527,22 +10284,22 @@ function DocumentToolbar({
   // A handwriting document has one tab, Draw, whatever is selected.
   const ribbonTab: RibbonTabId = handwriting ? "draw" : normalizeWebRibbonTab(
     ribbonTabState,
-    tableContextVisible,
-    pictureContextVisible,
-    equationContextVisible,
-    shapeContextVisible,
-    smartArtContextVisible,
-    chartContextVisible,
-    headerFooterContextVisible,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
     lastBaseRibbonTabRef.current,
   );
   const setRibbonTab = useCallback(
     (next: RibbonTabId) => {
-      if (next !== "shape") {
+      {
         setShapeFillPaletteOpen(false);
         setShapeOutlinePaletteOpen(false);
       }
-      if (next !== "tableDesign") {
+      {
         setTableShadingPaletteTarget(null);
         setLocalTableShadingPaletteOpen(false);
       }
@@ -12551,42 +10308,15 @@ function DocumentToolbar({
         setRibbonTabState(next);
         return;
       }
-      if (pictureContextVisible && isPictureContextRibbonTab(next)) {
-        setRibbonTabState(next);
-        return;
-      }
-      if (equationContextVisible && isEquationContextRibbonTab(next)) {
-        setRibbonTabState(next);
-        return;
-      }
-      if (shapeContextVisible && isShapeContextRibbonTab(next)) {
-        setRibbonTabState(next);
-        return;
-      }
-      if (smartArtContextVisible && isSmartArtContextRibbonTab(next)) {
-        setRibbonTabState(next);
-        return;
-      }
-      if (chartContextVisible && isChartContextRibbonTab(next)) {
-        setRibbonTabState(next);
-        return;
-      }
-      if (headerFooterContextVisible && isHeaderFooterContextRibbonTab(next)) {
-        setRibbonTabState(next);
-        return;
-      }
-      if (tableContextVisible && isTableContextRibbonTab(next)) {
-        setRibbonTabState(next);
-      }
     },
     [
-      equationContextVisible,
-      chartContextVisible,
-      headerFooterContextVisible,
-      pictureContextVisible,
-      shapeContextVisible,
-      smartArtContextVisible,
-      tableContextVisible,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
     ],
   );
   // Draw tab ink (Word: Draw, an Eraser of three kinds, a gallery of pens
@@ -12609,24 +10339,8 @@ function DocumentToolbar({
     return changed ? pens : inkPens.pens;
   }, [handwritingPaperColor, inkPens.pens]);
   const inkPreset = documentInkPresetById(inkPresetId, { ...inkPens, pens: shownInkPens });
-  // The pen itself, for the page surface: it writes as the page it starts on
-  // asks (`penOnPage`), so a dark cover over light paper (or a light cover
-  // over dark paper) gets its own ink, not the ribbon's.
-  const rawInkPreset = documentInkPresetById(inkPresetId, inkPens);
   const handwritingSettingRef = useRef(handwritingSetting);
   handwritingSettingRef.current = handwritingSetting;
-  const penOnHandwritingPage = useCallback(
-    (pen: DocumentInkPreset, at: { x: number; y: number }) => {
-      const setting = handwritingSettingRef.current;
-      if (!setting || editor.isDestroyed) return { pen, dark: false };
-      const index = handwritingSheetIndexAt(editor.view, at);
-      const dark = index !== null && handwritingPageIsDark(setting, index);
-      if (!dark || pen.effect) return { pen, dark };
-      const color = handwritingInkColorOnDark(pen.color);
-      return { pen: color === pen.color ? pen : { ...pen, color }, dark };
-    },
-    [editor],
-  );
   // The toolbar re-renders when the formatting it shows changes, which a
   // stroke drawn or rubbed out does not: counted during render, the Eraser
   // stayed greyed out after the ink was all erased and a new stroke drawn.
@@ -12637,13 +10351,12 @@ function DocumentToolbar({
   
   // or the last one goes, and the scan stops at the first stroke it finds.
   const [hasInk, setHasInk] = useState(false);
-  const inkStrokeCount = hasInk ? 1 : 0;
   // What the Eraser and the Lasso can take: the ink, and in a handwriting
   // document the objects over its paper too (a picture, converted text's
   // box), which they take whole (documentHasInkErasable).
   const [hasInkErasable, setHasInkErasable] = useState(false);
   useEffect(() => {
-    if (ribbonTab !== "draw") return;
+    return;
     const runtime: Partial<Pick<Editor, "on" | "off">> = editor;
     let counted: unknown = null;
     const recount = () => {
@@ -12685,7 +10398,7 @@ function DocumentToolbar({
     else setInkMode(null);
   }, []);
   useEffect(() => {
-    if (ribbonTab !== "draw" || inkMode !== null) setInkReplay(null);
+    setInkReplay(null);
   }, [inkMode, ribbonTab]);
   const armInkMode = useCallback((mode: DocumentInkMode) => setInkMode(mode), []);
   // While a pen, an eraser or the lasso is armed the document holds no DOM
@@ -12694,7 +10407,7 @@ function DocumentToolbar({
   // back, and iPad WebKit scrolled that caret into view -- writing at a page
   // seam with the caret on a later (blank) page threw the view to the
   
-  const inkArmedForFocus = ribbonTab === "draw" && inkMode !== null && !editor.isDestroyed;
+  const inkArmedForFocus = false;
   useEffect(() => {
     if (!inkArmedForFocus || editor.isDestroyed) return;
     const dom = editor.view.dom as HTMLElement;
@@ -12729,23 +10442,6 @@ function DocumentToolbar({
     setInkTapeArmed(true);
     setInkMode("draw");
   }, []);
-  // Draw ▸ Stickers: the sticker lands over the page in view as a floating
-  // picture, selected, and the pen goes down so it can be dragged and sized.
-  const insertSticker = useCallback(
-    (id: DocumentStickerId, name: string) => {
-      if (editor.isDestroyed || !editor.isEditable) return;
-      setInkMode(null);
-      void insertPicturesOverPageInView(editor, [documentStickerFile(id)], {
-        widthPx: DOCUMENT_STICKER_PAGE_PX,
-        altText: name,
-      });
-    },
-    [editor],
-  );
-  const inkTapePreset = useMemo(
-    () => (inkTapeArmed ? documentInkTapePreset(inkTape.effect, inkTape.widthPt) : null),
-    [inkTape, inkTapeArmed],
-  );
   const chooseInkEraser = useCallback((kind: DocumentInkEraser) => {
     setInkEraser(kind);
     setInkMode("eraser");
@@ -12771,15 +10467,6 @@ function DocumentToolbar({
     },
     [chooseInkPreset, inkPens, persistInkPens],
   );
-  // Add Pen appends a pen of the tool at Word's defaults and picks it.
-  const addInkPen = useCallback(
-    (tool: DocumentInkTool) => {
-      const { profile, id } = withDocumentInkPenAdded(inkPens, tool);
-      persistInkPens(profile);
-      chooseInkPreset(documentInkPresetById(id, profile));
-    },
-    [chooseInkPreset, inkPens, persistInkPens],
-  );
   // Delete removes the pen from the gallery (the last one stays).
   const removeInkPen = useCallback(
     (id: string) => {
@@ -12793,7 +10480,7 @@ function DocumentToolbar({
   // Leaving the Draw tab, or losing the right to write, disarms the tool,
   // closes the pad and the palette; an eraser with no ink disarms itself.
   useEffect(() => {
-    if (ribbonTab !== "draw" || !inkArmable) {
+    {
       exitInkMode();
       setInkTrackpad(false);
       setInkMoreColorsPenId(null);
@@ -12803,7 +10490,7 @@ function DocumentToolbar({
     if (inkMode === "eraser" && !hasInkErasable) exitInkMode();
   }, [exitInkMode, inkMode, hasInkErasable]);
   useEffect(() => {
-    if (ribbonTab !== "draw") return;
+    return;
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== "Escape" || inkMode === null || event.defaultPrevented) return;
       // Esc in a pen's menu, the eraser's or a dialog closes that alone (as
@@ -12843,11 +10530,9 @@ function DocumentToolbar({
     handwritingPenPickedRef.current = true;
     setInkMode((current) => current ?? "draw");
   }, [handwriting, inkDisabledReason]);
-  const inkExistingDisabledReason =
-    inkDisabledReason ?? (!hasInkErasable ? t("toolbar.drawNoInk") : undefined);
   // Pen-first drawing (lib/pen-first-draw): with a pen on a touch device the
   // Draw tab folds the ribbon away and the floating palette stands in for it.
-  const penFirst = usePenFirstDraw(ribbonTab === "draw" && !inkDisabledReason, ribbonTab === "draw", () => [
+  const penFirst = usePenFirstDraw(false, false, () => [
     documentEditor.isDestroyed
       ? null
       : (documentEditor.view.dom.closest('[data-testid="note-editor-page-surface"]') ?? documentEditor.view.dom),
@@ -12866,7 +10551,7 @@ function DocumentToolbar({
   // ending in the Select tool parted them under the strokes it had just
   
   
-  const inkPagesJoined = ribbonTab === "draw" && !inkWebLayout;
+  const inkPagesJoined = false;
   useLayoutEffect(() => {
     const wrapper = toolbarStack?.closest<HTMLElement>(".note-editor-wrapper");
     if (!wrapper) return;
@@ -12922,99 +10607,46 @@ function DocumentToolbar({
     [editor],
   );
   useEffect(() => {
-    const previousPictureContextSelectionIdentity =
-      previousPictureContextSelectionIdentityRef.current;
-    const pictureContextEntered =
-      pictureContextSelectionIdentity !== null &&
-      pictureContextSelectionIdentity !== previousPictureContextSelectionIdentity;
     previousPictureContextSelectionIdentityRef.current =
       pictureContextSelectionIdentity;
-    const previousEquationContextSelectionIdentity =
-      previousEquationContextSelectionIdentityRef.current;
-    const equationContextEntered =
-      equationContextSelectionIdentity !== null &&
-      equationContextSelectionIdentity !==
-        previousEquationContextSelectionIdentity;
     previousEquationContextSelectionIdentityRef.current =
       equationContextSelectionIdentity;
-    const previousShapeContextSelectionIdentity =
-      previousShapeContextSelectionIdentityRef.current;
-    const shapeContextEntered =
-      shapeContextSelectionIdentity !== null &&
-      shapeContextSelectionIdentity !== previousShapeContextSelectionIdentity &&
-      !shapeContextArrivedQuietlyRef.current;
     shapeContextArrivedQuietlyRef.current = false;
     previousShapeContextSelectionIdentityRef.current =
       shapeContextSelectionIdentity;
-    const previousChartContextSelectionIdentity =
-      previousChartContextSelectionIdentityRef.current;
-    const chartContextEntered =
-      chartContextVisible &&
-      chartContextSelectionIdentity !== null &&
-      chartContextSelectionIdentity !== previousChartContextSelectionIdentity;
     previousChartContextSelectionIdentityRef.current =
       chartContextSelectionIdentity;
-    const previousSmartArtContextSelectionIdentity =
-      previousSmartArtContextSelectionIdentityRef.current;
-    const smartArtContextEntered =
-      smartArtContextSelectionIdentity !== null &&
-      smartArtContextSelectionIdentity !==
-        previousSmartArtContextSelectionIdentity;
     previousSmartArtContextSelectionIdentityRef.current =
       smartArtContextSelectionIdentity;
-    const headerFooterContextEntered =
-      headerFooterContextIdentity !== null &&
-      headerFooterContextIdentity !==
-        previousHeaderFooterContextIdentityRef.current;
     previousHeaderFooterContextIdentityRef.current =
       headerFooterContextIdentity;
     setRibbonTabState((current) => {
-      // A selection can leave a table and enter another object in one editor
-      // transaction while a contextual surface remains visible. Resolve atom
-      // identity entry before normalization so a stale table/base tab cannot
-      // win a Picture or Equation transition.
-      if (headerFooterContextEntered) return "headerFooter";
-      if (equationContextEntered) return "equation";
-      if (pictureContextEntered) return "picture";
-      // A stroke picked on the Draw tab (to convert it, erase it, move it)
-      // keeps the Draw tab: Shape Format is there beside it, as in Word.
-      if (
-        shapeContextEntered &&
-        current === "draw" &&
-        shapeContextSelectionIdentity &&
-        isDocumentInkShapeAttrs(shapeContextSelectionIdentity.attrs)
-      ) {
-        return "draw";
-      }
-      if (shapeContextEntered) return "shape";
-      if (smartArtContextEntered) return "smartArt";
-      if (chartContextEntered) return "chartDesign";
       return normalizeWebRibbonTab(
         current,
-        tableContextVisible,
-        pictureContextVisible,
-        equationContextVisible,
-        shapeContextVisible,
-        smartArtContextVisible,
-        chartContextVisible,
-        headerFooterContextVisible,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
         lastBaseRibbonTabRef.current,
       );
     });
   }, [
     chartContextSelectionIdentity,
-    chartContextVisible,
+    false,
     equationContextSelectionIdentity,
-    equationContextVisible,
+    false,
     headerFooterContextIdentity,
-    headerFooterContextVisible,
+    false,
     pictureContextSelectionIdentity,
-    pictureContextVisible,
+    false,
     shapeContextSelectionIdentity,
-    shapeContextVisible,
+    false,
     smartArtContextSelectionIdentity,
-    smartArtContextVisible,
-    tableContextVisible,
+    false,
+    false,
   ]);
   // Document-level watermark text editor (a single stamp line). Open shows an
   // inline text input + presets; applying normalizes the value into the doc attr.
@@ -13024,11 +10656,6 @@ function DocumentToolbar({
     readonly pageId: string | undefined;
     readonly sourceJson: string;
   } | null>(null);
-  // Document properties (Word's "<name> Properties" dialog): the stored bag it
-  // opens with, null while closed. The dialog drafts; OK writes the bag to the
-  // doc node attr (normalized at the command edge, so even a bypassed UI
-  // cannot persist a malformed/over-long field).
-  const [hyphenationOptionsOpen, setHyphenationOptionsOpen] = useState(false);
   const [metadataDialogSeed, setMetadataDialogSeed] =
     useState<DocumentMetadata | null>(null);
   const metadataDraftAuthorityRef = useRef<{
@@ -13523,67 +11150,6 @@ function DocumentToolbar({
     return selection ? commandChain.setTextSelection(selection) : commandChain;
   }, [bodyContentLocked, currentOrRememberedSelection, editor, noteBodyIsEditing]);
 
-  // Layout > Indent Left/Right in the field's unit: characters (with their
-  // count recorded for w:leftChars / w:rightChars) or a length.
-  const layoutIndentShown = (side: "left" | "right", points: number | null) => {
-    if (layoutIndentField.unit === "char") {
-      const stated = indentCharacterCount(blockAttributes(editor), side);
-      if (stated !== null) return String(stated);
-      return (
-        formatIndentValue(points, "char", paragraphCharacterUnitsPt(editor).document) ||
-        "0"
-      );
-    }
-    if (layoutIndentField.unit === "in") return layoutIndentInchesFromPoints(points);
-    return formatIndentValue(points, "cm") || "0";
-  };
-  const commitLayoutIndent = (side: "left" | "right", raw: string) => {
-    if (editor.isDestroyed || !editor.isEditable) return;
-    const trimmed = raw.trim();
-    // A value typed with its own unit ("1 cm", `0.5"`, "2 字符") is that
-    // length, in the field's unit from here on.
-    const entry = trimmed === "" ? null : parseIndentEntry(trimmed, layoutIndentField.unit);
-    if (trimmed !== "" && entry === null) return;
-    let value = entry?.value ?? 0;
-    if (entry && entry.unit !== layoutIndentField.unit) {
-      if (layoutIndentField.unit === "char" || entry.unit === "char") return;
-      // A zero indent normalizes to null (none).
-      const points = parseIndentInput(trimmed, layoutIndentField.unit) ?? 0;
-      value =
-        layoutIndentField.unit === "in"
-          ? points / 72
-          : (points / 72) * 2.54;
-    }
-    if (!Number.isFinite(value) || value < 0) return;
-    const bounded = Math.min(value, layoutIndentField.max);
-    let points: number | null;
-    let receipts: IndentCharacterUnits | null = normalizeIndentCharacterUnits(
-      blockAttributes(editor).indentCharacterUnits,
-    );
-    if (layoutIndentField.unit === "char") {
-      const charPt = paragraphCharacterUnitsPt(editor).document;
-      points = normalizeIndentPt(Math.round(bounded * charPt * 100) / 100);
-      const next: { -readonly [K in keyof IndentCharacterUnits]: IndentCharacterUnits[K] } = {
-        ...(receipts ?? {}),
-      };
-      if (points === null) delete next[side];
-      else next[side] = { chars: Math.round(bounded * 100) / 100, pt: points };
-      receipts = normalizeIndentCharacterUnits(next);
-    } else {
-      points =
-        layoutIndentField.unit === "in"
-          ? (layoutIndentPointsFromInches(String(bounded)) ?? null)
-          : parseIndentInput(String(bounded), "cm");
-    }
-    const commandChain = restoredChain() as OfficeChain;
-    (side === "left"
-      ? commandChain.setIndentLeftPt(points)
-      : commandChain.setIndentRightPt(points)
-    )
-      .setIndentCharacterUnits(receipts)
-      .run();
-  };
-
   // An equation being edited keeps its own history (MathLive's) until the
   // edit is committed to the document. The toolbar's Undo read only the
   // document's history, so it said "nothing to undo" beside an equation whose
@@ -13610,9 +11176,6 @@ function DocumentToolbar({
   // is followed here; the story's is the snapshot's.
   const historyFallbackEditor = editor === documentEditor ? null : documentEditor;
   const [fallbackHistory, setFallbackHistory] = useState({ canUndo: false, canRedo: false });
-  // A pen stroke still wet on the Draw surface (DocumentInkSurface lands it
-  // when the hand pauses) is already something to undo, as in Word.
-  const [inkWetPending, setInkWetPending] = useState(false);
   // The strokes in hand go out to the room as they are written; they land in
   // the document in batches (lib/collab/ink-presence).
   // Made and disposed by one effect: a publisher memoised beside a disposing
@@ -13627,11 +11190,6 @@ function DocumentToolbar({
       publisher.dispose();
     };
   }, [liveInkAwareness]);
-  const publishLiveInk = useCallback(
-    (strokes: readonly InkPresenceStroke[]) =>
-      liveInkPublisherRef.current?.update(DOCUMENT_INK_PRESENCE_SURFACE, strokes),
-    [],
-  );
   const refreshFallbackHistory = useCallback(() => {
     const live = historyFallbackEditor && !historyFallbackEditor.isDestroyed ? historyFallbackEditor : null;
     const canUndo = live ? can(live, "undo") : false;
@@ -13826,7 +11384,7 @@ function DocumentToolbar({
   // (lib/ink-finger-taps).
   useInkFingerTaps(
     toolbarStack?.closest<HTMLElement>(".note-editor-wrapper") ?? null,
-    ribbonTab === "draw" && inkMode !== null,
+    false,
     runToolbarHistoryCommand,
     { undo: t("toolbar.undo"), redo: t("toolbar.redo") },
   );
@@ -14348,58 +11906,6 @@ function DocumentToolbar({
         : (editor.can().chain() as unknown as OfficeChain),
     [canWriteEditor, editor],
   );
-  const tableInsertMenuLabel = t("toolbar.insertMenu");
-  const pictureTabLabel = t("toolbar.pictureTabLabel");
-  const equationTabLabel = t("toolbar.equationTabLabel");
-  const shapeTabLabel = t("toolbar.shapeTabLabel");
-  const smartArtTabLabel = "SmartArt";
-  const chartDesignTabLabel = t("presentation.home.ribbonChartDesign");
-  const chartFormatTabLabel = t("toolbar.chartFormatTabLabel");
-  const headerFooterTabLabel = t("toolbar.headerFooterTabLabel");
-  const headerFooterDistanceTwips =
-    headerFooterContext?.kind === "footer"
-      ? headerFooterNativeState.footerDistanceTwips
-      : headerFooterNativeState.headerDistanceTwips;
-  const headerFooterDistanceValue =
-    headerFooterDistanceTwips === null
-      ? ""
-      : String(
-          Math.round(
-            ((headerFooterDistanceTwips / 1_440) *
-              (docsLengthUnit === "cm" ? 2.54 : 1)) *
-              100,
-          ) / 100,
-        );
-  const headerFooterAiAvailable = Boolean(
-    windowManager && notebookId && pageId,
-  );
-  const tableDesignTabLabel = t("toolbar.tableDesignTabLabel");
-  const tableLayoutTabLabel = t("toolbar.tableLayoutTabLabel");
-  const tableRowsColumnsGroupLabel = t("toolbar.tableRowsColumnsGroupLabel");
-  const tableCellSizeGroupLabel = t("toolbar.tableCellSizeGroupLabel");
-  const tableAlignmentGroupLabel = t("toolbar.tableAlignmentGroupLabel");
-  const tableDataGroupLabel = t("toolbar.tableDataGroupLabel");
-  const tableGroupLabel = t("toolbar.tableGroupLabel");
-  const tableAdvancedLabel = t("toolbar.tableAdvancedLabel");
-  const tableColorLabel = t("toolbar.tableColorLabel");
-  const tableColorNativeUnavailableReason = t(
-    "toolbar.tableColorNativeUnavailableReason",
-  );
-  const tableAltTextVisibleLabel = t("toolbar.tableAltTextVisibleLabel");
-  const tableAltTextAccessibleLabel = t("toolbar.tableAltTextAccessibleLabel");
-  const tableDeleteMenuLabel = t("toolbar.tableDeleteMenuLabel");
-  const tableMergeMenuLabel = t("toolbar.tableMergeMenuLabel");
-  const tableAutoFitMenuLabel = t("toolbar.autoFit");
-  const tableAutoFitFixedLabel = t("toolbar.autoFitFixed");
-  const tableRowHeightLabel = t("toolbar.tableRowHeightLabel");
-  const tableMeasurementUnit = docsLengthUnitLabel;
-  const tableRowHeightUnavailableReason = t(
-    "toolbar.tableRowHeightUnavailableReason",
-  );
-  const tableColumnWidthLabel = t("toolbar.tableColumnWidthLabel");
-  const tableColumnWidthUnavailableReason = t(
-    "toolbar.tableColumnWidthUnavailableReason",
-  );
   const tableStructureDisabledReason = !editor.isEditable
     ? t("toolbar.readOnlyReason")
     : null;
@@ -14411,24 +11917,6 @@ function DocumentToolbar({
   const tableLayoutUnavailableReason = t(
     "toolbar.tableLayoutUnavailableReason",
   );
-  const autoFitContentsDisabledReason =
-    tableStructureDisabledReason ??
-    (!can(editor, "autoFitTableContents") &&
-    snapshot.tableAutoFitMode !== "contents"
-      ? tableLayoutUnavailableReason
-      : null);
-  const autoFitWindowDisabledReason =
-    tableStructureDisabledReason ??
-    (!can(editor, "autoFitTableWindow") &&
-    snapshot.tableAutoFitMode !== "window"
-      ? tableLayoutUnavailableReason
-      : null);
-  const fixedColumnWidthDisabledReason =
-    tableStructureDisabledReason ??
-    (!can(editor, "fixTableColumnWidths") &&
-    snapshot.tableAutoFitMode !== "fixed"
-      ? tableLayoutUnavailableReason
-      : null);
   const distributeRowsDisabledReason =
     tableStructureDisabledReason ??
     (snapshot.tableGridRows < 2
@@ -14450,8 +11938,6 @@ function DocumentToolbar({
         ? t("toolbar.mergeCellsFormulaContent")
         : t("toolbar.selectTwoOrMoreAdjacentCells")
       : null);
-  const splitMergedCellLabel = t("toolbar.splitMergedCellLabel");
-  const splitCellsNumericLabel = t("toolbar.splitCellsNumericLabel");
   const splitCellsNumericTarget = readDocumentTableSplitCellsTarget(editor);
   const splitCellsNumericDisabledReason =
     tableRowColumnDisabledReason ??
@@ -14461,17 +11947,6 @@ function DocumentToolbar({
   const splitCellDisabledReason =
     tableRowColumnDisabledReason ??
     (!snapshot.canSplitCell ? t("toolbar.selectMergedCell") : null);
-  const splitTableDisabledReason =
-    tableRowColumnDisabledReason ??
-    (!snapshot.canSplitTable
-      ? t("toolbar.currentRowCannotStartNewTable")
-      : null);
-  const splitMenuDisabledReason =
-    splitCellsNumericDisabledReason &&
-    splitCellDisabledReason &&
-    splitTableDisabledReason
-      ? tableLayoutUnavailableReason
-      : null;
   const runTableStructureCommand = useCallback(
     (command: (commandChain: OfficeChain) => OfficeChain) => {
       if (editor.isDestroyed || !editor.isEditable) return false;
@@ -14537,127 +12012,6 @@ function DocumentToolbar({
     },
     [editor, tableSplitCellsTarget],
   );
-  const openTableReplaceTextDialog = useCallback(() => {
-    const target = readDocumentTableReplaceTextTarget(editor);
-    if (!target) return;
-    tableReplaceTextReturnFocusRef.current = editor.view.dom;
-    setTableReplaceTextTarget(target);
-  }, [editor]);
-  const closeTableReplaceTextDialog = useCallback(() => {
-    setTableReplaceTextTarget(null);
-  }, []);
-  const submitTableReplaceTextDialog = useCallback(
-    (
-      query: string,
-      replacement: string,
-      options: DocumentTableReplaceTextOptions,
-    ) => {
-      if (!tableReplaceTextTarget) return "stale" as const;
-      return replaceDocumentTableText(
-        editor,
-        tableReplaceTextTarget,
-        query,
-        replacement,
-        options,
-      );
-    },
-    [editor, tableReplaceTextTarget],
-  );
-  const tableColumnWidthDisabledReason =
-    tableStructureDisabledReason ??
-    (snapshot.tableColumnWidthPx === null
-      ? tableColumnWidthUnavailableReason
-      : null);
-  const tableRowHeightDisabledReason =
-    tableStructureDisabledReason ??
-    (snapshot.tableRowHeightPx === null
-      ? tableRowHeightUnavailableReason
-      : null);
-  const formattedTableRowHeight =
-    snapshot.tableRowHeightPx === null
-      ? ""
-      : (snapshot.tableRowHeightPx / docsPxPerLengthUnit).toFixed(2);
-  const beginTableRowHeightEdit = useCallback(() => {
-    tableRowHeightTargetRef.current = readDocumentTableRowHeightTarget(editor);
-  }, [editor]);
-  const commitTableRowHeightDraft = useCallback((raw: string) => {
-    const target = tableRowHeightTargetRef.current;
-    tableRowHeightTargetRef.current = null;
-    if (!target) {
-      flushSync(() => {
-        setTableRowHeightFieldEpoch((current) => current + 1);
-      });
-      return false;
-    }
-    // The height in twips as typed (in the field's unit, or one it names:
-    // "1 cm", "28 pt"); 1 cm stays 567 twips, not its nearest pixel's 570.
-    const heightTwips = parseDocumentLengthTwips(raw, docsLengthUnit);
-    const heightPx =
-      heightTwips === null ? Number.NaN : Math.round(heightTwips / 15);
-    if (
-      heightTwips === null ||
-      heightPx < MIN_ROW_HEIGHT_PX ||
-      heightPx > MAX_ROW_HEIGHT_PX
-    ) {
-      flushSync(() => {
-        setTableRowHeightFieldEpoch((current) => current + 1);
-      });
-      return false;
-    }
-    const result = commitDocumentTableRowHeight(
-      editor,
-      target,
-      heightPx,
-      heightTwips,
-    );
-    if (result === "stale") {
-      flushSync(() => {
-        setTableRowHeightFieldEpoch((current) => current + 1);
-      });
-    }
-    return result !== "stale";
-  }, [docsLengthUnit, editor]);
-  const formattedTableColumnWidth =
-    snapshot.tableColumnWidthPx === null
-      ? ""
-      : (snapshot.tableColumnWidthPx / docsPxPerLengthUnit).toFixed(2);
-  const beginTableColumnWidthEdit = useCallback(() => {
-    tableColumnWidthTargetRef.current =
-      readDocumentTableColumnWidthTarget(editor);
-  }, [editor]);
-  const commitTableColumnWidthDraft = useCallback((raw: string) => {
-    const target = tableColumnWidthTargetRef.current;
-    tableColumnWidthTargetRef.current = null;
-    if (!target) {
-      flushSync(() => {
-        setTableColumnWidthFieldEpoch((current) => current + 1);
-      });
-      return false;
-    }
-    // Kept as typed, not rounded to a whole pixel (see setTableColumnWidth).
-    const widthPx = parseDocumentLengthPx(raw, docsLengthUnit) ?? Number.NaN;
-    if (
-      !Number.isFinite(widthPx) ||
-      Math.round(widthPx) < MIN_TABLE_COLUMN_WIDTH ||
-      Math.round(widthPx) > MAX_TABLE_COLUMN_WIDTH
-    ) {
-      flushSync(() => {
-        setTableColumnWidthFieldEpoch((current) => current + 1);
-      });
-      return false;
-    }
-    const result = commitDocumentTableColumnWidth(editor, target, widthPx);
-    if (result === "stale" || result === "limited") {
-      // A limited width shows what the column really got (WUA 006).
-      flushSync(() => {
-        setTableColumnWidthFieldEpoch((current) => current + 1);
-      });
-    }
-    if (result === "limited") {
-      toast({ title: t("toolbar.tableColumnWidthLimited") });
-    }
-    return result !== "stale";
-  }, [docsLengthUnit, editor, t]);
   const tableSortCommandContext = snapshot.table
     ? tableSortContextAtSelection(editor)
     : null;
@@ -14670,78 +12024,6 @@ function DocumentToolbar({
     : tableSortCommandContext && tableSortCommandContext.rowCount < 2
       ? t("toolbar.atLeastTwoRowsRequired")
       : null;
-  const tableSortLabelWithReason = (name: string) =>
-    tableSortUnavailableReason ? `${name}: ${tableSortUnavailableReason}` : name;
-  const tableSortCommandLabel = tableSortLabelWithReason(t("toolbar.sort"));
-  const tableFormulaTarget = snapshot.table
-    ? selectedFormulaCellTarget(editor)
-    : null;
-  const tableFormulaLabel = t("toolbar.cellFormula");
-  const tableFormulaDisabledReason = !editor.isEditable
-    ? t("toolbar.readOnlyReason")
-    : tableFormulaTarget === null
-      ? t("toolbar.placeCursorInOneTableCell")
-      : null;
-  const convertTableToTextLabel = t("toolbar.convertTableToText");
-  const convertTableToTextCommandLabel = editor.isEditable
-    ? convertTableToTextLabel
-    : `${convertTableToTextLabel}: ${t("toolbar.readOnlyReason")}`;
-  const repeatHeaderRowsState = snapshot.table
-    ? repeatHeaderRowsCommandState(editor)
-    : {
-        enabled: false,
-        active: false as const,
-        selectedRowCount: 0,
-        unavailableReason: "not_table" as const,
-      };
-  const repeatHeaderRowsLabel = t("toolbar.repeatHeaderRowsLabel");
-  const repeatHeaderRowsDisabledReason =
-    repeatHeaderRowsState.unavailableReason === "first_row_required"
-      ? t("toolbar.selectFirstRow")
-      : repeatHeaderRowsState.unavailableReason === "whole_rows_required"
-        ? t("toolbar.selectCompleteRowsBeginningWithFirst")
-        : repeatHeaderRowsState.unavailableReason === "readonly"
-          ? t("toolbar.readOnlyReason")
-          : null;
-  const pinHeaderRowsLabel = t("toolbar.pinHeaderRowsLabel");
-  const unpinHeaderRowsLabel = t("toolbar.unpinHeaderRowsLabel");
-  const pinHeaderRowsDisabledReason =
-    repeatHeaderRowsDisabledReason ??
-    (repeatHeaderRowsState.active === true
-      ? t("toolbar.selectedHeaderRowsAlreadyPinned")
-      : null);
-  const unpinHeaderRowsDisabledReason =
-    repeatHeaderRowsDisabledReason ??
-    (repeatHeaderRowsState.active === false
-      ? t("toolbar.selectedRowsNotPinned")
-      : null);
-  const runSetRepeatHeaderRows = useCallback(
-    (enabled: boolean) => {
-      if (setRepeatHeaderRows(editor, enabled)) editor.commands.focus(null, { scrollIntoView: false });
-    },
-    [editor],
-  );
-  const rowBreakAcrossPagesState = snapshot.table
-    ? rowBreakAcrossPagesCommandState(editor)
-    : {
-        enabled: false,
-        active: false as const,
-        selectedRowCount: 0,
-        unavailableReason: "not_table" as const,
-      };
-  const rowBreakAcrossPagesLabel = t("toolbar.rowBreakAcrossPagesLabel");
-  const rowBreakAcrossPagesDisabledReason =
-    rowBreakAcrossPagesState.unavailableReason === "row_selection_required"
-      ? t("toolbar.placeCursorInTableRow")
-      : rowBreakAcrossPagesState.unavailableReason === "readonly"
-        ? t("toolbar.readOnlyReason")
-        : null;
-  const rowBreakAcrossPagesCommandLabel = rowBreakAcrossPagesDisabledReason
-    ? `${rowBreakAcrossPagesLabel}: ${rowBreakAcrossPagesDisabledReason}`
-    : rowBreakAcrossPagesLabel;
-  const runToggleRowBreakAcrossPages = useCallback(() => {
-    if (toggleRowBreakAcrossPages(editor)) editor.commands.focus(null, { scrollIntoView: false });
-  }, [editor]);
   const runSelectDocumentTableScope = useCallback(
     (scope: DocumentTableSelectionScope) => {
       if (!selectDocumentTableScope(editor, scope)) return;
@@ -14749,19 +12031,6 @@ function DocumentToolbar({
     },
     [editor],
   );
-  const runToggleTableGridlines = useCallback(() => {
-    const next = !documentTableGridlinesVisible(editor);
-    if (setDocumentTableGridlinesVisible(editor, next)) editor.view.focus();
-  }, [editor]);
-  const cellTextDirectionName =
-    snapshot.cellTextDirection === "tbRl"
-      ? t("toolbar.cellTextDirectionTopToBottom")
-      : snapshot.cellTextDirection === "btLr"
-        ? t("toolbar.cellTextDirectionBottomToTop")
-        : t("toolbar.cellTextDirectionHorizontal");
-  const cellTextDirectionCommandLabel = t("toolbar.cellTextDirectionValue", {
-    direction: cellTextDirectionName,
-  });
 
   // AutoFit Window fills the actual printable section column, not the editor
   // shell (whose clientWidth includes window chrome and adjacent columns).
@@ -15318,7 +12587,7 @@ function DocumentToolbar({
       setSmartArtContextSelectionIdentity(target.node);
     };
     const refreshNativeTableDesignTarget = () => {
-      if (ribbonTab !== "tableDesign") return;
+      return;
       const next = readDocumentTableDesignTarget(editor);
       setNativeTableDesignTarget((current) =>
         current?.doc === next?.doc &&
@@ -15486,18 +12755,6 @@ function DocumentToolbar({
           if (!valid) setTableRowHeightFieldEpoch((value) => value + 1);
         }
       }
-      // These fields are mounted only in Table Layout. Invalidating their
-      // drafts on Home forces a full ribbon render for every typed character,
-      // even when all visible formatting is unchanged. Reopening Table Layout
-      // mounts fresh fields from the current document dimensions.
-      if (
-        transaction.docChanged &&
-        !derivedPagination &&
-        ribbonTab === "tableLayout"
-      ) {
-        setTableColumnWidthFieldEpoch((current) => current + 1);
-        setTableRowHeightFieldEpoch((current) => current + 1);
-      }
       // A key typed changes no button until the hand pauses (one button's dry run
       // builds every command of the editor; about 30 ms of each key on a long page).
       // Nor does what follows the key in its own transaction: the room's Undo
@@ -15660,7 +12917,7 @@ function DocumentToolbar({
     historyLockedReason === null &&
     (shapeTextHistory
       ? shapeTextHistory.officeTextCanUndo()
-      : snapshot.canUndo || fallbackHistory.canUndo || inkWetPending);
+      : snapshot.canUndo || fallbackHistory.canUndo || false);
   const historyCanRedo =
     historyLockedReason === null &&
     (shapeTextHistory
@@ -16391,7 +13648,7 @@ function DocumentToolbar({
         );
       }
       const numeric = Number.parseFloat(trimmed);
-      if (!Number.isFinite(numeric) || numeric < -72 || numeric > 72) {
+      if (normalizeCharSpacing(numeric) === null) {
         return false;
       }
       setCharSpacingDraft(String(numeric));
@@ -17028,40 +14285,6 @@ function DocumentToolbar({
     [editor, restoredChain],
   );
 
-  // ---- Simplified <-> Traditional Chinese (简繁转换, Word/WPS Review tab) -----
-  // Converts the selected text (or the whole document when nothing is selected)
-  // between Simplified and Traditional through OpenCC, preserving marks and
-  // structure. The converter dictionaries load lazily on first use, so this is
-  // async; a load failure simply leaves the document untouched. The pointer-down
-  // handler on the menu trigger has already remembered the selection, which we
-  // re-apply before converting so the menu click does not collapse the range.
-  const runChineseConversion = useCallback(
-    (direction: ChineseConversionDirection) => {
-      if (!canWriteEditor()) return;
-      const selection = currentOrRememberedSelection();
-      if (selection) {
-        editor.commands.setTextSelection(selection);
-      }
-      editor.commands.focus(null, { scrollIntoView: false });
-      void convertSelectionChinese(editor, direction).catch(() => {
-        toast({
-          title: t("toolbar.chineseConversionFailed"),
-          variant: "destructive",
-        });
-      });
-    },
-    [canWriteEditor, currentOrRememberedSelection, editor, t],
-  );
-
-  // ---- Paragraph cleanup (段落整理 / 删除空段, Word/WPS Writer "tidy") ---------
-  // Collapses runs of blank paragraphs and trims trailing whitespace across the
-  // whole document in one transaction. A paragraph holding an inline atom
-  // (image/footnote/math) is kept; a clean document is a no-op (no transaction).
-  const cleanUpParagraphs = useCallback(() => {
-    editor.commands.focus(null, { scrollIntoView: false });
-    runParagraphCleanup(editor);
-  }, [editor]);
-
   const runChangeCase = useCallback(
     (mode: ChangeCaseMode) => {
       const selection = currentOrRememberedSelection();
@@ -17139,24 +14362,6 @@ function DocumentToolbar({
       return queueOfficeSymbol(chain, editor.state.selection.from, insertion).run();
     },
     [canWriteEditor, editor, replacingTextChain],
-  );
-
-  // ---- Sort (Word/WPS "Sort") ----------------------------------------------
-  // When the caret is inside a TABLE, sorts the table's data rows by the caret's
-  // column (the header row, if any, stays pinned). Otherwise sorts the SELECTED
-  // sibling paragraphs / list items by their text. Direction + numeric mode come
-  // from the chosen menu item.
-  const runSort = useCallback(
-    (options: SortOptions) => {
-      if (!canWriteEditor()) return;
-      const selection = currentOrRememberedSelection();
-      if (selection) {
-        editor.commands.setTextSelection(selection);
-      }
-      editor.commands.focus(null, { scrollIntoView: false });
-      sortAtSelection(editor, options);
-    },
-    [canWriteEditor, currentOrRememberedSelection, editor],
   );
 
   const runParagraphSort = useCallback(
@@ -17771,13 +14976,15 @@ function DocumentToolbar({
 
   const applyOutdent = useCallback(() => {
     if (restoredChain().command(({ state, tr }) => indentWholeList(state, tr, -1)).run()) return;
-    if (active(editor, "taskItem")) {
-      restoredChain().liftListItem("taskItem").run();
-      return;
-    }
-    if (active(editor, "listItem")) {
-      restoredChain().liftListItem("listItem").run();
-      return;
+    // Word's Decrease Indent on list items: only the items' own levels move,
+    // as Shift+Tab does (listLevelCommands).
+    for (const item of ["taskItem", "listItem"] as const) {
+      if (active(editor, item)) {
+        restoredChain()
+          .command(({ state, dispatch }) => liftListItemKeepingLists(state.schema.nodes[item])(state, dispatch))
+          .run();
+        return;
+      }
     }
     restoredChain().decreaseIndent().run();
   }, [editor, restoredChain]);
@@ -18945,89 +16152,6 @@ function DocumentToolbar({
     [editor, tableConversionTarget],
   );
 
-  // ---- Sort Table (Word Web "Table Layout -> Sort") ----------------------
-  // Freeze the exact table and selection that opened the modal. A dialog must
-  // never retarget a later caret/table after a collaborative or programmatic
-  // document update; changed content therefore fails closed and asks the user
-  // to select the table again.
-  const openTableSortDialog = useCallback(() => {
-    if (editor.isDestroyed || !editor.isEditable) return;
-    const context = tableSortContextAtSelection(editor);
-    const target = findSelectedTable(editor);
-    if (
-      !context ||
-      !target ||
-      context.hasMergedCells ||
-      context.rowCount < 2
-    ) {
-      return;
-    }
-    tableSortReturnFocusRef.current = editor.view.dom;
-    setTableSortTarget({
-      pos: target.pos,
-      nodeSize: target.node.nodeSize,
-      sourceJson: JSON.stringify(target.node.toJSON()),
-      selectionFrom: editor.state.selection.from,
-      columnLabels: context.columnLabels,
-      initialColumnIndex: context.currentColumnIndex,
-      initialHasHeader: context.hasHeader,
-    });
-  }, [editor]);
-
-  const closeTableSortDialog = useCallback(() => {
-    setTableSortTarget(null);
-  }, []);
-
-  const submitTableSort = useCallback(
-    (settings: DocumentTableSortSettings): boolean => {
-      const target = tableSortTarget;
-      if (!target || editor.isDestroyed || !editor.isEditable) return false;
-      if (
-        settings.criteria.length < 1 ||
-        settings.criteria.length > 3 ||
-        settings.criteria.some(
-          (criterion) =>
-            !Number.isInteger(criterion.columnIndex) ||
-            criterion.columnIndex < 0 ||
-            criterion.columnIndex >= target.columnLabels.length ||
-            !["text", "number", "date"].includes(criterion.sortType) ||
-            !["asc", "desc"].includes(criterion.direction),
-        )
-      ) {
-        return false;
-      }
-
-      const liveNode = editor.state.doc.nodeAt(target.pos);
-      if (
-        !liveNode ||
-        liveNode.type.name !== "table" ||
-        liveNode.nodeSize !== target.nodeSize ||
-        JSON.stringify(liveNode.toJSON()) !== target.sourceJson ||
-        target.selectionFrom <= target.pos ||
-        target.selectionFrom >= target.pos + liveNode.nodeSize
-      ) {
-        return false;
-      }
-
-      // The Radix modal keeps the ProseMirror selection, but restoring the
-      // captured in-table position makes the ownership boundary explicit and
-      // prevents a later focus move from sorting another table.
-      if (!editor.commands.setTextSelection(target.selectionFrom)) return false;
-      const liveContext = tableSortContextAtSelection(editor);
-      if (!liveContext || liveContext.hasMergedCells) return false;
-      sortTableByCriteria(editor, settings.criteria, {
-        caseSensitive: settings.caseSensitive,
-        hasHeader: settings.hasHeader,
-        locale,
-      });
-      // An already-sorted table is a successful no-op: the frozen target was
-      // valid and no document change was required.
-      editor.commands.focus(null, { scrollIntoView: false });
-      return true;
-    },
-    [editor, locale, tableSortTarget],
-  );
-
   const runQuickTableSort = useCallback(
     (direction: "asc" | "desc") => {
       if (editor.isDestroyed || !editor.isEditable) return false;
@@ -19197,11 +16321,6 @@ function DocumentToolbar({
     [editor, t],
   );
 
-  const rememberDocumentIndexSelection = useCallback(() => {
-    indexSelectionRef.current = selectedDocumentIndexTarget(editor);
-    rememberEditorSelection();
-  }, [editor, rememberEditorSelection]);
-
   const resolveDocumentIndexSelection = useCallback(
     (allowRemembered = false) => {
       const live = selectedDocumentIndexTarget(editor);
@@ -19349,11 +16468,6 @@ function DocumentToolbar({
       }),
     [editor, t],
   );
-
-  const rememberAuthoritySelection = useCallback(() => {
-    authoritySelectionRef.current = selectedAuthorityTableTarget(editor);
-    rememberEditorSelection();
-  }, [editor, rememberEditorSelection]);
 
   const resolveAuthoritySelection = useCallback(
     (allowRemembered = false) => {
@@ -20453,14 +17567,6 @@ function DocumentToolbar({
       ),
     ]),
   ) as Record<ReferenceSliceFeatureId, ResolvedDocumentFeatureCommand>;
-  const referenceNextFootnoteReason = reviewUnavailableTitle(
-    referenceCommandDecisions["references.noteNavigation"],
-  );
-  const referenceNoteMenuReason = referenceNextFootnoteReason;
-  const referenceBibliographyReason = reviewUnavailableTitle(
-    referenceCommandDecisions["references.bibliographyInsert"],
-  );
-  const tocOutlineMenuValue = selectedTocOutlineMenuValue(editor);
   const executeReferenceFeature = useCallback(
     (featureId: ReferenceSliceFeatureId, style?: CitationStyle) => {
       if (style) requestedCitationStyleByEditor.set(editor, style);
@@ -20476,13 +17582,6 @@ function DocumentToolbar({
       referenceCommandRegistry,
       reviewCommandRuntime,
     ],
-  );
-  const executeTocOutlineChoice = useCallback(
-    (choice: TocOutlineChoice) => {
-      requestedTocOutlineChoiceByEditor.set(editor, choice);
-      executeReferenceFeature("references.tocAddText");
-    },
-    [editor, executeReferenceFeature],
   );
   // The Table of Contents button, wherever the ribbon shows it (References,
   // Insert, the Insert menu): on a selected table it updates that table, and
@@ -20545,18 +17644,6 @@ function DocumentToolbar({
     openTocUpdateDialog,
     rememberTocSelection,
   ]);
-  const executeGeneratedListFeature = useCallback(
-    (
-      featureId:
-        | "references.generatedListUpdate"
-        | "references.generatedListRemove",
-      kind: CaptionListKind,
-    ) => {
-      requestedCaptionListKindByEditor.set(editor, kind);
-      executeReferenceFeature(featureId);
-    },
-    [editor, executeReferenceFeature],
-  );
 
   // Insert / Edit Hyperlink's OK. The destination is resolved here (the
   // dialog only drafts it): a place must still be in the document, an e-mail
@@ -20703,27 +17790,6 @@ function DocumentToolbar({
     ],
   );
 
-  // Image controls act on a NodeSelection (the selected <img>), so they focus
-  // and call updateAttributes("image", …) directly rather than going through
-  // restoredChain(), which would reapply a remembered *text* range and collapse
-  // the image's node selection.
-  const setImageWidthPreset = useCallback(
-    (percent: ImageWidthPreset | null) => {
-      if (!canWriteEditor()) return;
-      // null clears the preset back to the natural ("original") width. The
-      // value is re-clamped here so a programmatic caller can never persist an
-      // off-whitelist percent even if the UI is bypassed.
-      const next = percent === null ? null : clampImageWidthPercent(percent);
-      const selected = editor.state.selection;
-      const pictureType =
-        selected instanceof NodeSelection && isPictureNode(selected.node)
-          ? selected.node.type.name
-          : "image";
-      chain(editor).updateAttributes(pictureType, { widthPercent: next }).run();
-    },
-    [canWriteEditor, editor],
-  );
-
   const setImageAlign = useCallback(
     (align: ImageAlign | null) => setLiveImageAlign(editor, align),
     [editor],
@@ -20749,16 +17815,8 @@ function DocumentToolbar({
     (locked: boolean) => setLiveImageAspectRatioLock(editor, locked),
     [editor],
   );
-  const resetImageSize = useCallback(
-    () => resetLiveImageSize(editor),
-    [editor],
-  );
   const resetImagePicture = useCallback(
     () => resetLiveImagePictureFormatting(editor),
-    [editor],
-  );
-  const resetImagePictureAndSize = useCallback(
-    () => resetLiveImagePictureAndSize(editor),
     [editor],
   );
   const beginPictureChangeFromDevice = useCallback(() => {
@@ -20854,201 +17912,6 @@ function DocumentToolbar({
     },
     [editor, pageId, pictureReplaceBusy, t],
   );
-  const openPictureCompression = useCallback(() => {
-    if (editor.isDestroyed || !editor.isEditable) return;
-    const target = liveImageAltTarget(editor);
-    if (
-      !target ||
-      !documentPictureCompressionAuthority(target.attrs) ||
-      snapshot.imageWidthPx === null ||
-      snapshot.imageHeightPx === null
-    ) {
-      return;
-    }
-    // The frame shows the KEPT part of the source: the resolution asked for
-    // is the visible area's, so the whole raster is scaled as if it were
-    // drawn at frame ÷ kept fraction (a 45% crop at 96 ppi keeps 96 ppi in
-    
-    const crop = documentImageCropInsets(target.attrs);
-    const keptWidth = Math.max(0.01, 1 - (crop.left + crop.right) / 100);
-    const keptHeight = Math.max(0.01, 1 - (crop.top + crop.bottom) / 100);
-    setPictureCompressionTarget({
-      target,
-      displayWidth: snapshot.imageWidthPx / keptWidth,
-      displayHeight: snapshot.imageHeightPx / keptHeight,
-    });
-  }, [editor, snapshot.imageHeightPx, snapshot.imageWidthPx]);
-  const closePictureCompression = useCallback(
-    () => setPictureCompressionTarget(null),
-    [],
-  );
-  const openPictureDraw = useCallback(() => {
-    if (editor.isDestroyed || !editor.isEditable) return;
-    const target = liveImageAltTarget(editor);
-    const mimeType = target ? documentPictureDrawMime(target.attrs) : null;
-    if (!target || !mimeType) return;
-    setPictureDrawTarget({ target, mimeType });
-  }, [editor]);
-  const closePictureDraw = useCallback(() => {
-    setPictureDrawTarget(null);
-  }, []);
-  const applyPictureDraw = useCallback(
-    (source: string) => {
-      const frozen = pictureDrawTarget;
-      const live = liveImageAltTarget(editor);
-      if (
-        !frozen ||
-        !live ||
-        !sameLiveImageAltTarget(live, frozen.target) ||
-        documentPictureDrawMime(live.attrs) !== frozen.mimeType ||
-        !source.startsWith(`data:${frozen.mimeType};base64,`)
-      ) {
-        return false;
-      }
-      return commitLiveImagePictureSource(editor, frozen.target, source);
-    },
-    [editor, pictureDrawTarget],
-  );
-  const submitPictureCompression = useCallback(
-    async (
-      presetId: DocumentPictureCompressionPresetId,
-      signal: AbortSignal,
-    ): Promise<"compressed" | "unchanged" | "rejected"> => {
-      const frozen = pictureCompressionTarget;
-      const source = frozen?.target.attrs.src;
-      if (
-        signal.aborted ||
-        !frozen ||
-        typeof source !== "string" ||
-        !documentPictureCompressionAuthority(frozen.target.attrs)
-      ) {
-        return "rejected";
-      }
-      try {
-        const result = await compressDocumentPictureDataUrl({
-          source,
-          displayWidth: frozen.displayWidth,
-          displayHeight: frozen.displayHeight,
-          presetId,
-        });
-        if (signal.aborted) return "rejected";
-        if (result.status === "unchanged") return "unchanged";
-        if (
-          !commitLiveImagePictureSource(editor, frozen.target, result.dataUrl)
-        ) {
-          return "rejected";
-        }
-        const reduction = Math.max(
-          1,
-          Math.round((1 - result.afterBytes / result.beforeBytes) * 100),
-        );
-        toast({
-          title: t("toolbar.pictureCompressedReduction", { reduction }),
-        });
-        return "compressed";
-      } catch {
-        return "rejected";
-      }
-    },
-    [editor, pictureCompressionTarget, t],
-  );
-  const setImageBorder = useCallback(
-    (width: number, color = snapshot.imageBorderColor, style = snapshot.imageBorderStyle) =>
-      setPictureBorder(editor, width, color, style),
-    [editor, snapshot.imageBorderColor, snapshot.imageBorderStyle],
-  );
-  // Crop > Reset: the whole source again at the scale it is drawn at, so
-  // the frame grows by what the crop kept away (documentImageCrop.ts).
-  const resetImageCrop = useCallback(() => resetPictureCrop(editor), [editor]);
-  // Word's Crop > Fill: the frame keeps its size and the source is cropped to
-  // the frame's aspect about its centre (the shared `office-picture-fit`
-  // math the deck and the worksheet use). Word's Fit needs an outset crop,
-  // which this picture model's percentage edges cannot state.
-  const fillImageCrop = useCallback(async () => {
-    const selection = editor.state.selection;
-    const node = selection instanceof NodeSelection ? selection.node : null;
-    if (!node || snapshot.imageWidthPx === null || snapshot.imageHeightPx === null) return false;
-    const natural = await loadOfficeImageNaturalSize(node.attrs.src);
-    if (!natural) return false;
-    return applyPictureCropFill(editor, natural, {
-      width: snapshot.imageWidthPx,
-      height: snapshot.imageHeightPx,
-    });
-  }, [editor, snapshot.imageHeightPx, snapshot.imageWidthPx]);
-  // Picture Format > Crop > Aspect Ratio / Fit (documentImageCrop.ts holds
-  // Word's semantics and this model's limits; Fill is fillImageCrop above).
-  // Aspect Ratio leaves cropping on, as Word does, so the handles can adjust
-  // the result.
-  const commitImageCropResult = useCallback(
-    async (
-      compute: (
-        frame: DocumentImageFrame,
-        current: DocumentImageCropInsets,
-      ) => DocumentImageCropResult | null,
-      enterCrop: boolean,
-    ) => {
-      const target = liveImageAltTarget(editor);
-      if (!target) return false;
-      const frame = await readDocumentImageFrame(editor, target.pos, target.node);
-      if (!frame) {
-        toast({
-          title: t("toolbar.pictureCropFillUnavailable"),
-          variant: "destructive",
-        });
-        return false;
-      }
-      // The picture must still be the one the command was given.
-      if (liveImageAltTarget(editor)?.node !== target.node) return false;
-      const result = compute(frame, documentImageCropInsets(target.attrs));
-      if (!result) {
-        toast({ title: t("toolbar.pictureCropLimit"), variant: "destructive" });
-        return false;
-      }
-      const changed = applyPictureCropResult(editor, result);
-      if (enterCrop) {
-        if (!isDocumentImageCropActive(editor.state)) {
-          enterDocumentImageCrop(editor);
-        }
-        setPictureCropModeActive(isDocumentImageCropActive(editor.state));
-      }
-      return changed;
-    },
-    [editor, t],
-  );
-  const applyImageCropAspectRatio = useCallback(
-    (ratioId: PictureCropAspectRatioId) =>
-      commitImageCropResult(
-        (frame, current) =>
-          documentImageAspectRatioCrop(current, frame, ratioId, MIN_IMAGE_PX),
-        true,
-      ),
-    [commitImageCropResult],
-  );
-  const applyImageCropFit = useCallback(
-    () =>
-      commitImageCropResult(
-        (frame) => documentImageFitCrop(frame, MIN_IMAGE_PX),
-        false,
-      ),
-    [commitImageCropResult],
-  );
-  const setImageTransparency = useCallback(
-    (transparency: number) => setPictureTransparency(editor, transparency),
-    [editor],
-  );
-  const setImageRecolor = useCallback(
-    (recolor: NativeImageRecolorMode) => setPictureRecolor(editor, recolor),
-    [editor],
-  );
-  const setImageSaturation = useCallback(
-    (saturation: number) => setPictureSaturation(editor, saturation),
-    [editor],
-  );
-  const setImageCorrections = useCallback(
-    (brightnessDelta: number, contrastDelta: number) =>
-      setPictureCorrections(editor, brightnessDelta, contrastDelta),
-    [editor],
-  );
   const restoreImageFilterPreview = useCallback(() => {
     const preview = pictureFilterPreviewRef.current;
     pictureFilterPreviewRef.current = null;
@@ -21061,108 +17924,6 @@ function DocumentToolbar({
     }
     preview.element.removeAttribute("data-picture-adjustment-preview");
   }, []);
-  const paintImageFilterPreview = useCallback(
-    (previewId: string, paintedFilter: string) => {
-      restoreImageFilterPreview();
-      const target = liveImageAltTarget(editor);
-      if (!target) return;
-      const nodeDom = editor.view.nodeDOM(target.pos);
-      const image =
-        nodeDom instanceof HTMLImageElement
-          ? nodeDom
-          : nodeDom instanceof HTMLElement
-            ? nodeDom.querySelector<HTMLImageElement>("img")
-            : null;
-      if (!image) return;
-      pictureFilterPreviewRef.current = {
-        element: image,
-        originalFilter: image.style.filter,
-        paintedFilter,
-      };
-      image.style.filter = paintedFilter;
-      image.setAttribute("data-picture-adjustment-preview", previewId);
-    },
-    [editor, restoreImageFilterPreview],
-  );
-  const previewImageRecolor = useCallback(
-    (recolor: NativeImageRecolorMode) => {
-      const filter =
-        imageFilterCss(
-          resolveImageEffects({
-            recolor,
-            saturation: snapshot.imageSaturation,
-            brightness: snapshot.imageBrightness,
-            contrast: snapshot.imageContrast,
-          }),
-        ) ?? "";
-      paintImageFilterPreview(`color:${recolor}`, filter);
-    },
-    [
-      paintImageFilterPreview,
-      snapshot.imageBrightness,
-      snapshot.imageContrast,
-      snapshot.imageSaturation,
-    ],
-  );
-  const previewImageSaturation = useCallback(
-    (saturation: number) => {
-      const filter =
-        imageFilterCss(
-          resolveImageEffects({
-            recolor: snapshot.imageRecolor,
-            saturation,
-            brightness: snapshot.imageBrightness,
-            contrast: snapshot.imageContrast,
-          }),
-        ) ?? "";
-      paintImageFilterPreview(`saturation:${saturation}`, filter);
-    },
-    [
-      paintImageFilterPreview,
-      snapshot.imageBrightness,
-      snapshot.imageContrast,
-      snapshot.imageRecolor,
-    ],
-  );
-  const previewImageCorrections = useCallback(
-    (brightnessDelta: number, contrastDelta: number) => {
-      const filter =
-        imageFilterCss(
-          resolveImageEffects({
-            recolor: snapshot.imageRecolor,
-            saturation: snapshot.imageSaturation,
-            brightness: imageCorrectionStoredFromDelta(brightnessDelta),
-            contrast: imageCorrectionStoredFromDelta(contrastDelta),
-          }),
-        ) ?? "";
-      paintImageFilterPreview(
-        `corrections:${brightnessDelta}:${contrastDelta}`,
-        filter,
-      );
-    },
-    [paintImageFilterPreview, snapshot.imageRecolor, snapshot.imageSaturation],
-  );
-  const commitImageRecolor = useCallback(
-    (recolor: NativeImageRecolorMode) => {
-      restoreImageFilterPreview();
-      setImageRecolor(recolor);
-    },
-    [restoreImageFilterPreview, setImageRecolor],
-  );
-  const commitImageSaturation = useCallback(
-    (saturation: number) => {
-      restoreImageFilterPreview();
-      setImageSaturation(saturation);
-    },
-    [restoreImageFilterPreview, setImageSaturation],
-  );
-  const commitImageCorrections = useCallback(
-    (brightnessDelta: number, contrastDelta: number) => {
-      restoreImageFilterPreview();
-      setImageCorrections(brightnessDelta, contrastDelta);
-    },
-    [restoreImageFilterPreview, setImageCorrections],
-  );
   useEffect(
     () => () => restoreImageFilterPreview(),
     [restoreImageFilterPreview],
@@ -21350,26 +18111,7 @@ function DocumentToolbar({
       ),
     ]),
   ) as Record<LayoutSliceFeatureId, ResolvedDocumentFeatureCommand>;
-  const pictureAlignDecision = layoutCommandDecisions["layout.object.align"];
-  const pictureRotateDecision = layoutCommandDecisions["layout.object.rotate"];
-  const pictureSizeDecision = layoutCommandDecisions["layout.object.size"];
-  const pictureFormatDecision = reviewCommandRegistry.resolve(
-    "picture.formatPane",
-    reviewCommandContext,
-    reviewCommandRuntime,
-  );
-  const openPictureFormatPane = () =>
-    void reviewCommandRegistry.execute(
-      "picture.formatPane",
-      liveDocumentCommandContext(),
-      reviewCommandRuntime,
-    );
-  const pictureSizeDecisionReason = reviewUnavailableTitle(pictureSizeDecision);
   const selectedDocumentShape = liveDocumentShapeTarget(editor);
-  const selectedDocumentShapeEffect =
-    selectedDocumentShape?.attrs.effect === "none" && selectedDocumentShape.attrs.shapeShadow
-      ? "shadow"
-      : selectedDocumentShape?.attrs.effect ?? "none";
   // The shape selected inside the graphic (the node view announces it); the
   // Shape Format tab paints THAT shape, as PowerPoint and Excel do.
   const [smartArtSelectedMemberId, setSmartArtSelectedMemberId] = useState<
@@ -21384,10 +18126,6 @@ function DocumentToolbar({
         (member) => member.memberId === smartArtSelectedMemberId,
       )) ||
     null;
-  // The paint the tab and the pane show and write: the leaf shape, or the
-  // shape selected inside the graphic.
-  const selectedDocumentShapePaint =
-    selectedDocumentShapeMember ?? selectedDocumentShape?.attrs ?? null;
   const selectedDocumentShapePaneAttrs = useMemo(() => {
     if (!selectedDocumentShape) return null;
     if (!selectedDocumentShapeMember) return selectedDocumentShape.attrs;
@@ -21417,43 +18155,6 @@ function DocumentToolbar({
       selectedDocumentShape.attrs.groupMembers?.length &&
       !selectedDocumentShapeMember,
   );
-  // The picture in the SmartArt slot selected inside the graphic, when it
-  // holds one: Word's Picture Format reaches it.
-  const documentSmartArtSlotPicture =
-    selectedDocumentShapeMember?.smartArtPicturePlaceholder === true &&
-    typeof selectedDocumentShapeMember.src === "string"
-      ? liveDocumentSmartArtSlotPicture(editor)
-      : null;
-  const applyDocumentSmartArtSlotPicture = async (command: SmartArtSlotPictureCommand) => {
-    const slot = liveDocumentSmartArtSlotPicture(editor);
-    if (!slot || !editor.isEditable) return false;
-    // Fill / Fit size the crop from the picture's own pixels and the slot's
-    // box; a Picture Style picked on an uncropped picture keeps the Fill the
-    // slot shows (Office puts a picture into a slot at Fill).
-    const natural =
-      command.kind === "reset" ? null : await loadOfficeImageNaturalSize(slot.src, 4_000);
-    const sizes = { picture: natural, slot: { width: slot.widthEmu, height: slot.heightEmu } };
-    const base =
-      command.kind === "style" && !slot.format.crop
-        ? (smartArtSlotPictureFormatAfter(slot.format, { kind: "crop", mode: "fill" }, sizes) ?? slot.format)
-        : slot.format;
-    const next = smartArtSlotPictureFormatAfter(base, command, sizes);
-    if (!next) {
-      if (command.kind === "crop" && !natural) {
-        toast({ title: t("toolbar.pictureCropFillUnavailable") });
-      }
-      return false;
-    }
-    return setLiveDocumentSmartArtSlotPictureFormat(editor, slot.memberId, next);
-  };
-  // The whole SmartArt graphic selected (no shape inside it): Shape Fill is
-  // its background (`setLiveDocumentSmartArtGraphicFill`).
-  const smartArtGraphicFillable =
-    editor.isEditable &&
-    !selectedDocumentShapeMember &&
-    typeof selectedDocumentShape?.attrs.smartArtKind === "string" &&
-    Boolean(selectedDocumentShape.attrs.groupMembers?.length) &&
-    documentShapeGroupIsEditable(selectedDocumentShape.attrs);
   const shapeFormatLinkTargets = useMemo(() => {
     if (!selectedDocumentShape?.attrs.isTextBox) return [];
     const selectedStoryId =
@@ -21512,11 +18213,6 @@ function DocumentToolbar({
   const shapePaintDisabledReason = !editor.isEditable
     ? t("toolbar.documentReadOnly")
     : t("toolbar.groupedShapePaintMemberOwnedAnd");
-  const shapePaletteTarget = useRef<ReturnType<typeof liveDocumentShapeTarget>>(null);
-  const canWriteShapePalette = () => {
-    const target = shapePaletteTarget.current, current = liveDocumentShapeTarget(editor);
-    return !shapePaintDisabled && editor.isEditable && target !== null && current !== null && target.node === current.node && target.pos === current.pos;
-  };
   // ARROWS — Word's Shape Outline ▸ Arrows. A document shape carries its own
   // `a:ln` ends (the writer rebuilds the outline from the page), so the picker
   // reaches a connector, an `arc`, a bracket, a callout's leader and an open
@@ -21527,9 +18223,6 @@ function DocumentToolbar({
       documentShapeTakesLineEnds(selectedDocumentShape.attrs),
   );
   const shapeArrowsDisabled = shapePaintDisabled || !shapeArrowsSupported;
-  const shapeArrowsDisabledReason = shapePaintDisabled
-    ? shapePaintDisabledReason
-    : t("toolbar.arrowheadsApplyToLinesAndOpen");
   const shapeArrowsValue = selectedDocumentShape
     ? documentShapeLineEnds(selectedDocumentShape.attrs)
     : null;
@@ -21539,49 +18232,6 @@ function DocumentToolbar({
     const patch = documentShapeLineEndsPatch(target.attrs, ends);
     if (patch) commitLiveDocumentShapePatch(editor, target, patch);
   };
-  const sharedShapeRecipes=officeShapeStyleRecipes(OFFICE_WEB_SHAPE_ACCENTS);
-  // The swatch the gallery marks is the selected member's own when a shape
-  // inside the graphic is selected, as its fill and outline are.
-  const activeShapeStyleId=selectedDocumentShapePaneAttrs ? sharedShapeRecipes.find(r=>documentShapeMatchesStyle(selectedDocumentShapePaneAttrs,r))?.id??null : null;
-  // A whole SmartArt graphic (or group) shows the style every shape's words
-  // wear, as the gallery is pressed for a single shape.
-  const shapeWordBearers = selectedDocumentShape?.attrs.groupMembers?.length
-    ? selectedDocumentShape.attrs.groupMembers.filter(
-      member => member.kind !== "picture" && member.kind !== "connector" && !documentShapeDefinition(member.preset).lineLike)
-    : selectedDocumentShape ? [selectedDocumentShape.attrs] : [];
-  const activeShapeTextStyleId = shapeWordBearers.length
-    ? OFFICE_WORDART_STYLE_RECIPES.find(recipe =>
-      shapeWordBearers.every(item => documentWordArtMatchesStyle(item as never, recipe)))?.id ?? null
-    : null;
-  const shapeWordArtDisabled = shapePaintDisabled || Boolean(selectedDocumentShape?.attrs.isTextBox) ||
-    Boolean(selectedDocumentShape && documentShapeDefinition(selectedDocumentShape.attrs.preset).lineLike);
-  const shapeWordArtDisabledReason = shapePaintDisabled ? shapePaintDisabledReason :
-    selectedDocumentShape?.attrs.isTextBox
-      ? t("toolbar.textBoxHasNoNativeWordart")
-      : t("toolbar.shapeCannotCarryText");
-  const selectedShapeTextEffect = selectedDocumentShape?.attrs.textPaint
-    ? officeTextPaintEffect(selectedDocumentShape.attrs.textPaint)
-    : selectedDocumentShape?.attrs.textEffect ?? "none";
-  const smartArtTextTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const openDocumentSmartArtTextEditor = useCallback(() => {
-    if (!smartArtContextTarget || editor.isDestroyed || !editor.isEditable) {
-      return;
-    }
-    const current = liveDocumentSmartArtTarget(editor);
-    if (!sameLiveDocumentSmartArtTarget(current, smartArtContextTarget)) return;
-    window.dispatchEvent(
-      new CustomEvent<DocumentSmartArtEditItemsEventDetail>(
-        DOCUMENT_SMARTART_EDIT_ITEMS_EVENT,
-        {
-          detail: {
-            position: current.pos,
-            node: current.node,
-            returnFocus: smartArtTextTriggerRef.current,
-          },
-        },
-      ),
-    );
-  }, [editor, smartArtContextTarget]);
 
   /* ------------------------------------------- SmartArt Design tab (shapes) */
   // The whole Design tab is `components/office-ribbon/OfficeSmartArtDesignTab`
@@ -22243,24 +18893,9 @@ function DocumentToolbar({
   const chartDataEditorTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [chartSelectDataTarget, setChartSelectDataTarget] =
     useState<LiveDocumentChartTarget | null>(null);
-  const chartSizeTargetRef = useRef<LiveDocumentChartTarget | null>(null);
   const chartFormatObjectIdentity =
     typeof chartContextTarget?.node.attrs.block_id === "string" && chartContextTarget.node.attrs.block_id.length > 0
       ? chartContextTarget.node.attrs.block_id : chartContextTarget?.node ?? null;
-  // What the Format pane and the element chosen in it belong to: the chart's
-  // block id, else the key it keeps through its own edits (an inline chart's
-  // node is replaced by each of them: a Glow picked on Format Legend closed
-  // the pane and put it back on Chart Area).
-  const chartFormatPaneIdentity =
-    typeof chartFormatObjectIdentity === "string"
-      ? chartFormatObjectIdentity
-      : chartFormatObjectIdentity && chartFormatPaneKey
-        ? `inline:${chartFormatPaneKey}`
-        : chartFormatObjectIdentity;
-  const chartFormatSelectionIdentity = useMemo(
-    () => ({ editor, target: chartFormatPaneIdentity }),
-    [editor, chartFormatPaneIdentity],
-  );
   // The selected chart's key in the shared chart element selection
   // (`chart-selection-store`): the node's block id, else its place -- the
   // key its node view uses for the frame it draws.
@@ -22273,22 +18908,6 @@ function DocumentToolbar({
   useEffect(() => {
     keepOfficeChartSelections(officeChartHostKey(editor), chartSelectionKey ? [chartSelectionKey] : []);
   }, [editor, chartSelectionKey]);
-  // The chart's Current Selection as its clicks left it: the Chart Format
-  // ribbon opens on it (two clicks on a column before the tab is shown
-  // select that point).
-  const chartSelectedArea = useOfficeChartSelectedArea(chartSelectionKey);
-  // The chart the Format pane and the colour pickers write to. A chart with a
-  // block id stays that chart through its own edits, so the pane Word keeps
-  // open while one effect after another is set is not closed by the edit it
-  // just made (a Glow preset picked on Format Legend closed the pane); one
-  // without a block id is this very node at this place.
-  const chartFormatStableIdentity = typeof chartFormatObjectIdentity === "string" ? chartFormatObjectIdentity : null;
-  const chartFormatNode = chartFormatStableIdentity ? null : chartContextTarget?.node;
-  const chartFormatPos = chartFormatStableIdentity ? null : chartContextTarget?.pos;
-  const chartFormatAuthority = useMemo(
-    () => (chartFormatStableIdentity ? { chart: chartFormatStableIdentity } : { node: chartFormatNode, pos: chartFormatPos }),
-    [chartFormatStableIdentity, chartFormatNode, chartFormatPos],
-  );
   const [chartFormatPaneContainer, setChartFormatPaneContainer] = useState<HTMLElement | null>(null);
   // Word's "More <element> Options…" commands open the Format pane scoped to
   // the element they name rather than a dialog of their own. Switching to the
@@ -22325,7 +18944,7 @@ function DocumentToolbar({
       if (!surface.contains(event.target)) return;
       token += 1;
       setChartElementHit({ hit: detail.hit, open: detail.open, token });
-      if (detail.open) setRibbonTab("chartFormat");
+      if (detail.open) void 0;
       // The click selects the element it landed on (Office's Current
       // Selection), which Home's Font group formats and the picture frames.
       const host = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-chart-selection-key]") : null;
@@ -22347,44 +18966,10 @@ function DocumentToolbar({
     (area: DocumentChartAreaStyleKey) => {
       chartFormatFocusToken.current += 1;
       setChartFormatFocus({ area, token: chartFormatFocusToken.current });
-      setRibbonTab("chartFormat");
+      void 0;
     },
     [setRibbonTab],
   );
-  const rememberChartSize = () => {
-    rememberEditorSelection();
-    chartSizeTargetRef.current = liveDocumentChartTarget(editor);
-  };
-  const displayedChartSize = (() => {
-    if (!chartContextTarget) return undefined;
-    try { return documentChartSize(chartContextTarget.node.attrs) ?? {widthEmu:5_486_400,heightEmu:3_127_200}; }
-    catch { return undefined; }
-  })();
-  const commitChartSize = (axis: keyof DocumentChartSize, emu: number): boolean => {
-    const target=chartSizeTargetRef.current;
-    if (!target || !sameLiveDocumentChartTarget(liveDocumentChartTarget(editor),target) || !target.valid) return false;
-    const size=documentChartSize(target.node.attrs) ?? {widthEmu:5_486_400,heightEmu:3_127_200};
-    if (size[axis]===emu) return true;
-    let host;
-    try {
-      const current = normalizeDocumentChartHost(target.node.attrs.documentChart);
-      host=normalizeDocumentChartHost({
-        version:1,
-        size:{...size,[axis]:emu},
-        ...(current?.layout ? {layout:current.layout} : {}),
-        ...(current?.workbook ? {workbook:current.workbook} : {}),
-      });
-    } catch { return false; }
-    return commitLiveDocumentChartAttrs(editor,target,{...target.node.attrs,documentChart:host});
-  };
-  const displayedChartLayout = (() => {
-    if (!chartContextTarget) return { mode: "inline" } as const;
-    try {
-      return documentChartLayout(chartContextTarget.node.attrs);
-    } catch {
-      return { mode: "inline" } as const;
-    }
-  })();
   // Word's Layout Options on the chart (Position, Wrap Text, Move with Text /
   // Fix Position on Page, the floating stack, Align): its own `floatAnchor`.
   // Word's Layout dialog (More Layout Options…) on the selected floating
@@ -22396,10 +18981,6 @@ function DocumentToolbar({
       size: import("./native-document/floatLayoutTarget").LiveFloatLayoutSize | null;
     } | null
   >(null);
-  const openFloatLayoutDialog = () => {
-    const target = liveDocumentFloatLayoutTarget(editor);
-    if (target) setFloatLayoutDialog({ anchor: target.anchor, paint: target.paint, size: target.size });
-  };
   const floatLayoutLabels: OfficeFloatLayoutDialogLabels = {
     title: t("document.floatLayout.title"),
     ok: t("toolbar.dialogOk"),
@@ -22435,14 +19016,9 @@ function DocumentToolbar({
     cm: t("document.floatLayout.cm"),
     option: (key) => t(`document.floatLayout.option.${key}` as Parameters<typeof t>[0]),
   };
-  const pictureContextPlacement = snapshot.image
-    ? liveDocumentDrawingPlacementState(editor)
-    : null;
   const displayedChartPlacement = chartContextTarget
     ? documentChartPlacementState(editor.state.doc, chartContextTarget.node.attrs, chartContextTarget.pos)
     : undefined;
-  const commitChartPlacement = (command: DocumentChartPlacementCommand): boolean =>
-    setLiveDocumentChartPlacement(editor, command);
   // Word's Group on a floating chart and the shapes / text boxes picked with
   // it (Shift + click on the page, Ctrl + click in the Selection Pane): one
   // group the chart is a member of, written to Word as `wpg:wgp`.
@@ -22462,35 +19038,6 @@ function DocumentToolbar({
           ? t("toolbar.chartGroupRefused")
           : t("toolbar.objectGroupNeedsTwo"),
   };
-  const commitChartLayout = (layout: DocumentChartLayout): boolean => {
-    const target = liveDocumentChartTarget(editor);
-    if (!target || !target.valid) return false;
-    const size = documentChartSize(target.node.attrs) ?? {
-      widthEmu: 5_486_400,
-      heightEmu: 3_127_200,
-    };
-    let host;
-    try {
-      const workbook = normalizeDocumentChartHost(target.node.attrs.documentChart)?.workbook;
-      host = normalizeDocumentChartHost({ version: 1, size, layout, ...(workbook ? {workbook} : {}) });
-    } catch {
-      return false;
-    }
-    if (target.node.isInline && host?.layout?.mode === "floating") {
-      // Word: wrapping an inline chart makes it a floating chart anchored to
-      // its paragraph -- the block chart with that layout.
-      const converted = convertInlineDrawingToBlock(editor.view, target.pos, {
-        documentChart: host,
-      });
-      if (converted) editor.view.focus();
-      return converted;
-    }
-    return commitLiveDocumentChartAttrs(editor, target, {
-      ...target.node.attrs,
-      documentChart: host,
-    });
-  };
-  const chartAddElementTriggerRef = useRef<HTMLButtonElement | null>(null);
   const chartCommandDisabledReason = !editor.isEditable
     ? t("toolbar.documentReadOnly")
     : chartContextTarget && !chartContextTarget.valid
@@ -22535,23 +19082,6 @@ function DocumentToolbar({
     },
     [chartContextTarget, chartThemeAccents, editor],
   );
-  // Quick Layout: the one catalogue (Excel's eleven on a column or bar
-  // chart, the five generic ones elsewhere) and its one gallery.
-  const chartQuickLayoutCalibrated = Boolean(
-    chartContextTarget?.valid &&
-      officeChartQuickLayoutCalibrated(chartContextTarget.attrs),
-  );
-  const chartQuickLayoutRefusal = (layoutId: DocumentChartQuickLayoutId) =>
-    !chartContextTarget?.valid ||
-    officeChartQuickLayoutAvailable(chartContextTarget.attrs, layoutId)
-      ? null
-      : officeChartQuickLayoutPatch(layoutId)
-        ? t("toolbar.chartTypeDoesNotSupportData")
-        : t("toolbar.layoutForColumnAndBarCharts");
-  const activeChartQuickLayoutId =
-    chartContextTarget?.valid
-      ? officeChartActiveQuickLayout(chartContextTarget.attrs)
-      : null;
   const previewDocumentChartStyle = useCallback(
     (styleId: DocumentChartStyleId | null) => {
       if (styleId === null) {
@@ -22674,19 +19204,6 @@ function DocumentToolbar({
     },
     [chartContextTarget, documentChartWithPalette, editor, previewDocumentChartQuickLayout],
   );
-  const commitDocumentChartQuickLayout = useCallback(
-    (layoutId: DocumentChartQuickLayoutId) => {
-      previewDocumentChartQuickLayout(null);
-      if (!chartContextTarget) return;
-      applyLiveDocumentChartQuickLayout(
-        editor,
-        chartContextTarget,
-        layoutId,
-        chartQuickLayoutWords,
-      );
-    },
-    [chartContextTarget, chartQuickLayoutWords, editor, previewDocumentChartQuickLayout],
-  );
   const chartSelectDataAvailable = Boolean(
     chartContextTarget?.valid &&
       documentChartSupportsSelectData(chartContextTarget.attrs),
@@ -22791,29 +19308,6 @@ function DocumentToolbar({
     () => openDocumentChartDataEditorFrom(chartDataEditorTriggerRef.current),
     [openDocumentChartDataEditorFrom],
   );
-  const chartWorkbookAvailable = Boolean(
-    chartContextTarget &&
-      normalizeDocumentChartHost(chartContextTarget.node.attrs.documentChart)
-        ?.workbook,
-  );
-  const refreshDocumentChartData = useCallback(async () => {
-    if (!chartContextTarget || !editor.isEditable) return;
-    // The workbook's formulas are calculated on the server.
-    const outcome = await refreshLiveDocumentChartData(editor, chartContextTarget, calculateDocumentChartWorkbookSettled);
-    toast({
-      title:
-        outcome === "refreshed"
-          ? t("toolbar.dataRefreshed")
-          : outcome === "unchanged"
-            ? t("toolbar.chartAlreadyShowsLatestData")
-            : t("toolbar.checkDataRangeOrFormulas"),
-      ...(outcome === "failed" ? { variant: "destructive" as const } : {}),
-    });
-  }, [chartContextTarget, editor, t]);
-  const switchDocumentChartRowsAndColumns = useCallback(() => {
-    if (!chartContextTarget) return;
-    switchLiveDocumentChartRowsAndColumns(editor, chartContextTarget);
-  }, [chartContextTarget, editor]);
   // Change Chart Type > Combo > Custom Combination opens the shared per-series
   // pane (chart type and Secondary Axis per series) instead of applying a
   // type, as Word's dialog does.
@@ -22822,21 +19316,6 @@ function DocumentToolbar({
   // Insert > Combo > Custom Combination: the chart about to be inserted.
   const [chartInsertCombo, setChartInsertCombo] =
     useState<ChartBlockAttrsV2 | null>(null);
-  const changeDocumentChartType = useCallback(
-    (family: ChartFamily, subtype: ChartSubtype) => {
-      if (!chartContextTarget) return;
-      if (family === "combo" && subtype === "custom") {
-        if (
-          chartContextTarget.valid &&
-          officeChartCombinationRows(chartContextTarget.attrs)
-        )
-          setChartComboTarget(chartContextTarget);
-        return;
-      }
-      setLiveDocumentChartType(editor, chartContextTarget, family, subtype);
-    },
-    [chartContextTarget, editor],
-  );
   const applyDocumentChartCombination = useCallback(
     (rows: OfficeChartCombinationRow[]) => {
       const target = chartComboTarget;
@@ -22852,78 +19331,12 @@ function DocumentToolbar({
     },
     [chartComboTarget, editor],
   );
-  const setDocumentChartAreaPaint = useCallback(
-    (
-      area: DocumentChartAreaStyleKey,
-      field: "fill" | "outline",
-      paint: PresentationChartAreaPaint,
-    ) => {
-      if (!chartContextTarget) return;
-      setLiveDocumentChartAreaPaint(
-        editor,
-        chartContextTarget,
-        area,
-        field,
-        paint,
-      );
-    },
-    [chartContextTarget, editor],
-  );
-  const setDocumentChartAreaStyle = useCallback(
-    (
-      area: DocumentChartAreaStyleKey,
-      style: PresentationChartAreaStyle,
-    ) => {
-      if (!chartContextTarget) return;
-      setLiveDocumentChartAreaStyle(editor, chartContextTarget, area, style);
-    },
-    [chartContextTarget, editor],
-  );
-  const setDocumentChartAxisOptions = useCallback(
-    (axis: OfficeChartAxisKey, options: OfficeChartAxisOptions | null) => {
-      if (!chartContextTarget) return;
-      setLiveDocumentChartAxisOptions(editor, chartContextTarget, axis, options);
-    },
-    [chartContextTarget, editor],
-  );
   const setDocumentChartModel = useCallback(
     (command: (attrs: ChartBlockAttrsV2) => ChartBlockAttrsV2 | null) => {
       if (!chartContextTarget) return;
       setLiveDocumentChartModel(editor, chartContextTarget, command);
     },
     [chartContextTarget, editor],
-  );
-  const setDocumentChartAreaEffect = useCallback(
-    (
-      area: DocumentChartAreaStyleKey,
-      effect: PresentationChartEffectPreset | null,
-    ) => {
-      if (!chartContextTarget) return;
-      setLiveDocumentChartAreaEffect(editor, chartContextTarget, area, effect);
-    },
-    [chartContextTarget, editor],
-  );
-  const setDocumentChartTextStyle = useCallback(
-    (
-      area: DocumentChartAreaStyleKey,
-      style: PresentationChartAreaStyle,
-    ) => {
-      if (!chartContextTarget) return;
-      setLiveDocumentChartTextStyle(editor, chartContextTarget, area, style);
-    },
-    [chartContextTarget, editor],
-  );
-  const resetDocumentChartAreaStyle = useCallback(
-    (area: DocumentChartAreaStyleKey) => {
-      if (!chartContextTarget) return;
-      resetLiveDocumentChartAreaStyle(editor, chartContextTarget, area);
-    },
-    [chartContextTarget, editor],
-  );
-  const chartTransposeEnabled = Boolean(
-    editor.isEditable &&
-    chartContextTarget &&
-    transposedDocumentChartAttrs(chartContextTarget),
   );
   // A chart's right-click menu (OfficeChartContextMenu, the one the deck and
   // the worksheet open): a right click on a chart selects it, as Word does,
@@ -23170,23 +19583,6 @@ function DocumentToolbar({
       officeChartWithFontDialogText(attrs, dialog.element, text),
     );
   };
-  const selectedDocumentShapeStack = resolveDocumentShapeStack(
-    editor.state.doc,
-  );
-  // The selected member the z-order commands move: a shape, or a picture
-  // floated in the editor that holds its own place in the stack.
-  const selectedStackMemberPos = liveDocumentStackMemberPos(editor);
-  const selectedDocumentShapeStackIndex =
-    selectedStackMemberPos !== null
-      ? selectedDocumentShapeStack.backToFront.findIndex(
-          (entry) => entry.pos === selectedStackMemberPos,
-        )
-      : -1;
-  const selectedPictureCanReorder =
-    !selectedDocumentShape &&
-    selectedDocumentShapeStackIndex >= 0 &&
-    selectedDocumentShapeStack.complete &&
-    selectedDocumentShapeStack.backToFront.length > 1;
   // Greyed when the command has nothing to do on the selection (one member,
   // or the Shift / Ctrl + clicked set), by the planner the command runs.
   const shapeZOrderAtBoundary = (action: DocumentShapeZOrderAction) =>
@@ -23685,49 +20081,6 @@ function DocumentToolbar({
     feature.run();
     return true;
   };
-  const runPicture = executeLayoutFeature;
-  const alignPicture = (align: ImageAlign) =>
-    runPicture("layout.object.align", align);
-  const transformPicture = (rotation: DocumentShapeRotationRequest) =>
-    runPicture("layout.object.rotate", rotation);
-  const commitPictureSize = (axis: DocumentShapeSizeAxis, raw: string) =>
-    runPicture("layout.object.size", {
-      axis,
-      // In the field's unit, or one typed with the value ("5 cm", `2"`).
-      raw: String(
-        docsOfficeParityV2
-          ? (parseDocumentLengthPx(raw, docsLengthUnit) ?? Number.NaN)
-          : Number(raw) * pictureSizeScale,
-      ),
-    });
-
-  // Cell-level formatting acts on the live table selection — the caret's cell or
-  // a multi-cell CellSelection — via setCellAttribute, so it uses tableChain()
-  // (which does NOT rewrite the selection, preserving a CellSelection that spans
-  // several cells). Each value is re-resolved through its whitelist / the strict
-  // color gate here so a bypassed UI can never persist an off-whitelist value;
-  // the extension's parse/render re-validates again as a backstop. Passing null
-  // clears the attribute (back to the table default).
-  const setCellBackgroundColor = useCallback(
-    (color: string | null) => {
-      setCellShading(tableChain(), color);
-    },
-    [tableChain],
-  );
-
-  const setCellAlignment = useCallback(
-    ({ horizontal, vertical }: OfficeTableCellAlignmentValue) => {
-      setSharedCellAlignment(tableChain(), horizontal, vertical);
-    },
-    [tableChain],
-  );
-
-  const setCellTextDirection = useCallback(
-    (direction: CellTextDirection) => {
-      setSharedCellTextDirection(tableChain(), direction);
-    },
-    [tableChain],
-  );
 
   // Existing presets remain uniform, but now write the native four-edge object.
   // Imported custom objects stay untouched until the user explicitly chooses a
@@ -23738,19 +20091,6 @@ function DocumentToolbar({
     },
     [tableChain],
   );
-  const cellMarginPreset = uniformCellMarginPreset(snapshot.cellMargin);
-  const cellMarginMenuValue = snapshot.cellMarginMixed
-    ? "mixed"
-    : snapshot.cellMargin === null
-      ? ""
-      : cellMarginPreset === null
-        ? "custom"
-        : String(cellMarginPreset);
-  const cellMarginCustomDisabledReason = !editor.isEditable
-    ? t("toolbar.documentReadOnly")
-    : snapshot.cellMarginMixed
-      ? t("toolbar.selectCellsWithMatchingMarginsFirst")
-      : null;
 
   const buildCellMarginsTarget = useCallback(
     (
@@ -23792,14 +20132,6 @@ function DocumentToolbar({
       };
     },
     [editor, snapshot.cellMargin, snapshot.cellMarginMixed, snapshot.table],
-  );
-
-  const openCellMarginsDialog = useCallback(
-    (scope: DocumentTableCellMarginsScope) => {
-      const target = buildCellMarginsTarget(scope);
-      if (target) setCellMarginsDialogTarget(target);
-    },
-    [buildCellMarginsTarget],
   );
 
   const closeCellMarginsDialog = useCallback(() => {
@@ -23910,10 +20242,6 @@ function DocumentToolbar({
 
   const openTablePropertiesDialog = useCallback(() => {
     openTablePropertiesAtTab("table");
-  }, [openTablePropertiesAtTab]);
-
-  const openTableAltTextDialog = useCallback(() => {
-    openTablePropertiesAtTab("altText");
   }, [openTablePropertiesAtTab]);
 
   const closeTablePropertiesDialog = useCallback(() => {
@@ -24054,17 +20382,6 @@ function DocumentToolbar({
     restoreLocalTableStylePreview(localTableStylePreviewRef.current);
     localTableStylePreviewRef.current = null;
   }, []);
-  const previewTableStyle = useCallback(
-    (themeId: string | null) => {
-      clearLocalTableStylePreview();
-      if (themeId === null) return;
-      localTableStylePreviewRef.current = createLocalTableStylePreview(
-        editor,
-        themeId,
-      );
-    },
-    [clearLocalTableStylePreview, editor],
-  );
   useEffect(() => {
     const clearPreviewOnEditorChange = () => clearLocalTableStylePreview();
     editor.on("selectionUpdate", clearPreviewOnEditorChange);
@@ -24075,149 +20392,6 @@ function DocumentToolbar({
       clearLocalTableStylePreview();
     };
   }, [clearLocalTableStylePreview, editor]);
-  const tableStyleThemeIdForColor = useCallback(
-    (family: TableStyleColorFamilyId): string | null => {
-      const target = findSelectedTable(editor);
-      const current = tableStyleThemeFromAttrs(target?.node.attrs);
-      return tableStyleThemeForColorFamily(current, family)?.id ?? null;
-    },
-    [editor],
-  );
-  const applyTableStyleColor = useCallback(
-    (family: TableStyleColorFamilyId) => {
-      const target = findSelectedTable(editor);
-      const current = tableStyleThemeFromAttrs(target?.node.attrs);
-      const next = tableStyleThemeForColorFamily(current, family);
-      if (!target || !current || !next) return;
-      clearLocalTableStylePreview();
-      if (
-        applyTableStyleTheme(
-          editor,
-          next.id,
-          tableStyleOptionsFromAttrs(target.node.attrs),
-        )
-      ) {
-        editor.chain().focus(null, { scrollIntoView: false }).run();
-      }
-    },
-    [clearLocalTableStylePreview, editor],
-  );
-
-  // Authority presence is the sole native/legacy boundary. Every native
-  // command re-reads the live target and writes the table-design state once;
-  // Header Row changes w:tblLook only, not Layout's repeated-row property.
-  const nativeTableDesignTarget =
-    ribbonTab === "tableDesign"
-      ? nativeTableDesignTargetState?.doc === editor.state.doc &&
-        nativeTableDesignTargetState.selectionRef === editor.state.selection
-        ? nativeTableDesignTargetState
-        : readDocumentTableDesignTarget(editor)
-      : null;
-  const tableShadingPaletteOpen = Boolean(
-    ribbonTab === "tableDesign" &&
-    nativeTableDesignTarget &&
-    tableShadingPaletteTarget?.selection ===
-      nativeTableDesignTarget.selectionRef &&
-    tableShadingPaletteTarget.tableNode === nativeTableDesignTarget.tableNode &&
-    tableShadingPaletteTarget.authorityJson ===
-      nativeTableDesignTarget.authorityJson,
-  );
-  const localTableShadingPaletteVisible = Boolean(
-    ribbonTab === "tableDesign" &&
-    !nativeTableDesignTarget &&
-    localTableShadingPaletteOpen,
-  );
-
-  // Word Table Layout -> Formula targets one exact cell. Freeze the cell JSON
-  // and selection before the modal moves DOM focus, then revalidate both on
-  // submit so a collaborative edit or later caret cannot retarget the command.
-  const openFormulaEditor = useCallback(() => {
-    if (editor.isDestroyed || !editor.isEditable) return;
-    const target = selectedFormulaCellTarget(editor);
-    if (!target) return;
-    const activeElement = document.activeElement;
-    formulaReturnFocusRef.current =
-      activeElement instanceof HTMLElement ? activeElement : editor.view.dom;
-    setFormulaDialogTarget({
-      pos: target.pos,
-      nodeSize: target.node.nodeSize,
-      sourceJson: JSON.stringify(target.node.toJSON()),
-      selectionJson: editor.state.selection.toJSON(),
-      initialFormula: normalizeCellFormula(target.node.attrs.formula),
-      initialNumberFormat: normalizeCellFormulaNumberFormat(
-        target.node.attrs.formulaNumberFormat,
-      ),
-      bookmarkNames: getBookmarks(editor.state).map(
-        (bookmark) => bookmark.name,
-      ),
-    });
-  }, [editor]);
-
-  const closeFormulaEditor = useCallback(() => {
-    setFormulaDialogTarget(null);
-  }, []);
-
-  const writeFrozenCellFormula = useCallback(
-    (
-      formula: string | null,
-      numberFormat: CellFormulaNumberFormat | null,
-    ): boolean => {
-      const target = formulaDialogTarget;
-      if (!target || editor.isDestroyed || !editor.isEditable) return false;
-      const liveNode = editor.state.doc.nodeAt(target.pos);
-      if (
-        !liveNode ||
-        (liveNode.type.name !== "tableCell" &&
-          liveNode.type.name !== "tableHeader") ||
-        liveNode.nodeSize !== target.nodeSize ||
-        JSON.stringify(liveNode.toJSON()) !== target.sourceJson
-      ) {
-        return false;
-      }
-
-      let selection: ProseMirrorSelection;
-      try {
-        selection = ProseMirrorSelection.fromJSON(
-          editor.state.doc,
-          target.selectionJson,
-        );
-      } catch {
-        return false;
-      }
-      if (
-        selection.from <= target.pos ||
-        selection.to >= target.pos + liveNode.nodeSize
-      ) {
-        return false;
-      }
-
-      if (
-        !writeTableCellFormula(
-          editor,
-          target.pos,
-          formula,
-          numberFormat,
-          target.selectionJson,
-        )
-      ) {
-        return false;
-      }
-      editor.view.focus();
-      return true;
-    },
-    [editor, formulaDialogTarget],
-  );
-
-  const applyCellFormula = useCallback(
-    (settings: DocumentTableFormulaSettings) =>
-      writeFrozenCellFormula(settings.formula, settings.numberFormat),
-    [writeFrozenCellFormula],
-  );
-
-  const clearCellFormula = useCallback(
-    () => writeFrozenCellFormula(null, null),
-    [writeFrozenCellFormula],
-  );
 
   // With Office parity V2, page setup targets the section containing the live
   // selection. The default-OFF path deliberately retains the legacy global
@@ -24263,82 +20437,6 @@ function DocumentToolbar({
     },
     [docsOfficeParityV2, editor],
   );
-
-  // Word's Margins gallery: its rows are concrete twips, so a section whose
-  // margins (and the document's Mirror margins) match a row selects it, and
-  // Last Custom Setting (this viewer's, as Word keeps it per user) leads the
-  // list once the Custom Margins dialog has applied something.
-  const [lastCustomMargins, setLastCustomMargins] =
-    useState<LastCustomMargins | null>(null);
-  const currentMarginTwips: MarginTwips = selectedSectionLayout
-    ? {
-        top: selectedSectionLayout.pageMargins.topTwips,
-        bottom: selectedSectionLayout.pageMargins.bottomTwips,
-        left: selectedSectionLayout.pageMargins.leftTwips,
-        right: selectedSectionLayout.pageMargins.rightTwips,
-      }
-    : (() => {
-        const px = resolvePageMarginsPx(currentPageMargins, currentCustomPageMargins);
-        const twips = (value: number) => Math.round((value / PX_PER_INCH) * 1440);
-        return {
-          top: twips(px.top),
-          bottom: twips(px.bottom),
-          left: twips(px.left),
-          right: twips(px.right),
-        };
-      })();
-  const mirrorMarginsOn =
-    normalizeWordDocumentSettings(editor.state.doc.attrs.wordSettings)
-      ?.multiplePages === "mirrorMargins";
-  const marginGalleryValue: string =
-    marginGalleryPresetFor(currentMarginTwips, mirrorMarginsOn) ??
-    (lastCustomMargins &&
-    lastCustomMargins.mirrored === mirrorMarginsOn &&
-    (["top", "bottom", "left", "right"] as const).every(
-      (edge) => Math.abs(lastCustomMargins.twips[edge] - currentMarginTwips[edge]) <= 2,
-    )
-      ? "lastCustom"
-      : "custom");
-  const applyMarginGallery = useCallback(
-    (twips: MarginTwips, mirrored: boolean, presetId: MarginGalleryPresetId | null) => {
-      // Mirror margins is a document setting (settings.xml), the margins
-      // are the section's: Mirrored turns it on, every other row off.
-      runMarginGalleryButton(editor, twips, mirrored, presetId, docsOfficeParityV2);
-    },
-    [docsOfficeParityV2, editor],
-  );
-  // Word lists each row's four measurements in the user's unit: centimetres
-  // in the Chinese UI, inches otherwise. Mirrored names its sides Inside and
-  // Outside.
-  const marginGalleryDetails = (twips: MarginTwips, mirrored: boolean): ReactNode[] => {
-    const edges = [
-      ["top", twips.top, "toolbar.pageMarginsGallery.top"],
-      ["bottom", twips.bottom, "toolbar.pageMarginsGallery.bottom"],
-      ["left", twips.left, mirrored ? "toolbar.pageMarginsGallery.inside" : "toolbar.pageMarginsGallery.left"],
-      ["right", twips.right, mirrored ? "toolbar.pageMarginsGallery.outside" : "toolbar.pageMarginsGallery.right"],
-    ] as const;
-    const measure = (value: number) =>
-      isChineseLocale
-        ? t("toolbar.pageMarginsGallery.centimetres", {
-            // Half up at the hundredth, as Word prints 1.25 in (3.175 cm) as
-            // 3.18; the float product sits just under the half.
-            value: (Math.round((value / 1440) * 254 + 1e-6) / 100).toFixed(2),
-          })
-        : formatMarginInches(value / 1440);
-    const separator = t("toolbar.pageMarginsGallery.separator");
-    // A full-width comma carries its own space (顶部: 2.54 厘米，底部 …).
-    const tight = /[\u3000-\u303f\uff00-\uffef]$/u.test(separator);
-    return edges.map(([edge, value, key], index) => (
-      <span
-        key={edge}
-        data-margin-edge={edge}
-        style={tight ? { marginInlineEnd: 0 } : undefined}
-      >
-        {t(key)}: {measure(value)}
-        {index < edges.length - 1 ? separator : null}
-      </span>
-    ));
-  };
 
   // Open the custom SIZE dialog, prefilling the width/height drafts (inches)
   // from the current custom size when set, else from the resolved preset's
@@ -24641,105 +20739,6 @@ function DocumentToolbar({
     [docsOfficeParityV2, editor],
   );
 
-  /**
-   * Word's Columns ▸ Left / Right. Both write an explicit two-column `<w:col>`
-   * sequence whose narrow column is the width an equal three-column layout
-   * would give, so the pair matches Word's own 1.83in + 4.17in on US Letter.
-   * The widths come from the SECTION's real text width, so the presets are only
-   * offered once section layouts exist; without one the rows stay disabled
-   * rather than guessing a page geometry.
-   */
-  const setColumnsPreset = useCallback(
-    (side: "left" | "right") => runColumnsPresetButton(editor, side),
-    [editor],
-  );
-
-  // The between-columns rule (分栏分隔线) acts on the top-level doc node. Toggling
-  // flips the boolean; the extension command coerces it as a backstop. Untoggling
-  // stores the default `false`, which renders no `data-*` attr (byte-stable).
-  const toggleColumnSeparator = useCallback(
-    (enabled: boolean) => {
-      runColumnSeparatorButton(editor, enabled, docsOfficeParityV2);
-    },
-    [docsOfficeParityV2, editor],
-  );
-
-  // The writing mode (竖排) also acts on the top-level doc node. Toggling flips
-  // between the default horizontal flow and vertical-rl; the extension command
-  // re-validates the mode against the whitelist as a backstop. Untoggling stores
-  // the default "horizontal-tb", which renders no `data-*` attr (byte-stable).
-  const toggleVerticalText = useCallback(
-    (vertical: boolean) => {
-      runVerticalTextButton(editor, vertical);
-    },
-    [editor],
-  );
-
-  // The manuscript grid (稿纸) also acts on the top-level doc node. Toggling flips
-  // between the default "off" and the full-cell "grid"; the extension command
-  // re-validates the mode against the whitelist as a backstop. Untoggling stores
-  // the default "off", which renders no `data-*` attr (byte-stable).
-  const toggleManuscriptGrid = useCallback(
-    (enabled: boolean) => {
-      runManuscriptGridButton(editor, enabled ? "grid" : "off");
-    },
-    [editor],
-  );
-
-  const updatePageBorderPlacement = useCallback(
-    (
-      patch: Partial<
-        Pick<
-          NonNullable<SectionLayout["pageBorders"]>,
-          "display" | "offsetFrom" | "zOrder"
-        >
-      > & { spacePt?: number },
-    ) => {
-      if (
-        editor.isDestroyed ||
-        !editor.isEditable ||
-        !docsOfficeParityV2
-      ) {
-        return false;
-      }
-      const borders = effectiveSectionPageBorders(editor.state);
-      if (!borders) return false;
-      const { spacePt, ...containerPatch } = patch;
-      return applyCurrentSectionLayoutPatch(editor, {
-        pageBorders: {
-          ...containerPatch,
-          ...(spacePt === undefined
-            ? {}
-            : {
-                edges: Object.fromEntries(
-                  SECTION_BORDER_EDGES.filter(
-                    (edgeName) => borders.edges[edgeName],
-                  ).map((edgeName) => [edgeName, { spacePt }]),
-                ),
-              }),
-        },
-      });
-    },
-    [docsOfficeParityV2, editor],
-  );
-
-  // Word's Options… "Margin" field, shared by the Design and Layout tabs so
-  // both reach the identical control the way Word's two entry points do.
-  const pageBorderSpacingField = (
-    <SpacingNumberField
-      label={t("toolbar.pageBorderSpacing")}
-      testId="document-toolbar-page-border-spacing"
-      value={String(pageBorderSpacePt(currentSectionPageBorders) ?? 24)}
-      disabled={!editor.isEditable || currentSectionPageBorders === null}
-      min={0}
-      max={31}
-      step={1}
-      onCommit={(raw) =>
-        updatePageBorderPlacement({ spacePt: raw === "" ? 24 : Number(raw) })
-      }
-    />
-  );
-
   // Word's Page Border button menu. Every entry composes one section-layout
   // patch in documentPageBorder.ts and applies it here, so the menu itself owns
   // no model rules. "Whole document" is the one entry that spans the chain: it
@@ -24831,88 +20830,10 @@ function DocumentToolbar({
       },
     };
   }, [editor]);
-
-  // ---- Page background color (Word/WPS 页面颜色 / <w:background>) ------------
-  // A solid page-surface fill. The doc-level command re-normalizes the value
-  // (6-hex or null) as a backstop, so a bypassed UI can never persist injected
-  // CSS. Applying a swatch stores the hex; clearing stores null, which renders no
-  // `data-*` attr (byte-stable for a fill-free document).
-  const applyPageBackgroundColor = useCallback(
-    (color: string) => {
-      if (editor.isDestroyed || !editor.isEditable) return;
-      (editor.chain() as OfficeChain).setPageBackgroundColor(color).run();
-    },
-    [editor],
-  );
-
-  const clearPageBackgroundColor = useCallback(() => {
-    if (editor.isDestroyed || !editor.isEditable) return;
-    (editor.chain() as OfficeChain).setPageBackgroundColor(null).run();
-  }, [editor]);
-
-  // Design tab: every command is one undo step that restyles the document
-  // (documentDesignThemes.ts); the editor keeps the focus it had.
-  const runDesignCommand = useCallback(
-    (run: () => boolean) => {
-      if (run()) editor.commands.focus(null, { scrollIntoView: false });
-    },
-    [editor],
-  );
-  /**
-   * Design > Fonts > Customize Fonts... (Create New Theme Fonts, Microsoft
-   * Support "Change theme fonts"): the document theme's own font scheme, its
-   * heading and body faces for Latin and Asian text, under the name it is
-   * saved as -- the Fonts gallery's Custom entry. Text in the theme's fonts
-   * follows; the file's theme states the faces and the name.
-   */
-  const [designFontsDialogOpen, setDesignFontsDialogOpen] = useState(false);
-  const designCustomFonts = useMemo(() => {
-    const own = snapshot.documentDesign?.nativeFonts;
-    if (!own) return [];
-    const asian = (collection: { ea: string; scripts: Partial<Record<string, string>> }) =>
-      collection.scripts.Hans || collection.ea || undefined;
-    return [
-      {
-        id: "document",
-        name: own.name,
-        headingLatin: own.major.latin,
-        bodyLatin: own.minor.latin,
-        ...(asian(own.major) ? { headingEastAsia: asian(own.major) } : {}),
-        ...(asian(own.minor) ? { bodyEastAsia: asian(own.minor) } : {}),
-      },
-    ];
-  }, [snapshot.documentDesign?.nativeFonts]);
-  const designFontsDialogInitial = useMemo<OfficeThemeFontsDraft>(() => {
-    const design = snapshot.documentDesign ?? DEFAULT_DOCUMENT_DESIGN;
-    const start = design.nativeFonts ?? documentDesignFonts(design);
-    const asian = (collection: { ea: string; scripts: Partial<Record<string, string>> }) =>
-      collection.scripts.Hans || collection.ea || undefined;
-    return {
-      headingLatin: start.major.latin,
-      bodyLatin: start.minor.latin,
-      ...(asian(start.major) ? { headingEastAsian: asian(start.major) } : {}),
-      ...(asian(start.minor) ? { bodyEastAsian: asian(start.minor) } : {}),
-      name: nextCustomThemeFontsName(t("officeThemeFonts.customPrefix"), [design.nativeFonts?.name]),
-    };
-  }, [snapshot.documentDesign, t]);
-  const applyDesignCustomFonts = useCallback(
-    (draft: OfficeThemeFontsDraft) => {
-      const design = normalizeDocumentDesign(editor.state.doc.attrs.documentDesign) ?? DEFAULT_DOCUMENT_DESIGN;
-      const fonts = customizedSpreadsheetNativeThemeFonts(design.nativeFonts ?? documentDesignFonts(design), draft);
-      if (!fonts) return;
-      setDesignFontsDialogOpen(false);
-      runDesignCommand(() => applyDocumentCustomFonts(editor, fonts));
-    },
-    [editor, runDesignCommand],
-  );
-  const designThemeFileInputRef = useRef<HTMLInputElement | null>(null);
   // Themes > Save Current Theme: Word asks for the file's name, then saves
   // the document's theme as an Office theme file (.thmx) that Word's,
   // PowerPoint's and Excel's Browse for Themes apply (the API builds it).
   const [designThemeSaveName, setDesignThemeSaveName] = useState<string | null>(null);
-  // Style sets > Save as a New Style Set: the set's name, then the user's
-  // Custom list (lib/document-custom-style-sets.ts).
-  const customStyleSets = useCustomStyleSets();
   const [styleSetSaveName, setStyleSetSaveName] = useState<string | null>(null);
   const saveNewStyleSet = useCallback(
     (name: string) => {
@@ -24923,16 +20844,6 @@ function DocumentToolbar({
     },
     [editor, t],
   );
-  const saveCurrentDesignTheme = useCallback(() => {
-    const design = normalizeDocumentDesign(editor.state.doc.attrs.documentDesign) ?? DEFAULT_DOCUMENT_DESIGN;
-    const themeId = documentDesignThemeId(design);
-    const office = themeId ? OFFICE_THEMES.find((theme) => theme.id === themeId) : undefined;
-    setDesignThemeSaveName(design.themeName ?? (office ? officeThemeLabel(office.label, locale) : t("toolbar.designTheme")));
-  }, [editor, locale, t]);
-  // Themes > Custom: the themes saved with Save Current Theme, kept by the
-  // browser (lib/document-custom-themes.ts); right-click > Delete.
-  const customThemes = useCustomThemes();
-  const [customThemeMenu, setCustomThemeMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const writeCurrentDesignTheme = useCallback(
     (rawName: string) => {
       const name = rawName.trim();
@@ -24964,74 +20875,6 @@ function DocumentToolbar({
     },
     [editor, pageId, t],
   );
-  // Themes > Browse for Themes: an Office theme file or a themed Office
-  // document (lib/office-theme-file.ts); its theme replaces the document's.
-  const openDesignThemeFile = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
-      const input = event.currentTarget;
-      const file = input.files?.[0];
-      input.value = "";
-      if (!file) return;
-      const theme = await readOfficeThemeFile(file).catch(() => null);
-      if (!theme) {
-        toast({ variant: "destructive", description: t("toolbar.designThemeFileInvalid") });
-        return;
-      }
-      runDesignCommand(() => applyDocumentThemeFile(editor, theme));
-    },
-    [editor, runDesignCommand, t],
-  );
-
-  // ---- Line numbering (Word 行号 / <w:lnNumType>) ---------------------------
-  // Margin line numbers (count-by N, restart mode, distance). The doc-level
-  // command re-normalizes the value (countBy/restart/distance clamped) as a
-  // backstop. Toggling on stores defaults ({ countBy: 1, continuous, 0pt});
-  // toggling off stores null (byte-stable for a doc without line numbering).
-  const toggleLineNumbers = useCallback(
-    (enabled: boolean) => {
-      runLineNumbersToggle(editor, enabled, docsOfficeParityV2);
-    },
-    [docsOfficeParityV2, editor],
-  );
-
-  // Patch a single field of the current line-numbering config, preserving the
-  // rest (so changing the count-by step keeps the chosen restart mode, etc.).
-  const updateLineNumberField = useCallback(
-    (patch: Partial<LineNumbers>) => {
-      runLineNumberFieldUpdate(editor, patch, docsOfficeParityV2, snapshot.lineNumbers);
-    },
-    [docsOfficeParityV2, editor, snapshot.lineNumbers],
-  );
-
-  /**
-   * Word's Line Numbers menu applies a numbering mode in ONE step regardless of
-   * the current state: picking 每页重编行号 while numbering is off both turns it
-   * on and stores that restart mode. Once numbering is on it is a plain restart
-   * patch, so an imported `w:start`/`w:distance` survives (see
-   * {@link updateLineNumberField}).
-   */
-  const setLineNumberMode = useCallback(
-    (restart: LineNumberRestart) => {
-      runLineNumberMode(editor, restart, docsOfficeParityV2, currentLineNumbers, snapshot.lineNumbers);
-    },
-    [currentLineNumbers, docsOfficeParityV2, editor, snapshot.lineNumbers],
-  );
-
-  /**
-   * Word's 禁止用于当前段落 (Suppress for Current Paragraph) — the one row in the
-   * Line Numbers menu that is NOT part of the exclusive mode group, because it
-   * is a paragraph property (`w:suppressLineNumbers`) rather than a section one.
-   * The same command backs the Paragraph dialog's exception checkbox.
-   */
-  const toggleSuppressLineNumbers = useCallback(
-    (suppressed: boolean) => {
-      if (editor.isDestroyed || !editor.isEditable) return;
-      (editor.chain() as OfficeChain)
-        .setSuppressLineNumbers(suppressed)
-        .run();
-    },
-    [editor],
-  );
 
   // Word's Line Numbering Options… opens the Line Numbers dialog for the
   // section at the caret, seeded from its live w:lnNumType (or Word's defaults
@@ -25059,11 +20902,6 @@ function DocumentToolbar({
   const submitLineNumbersDialog = useCallback(
     (value: DocumentLineNumbersValue): boolean =>
       runLineNumbersDialog(editor, value, docsOfficeParityV2),
-    [docsOfficeParityV2, editor],
-  );
-
-  const updateSectionLineNumberStart = useCallback(
-    (raw: string) => docsOfficeParityV2 && runLineNumberStart(editor, raw),
     [docsOfficeParityV2, editor],
   );
 
@@ -26400,36 +22238,6 @@ function DocumentToolbar({
     return true;
   }, [editor, openAltEditorForTarget]);
 
-  const fixAccessibilityImageAlt = useCallback(
-    (
-      issue: DocumentAccessibilityIssue,
-      expectedDoc: ProseMirrorNode,
-    ): boolean => {
-      if (
-        issue.kind !== "imageMissingAlt" ||
-        editor.isDestroyed ||
-        !editor.isEditable ||
-        editor.state.doc !== expectedDoc
-      ) {
-        return false;
-      }
-      if (!selectDocumentAccessibilityIssue(editor, issue, expectedDoc)) {
-        return false;
-      }
-      const target = liveImageAltTarget(editor);
-      if (
-        !target ||
-        target.doc !== expectedDoc ||
-        target.pos !== issue.nodePos ||
-        target.node.nodeSize !== issue.nodeSize
-      ) {
-        return false;
-      }
-      return openAltEditorForTarget(target);
-    },
-    [editor, openAltEditorForTarget],
-  );
-
   // Close the Alt Text pane and hand the keyboard back to the document, where
   // the picture is still selected (Word).
   const closeAltEditor = useCallback(() => {
@@ -27003,29 +22811,6 @@ function DocumentToolbar({
     pendingExportLossConsentRef.current = null;
     setPendingExportLossConsent(null);
   }, []);
-
-  const documentEncryptedWithPassword =
-    editor.state.doc.attrs.encryptWithPassword === true ||
-    (pageId ? documentOpenPassword(pageId) !== null : false);
-  const encryptDocumentWithPassword = useCallback(
-    async (change: boolean) => {
-      if (!pageId || !editor.isEditable) return;
-      const password = await askOfficePassword({ mode: "set", change }).catch(() => null);
-      if (!password || editor.isDestroyed) return;
-      setDocumentOpenPassword(pageId, password);
-      if (editor.state.doc.attrs.encryptWithPassword !== true) {
-        editor.commands.setDocumentEncryptWithPassword(true);
-      }
-      toast({ title: t(change ? "officeEncryption.changed" : "officeEncryption.encrypted") });
-    },
-    [editor, pageId, t],
-  );
-  const removeDocumentPassword = useCallback(() => {
-    if (!pageId || !editor.isEditable) return;
-    setDocumentOpenPassword(pageId, null);
-    editor.commands.setDocumentEncryptWithPassword(false);
-    toast({ title: t("officeEncryption.removed") });
-  }, [editor, pageId, t]);
   // A page made from a file opened with its password stays encrypted, as
   // Word saves such a file encrypted again: marked once its content is in.
   useEffect(() => {
@@ -27716,19 +23501,6 @@ function DocumentToolbar({
     ? (documentPictureChangeAuthority(selectedImageTarget.attrs) ??
       (pageId ? documentAttachmentPictureChangeAuthority(selectedImageTarget.attrs) : null))
     : null;
-  const pictureDrawMime = selectedImageTarget
-    ? documentPictureDrawMime(selectedImageTarget.attrs)
-    : null;
-  const pictureDrawAuthorityValid = Boolean(
-    editor.isEditable &&
-    pictureDrawTarget &&
-    selectedImageTarget &&
-    sameLiveImageAltTarget(selectedImageTarget, pictureDrawTarget.target) &&
-    pictureDrawMime === pictureDrawTarget.mimeType,
-  );
-  const pictureCompressionAuthority = selectedImageTarget
-    ? documentPictureCompressionAuthority(selectedImageTarget.attrs)
-    : null;
   const pictureChangeDisabled =
     !editor.isEditable ||
     pictureReplaceBusy ||
@@ -27739,133 +23511,15 @@ function DocumentToolbar({
     : !pictureChangeAuthority
       ? t("toolbar.pictureHasNoVerifiedInPlace")
       : undefined;
-  const pictureDrawDisabledReason = !editor.isEditable
-    ? t("toolbar.documentReadOnlySoPictureCannotDrawnOn")
-    : !pictureDrawMime
-      ? t("toolbar.drawAvailableOnlyForPngJpeg")
-      : null;
-  const pictureCompressionDisabled =
-    !editor.isEditable ||
-    !selectedImageTarget ||
-    !pictureCompressionAuthority ||
-    snapshot.imageWidthPx === null ||
-    snapshot.imageHeightPx === null;
-  const pictureCompressionUnavailableReason = !editor.isEditable
-    ? t("toolbar.documentReadOnlySoPictureCannotCompressed")
-    : !pictureCompressionAuthority
-      ? t("toolbar.compressionAvailableOnlyForLocalPng")
-      : snapshot.imageWidthPx === null || snapshot.imageHeightPx === null
-        ? t("toolbar.pictureDoesNotExposeVerifiedDisplay")
-        : undefined;
-  const imageResetDisabled =
-    !editor.isEditable ||
-    !selectedImageTarget ||
-    selectedImageTarget.attrs.officeImage === true;
   const pictureVisualFormattingDisabled =
     !editor.isEditable || !snapshot.imageVisualFormattingEditable;
-  const pictureBrightnessDelta = imageCorrectionDeltaFromStored(
-    snapshot.imageBrightness,
-  );
-  const pictureContrastDelta = imageCorrectionDeltaFromStored(
-    snapshot.imageContrast,
-  );
   const pictureResetDisabled =
     pictureReplaceBusy ||
     pictureVisualFormattingDisabled ||
     !selectedImageTarget ||
     !imageHasResettablePictureFormatting(selectedImageTarget.attrs);
-  const pictureResetMenuDisabled =
-    pictureReplaceBusy || !editor.isEditable || !selectedImageTarget;
-  const pictureResetAndSizeDisabled =
-    pictureReplaceBusy ||
-    pictureVisualFormattingDisabled ||
-    imageResetDisabled ||
-    !selectedImageTarget;
   const pictureWriterUnavailableReason = t(
     "toolbar.pictureWriterUnavailableReason",
-  );
-  const pictureResetAndSizeUnavailableReason = !editor.isEditable
-    ? t("toolbar.documentReadOnlySoPictureFormatting")
-    : selectedImageTarget?.attrs.officeImage === true
-      ? t("toolbar.sourceDoesNotProvideVerifiedOriginal")
-      : pictureVisualFormattingDisabled
-        ? pictureWriterUnavailableReason
-        : undefined;
-  const pictureStyleTarget = snapshot.image
-    ? readDocumentPictureStyleTarget(editor)
-    : null;
-  const pictureUnsupported = t("toolbar.placeholderUnavailable");
-  const pictureSizeUnavailableReason =
-    pictureSizeDecisionReason ??
-    (snapshot.imageLockAspectRatioEditable ? undefined : pictureUnsupported);
-  const pictureResetCommand = (
-    <OfficeHomeCommand
-      disabled={pictureResetDisabled}
-      icon={<OfficeSemanticIcon semanticId="image.reset" size={24} />}
-      label={t("toolbar.resetPicture")}
-      onClick={resetImagePicture}
-      testId="document-toolbar-picture-reset"
-      variant="large"
-    />
-  );
-  const pictureWidthField = (
-    <LayoutRibbonNumberField
-      icon={<OfficeSemanticIcon semanticId="object.width" size={22} />}
-      label={t("toolbar.pageSetupWidth")}
-      testId="document-toolbar-image-width-px"
-      acceptsUnits
-      value={pictureSizeValue(snapshot.imageWidthPx)}
-      disabled={!pictureSizeDecision.enabled}
-      disabledReason={pictureSizeDecisionReason}
-      min={MIN_IMAGE_PX / pictureSizeScale}
-      max={8192 / pictureSizeScale}
-      step={docsOfficeParityV2 ? 0.1 : 1}
-      unit={pictureSizeUnit}
-      inputWidthPx={docsOfficeParityV2 ? 61 : undefined}
-      onRememberSelection={rememberEditorSelection}
-      onCommit={(raw) => commitPictureSize("width", raw)}
-    />
-  );
-  const pictureHeightField = (
-    <LayoutRibbonNumberField
-      icon={<OfficeSemanticIcon semanticId="object.height" size={22} />}
-      label={t("toolbar.pageSetupHeight")}
-      testId="document-toolbar-image-height-px"
-      acceptsUnits
-      value={pictureSizeValue(snapshot.imageHeightPx)}
-      disabled={!pictureSizeDecision.enabled}
-      disabledReason={pictureSizeDecisionReason}
-      min={MIN_IMAGE_PX / pictureSizeScale}
-      max={8192 / pictureSizeScale}
-      step={docsOfficeParityV2 ? 0.1 : 1}
-      unit={pictureSizeUnit}
-      inputWidthPx={docsOfficeParityV2 ? 61 : undefined}
-      onRememberSelection={rememberEditorSelection}
-      onCommit={(raw) => commitPictureSize("height", raw)}
-    />
-  );
-  const pictureLockAspectRatioControl = (
-    <OfficeHomeCheckbox
-      aria-label={officeCommandAccessibleLabel(
-        t("toolbar.lockAspectRatio"),
-        pictureSizeUnavailableReason,
-      )}
-      checked={snapshot.imageLockAspectRatio}
-      className={homeStyles.pictureAspectRatioTarget}
-      disabled={
-        !pictureSizeDecision.enabled || !snapshot.imageLockAspectRatioEditable
-      }
-      label={t("toolbar.lockAspectRatio")}
-      onPointerDown={rememberEditorSelection}
-      onCheckedChange={(locked) =>
-        runPicture("layout.object.size", { setImageAspectRatio: locked })
-      }
-      testId="document-toolbar-image-lock-ratio"
-      title={officeCommandAccessibleLabel(
-        t("toolbar.lockAspectRatio"),
-        pictureSizeUnavailableReason,
-      )}
-    />
   );
   const docxRejectAtomLabel = (
     atomName: RejectedDocxAtom["atomName"],
@@ -27879,64 +23533,6 @@ function DocumentToolbar({
   const pendingInsertItemLabel = pendingInsertView
     ? docxRejectAtomLabel(pendingInsertView.atomName)
     : "";
-
-  const tableDesignLabels = {
-    ariaLabel: t("toolbar.tableStyles"),
-    more: t("toolbar.moreTableStyles"),
-    clear: t("toolbar.clearTableStyle"),
-    currentStyle: t("toolbar.currentStyle"),
-    documentStyles: t("toolbar.inDocument"),
-    disabledReason: t("toolbar.sourceTableStylePreserveOnlyAnd"),
-    currentStyleUnavailableReason: t("toolbar.currentSourceStyleNotInEditable"),
-    nativeBuiltInUnavailableReason: t(
-      "toolbar.importedTableHasNoAuthenticatedBuilt",
-    ),
-    options: t("toolbar.tableStyleOptions"),
-    tableColor: tableColorLabel,
-    shadingAndBorders: t("toolbar.bordersAndShading"),
-    headerRow: t("toolbar.headerRow"),
-    totalRow: t("toolbar.totalRow"),
-    firstColumn: t("toolbar.firstColumn"),
-    lastColumn: t("toolbar.lastColumn"),
-    bandedRows: t("toolbar.bandedRows"),
-    bandedColumns: t("toolbar.bandedColumns"),
-  } as const;
-  const tableAltTextCommand = (
-    <OfficeHomeCommand
-      activation="click"
-      disabled={!editor.isEditable}
-      displayLabel={tableAltTextVisibleLabel}
-      icon={<OfficeSemanticIcon semanticId="table.altText" size={24} />}
-      label={tableAltTextAccessibleLabel}
-      onClick={openTableAltTextDialog}
-      testId="document-toolbar-table-alt-text"
-      variant="large"
-    />
-  );
-  const webTableSortCommand = (direction: "asc" | "desc") => {
-    const ascending = direction === "asc";
-    const label = ascending
-      ? t("toolbar.sortAscendingLabel")
-      : t("toolbar.sortDescendingLabel");
-    return (
-      <OfficeHomeCommand
-        disabled={tableSortCommandDisabled || !editor.isEditable}
-        displayLabel={label}
-        icon={
-          <OfficeSemanticIcon
-            semanticId={
-              ascending ? "table.sortAscending" : "table.sortDescending"
-            }
-            size={24}
-          />
-        }
-        label={tableSortLabelWithReason(label)}
-        onClick={() => runQuickTableSort(direction)}
-        testId={`document-toolbar-table-sort-${ascending ? "ascending" : "descending"}`}
-        variant="large"
-      />
-    );
-  };
   // One implementation of each East Asian tool's menu, rendered by whichever
   // host owns it for this UI language (Home, or Review > More).
   // Word's Enclose Characters as a small panel of its own: the two styles
@@ -28161,212 +23757,6 @@ function DocumentToolbar({
         {t("toolbar.sortDescending")}
       </DropdownMenuItem>
     </>
-  );
-  const localTableStyleEntries = TABLE_STYLE_THEMES.map((theme) => ({
-    id: theme.id,
-    label: TABLE_STYLE_LABEL_KEY[theme.id]
-      ? t(TABLE_STYLE_LABEL_KEY[theme.id] as Parameters<typeof t>[0])
-      : theme.label,
-    headerFill: theme.headerFill,
-    bandFillA: theme.bandFillA,
-    bandFillB: theme.bandFillB,
-  }));
-  const tableDesignLook: DocumentTableLook = nativeTableDesignTarget
-    ? nativeTableDesignTarget.authority.current.look
-    : {
-        firstRow: snapshot.tableStyleHeaderRow,
-        lastRow: snapshot.tableStyleTotalRow,
-        firstColumn: snapshot.tableStyleFirstColumn,
-        lastColumn: snapshot.tableStyleLastColumn,
-        bandedRows: snapshot.tableStyleBandedRows,
-        bandedColumns: snapshot.tableStyleBandedColumns,
-      };
-  const updateTableDesignLook = (key: keyof DocumentTableLook) => {
-    // A table wearing an Office gallery style (or none) keeps each option as
-    // Word's w:tblLook switch; only legacy recipes restamp their cells.
-    if (
-      toggleTableDesignLook(editor, key, tableChain, nativeTableDesignTarget) &&
-      !nativeTableDesignTarget &&
-      key !== "firstRow"
-    ) {
-      editor.chain().focus(null, { scrollIntoView: false }).run();
-    }
-  };
-  const tableDesignBordersControl = (
-    <DocumentTableBordersMenu
-      ref={tablePropertiesBordersRef}
-      editor={editor}
-      disabled={!editor.isEditable}
-      presentation="large"
-      cellMargin={snapshot.cellMargin}
-      cellMarginMixed={snapshot.cellMarginMixed}
-      onCellMarginChange={setCellMargin}
-      onDrawTable={toggleTableDraw}
-      onPenPicked={armTableBorderPainter}
-      heldPen={tableBorderHeldPen}
-      onPointerDown={rememberEditorSelection}
-    />
-  );
-  const localTableDesignTarget = nativeTableDesignTarget
-    ? null
-    : findSelectedTable(editor);
-  const localTableDesignTheme = tableStyleThemeFromAttrs(
-    localTableDesignTarget?.node.attrs,
-  );
-  const localTableColorFamily = tableStyleColorFamilyFromTheme(
-    localTableDesignTheme,
-  );
-  const tableColorDisabledReason = !editor.isEditable
-    ? t("toolbar.documentReadOnlySoTableColor")
-    : nativeTableDesignTarget
-      ? tableColorNativeUnavailableReason
-      : !localTableDesignTheme || !localTableColorFamily
-        ? t("toolbar.chooseEditableColoredTableStyleFirst")
-        : undefined;
-  // A table wearing an Office gallery style recolours through the gallery's
-  // colour columns; legacy recipes keep their colour families below.
-  const officeTableColorTarget = readDocumentOfficeTableColorTarget(editor);
-  const tableDesignColorControl = officeTableColorTarget ? (
-    <DocumentOfficeTableColorMenu
-      editor={editor}
-      target={officeTableColorTarget}
-      locale={isChineseLocale ? "zh" : "en"}
-      label={tableColorLabel}
-      disabledReason={
-        editor.isEditable
-          ? undefined
-          : t("toolbar.documentReadOnlySoTableColor")
-      }
-      onPointerDown={rememberEditorSelection}
-    />
-  ) : (
-    <DropdownMenu
-      onOpenChange={(open) => {
-        if (!open) clearLocalTableStylePreview();
-      }}
-    >
-      <DropdownMenuTrigger asChild>
-        <OfficeHomeMenuTrigger
-          disabled={tableColorDisabledReason !== undefined}
-          disabledReason={tableColorDisabledReason}
-          hasMenuIndicator
-          icon={<OfficeSemanticIcon semanticId="table.style.color" size={24} />}
-          label={tableColorLabel}
-          onPointerDown={rememberEditorSelection}
-          testId="document-toolbar-table-color"
-          variant="large"
-        />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        data-testid="document-toolbar-table-color-menu"
-        sideOffset={6}
-      >
-        {TABLE_STYLE_COLOR_FAMILIES.map((family) => {
-          const nextThemeId = tableStyleThemeIdForColor(family.id);
-          return (
-            <DropdownMenuItem
-              key={family.id}
-              data-testid={`document-toolbar-table-color-${family.id}`}
-              disabled={!nextThemeId}
-              onFocus={() => {
-                if (nextThemeId) previewTableStyle(nextThemeId);
-              }}
-              onPointerEnter={() => {
-                if (nextThemeId) previewTableStyle(nextThemeId);
-              }}
-              onPointerLeave={clearLocalTableStylePreview}
-              onSelect={() => applyTableStyleColor(family.id)}
-            >
-              <span
-                aria-hidden
-                style={{
-                  backgroundColor: family.swatch,
-                  border: "1px solid rgba(15, 23, 42, 0.2)",
-                  borderRadius: 3,
-                  display: "inline-block",
-                  height: 16,
-                  width: 16,
-                }}
-              />
-              <span>
-                {TABLE_STYLE_COLOR_LABEL_KEY[family.id]
-                  ? t(
-                      TABLE_STYLE_COLOR_LABEL_KEY[family.id] as Parameters<
-                        typeof t
-                      >[0],
-                    )
-                  : family.label}
-              </span>
-              {localTableColorFamily === family.id ? (
-                <Check aria-hidden size={14} />
-              ) : null}
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-  const activeTableShadingPalette = nativeTableDesignTarget
-    ? tableShadingPaletteOpen
-    : localTableShadingPaletteVisible;
-  const tableDesignShadingControl = (
-    <div className={homeStyles.tableShadingPopoverHost}>
-      <OfficeHomeMenuTrigger
-        active={snapshot.cellBackgroundColor !== null}
-        disabled={!editor.isEditable}
-        hasMenuIndicator
-        icon={<OfficeSemanticIcon semanticId="table.shading" size={24} />}
-        label={t("toolbar.cellShading")}
-        aria-expanded={activeTableShadingPalette}
-        aria-haspopup="dialog"
-        onPointerDown={rememberEditorSelection}
-        onClick={() => {
-          if (nativeTableDesignTarget) {
-            setLocalTableShadingPaletteOpen(false);
-            setTableShadingPaletteTarget(
-              tableShadingPaletteOpen
-                ? null
-                : {
-                    selection: nativeTableDesignTarget.selectionRef,
-                    tableNode: nativeTableDesignTarget.tableNode,
-                    authorityJson: nativeTableDesignTarget.authorityJson,
-                  },
-            );
-            return;
-          }
-          setTableShadingPaletteTarget(null);
-          setLocalTableShadingPaletteOpen((open) => !open);
-        }}
-        testId="document-toolbar-cell-shading"
-        variant="large"
-      />
-      {activeTableShadingPalette && editor.isEditable ? (
-        <OfficeColorPalettePopover
-          paletteId={snapshot.designColorSet ?? undefined}
-          value={snapshot.cellBackgroundColor ?? undefined}
-          allowNoFill
-          noFillSelected={snapshot.cellBackgroundColor === null}
-          labels={{
-            themeColors: t("toolbar.themeColors"),
-            standardColors: t("toolbar.standardColors"),
-            recentColors: t("spreadsheet.recentColors"),
-            moreColors: t("toolbar.cellShading"),
-            noFill: t("toolbar.cellShadingNone"),
-          }}
-          onPick={(color) => {
-            setCellBackgroundColor(color);
-            setTableShadingPaletteTarget(null);
-            setLocalTableShadingPaletteOpen(false);
-          }}
-          onDismiss={() => {
-            setTableShadingPaletteTarget(null);
-            setLocalTableShadingPaletteOpen(false);
-          }}
-          testIdPrefix="document-toolbar-cell-shading"
-        />
-      ) : null}
-    </div>
   );
 
   const documentSmartArtPreparationEntry =
@@ -28637,1220 +24027,6 @@ function DocumentToolbar({
           },
         )
       : null);
-
-  // CSS hides inactive groups after React has already built their JSX. Keep
-  // those trees out of the render path so opening another document cannot
-  // block input and collaboration while every ribbon tab is constructed.
-  /**
-   * The ONE Shape Format tab (components/office-ribbon/OfficeShapeFormatTab):
-   * Docs supplies its selection, its writers and its reasons. Word's tab is
-   * the reference anatomy (it is the only host with the Text group and with
-   * Position / Wrap Text under Arrange), so those ride the adapter as Word-only
-   * pieces; the exact-rotation box inside Rotate is Docs' own strength and
-   * stays as a host-rendered field.
-   */
-  const documentShapeEffects = [
-    "none",
-    "shadow",
-    "reflection",
-    "glow",
-    "softEdge",
-    "bevel",
-    "threeD",
-  ] as const;
-  const documentShapeFormatLabels: OfficeShapeFormatLabels = {
-        insertShapes: t("toolbar.insertShapesLabel"),
-        shapes: t("toolbar.shapes"),
-        editShape: t("toolbar.editShape"),
-        changeShape: t("toolbar.changeShape"),
-        editPoints: t("toolbar.editPoints"),
-        editPointsReason: t("toolbar.objectHasNoSingleOutlineTo"),
-        rerouteConnectors: t("presentation.ui.shapeFormat.rerouteConnectors"),
-        textBox: t("toolbar.textBoxLabel"),
-        textBoxHorizontal: t("toolbar.textBox.horizontal"),
-        textBoxVertical: t("toolbar.textBox.vertical"),
-        shapeStyles: t("toolbar.shapeStyles"),
-        moreShapeStyles: t("toolbar.moreShapeStyles"),
-        previousStyles: t("toolbar.previousStyles"),
-        nextStyles: t("toolbar.nextStyles"),
-        shapeFill: t("toolbar.shapeFill"),
-        fill: t("toolbar.fill"),
-        shapeOutline: t("toolbar.shapeOutline"),
-        outline: t("toolbar.outline"),
-        shapeEffects: t("toolbar.shapeEffects"),
-        effects: t("toolbar.effects"),
-        effect: (effect) =>
-          t(
-            `toolbar.shapeFormatOption.effect.${effect}` as "toolbar.shapeFormatOption.effect.none",
-          ),
-        outlineLine: t("toolbar.outlineLine"),
-        arrows: t("officeArrows.arrows"),
-        weight: t("toolbar.weight"),
-        lineStyle: t("presentation.home.dashes"),
-        lineStyleOption: (style) =>
-          style === "solid"
-            ? t("toolbar.solid")
-            : style === "dashed"
-              ? t("toolbar.dashed")
-              : t("toolbar.dotted"),
-        wordArtStyles: t("toolbar.wordartStyles"),
-        moreWordArtStyles: t("toolbar.moreWordartStyles"),
-        textFill: t("toolbar.textFill"),
-        textOutline: t("toolbar.textOutline"),
-        textEffects: t("toolbar.textEffectsLabel"),
-        text: t("toolbar.text"),
-        textDirection: t("toolbar.textDirection"),
-        textDirectionOption: (direction) =>
-          t(
-            `toolbar.shapeFormatOption.textDirection.${direction}` as "toolbar.shapeFormatOption.textDirection.horizontal",
-          ),
-        alignText: t("toolbar.alignText"),
-        alignTextOption: (align) =>
-          t(
-            `toolbar.shapeFormatOption.verticalAlign.${align}` as "toolbar.shapeFormatOption.verticalAlign.middle",
-          ),
-        createLink: t("toolbar.createLink"),
-        accessibility: t("toolbar.accessibility"),
-        altText: t("toolbar.altText"),
-        arrange: t("spreadsheet.arrangeMenu"),
-        position: t("toolbar.objectPosition"),
-        wrapText: t("toolbar.objectWrap"),
-        bringForward: t("presentation.contextMenu.bringForward"),
-        bringToFront: t("presentation.contextMenu.bringToFront"),
-        sendBackward: t("presentation.contextMenu.sendBackward"),
-        sendToBack: t("presentation.contextMenu.sendToBack"),
-        selectionPane: t("toolbar.selectionPane"),
-        align: t("toolbar.objectAlign"),
-        alignOption: (action) =>
-          t(`toolbar.objectAlign_${action}` as "toolbar.objectAlign_left"),
-        group: t("toolbar.objectGroup"),
-        ungroup: t("presentation.group.ungroup"),
-        rotate: t("toolbar.objectRotate"),
-        rotateOption: (action) =>
-          action === "rotateRight90"
-            ? t("presentation.rotate.right")
-            : action === "rotateLeft90"
-              ? t("presentation.rotate.left")
-              : action === "flipHorizontal"
-                ? t("presentation.flip.horizontal")
-                : t("presentation.flip.vertical"),
-        moreRotationOptions: t("toolbar.moreRotationOptions"),
-        alreadyAtFront: t("presentation.bringForwardAtFront"),
-        alreadyAtBack: t("presentation.sendBackwardAtBack"),
-        resetRotation: t("presentation.image.reset"),
-        size: t("toolbar.size"),
-        width: t("toolbar.pageSetupWidth"),
-        height: t("toolbar.pageSetupHeight"),
-        lockAspectRatio: t("presentation.tableRibbon.lockAspectRatio"),
-        mixed: t("toolbar.fontPickerMixed"),
-        formatPane: t("toolbar.formatPane"),
-        themeColors: t("toolbar.themeColors"),
-        standardColors: t("toolbar.standardColors"),
-        recentColors: t("spreadsheet.recentColors"),
-        moreFillColors: t("toolbar.moreFillColors"),
-        moreOutlineColors: t("toolbar.moreOutlineColors"),
-        moreTextColors: t("toolbar.moreTextColors"),
-        noFill: t("toolbar.noFill"),
-        noOutline: t("toolbar.noOutline"),
-  };
-  // Word's text box (the `textBox` frame) selected by its border: the same
-  // shared Shape Format tab, its commands writing the frame's own `wp:anchor`
-  // and `wps:bodyPr` (textBoxFrameCommands). What a frame cannot take yet
-  // stays listed and says so.
-  const selectedTextBoxFrame = selectedDocumentShape ? null : liveTextBoxFrameTarget(editor);
-  // PowerPoint's Shape Format commands, on the document's shapes and its one
-  // floating stack (shared by the shape and the text box adapters): Merge
-  // Shapes, Reorder Objects, Regroup and the selection count beside Arrange.
-  const documentShapeSelectedPositions = documentShapeMultiSelection(editor.state);
-  const documentShapeSelectedCount = Math.max(
-    documentShapeSelectedPositions.length,
-    selectedDocumentShape || selectedTextBoxFrame ? 1 : 0,
-  );
-  // Merge Shapes reads the shapes in the order they were picked: the one
-  // clicked last holds the editor's selection, so the other is the first.
-  const documentMergeOrder: readonly number[] =
-    documentShapeSelectedPositions.length === 2 && editor.state.selection instanceof NodeSelection
-      ? [
-          documentShapeSelectedPositions.find((pos) => pos !== editor.state.selection.from) ??
-            documentShapeSelectedPositions[0],
-          editor.state.selection.from,
-        ]
-      : documentShapeSelectedPositions;
-  const documentMergeReady =
-    editor.isEditable &&
-    documentMergeOrder.length === 2 &&
-    documentShapeMergeInputs(editor, documentMergeOrder) !== null;
-  const mergeDocumentShapes = (op: OfficeMergeShapesOperation) => {
-    const doc = editor.state.doc;
-    const inputs = documentShapeMergeInputs(editor, documentMergeOrder);
-    if (!inputs || !editor.isEditable) return;
-    void requestOfficeShapeMerge(op, inputs.first, inputs.second).then(
-      (results) => {
-        if (results.length === 0) {
-          toast({ title: t("presentation.mergeShapes.noResult") });
-          return;
-        }
-        if (applyDocumentShapeMerge(editor, doc, inputs.positions, results) === null) {
-          toast({ title: t("presentation.ui.contextMenu.shapesCannotMerge") });
-        }
-      },
-      (error: unknown) => {
-        if (isEngineAbort(error)) return;
-        toast({ title: t(engineErrorMessageKey(error)), variant: "destructive" });
-      },
-    );
-  };
-  const documentMergeShapes: OfficeShapeFormatAdapter["mergeShapes"] = {
-    label: t("presentation.contextMenu.mergeShapes"),
-    disabled: !documentMergeReady,
-    disabledReason: !editor.isEditable
-      ? readOnlyReason
-      : documentShapeSelectedPositions.length === 2
-        ? t("presentation.ui.contextMenu.shapesCannotMerge")
-        : t("presentation.ui.contextMenu.selectTwoShapes"),
-    items: OFFICE_MERGE_SHAPES_OPERATIONS.map((op) => ({
-      key: op,
-      label: t(`presentation.mergeShapes.${op}`),
-      onSelect: () => mergeDocumentShapes(op),
-    })),
-  };
-  const documentReorderAvailable =
-    editor.isEditable &&
-    selectedDocumentShapeStack.complete &&
-    selectedDocumentShapeStack.backToFront.length >= 2;
-  const openDocumentReorderObjects = (overlappingOnly: boolean) => {
-    const layers = documentShapeReorderLayers(editor.view, {
-      overlappingOnly,
-      fallbackLabel: (_type, ordinal) => `${t("toolbar.object")} ${ordinal}`,
-    });
-    if (!layers) {
-      toast({ title: t("office.shapeFormat.reorderNeedsTwoInDocument") });
-      return;
-    }
-    shapeReorderReturnFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setShapeReorderSession((current) => ({
-      key: (current?.key ?? 0) + 1,
-      doc: editor.state.doc,
-      layers,
-    }));
-  };
-  const documentShapeReorder: OfficeShapeFormatAdapter["reorder"] = {
-    label: t("presentation.arrange.reorderObjects"),
-    overlappingLabel: t("presentation.arrange.reorderOverlapping"),
-    disabled: !documentReorderAvailable,
-    disabledReason: !editor.isEditable
-      ? readOnlyReason
-      : selectedDocumentShapeStack.backToFront.length >= 2 && !selectedDocumentShapeStack.complete
-        ? // An imported floating object the page does not show holds a
-          // place in the stack, so nothing may be renumbered around it.
-          t("document.capability.unavailable")
-        : t("office.shapeFormat.reorderNeedsTwoInDocument"),
-    overlappingDisabled: !documentReorderAvailable || documentShapeSelectedCount === 0,
-    onReorder: () => openDocumentReorderObjects(false),
-    onReorderOverlapping: () => openDocumentReorderObjects(true),
-  };
-  const documentSelectionCount: OfficeShapeFormatAdapter["selectionCount"] = {
-    count: documentShapeSelectedCount,
-    label: t("presentation.align.selectionCount", { count: documentShapeSelectedCount }),
-  };
-  const documentRegroupPositions = editor.isEditable
-    ? documentShapeRegroupPositions(editor.state)
-    : null;
-  const documentRegroup: NonNullable<OfficeShapeFormatAdapter["group"]["regroup"]> = {
-    label: t("office.shapeContextMenu.regroup"),
-    disabled: documentRegroupPositions === null,
-    disabledReason: editor.isEditable
-      ? t("presentation.arrange.regroupUnavailable")
-      : readOnlyReason,
-    onSelect: () => {
-      const positions = documentShapeRegroupPositions(editor.state);
-      if (positions) groupDocumentShapes(editor, editor.state.doc, positions);
-    },
-  };
-  const buildTextBoxFrameFormatAdapter = (
-    frame: NonNullable<typeof selectedTextBoxFrame>,
-  ): OfficeShapeFormatAdapter => {
-    const writable = editor.isEditable;
-    const lockedReason = writable ? undefined : readOnlyReason;
-    const notForTextBox = {
-      disabled: true,
-      disabledReason: t("document.capability.unavailable"),
-    } as const;
-    const fill = normalizeDocumentTextBoxFill(frame.node.attrs.textBoxFill);
-    const outline = normalizeDocumentTextBoxOutline(frame.node.attrs.textBoxOutline);
-    const outlineVisible = Boolean(outline && outline.style !== "none" && outline.style !== "nil");
-    const body = normalizeFloatFrameBody(frame.node.attrs.frameBody);
-    const size = textBoxFrameSizeEmu(frame.node);
-    const anchored = Boolean(frame.node.attrs.floatAnchor);
-    const wrap = documentTextBoxWrapOf(frame.node.attrs.floatAnchor);
-    const textBoxPlacement = liveTextBoxPlacement(editor);
-    const cm = (emu: number) => String(documentShapePxToCentimeters(documentShapeEmuToPx(emu)));
-    const noEffect = {
-      value: "none" as const,
-      available: [] as const,
-      onPick: () => undefined,
-      ...notForTextBox,
-    };
-    const noColor = { value: undefined, onPick: () => undefined, ...notForTextBox };
-    return {
-      application: "docs",
-      onRememberSelection: rememberEditorSelection,
-      labels: documentShapeFormatLabels,
-      insert: {
-        disabled: !writable,
-        disabledReason: lockedReason,
-        recentStorageKey: DOCUMENT_SHAPE_RECENT_STORAGE_KEY,
-        onInsert: armDocumentShapeDraw,
-        onInsertTool: (tool) => {
-          if (canWriteEditor()) setDocumentFreeformTool(tool);
-        },
-      },
-      changeShape: {
-        ...notForTextBox,
-        recentStorageKey: DOCUMENT_SHAPE_RECENT_STORAGE_KEY,
-        onChange: () => false,
-      },
-      editPoints: { onSelect: () => undefined, ...notForTextBox },
-      changeShapeSubmenu: true,
-      rerouteConnectors: { onSelect: () => undefined, ...notForTextBox },
-      textBox: { onInsert: insertDocumentTextBox },
-      mergeShapes: documentMergeShapes,
-      styles: { recipes: sharedShapeRecipes, value: null, onCommit: () => undefined, ...notForTextBox },
-      fill: {
-        value: fill && fill.color !== "none" ? fill.color : "none",
-        paletteId: snapshot.designColorSet ?? undefined,
-        disabled: !writable,
-        disabledReason: lockedReason,
-        onPick: (color) => setLiveTextBoxFill(editor, color),
-      },
-      outline: {
-        value: outlineVisible ? (outline?.color ?? "#000000") : "none",
-        paletteId: snapshot.designColorSet ?? undefined,
-        disabled: !writable,
-        disabledReason: lockedReason,
-        onPick: (color) => setLiveTextBoxOutline(editor, { color }),
-        weightPt: outlineVisible ? (outline?.sizePt ?? 0.5) : null,
-        onWeight: (pt) => setLiveTextBoxOutline(editor, { weightPt: pt }),
-        lineStyle: outlineVisible ? textBoxOutlineStyleOf(frame.node.attrs.textBoxOutline) : null,
-        onLineStyle: (style) => setLiveTextBoxOutline(editor, { style }),
-        lineEnds: shapeArrowsValue,
-        onLineEnds: () => undefined,
-        lineEndsCapability: notForTextBox,
-      },
-      effects: noEffect,
-      wordArt: { value: null, onCommit: () => undefined, ...notForTextBox },
-      textFill: noColor,
-      textOutline: noColor,
-      textEffects: noEffect,
-      text: {
-        direction: {
-          value: documentTextBoxDirectionOf(body.vert),
-          disabled: !writable,
-          disabledReason: lockedReason,
-          onPick: (direction) => setLiveTextBoxBody(editor, { direction }),
-        },
-        align: {
-          value: body.anchor === "ctr" ? "middle" : body.anchor === "b" ? "bottom" : "top",
-          disabled: !writable,
-          disabledReason: lockedReason,
-          onPick: (align) => setLiveTextBoxBody(editor, { align }),
-        },
-      },
-      altText: { active: false, onOpen: () => undefined, ...notForTextBox },
-      // Word's Position gallery: the nine "with Square Text Wrapping" places.
-      position: {
-        icon: <ArrowRightLeft size={24} />,
-        disabled: !writable || !anchored,
-        disabledReason: lockedReason ?? t("document.capability.unavailable"),
-        menu: (
-          <>
-            <DropdownMenuLabel>{t("spreadsheet.chartFormatCopy.arrange.withTextWrapping")}</DropdownMenuLabel>
-            <div role="group" style={{ display: "grid", gridTemplateColumns: "repeat(3, auto)", gap: 4, padding: "2px 8px 6px" }}>
-              {FLOAT_POSITION_PRESETS.map((preset) => {
-                const name = t(`spreadsheet.chartFormatCopy.arrange.${POSITION_KEYS[preset]}`);
-                const current = textBoxPlacement.preset === preset;
-                return (
-                  <DropdownMenuItem
-                    key={preset}
-                    aria-label={name}
-                    title={name}
-                    data-testid={`document-toolbar-text-box-position-${preset}`}
-                    data-state={current ? "checked" : undefined}
-                    style={{ justifyContent: "center", padding: 4, outline: current ? "2px solid var(--office-accent, #2b579a)" : undefined }}
-                    onSelect={() => setLiveTextBoxPositionPreset(editor, preset)}
-                  >
-                    <PositionGlyph preset={preset} />
-                  </DropdownMenuItem>
-                );
-              })}
-            </div>
-          </>
-        ),
-      },
-      wrapText: {
-        icon: <OfficeSemanticIcon semanticId="object.textWrap" size={24} />,
-        disabled: !writable,
-        disabledReason: lockedReason,
-        menu: (
-          <>
-          <DropdownMenuRadioGroup value={wrap}>
-            {(
-              [
-                "square",
-                "tight",
-                "through",
-                "topAndBottom",
-                "behindText",
-                "inFrontOfText",
-              ] as const
-            ).map((value) => (
-              <DropdownMenuRadioItem
-                key={value}
-                value={value}
-                data-testid={`document-toolbar-text-box-wrap-${value}`}
-                onSelect={() => setLiveTextBoxWrap(editor, value)}
-              >
-                {t(`toolbar.shapeFormatOption.wrap.${value}`)}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuRadioGroup
-            value={textBoxPlacement.moveWithText === null ? "" : textBoxPlacement.moveWithText ? "move" : "fix"}
-          >
-            <DropdownMenuRadioItem
-              value="move"
-              disabled={!anchored}
-              data-testid="document-toolbar-text-box-move-with-text"
-              onSelect={() => setLiveTextBoxMoveWithText(editor, true)}
-            >
-              {t("spreadsheet.chartFormatCopy.arrange.moveWithText")}
-            </DropdownMenuRadioItem>
-            <DropdownMenuRadioItem
-              value="fix"
-              disabled={!anchored}
-              data-testid="document-toolbar-text-box-fix-position-on-page"
-              onSelect={() => setLiveTextBoxMoveWithText(editor, false)}
-            >
-              {t("spreadsheet.chartFormatCopy.arrange.fixPositionOnPage")}
-            </DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            disabled={!anchored}
-            data-testid="document-toolbar-text-box-more-layout-options"
-            onSelect={openFloatLayoutDialog}
-          >
-            {t("document.floatLayout.moreLayoutOptions")}
-          </DropdownMenuItem>
-          </>
-        ),
-      },
-      zOrder: {
-        disabled: !writable || !anchored,
-        disabledReason: !writable ? readOnlyReason : t("document.capability.unavailable"),
-        atBoundary: (action) => textBoxZOrderAtBoundary(editor, action),
-        onAction: (action) => setLiveTextBoxZOrder(editor, action),
-        textLayer: {
-          inFrontOfTextLabel: t("toolbar.objectLayer_inFrontOfText"),
-          behindTextLabel: t("toolbar.objectLayer_behindText"),
-          onInFrontOfText: () => setLiveTextBoxZOrder(editor, "inFrontOfText"),
-          onBehindText: () => setLiveTextBoxZOrder(editor, "behindText"),
-          disabled: !writable || !anchored,
-        },
-      },
-      selectionPane: {
-        onSelect: () => {
-          selectionPaneReturnFocusRef.current = document.querySelector<HTMLButtonElement>(
-            '[data-testid="document-toolbar-ribbon-shape-selection-pane"]',
-          );
-          setFindReplaceOpen(false);
-          setGoToMode(null);
-          setSelectionPaneOpen(true);
-        },
-      },
-      selectionCount: documentSelectionCount,
-      reorder: documentShapeReorder,
-      // Align (one object: to the margins), as Word aligns a text box.
-      alignObjects: {
-        actions: ["left", "center", "right", "top", "middle", "bottom"],
-        disabled: !writable || !anchored,
-        disabledReason: lockedReason ?? t("document.capability.unavailable"),
-        onAction: (action) => {
-          if (action !== "distributeHorizontal" && action !== "distributeVertical") setLiveTextBoxAlign(editor, action);
-        },
-      },
-      group: { grouped: false, onGroup: () => undefined, onUngroup: () => undefined, ...notForTextBox },
-      rotate: { onAction: () => undefined, ...notForTextBox },
-      size: {
-        heightFirst: true,
-        width: size ? cm(size.widthEmu) : "",
-        height: size ? cm(size.heightEmu) : "",
-        max: documentShapePxToCentimeters(documentShapeEmuToPx(DOCUMENT_SHAPE_MAX_EDGE_EMU)),
-        disabled: !writable || !size,
-        disabledReason: lockedReason ?? t("document.capability.unavailable"),
-        onCommit: (axis, raw) => setLiveTextBoxSize(editor, axis, documentShapeCentimetersToPx(raw)),
-        lockAspect: { value: false, onToggle: () => undefined, ...notForTextBox },
-      },
-    };
-  };
-  const documentShapeFormatAdapter: OfficeShapeFormatAdapter | null =
-    selectedDocumentShape
-      ? {
-          application: "docs",
-          onRememberSelection: rememberEditorSelection,
-          labels: documentShapeFormatLabels,
-          insert: {
-            disabled: !editor.isEditable,
-            disabledReason: editor.isEditable ? undefined : readOnlyReason,
-            recentStorageKey: DOCUMENT_SHAPE_RECENT_STORAGE_KEY,
-            onInsert: armDocumentShapeDraw,
-            onInsertTool: (tool) => {
-              if (canWriteEditor()) setDocumentFreeformTool(tool);
-            },
-          },
-          changeShape: {
-            disabled: shapePaintDisabled,
-            disabledReason: shapePaintDisabledReason,
-            recentStorageKey: DOCUMENT_SHAPE_RECENT_STORAGE_KEY,
-            onChange: (preset) => {
-              const target = liveDocumentShapeTarget(editor);
-              // A line keeps no words and no WordArt (the save refuses both).
-              if ((target?.attrs.textPaint || (target && documentShapeVisibleText(target.node))) && documentShapeDefinition(preset).lineLike) {
-                toast({
-                  title: target.attrs.textPaint
-                    ? t("toolbar.chooseTextBearingShapeToPreserve")
-                    : t("toolbar.chooseTextBearingShapeToKeepText"),
-                });
-                return false;
-              }
-              return setLiveDocumentShapePreset(editor, preset);
-            },
-          },
-          editPoints:
-            !shapePaintDisabled && documentShapeEditPointsAvailable(selectedDocumentShape.attrs)
-              ? { onSelect: () => void startLiveDocumentShapeEditPoints(editor) }
-              : {
-                  onSelect: () => undefined,
-                  disabled: true,
-                  disabledReason: shapePaintDisabled
-                    ? shapePaintDisabledReason
-                    : t("toolbar.objectHasNoSingleOutlineTo"),
-                },
-          // Word's Edit Shape is a menu, as PowerPoint's: Change Shape ▸, Edit
-          // Points, Reroute Connectors. The gallery used to fill the menu and
-          // left Edit Points below a long scroll.
-          changeShapeSubmenu: true,
-          // Word reroutes glued connectors, which a document draws inside a
-          // group or drawing canvas only.
-          rerouteConnectors:
-            editor.isEditable && documentShapeHasGluedConnectors(selectedDocumentShape.attrs)
-              ? { onSelect: () => void rerouteLiveDocumentShapeConnectors(editor) }
-              : {
-                  onSelect: () => undefined,
-                  disabled: true,
-                  disabledReason: editor.isEditable
-                    ? t("office.shapeFormat.rerouteConnectorsInGroup")
-                    : readOnlyReason,
-                },
-          textBox: {
-            onInsert: insertDocumentTextBox,
-          },
-          mergeShapes: documentMergeShapes,
-          styles: {
-            recipes: sharedShapeRecipes,
-            value: activeShapeStyleId,
-            disabled: shapePaintDisabled,
-            disabledReason: shapePaintDisabledReason,
-            onCommit: (recipe) => {
-              if (!shapePaintDisabled) setLiveDocumentShapeStyle(editor, recipe);
-            },
-          },
-          fill: {
-            value: selectedDocumentShapePaint?.fill ?? selectedDocumentShape.attrs.fill,
-            paletteId: snapshot.designColorSet ?? undefined,
-            // The whole SmartArt graphic takes Shape Fill as its own
-            // background (Word's `dgm:bg`), its shapes untouched.
-            disabled: shapePaintDisabled && !smartArtGraphicFillable,
-            disabledReason: shapePaintDisabledReason,
-            onPick: (color) =>
-              liveDocumentSmartArtGraphicSelected(editor)
-                ? setLiveDocumentSmartArtGraphicFill(editor, color ?? null)
-                : setLiveDocumentShapePaint(editor, { fill: color ?? "none" }),
-            // Office's row under the colours: Picture... fills the shape with a
-            // picture stretched over it (Format Shape's Picture fill).
-            extras: [
-              {
-                id: "picture",
-                label: t("office.shapeFill.picture"),
-                disabled: shapePaintDisabled || Boolean(selectedDocumentShape.attrs.groupMembers?.length),
-                disabledReason: shapePaintDisabledReason,
-                onSelect: () =>
-                  pickLiveDocumentShapeFillPicture(editor, () =>
-                    toast({ title: t("toolbar.pictureReplaceUnreadable"), variant: "destructive" }),
-                  ),
-              },
-            ],
-          },
-          outline: {
-            value: selectedDocumentShapePaint?.outline ?? selectedDocumentShape.attrs.outline,
-            paletteId: snapshot.designColorSet ?? undefined,
-            disabled: shapePaintDisabled,
-            disabledReason: shapePaintDisabledReason,
-            onOpenChange: (open) => {
-              if (open) shapePaletteTarget.current = liveDocumentShapeTarget(editor);
-            },
-            onPick: (color) => {
-              if (canWriteShapePalette()) {
-                setLiveDocumentShapePaint(editor, { outline: color ?? "none" });
-              }
-            },
-            weightPt: selectedDocumentShapePaint?.outlineWidthPt ?? selectedDocumentShape.attrs.outlineWidthPt ?? 1,
-            onWeight: (pt) => {
-              if (canWriteShapePalette()) {
-                setLiveDocumentShapePaint(editor, { outlineWidthPt: pt });
-              }
-            },
-            lineStyle: selectedDocumentShape.attrs.outlineStyle ?? "solid",
-            onLineStyle: (style) => {
-              if (canWriteShapePalette()) {
-                setLiveDocumentShapePaint(editor, { outlineStyle: style });
-              }
-            },
-            dashes: {
-              value: officeMenuDashOf(
-                selectedDocumentShape.attrs.outlineStyle,
-                selectedDocumentShape.attrs.outlineDash,
-              ),
-              onPick: (dash) => {
-                if (canWriteShapePalette()) {
-                  setLiveDocumentShapePaint(editor, { outlineMenuDash: dash });
-                }
-              },
-              optionLabel: (dash) => t(`presentation.officeGraphic.dash.${dash}`),
-            },
-            // Shape Outline > Sketched, as Word lists it.
-            sketched: {
-              label: t("office.outline.sketched"),
-              value: selectedDocumentShape.attrs.outlineSketch ?? "none",
-              disabled: shapePaintDisabled,
-              disabledReason: shapePaintDisabledReason,
-              onPick: (sketch) => {
-                if (canWriteShapePalette()) {
-                  setLiveDocumentShapePaint(editor, { outlineSketch: sketch });
-                }
-              },
-              optionLabel: (sketch) => t(`office.outline.sketch.${sketch}`),
-            },
-            lineEnds: shapeArrowsValue,
-            onLineEnds: (next) => {
-              if (!canWriteShapePalette()) return;
-              applyShapeLineEnds(next);
-            },
-            lineEndsCapability: {
-              disabled: shapeArrowsDisabled,
-              disabledReason: shapeArrowsDisabledReason,
-            },
-          },
-          effects: {
-            value: selectedDocumentShapeEffect,
-            available: documentShapeEffects,
-            disabled: shapePaintDisabled,
-            disabledReason: shapePaintDisabledReason,
-            onPick: (effect) => setLiveDocumentShapeFormat(editor, { effect }),
-            // Word's whole Shape Effects menu (Preset, Shadow, Reflection,
-            // Glow, Soft Edges, Bevel, 3-D Rotation), combinable, on the
-            // shape's `shapeEffects`: the menu slides, sheets and pictures
-            // use. The older custom shadow and preset name it replaces are
-            // cleared with each pick, so a removal reaches the file.
-            render: (trigger) => {
-              const theme = documentThemeColorsForExport(editor.state.doc.attrs);
-              const accents = {
-                accent1: theme.accent1,
-                accent2: theme.accent2,
-                accent3: theme.accent3,
-                accent4: theme.accent4,
-                accent5: theme.accent5,
-                accent6: theme.accent6,
-              };
-              const current = documentShapeOfficeEffects(selectedDocumentShape.attrs, accents.accent1);
-              return (
-                <OfficePictureEffectsMenu
-                  effects={current}
-                  shadow={false}
-                  accentColors={accents}
-                  disabled={shapePaintDisabled}
-                  disabledReason={shapePaintDisabledReason}
-                  testId={trigger.testId}
-                  displayLabel={trigger.displayLabel}
-                  labels={presentationEffectsMenuLabels(t, trigger.label)}
-                  onPick={(kind, value) =>
-                    setLiveDocumentShapeFormat(editor, {
-                      shapeEffects: withOfficePictureEffect(current, kind, value, false) ?? null,
-                      shapeShadow: null,
-                      effect: "none",
-                    })
-                  }
-                  // Each submenu's "... Options" (Glow Options..., 3-D
-                  // Options..., ...): Format Shape opened at its Effects
-                  // page with that effect's section in view, as Word opens it.
-                  onEffectOptions={(section) => {
-                    setShapeFormatPaneSection("effects");
-                    setShapeFormatPaneReveal((current) => ({ section, serial: (current?.serial ?? 0) + 1 }));
-                    setShapeFormatPaneOpen(true);
-                  }}
-                />
-              );
-            },
-          },
-          wordArt: {
-            // Word's own fifteen: a document's text effects (w14) hold no
-            // pattern fill or inner shadow.
-            recipes: OFFICE_WORDART_STYLE_RECIPES,
-            value: activeShapeTextStyleId,
-            disabled: shapeWordArtDisabled,
-            disabledReason: shapeWordArtDisabledReason,
-            onCommit: (recipe) => {
-              if (shapeWordArtDisabled) return;
-              // The words being typed: the selected ones take the style.
-              const typed = liveTypedShapeWords(editor);
-              if (typed) {
-                typed.formatCharacterPaint(() => recipe.paint);
-                return;
-              }
-              setLiveDocumentShapeFormat(editor, documentWordArtStylePatch(recipe));
-            },
-          },
-          textFill: {
-            value: selectedDocumentShape.attrs.textFill,
-            paletteId: snapshot.designColorSet ?? undefined,
-            disabled: shapePaintDisabled,
-            disabledReason: shapePaintDisabledReason,
-            onPick: (color) => {
-              const typed = liveTypedShapeWords(editor);
-              if (typed) {
-                typed.formatCharacterPaint((paint, style) =>
-                  patchOfficeTextPaint(typedWordsPaint(paint, style, selectedDocumentShape.attrs), {
-                    fill: color ?? "none",
-                  }),
-                );
-                return;
-              }
-              setLiveDocumentShapeFormat(editor, { textFill: color ?? "none" });
-            },
-          },
-          textOutline: {
-            value: selectedDocumentShape.attrs.textOutline,
-            paletteId: snapshot.designColorSet ?? undefined,
-            disabled: shapePaintDisabled,
-            disabledReason: shapePaintDisabledReason,
-            onPick: (color) => {
-              const typed = liveTypedShapeWords(editor);
-              if (typed) {
-                typed.formatCharacterPaint((paint, style) =>
-                  patchOfficeTextPaint(typedWordsPaint(paint, style, selectedDocumentShape.attrs), {
-                    outline: color ?? "none",
-                    outlineWidthPt: color ? 1 : 0,
-                  }),
-                );
-                return;
-              }
-              setLiveDocumentShapeFormat(editor, {
-                textOutline: color ?? "none",
-                textOutlineWidthPt: color ? 1 : 0,
-              });
-            },
-          },
-          textEffects: {
-            value: selectedShapeTextEffect,
-            // Text Effects are WordArt paint, which has no soft edges (Word's
-            // Text Effects list none either).
-            available: documentShapeEffects.filter((effect) => effect !== "softEdge"),
-            unavailableReason: t("toolbar.nativeWordartProfileDoesNotSupport"),
-            disabled: shapePaintDisabled,
-            disabledReason: shapePaintDisabledReason,
-            onPick: (textEffect) => {
-              const typed = liveTypedShapeWords(editor);
-              if (typed) {
-                typed.formatCharacterPaint((paint, style) =>
-                  patchOfficeTextPaint(typedWordsPaint(paint, style, selectedDocumentShape.attrs), {
-                    effect: textEffect,
-                  }),
-                );
-                return;
-              }
-              setLiveDocumentShapeFormat(editor, { textEffect });
-            },
-            // Word's Text Effects galleries (Shadow, Reflection, Glow, Bevel,
-            // 3-D Rotation, then Transform) on the words' WordArt paint,
-            // combinable: the typed words while they are typed, else the
-            // shape's words.
-            render: (trigger) => {
-              const theme = documentThemeColorsForExport(editor.state.doc.attrs);
-              const accents = {
-                accent1: theme.accent1,
-                accent2: theme.accent2,
-                accent3: theme.accent3,
-                accent4: theme.accent4,
-                accent5: theme.accent5,
-                accent6: theme.accent6,
-              };
-              const attrs = selectedDocumentShape.attrs;
-              return (
-                <OfficePictureEffectsMenu
-                  effects={officeTextPaintOfficeEffects(
-                    attrs.textPaint,
-                    OFFICE_GLOW_SIZES_PT.flatMap((size) =>
-                      OFFICE_GLOW_ACCENTS.map((accent) => officeGlowVariation(size, accent, accents[accent])),
-                    ),
-                  )}
-                  shadow={false}
-                  kinds={OFFICE_TEXT_EFFECT_KINDS}
-                  extra={trigger.extra}
-                  accentColors={accents}
-                  disabled={shapePaintDisabled}
-                  disabledReason={shapePaintDisabledReason}
-                  testId={trigger.testId}
-                  displayLabel={trigger.displayLabel}
-                  labels={presentationEffectsMenuLabels(t, trigger.label)}
-                  onPick={(kind, value) => {
-                    const typed = liveTypedShapeWords(editor);
-                    if (typed) {
-                      typed.formatCharacterPaint((paint, style) =>
-                        withOfficeTextEffect(typedWordsPaint(paint, style, attrs), kind, value),
-                      );
-                      return;
-                    }
-                    setLiveDocumentShapeFormat(editor, {
-                      textPaint: withOfficeTextEffect(typedWordsPaint(null, undefined, attrs), kind, value),
-                    });
-                  }}
-                />
-              );
-            },
-          },
-          // Text Effects > Transform: the words' preset warp (Word's
-          // `a:prstTxWarp`); No Transform writes an explicit null.
-          textTransform: {
-            value: selectedDocumentShape.attrs.textWarp?.preset ?? null,
-            disabled: shapePaintDisabled,
-            disabledReason: shapePaintDisabledReason,
-            labels: {
-              transform: t("office.textTransform.transform"),
-              noTransform: t("office.textTransform.none"),
-              followPath: t("office.textTransform.followPath"),
-              warp: t("office.textTransform.warp"),
-              name: (token) => t(`office.textTransform.name.${token}`),
-            },
-            onPick: (token) =>
-              setLiveDocumentShapeFormat(editor, { textWarp: token ? { preset: token } : null }),
-          },
-          text: {
-            direction: {
-              // The selected member's own, when one is (Word: each shape in
-              // a group keeps its own text box options).
-              value: (selectedDocumentShapePaneAttrs ?? selectedDocumentShape.attrs).textDirection ?? "horizontal",
-              disabled: shapePaintDisabled,
-              disabledReason: shapePaintDisabledReason,
-              onPick: (textDirection) =>
-                setLiveDocumentShapeFormat(editor, { textDirection }),
-            },
-            align: {
-              value: (selectedDocumentShapePaneAttrs ?? selectedDocumentShape.attrs).textVerticalAlign ?? "middle",
-              disabled: shapePaintDisabled,
-              disabledReason: shapePaintDisabledReason,
-              onPick: (textVerticalAlign) =>
-                setLiveDocumentShapeFormat(editor, { textVerticalAlign }),
-            },
-            createLink: {
-              active: typeof selectedDocumentShape.attrs.linkedTextBoxStoryId === "number",
-              disabled: !selectedDocumentShape.attrs.isTextBox,
-              disabledReason: t("toolbar.textBoxesOnly"),
-              onOpen: () => openShapeFormatPane("link"),
-            },
-          },
-          altText: {
-            active: Boolean(selectedDocumentShape.attrs.altText),
-            disabled: shapePaintDisabled,
-            disabledReason: shapePaintDisabledReason,
-            onOpen: () => openShapeFormatPane("alt"),
-          },
-          position: {
-            icon: <ArrowRightLeft size={24} />,
-            disabled: !layoutCommandDecisions["layout.object.position"].enabled,
-            disabledReason: reviewUnavailableTitle(
-              layoutCommandDecisions["layout.object.position"],
-            ),
-            menu: (
-              <>
-                {selectedDocumentShape ? (
-                  <>
-                    {/* Word's Position gallery: In Line with Text, then the
-                        nine "with Square Text Wrapping" places. */}
-                    <DropdownMenuItem
-                      data-testid="document-toolbar-ribbon-layout-object-position-inline"
-                      data-state={selectedDocumentShape.attrs.wrapMode === "inline" ? "checked" : undefined}
-                      onSelect={() => setLiveDocumentShapeWrap(editor, "inline")}
-                    >
-                      {t("spreadsheet.chartFormatCopy.arrange.inLineWithText")}
-                    </DropdownMenuItem>
-                    <DropdownMenuLabel>
-                      {t("spreadsheet.chartFormatCopy.arrange.withTextWrapping")}
-                    </DropdownMenuLabel>
-                    <div role="group" style={{ display: "grid", gridTemplateColumns: "repeat(3, auto)", gap: 4, padding: "2px 8px 6px" }}>
-                      {FLOAT_POSITION_PRESETS.map((preset) => {
-                        const name = t(`spreadsheet.chartFormatCopy.arrange.${POSITION_KEYS[preset]}`);
-                        const current = liveDocumentShapePositionPreset(editor) === preset;
-                        return (
-                          <DropdownMenuItem
-                            key={preset}
-                            aria-label={name}
-                            title={name}
-                            data-testid={`document-toolbar-ribbon-layout-object-position-${preset}`}
-                            data-state={current ? "checked" : undefined}
-                            style={{ justifyContent: "center", padding: 4, outline: current ? "2px solid var(--office-accent, #2b579a)" : undefined }}
-                            onSelect={() => setLiveDocumentShapePositionPreset(editor, preset)}
-                          >
-                            <PositionGlyph preset={preset} />
-                          </DropdownMenuItem>
-                        );
-                      })}
-                    </div>
-                    <DropdownMenuSeparator />
-                  </>
-                ) : null}
-                <DropdownMenuLabel>
-                  MRAI · {t("toolbar.objectPosition")}
-                </DropdownMenuLabel>
-                {DOCUMENT_SHAPE_POSITION_DIRECTIONS.map(
-                  ([action, label, DirectionIcon]) => (
-                    <DropdownMenuItem
-                      key={action}
-                      data-testid={`document-toolbar-ribbon-layout-object-position-${action}`}
-                      onSelect={() =>
-                        executeLayoutFeature(
-                          "layout.object.position",
-                          action,
-                        )
-                      }
-                    >
-                      <DirectionIcon size={16} aria-hidden />
-                      {t(
-                        label as "presentation.transition.directionLeft",
-                      )}
-                    </DropdownMenuItem>
-                  ),
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  disabled={
-                    selectedDocumentShape?.attrs.xEmu === 0 &&
-                    selectedDocumentShape?.attrs.yEmu === 0
-                  }
-                  data-testid="document-toolbar-ribbon-layout-object-position-reset"
-                  onSelect={() =>
-                    executeLayoutFeature(
-                      "layout.object.position",
-                      "reset",
-                    )
-                  }
-                >
-                  <RefreshCw size={16} aria-hidden />
-                  {t("presentation.printReset")}
-                </DropdownMenuItem>
-              
-              </>
-            ),
-          },
-          wrapText: {
-            icon: <OfficeSemanticIcon semanticId="object.textWrap" size={24} />,
-            menu: (
-              <>
-                {selectedDocumentShape ? (
-                  <DropdownMenuRadioGroup
-                    value={selectedDocumentShape.attrs.wrapMode}
-                  >
-                    {(
-                      [
-                        "inline",
-                        "square",
-                        "tight",
-                        "through",
-                        "topAndBottom",
-                        "behindText",
-                        "inFrontOfText",
-                      ] as const
-                    ).map((value) => (
-                      <DropdownMenuRadioItem
-                        key={value}
-                        value={value}
-                        data-testid={`document-toolbar-ribbon-layout-object-wrap-${value}`}
-                        onSelect={() => setLiveDocumentShapeWrap(editor, value)}
-                      >
-                        {value === "inline"
-                          ? t("toolbar.objectWrap_inline")
-                          : t(`toolbar.shapeFormatOption.wrap.${value}`)}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                ) : null}
-                {selectedDocumentShape ? (
-                  // Move with Text / Fix Position on Page: the vertical
-                  // origin only (paragraph / page), the shape kept in place.
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuRadioGroup
-                      value={(() => {
-                        const moves = liveDocumentShapeMovesWithText(editor);
-                        return moves === null ? "" : moves ? "move" : "fix";
-                      })()}
-                    >
-                      <DropdownMenuRadioItem
-                        value="move"
-                        disabled={selectedDocumentShape.attrs.wrapMode === "inline"}
-                        data-testid="document-toolbar-ribbon-layout-object-move-with-text"
-                        onSelect={() => setLiveDocumentShapeMoveWithText(editor, true)}
-                      >
-                        {t("spreadsheet.chartFormatCopy.arrange.moveWithText")}
-                      </DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem
-                        value="fix"
-                        disabled={selectedDocumentShape.attrs.wrapMode === "inline"}
-                        data-testid="document-toolbar-ribbon-layout-object-fix-position-on-page"
-                        onSelect={() => setLiveDocumentShapeMoveWithText(editor, false)}
-                      >
-                        {t("spreadsheet.chartFormatCopy.arrange.fixPositionOnPage")}
-                      </DropdownMenuRadioItem>
-                    </DropdownMenuRadioGroup>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      disabled={selectedDocumentShape.attrs.wrapMode === "inline"}
-                      data-testid="document-toolbar-ribbon-layout-object-more-layout-options"
-                      onSelect={openFloatLayoutDialog}
-                    >
-                      {t("document.floatLayout.moreLayoutOptions")}
-                    </DropdownMenuItem>
-                  </>
-                ) : null}
-                {selectedDocumentShape ? null : (
-                  <DropdownMenuRadioGroup
-                    value={snapshot.imageFloat ?? "inline"}
-                  >
-                    {(
-                      [
-                        "inline",
-                        "left",
-                        "right",
-                        "topAndBottom",
-                      ] as const
-                    ).map((value) => (
-                      <DropdownMenuRadioItem
-                        key={value}
-                        value={value}
-                        data-testid={`document-toolbar-ribbon-layout-object-wrap-${value}`}
-                        onSelect={() =>
-                          executeLayoutFeature(
-                            "layout.object.wrap",
-                            value === "inline" ? null : value,
-                          )
-                        }
-                      >
-                        {t(
-                          `toolbar.objectWrap_${value}` as "toolbar.objectWrap_inline",
-                        )}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                )}
-              
-              </>
-            ),
-          },
-          zOrder: {
-            disabled: !layoutCommandDecisions["layout.object.layer"].enabled,
-            disabledReason: reviewUnavailableTitle(
-              layoutCommandDecisions["layout.object.layer"],
-            ),
-            atBoundary: shapeZOrderAtBoundary,
-            onAction: (action) => executeLayoutFeature("layout.object.layer", action),
-            textLayer: {
-              inFrontOfTextLabel: t("toolbar.objectLayer_inFrontOfText"),
-              behindTextLabel: t("toolbar.objectLayer_behindText"),
-              onInFrontOfText: () =>
-                executeLayoutFeature("layout.object.layer", "inFrontOfText"),
-              onBehindText: () =>
-                executeLayoutFeature("layout.object.layer", "behindText"),
-              disabled: !layoutCommandDecisions["layout.object.layer"].enabled,
-            },
-          },
-          selectionPane: {
-            onSelect: () => {
-              selectionPaneReturnFocusRef.current =
-                document.querySelector<HTMLButtonElement>(
-                  '[data-testid="document-toolbar-ribbon-shape-selection-pane"]',
-                );
-              setFindReplaceOpen(false);
-              setGoToMode(null);
-              setSelectionPaneOpen(true);
-            },
-          },
-          selectionCount: documentSelectionCount,
-          reorder: documentShapeReorder,
-          // One shape aligns to the margins (Word's Align to Margin, left /
-          // centre / right); two or more Shift-clicked shapes align to each
-          // other on every edge and distribute (Align Selected Objects), as
-          // PowerPoint's Align menu does.
-          alignObjects: documentShapeSelectedPositions.length >= 2 ? {
-            actions: [
-              "left",
-              "center",
-              "right",
-              "top",
-              "middle",
-              "bottom",
-              "distributeHorizontal",
-              "distributeVertical",
-            ],
-            isActionDisabled: (action) =>
-              !alignDocumentShapes(editor, documentShapeMultiSelection(editor.state), action, true),
-            onAction: (action) =>
-              void alignDocumentShapes(editor, documentShapeMultiSelection(editor.state), action),
-          } : {
-            actions: ["left", "center", "right"],
-            onAction: (action) =>
-              setLiveDocumentShapeAlign(
-                editor,
-                action as "left" | "center" | "right",
-                rulerGeometry.pageWidthPx -
-                  rulerGeometry.marginLeftPx -
-                  rulerGeometry.marginRightPx,
-              ),
-          },
-          // Word: Group needs two or more objects selected (in Docs, the
-          // Selection Pane's Ctrl+click multi-selection); a group offers
-          // Ungroup instead.
-          // Shapes Group would refuse (one kept from the opened file) close
-          // it and say why, as the Selection Pane's Group does: it stood
-          
-          group: {
-            grouped: Boolean(selectedDocumentShape.attrs.groupMembers?.length),
-            // Group ▾ is a menu (Group, Ungroup, Regroup), as in PowerPoint
-            // and Word: each item says whether it applies.
-            canGroup:
-              !selectedDocumentShape.attrs.groupMembers?.length &&
-              (documentShapeMultiSelectionGroupState(editor.state) === "ready" ||
-                (documentShapeMultiSelection(editor.state).length < 2 && selectionPaneGroupAction !== null)),
-            canUngroup: documentShapeUngroupAttrs(selectedDocumentShape.attrs) !== null,
-            disabled:
-              !selectedDocumentShape.attrs.groupMembers?.length &&
-              (documentShapeMultiSelectionGroupState(editor.state) === "refused" ||
-                (documentShapeMultiSelection(editor.state).length < 2 &&
-                  selectionPaneGroupAction === null)),
-            disabledReason:
-              documentShapeMultiSelectionGroupState(editor.state) === "refused"
-                ? t("toolbar.onlyShapesDrawnInEditorCan")
-                : t("toolbar.objectGroupNeedsTwo"),
-            onGroup: () => {
-              // Word's Group: the shapes Shift / Ctrl + clicked on the page,
-              // or Ctrl + clicked in the Selection Pane, become one `wpg:wgp`.
-              const positions = documentShapeMultiSelection(editor.state);
-              if (positions.length >= 2) {
-                if (groupDocumentShapes(editor, editor.state.doc, positions) === null) {
-                  toast({
-                    title: t("toolbar.onlyShapesDrawnInEditorCan"),
-                  });
-                }
-                return;
-              }
-              selectionPaneGroupAction?.run();
-            },
-            onUngroup: () => {
-              if (documentShapeUngroupAttrs(selectedDocumentShape.attrs) !== null) {
-                ungroupDocumentShape(editor, editor.state.doc, selectedDocumentShape.pos);
-              }
-            },
-            regroup: documentRegroup,
-          },
-          rotate: {
-            disabled: !layoutCommandDecisions["layout.object.rotate"].enabled,
-            disabledReason: reviewUnavailableTitle(
-              layoutCommandDecisions["layout.object.rotate"],
-            ),
-            onAction: (action) => {
-              if (action === "rotateRight90") {
-                executeLayoutFeature("layout.object.rotate", 90);
-              } else if (action === "rotateLeft90") {
-                executeLayoutFeature("layout.object.rotate", -90);
-              } else {
-                executeLayoutFeature("layout.object.rotate", {
-                  flip: action === "flipHorizontal" ? "flipH" : "flipV",
-                });
-              }
-            },
-            exactField: (
-              <SpacingNumberField
-                label={t("presentation.geometry.rotation")}
-                testId="document-toolbar-ribbon-layout-object-rotate-exact"
-                value={String(snapshot.documentShapeRotation ?? 0)}
-                min={-360}
-                max={360}
-                step={0.1}
-                onCommit={(raw) =>
-                  executeLayoutFeature("layout.object.rotate", {
-                    exact: raw,
-                  })
-                }
-              />
-            ),
-            reset: {
-              disabled: selectedDocumentShape.attrs.rotation === 0,
-              onSelect: () => executeLayoutFeature("layout.object.rotate", 0),
-            },
-          },
-          size: {
-            heightFirst: true,
-            width: String(
-              documentShapePxToCentimeters(
-                documentShapeEmuToPx(selectedDocumentShape.attrs.widthEmu),
-              ),
-            ),
-            height: String(
-              documentShapePxToCentimeters(
-                documentShapeEmuToPx(selectedDocumentShape.attrs.heightEmu),
-              ),
-            ),
-            max: documentShapePxToCentimeters(
-              documentShapeEmuToPx(DOCUMENT_SHAPE_MAX_EDGE_EMU),
-            ),
-            disabled: !layoutCommandDecisions["layout.object.size"].enabled,
-            disabledReason: reviewUnavailableTitle(
-              layoutCommandDecisions["layout.object.size"],
-            ),
-            onCommit: (axis, raw) =>
-              executeLayoutFeature("layout.object.size", {
-                axis,
-                raw: documentShapeCentimetersToPx(raw),
-              }),
-            lockAspect: {
-              value: selectedDocumentShape.attrs.lockAspectRatio === true,
-              disabled: !layoutCommandDecisions["layout.object.size"].enabled,
-              onToggle: () =>
-                executeLayoutFeature("layout.object.size", { toggleAspectRatio: true }),
-            },
-          },
-          formatPane: {
-            disabled: shapePaintDisabled,
-            disabledReason: shapePaintDisabledReason,
-            onSelect: () => {
-              if (shapeFormatPaneOpen) setShapeFormatPaneOpen(false);
-              else openShapeFormatPane("shape");
-            },
-          },
-        }
-      : selectedTextBoxFrame
-        ? buildTextBoxFrameFormatAdapter(selectedTextBoxFrame)
-        : null;
   const isActiveRibbon = (ribbons: string) =>
     ribbons.split(/\s+/).includes(ribbonTab);
   // Chart Design's Add Chart Element rows, Change Colors palettes and Chart
@@ -29923,8 +24099,7 @@ function DocumentToolbar({
     ) : null;
   // The chart's own box on the page, where Word draws the buttons beside it.
   const chartQuickHost = (() => {
-    if (!chartContextVisible || !chartContextTarget?.valid || editor.isDestroyed)
-      return null;
+    return null;
     try {
       const dom = editor.view.nodeDOM(chartContextTarget.pos);
       if (!(dom instanceof HTMLElement)) return null;
@@ -29952,134 +24127,22 @@ function DocumentToolbar({
         data-docs-office-parity-v2={docsOfficeParityV2 ? "on" : "off"}
         data-pen-compact={penFirst.compact ? "true" : undefined}
         data-header-footer-context-control={
-          headerFooterContextVisible ? "" : undefined
+          undefined
         }
         role="toolbar"
       >
         <OfficeRibbonTabs
           collapse={
-            ribbonTab === "draw" && penFirst.available && !inkDisabledReason
-              ? { onCollapse: penFirst.showPalette }
-              : undefined
+            undefined
           }
           foldable={!handwriting}
           tabListHidden={handwriting}
           tabs={
             handwriting
-              ? ([{ key: "draw", label: t("toolbar.ribbonDraw") }] satisfies ReadonlyArray<
+              ? ([] satisfies ReadonlyArray<
                   OfficeRibbonTabDescriptor<RibbonTabId>
                 >)
-              : [
-              { key: "home", label: t("toolbar.ribbonHome") },
-              { key: "insert", label: t("toolbar.ribbonInsert") },
-              { key: "draw", label: t("toolbar.ribbonDraw") },
-              { key: "design", label: t("toolbar.ribbonDesign") },
-              { key: "layout", label: t("toolbar.ribbonLayout") },
-              { key: "references", label: t("toolbar.ribbonReferences") },
-              { key: "review", label: t("toolbar.ribbonReview") },
-              { key: "view", label: t("toolbar.ribbonView") },
-              // Word's Developer > Controls and the filling of a form: hidden
-              // for now (see WEB_BASE_RIBBON_TAB_IDS).
-              ...(headerFooterContextVisible
-                ? ([
-                    {
-                      key: "headerFooter",
-                      label: headerFooterTabLabel,
-                      ariaLabel: headerFooterTabLabel,
-                      contextual: "headerFooter",
-                    },
-                  ] satisfies ReadonlyArray<
-                    OfficeRibbonTabDescriptor<RibbonTabId>
-                  >)
-                : []),
-              ...(pictureContextVisible
-                ? ([
-                    {
-                      key: "picture",
-                      label: pictureTabLabel,
-                      ariaLabel: pictureTabLabel,
-                      contextual: "picture",
-                      className: homeStyles.pictureContextTab,
-                    },
-                  ] satisfies ReadonlyArray<
-                    OfficeRibbonTabDescriptor<RibbonTabId>
-                  >)
-                : []),
-              ...(smartArtContextVisible
-                ? ([
-                    {
-                      key: "smartArt",
-                      label: smartArtTabLabel,
-                      ariaLabel: smartArtTabLabel,
-                      contextual: "smartArt",
-                    },
-                  ] satisfies ReadonlyArray<
-                    OfficeRibbonTabDescriptor<RibbonTabId>
-                  >)
-                : []),
-              ...(equationContextVisible
-                ? ([
-                    {
-                      key: "equation",
-                      label: equationTabLabel,
-                      ariaLabel: equationTabLabel,
-                      contextual: "equation",
-                    },
-                  ] satisfies ReadonlyArray<
-                    OfficeRibbonTabDescriptor<RibbonTabId>
-                  >)
-                : []),
-              ...(shapeContextVisible
-                ? ([
-                    {
-                      key: "shape",
-                      label: shapeTabLabel,
-                      ariaLabel: shapeTabLabel,
-                      contextual: "shape",
-                    },
-                  ] satisfies ReadonlyArray<
-                    OfficeRibbonTabDescriptor<RibbonTabId>
-                  >)
-                : []),
-              ...(chartContextVisible
-                ? ([
-                    {
-                      key: "chartDesign",
-                      label: chartDesignTabLabel,
-                      ariaLabel: chartDesignTabLabel,
-                      contextual: "chart",
-                      className: homeStyles.chartContextTab,
-                    },
-                    {
-                      key: "chartFormat",
-                      label: chartFormatTabLabel,
-                      ariaLabel: chartFormatTabLabel,
-                      contextual: "chart",
-                      className: homeStyles.chartContextTab,
-                    },
-                  ] satisfies ReadonlyArray<
-                    OfficeRibbonTabDescriptor<RibbonTabId>
-                  >)
-                : []),
-              ...(tableContextVisible
-                ? ([
-                    {
-                      key: "tableDesign",
-                      label: tableDesignTabLabel,
-                      ariaLabel: tableDesignTabLabel,
-                      contextual: "table",
-                    },
-                    {
-                      key: "tableLayout",
-                      label: tableLayoutTabLabel,
-                      ariaLabel: tableLayoutTabLabel,
-                      contextual: "table",
-                    },
-                  ] satisfies ReadonlyArray<
-                    OfficeRibbonTabDescriptor<RibbonTabId>
-                  >)
-                : []),
-            ] satisfies ReadonlyArray<OfficeRibbonTabDescriptor<RibbonTabId>>
+              : [{ key: "home", label: t("toolbar.ribbonHome") }, { key: "insert", label: t("toolbar.ribbonInsert") }] satisfies ReadonlyArray<OfficeRibbonTabDescriptor<RibbonTabId>>
           }
           activeTab={ribbonTab}
           onSelect={setRibbonTab}
@@ -30185,89 +24248,14 @@ function DocumentToolbar({
           activeTab={ribbonTab}
           excludedRibbons={
             docsOfficeParityV2 && !desktopInteroperabilityTools
-              ? shapeContextVisible
-                ? WORD_WEB_EXCLUDED_RIBBONS_WITH_SHAPE
-                : WORD_WEB_EXCLUDED_RIBBONS
+              ? WORD_WEB_EXCLUDED_RIBBONS
               : undefined
           }
           scrollLeftLabel={t("toolbar.ribbonScrollLeft")}
           scrollRightLabel={t("toolbar.ribbonScrollRight")}
         >
-          {ribbonTab === "chartFormat" && chartContextVisible ? (
-            <>
-              <DocumentChartFormatRibbon
-                attrs={chartContextTarget?.attrs ?? null}
-                accentColors={chartThemeAccents}
-                selectionIdentity={chartFormatSelectionIdentity}
-                authority={chartFormatAuthority}
-                paneContainer={chartFormatPaneContainer}
-                paneDock={taskPaneDocks.right}
-                focusArea={chartFormatFocus}
-                elementHit={chartElementHit}
-                onAreaChange={(area) => setOfficeChartSelectedArea(chartSelectionKey, area)}
-                selectedArea={chartSelectedArea}
-                selectionPaneOpen={selectionPaneOpen}
-                // Format > Accessibility > Alt Text: Word's Alt Text pane on
-                // the selected chart.
-                onAltText={openAltEditor}
-                altTextPaneOpen={altPaneOpen}
-                onSelectionPane={(trigger) => {
-                  selectionPaneReturnFocusRef.current = trigger;
-                  setSelectionPaneOpen(open => !open);
-                }}
-                disabledReason={chartCommandDisabledReason}
-                locale={locale}
-                translate={t}
-                onRememberSelection={rememberEditorSelection}
-                onPaint={setDocumentChartAreaPaint}
-                onStyle={setDocumentChartAreaStyle}
-                onEffect={setDocumentChartAreaEffect}
-                onAxisOptions={setDocumentChartAxisOptions}
-                onChartModel={setDocumentChartModel}
-                floatingHeights={documentFloatingStack(editor.state.doc).heights}
-                elementPane={
-                  chartContextTarget?.valid
-                    ? {
-                        onIntent: (intent) =>
-                          commitDocumentChartElement(
-                            chartWithElementIntent(chartContextTarget.attrs, intent),
-                          ),
-                        trendlineOptions: true,
-                        seriesOptions: true,
-                        barSpacingOptions: true,
-                        customErrorAmounts: true,
-                        dataLabelContents: {
-                          format: chartContextTarget.attrs.format,
-                          chartType: chartContextTarget.attrs.chartType,
-                          chartSubtype: chartContextTarget.attrs.chartSubtype,
-                          onChange: (contents) =>
-                            setLiveDocumentChartDataLabelContents(
-                              editor,
-                              chartContextTarget,
-                              contents,
-                            ),
-                        },
-                      }
-                    : undefined
-                }
-                onTextStyle={setDocumentChartTextStyle}
-                onReset={resetDocumentChartAreaStyle}
-                size={displayedChartSize}
-                layout={displayedChartLayout}
-                onRememberSize={rememberChartSize}
-                onSize={commitChartSize}
-                onLayout={commitChartLayout}
-                placement={displayedChartPlacement}
-                onPlacement={commitChartPlacement}
-                onMoreLayoutOptions={openFloatLayoutDialog}
-                onGroup={chartGroupCommand}
-                // Word: the gallery arms the crosshair; the drawn shape anchors
-                // beside the chart's block, outside its list.
-                onInsertShape={armDocumentShapeDraw}
-              />
-            </>
-          ) : null}
-          {ribbonTab !== "chartFormat" ? (
+          {null}
+          {(
             <>
               {/* Word's SmartArt Design tab IS PowerPoint's: the layouts
                   gallery, the fourteen styles, Change Colors, the structural
@@ -30281,692 +24269,9 @@ function DocumentToolbar({
                   and wear the same column anatomy (commands over a centred
                   caption) as in the deck and the worksheet. A display:contents
                   wrapper here took them out of that anatomy. */}
-              {ribbonTab === "smartArt" && shapeSmartArtContextTarget ? (
-                <OfficeSmartArtDesignTab
-                  ribbon="smartArt"
-                  testIdPrefix="document-toolbar"
-                  application="docs"
-                  textPaneTriggerRef={smartArtDesignTextPaneTriggerRef}
-                  placeholders={smartArtPlaceholders}
-                  labels={smartArtDesignLabels}
-                  preserved={documentSmartArtPreserved}
-                  diagram={documentSmartArtDesignDiagram}
-                />
-              ) : null}
-              {ribbonTab === "smartArt" && smartArtContextTarget ? (
-                <>
-                  <OfficeHomeRibbonGroup
-                    ribbon="smartArt"
-                    label={t("toolbar.createGraphic")}
-                    testId="document-toolbar-smartart-create-group"
-                  >
-                    <OfficeHomeCommandRow>
-                      <OfficeHomeCommand
-                        buttonRef={smartArtTextTriggerRef}
-                        disabled={!editor.isEditable}
-                        disabledReason={
-                          editor.isEditable
-                            ? undefined
-                            : t("toolbar.documentReadOnly")
-                        }
-                        icon={
-                          <OfficeSemanticIcon
-                            semanticId="view.navigationPane"
-                            size={24}
-                          />
-                        }
-                        label={t("toolbar.textPane")}
-                        onClick={openDocumentSmartArtTextEditor}
-                        testId="document-toolbar-smartart-edit-text"
-                        variant="large"
-                      />
-                    </OfficeHomeCommandRow>
-                  </OfficeHomeRibbonGroup>
-                </>
-              ) : null}
-          {ribbonTab === "headerFooter" && headerFooterContext ? (
-            <>
-              {desktopInteroperabilityVisible ? (
-                // Mounted DIRECTLY in the track with the tab's ribbon token,
-                // as the SmartArt tab is: a display:contents wrapper took the
-                // rail out of the track's column anatomy (caption beside the
-                // commands, pinned back by an absolute-caption patch). The
-                // island's keep-open marker rides inside the group instead.
-                <OfficeHomeUndoRail
-                    ribbon="headerFooter"
-                    commandMarker="data-header-footer-context-control"
-                    label={t("toolbar.undo")}
-                    testId="document-toolbar-header-footer-undo-group"
-                    undo={{
-                      disabled: !historyCanUndo,
-                      icon: <Undo2 size={18} />,
-                      label: officeCommandAccessibleLabel(
-                        t("toolbar.undo"),
-                        historyCanUndo ? undefined : undoUnavailableReason,
-                      ),
-                      onClick: () => runToolbarHistoryCommand("undo"),
-                      testId: "document-toolbar-undo",
-                    }}
-                    redo={{
-                      disabled: !historyCanRedo,
-                      icon: <Redo2 size={18} />,
-                      label: officeCommandAccessibleLabel(
-                        t("toolbar.redo"),
-                        historyCanRedo ? undefined : redoUnavailableReason,
-                      ),
-                      onClick: () => runToolbarHistoryCommand("redo"),
-                      testId: "document-toolbar-redo",
-                    }}
-                  />
-              ) : null}
-              <OfficeHomeRibbonGroup
-                ribbon="headerFooter"
-                label={t("toolbar.pageNumberLabel")}
-                testId="document-toolbar-header-footer-page-number-group"
-              >
-                <OfficeHomeCommandRow>
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <OfficeHomeMenuTrigger
-                        ref={headerFooterPageNumberTriggerRef}
-                        hasMenuIndicator
-                        icon={
-                          <DocumentHeaderFooterRibbonIcon
-                            kind="page-number"
-                            size={28}
-                          />
-                        }
-                        label={t("toolbar.ribbonPageNumbers")}
-                        onPointerDown={rememberEditorSelection}
-                        testId="document-toolbar-page-number-menu"
-                        variant="large"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      className="note-editor-toolbar-menu docs-insert-menu"
-                      data-header-footer-context-control
-                      onCloseAutoFocus={(event) => {
-                        event.preventDefault();
-                        headerFooterPageNumberTriggerRef.current?.focus({
-                          preventScroll: true,
-                        });
-                      }}
-                    >
-                      {/* Word for Mac's Page Number menu: the dialog, the
-                          format dialog, Remove Page Numbers. */}
-                      <DropdownMenuItem
-                        data-testid="document-toolbar-page-number-dialog"
-                        disabled={!editor.isEditable}
-                        onSelect={openPageNumbersDialog}
-                      >
-                        <DocsInsertIcon name="pageNumber" size={18} />
-                        {t("toolbar.pageNumbersMenuDialog")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        data-testid="document-toolbar-page-number-format"
-                        disabled={!editor.isEditable}
-                        onSelect={() => openPageNumberFormatDialog()}
-                      >
-                        <DocsInsertIcon name="pageNumberFormat" size={18} />
-                        {t("toolbar.pageNumbersMenuFormat")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        data-testid="document-toolbar-page-number-remove"
-                        disabled={!canRemoveAnyNativePageNumber()}
-                        onSelect={removeAllNativePageNumbers}
-                      >
-                        <DocsInsertIcon name="pageNumberRemove" size={18} />
-                        {t("toolbar.pageNumberRemove")}
-                      </DropdownMenuItem>
-                      {headerFooterContext.storyEditor ? (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuLabel>
-                            {t("toolbar.currentPosition")}
-                          </DropdownMenuLabel>
-                          <DropdownMenuItem
-                            data-testid="document-toolbar-page-number-at-caret"
-                            onSelect={() => insertHeaderFooterField("PAGE")}
-                          >
-                            <DocsInsertIcon name="pageNumber" size={18} />
-                            {t("editor.band.insertPageNumber")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            data-testid="document-toolbar-page-count-at-caret"
-                            onSelect={() => insertHeaderFooterField("NUMPAGES")}
-                          >
-                            <DocsInsertIcon name="pageNumber" size={18} />
-                            {t("editor.band.insertPageCount")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            data-testid="document-toolbar-section-page-count-at-caret"
-                            onSelect={() => insertHeaderFooterNewField({ type: "SECTIONPAGES" })}
-                          >
-                            <DocsInsertIcon name="pageNumber" size={18} />
-                            {t("editor.band.sectionPageCount")}
-                          </DropdownMenuItem>
-                          {/* Edit Field > Format of the page-number field at
-                              the caret: its own \* switch. */}
-                          <DropdownMenuSub>
-                            <DropdownMenuSubTrigger
-                              data-testid="document-toolbar-field-number-format"
-                              disabled={!bandFieldAtCaret(headerFooterContext.storyEditor)}
-                            >
-                              <DocsInsertIcon name="pageNumberFormat" size={18} />
-                              {t("editor.band.fieldNumberFormat")}
-                            </DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent className="note-editor-toolbar-menu" data-header-footer-context-control>
-                              {(
-                                [
-                                  ["Arabic", "1, 2, 3, …"],
-                                  ["ArabicDash", "- 1 -, - 2 -, - 3 -, …"],
-                                  ["roman", "i, ii, iii, …"],
-                                  ["ROMAN", "I, II, III, …"],
-                                  ["alphabetic", "a, b, c, …"],
-                                  ["ALPHABETIC", "A, B, C, …"],
-                                ] as const
-                              ).map(([format, sample]) => (
-                                <DropdownMenuCheckboxItem
-                                  key={format}
-                                  data-testid={`document-toolbar-field-number-format-${format}`}
-                                  checked={bandFieldAtCaret(headerFooterContext.storyEditor)?.format === format}
-                                  onSelect={() => setBandFieldNumberFormat(headerFooterContext.storyEditor, format)}
-                                >
-                                  {sample}
-                                </DropdownMenuCheckboxItem>
-                              ))}
-                            </DropdownMenuSubContent>
-                          </DropdownMenuSub>
-                        </>
-                      ) : null}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </OfficeHomeCommandRow>
-              </OfficeHomeRibbonGroup>
-              <OfficeHomeRibbonGroup
-                ribbon="headerFooter"
-                label={t("toolbar.insert")}
-                testId="document-toolbar-header-footer-insert-group"
-              >
-                <OfficeHomeCommandRow>
-                  {/* The contextual ribbon owns the open story: a click here
-                      must not blur the island shut (the marker the island's
-                      blur rule looks for). The marker sits INSIDE the row: as
-                      the group's first child a box-less wrapper cannot take
-                      the auto margin that centres every group's commands, and
-                      this group's buttons rode above their neighbours'. */}
-                  <div data-header-footer-context-control data-ribbon-inline-contents="" style={{ display: "contents" }}>
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <OfficeHomeMenuTrigger
-                        disabled={!headerFooterContext?.storyEditor || !editor.isEditable}
-                        hasMenuIndicator
-                        icon={
-                          <DocumentHeaderFooterRibbonIcon
-                            kind={headerFooterContext?.kind === "footer" ? "go-footer" : "go-header"}
-                            size={28}
-                          />
-                        }
-                        label={
-                          headerFooterContext?.kind === "footer"
-                            ? t("toolbar.footerLabel")
-                            : t("toolbar.headerLabel")
-                        }
-                        onPointerDown={rememberEditorSelection}
-                        testId="document-toolbar-header-footer-gallery"
-                        variant="large"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      className="note-editor-toolbar-menu"
-                      data-header-footer-context-control
-                      onCloseAutoFocus={(event) => event.preventDefault()}
-                    >
-                      <DropdownMenuLabel>{t("toolbar.builtIn")}</DropdownMenuLabel>
-                      {(
-                        [
-                          ["blank", t("toolbar.blank"), 1],
-                          ["blank-three", t("toolbar.blankThreeColumns"), 3],
-                        ] as const
-                      ).map(([id, label, columns]) => (
-                        <DropdownMenuItem
-                          key={id}
-                          data-testid={`document-toolbar-header-footer-gallery-${id}`}
-                          onSelect={() => applyBuiltInBandBlock(columns)}
-                        >
-                          {label}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <OfficeHomeCommand
-                    disabled={!headerFooterContext?.storyEditor || !editor.isEditable}
-                    displayLabel={t("toolbar.dateTimeLabel")}
-                    icon={<DocumentHeaderFooterRibbonIcon kind="date-time" size={28} />}
-                    label={t("toolbar.dateTimeLabel")}
-                    // Word's Date & Time: the dialog (formats of the
-                    // document language, Update automatically), inserting
-                    // into the open header as Insert > Date & Time does.
-                    onClick={openDateTimeDialog}
-                    testId="document-toolbar-header-footer-date-time"
-                    variant="large"
-                  />
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <OfficeHomeMenuTrigger
-                            disabled={!headerFooterContext?.storyEditor || !editor.isEditable}
-                        hasMenuIndicator
-                        icon={<DocumentHeaderFooterRibbonIcon kind="document-info" size={28} />}
-                        label={t("toolbar.documentInfo")}
-                        onPointerDown={rememberEditorSelection}
-                        testId="document-toolbar-header-footer-document-info"
-                        variant="large"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      className="note-editor-toolbar-menu"
-                      data-header-footer-context-control
-                      onCloseAutoFocus={(event) => event.preventDefault()}
-                    >
-                      {(
-                        [
-                          ["AUTHOR", t("toolbar.author")],
-                          ["FILENAME", t("toolbar.fileName")],
-                          ["TITLE", t("toolbar.documentTitle")],
-                          ["TIME", t("toolbar.time")],
-                          ["NUMPAGES", t("toolbar.pageCount")],
-                        ] as const
-                      ).map(([fieldType, label]) => (
-                        <DropdownMenuItem
-                          key={fieldType}
-                          data-testid={`document-toolbar-header-footer-document-info-${fieldType.toLowerCase()}`}
-                          onSelect={() => {
-                            (restoredChain() as unknown as {
-                              insertDocumentField: (
-                                type: string,
-                                options: { context: typeof documentFieldInsertContext },
-                              ) => { run: () => boolean };
-                            })
-                              .insertDocumentField(fieldType, {
-                                context: documentFieldInsertContext,
-                              })
-                              .run();
-                          }}
-                        >
-                          {label}
-                        </DropdownMenuItem>
-                      ))}
-                      {/* Word's DOCPROPERTY and STYLEREF fields, written into
-                          an imported header's own part. */}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuSub>
-                        <DropdownMenuSubTrigger data-testid="document-toolbar-header-footer-document-property">
-                          {t("editor.band.documentProperty")}
-                        </DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent className="note-editor-toolbar-menu" data-header-footer-context-control>
-                          {(
-                            [
-                              ["Title", t("toolbar.documentPropertiesTitle")],
-                              ["Author", t("toolbar.documentPropertiesAuthor")],
-                              ["Subject", t("toolbar.documentPropertiesSubject")],
-                              ["Keywords", t("toolbar.documentPropertiesKeywords")],
-                              ["Category", t("toolbar.documentPropertiesCategory")],
-                              ["Company", t("toolbar.documentPropertiesCompany")],
-                            ] as const
-                          ).map(([property, label]) => (
-                            <DropdownMenuItem
-                              key={property}
-                              data-testid={`document-toolbar-header-footer-document-property-${property.toLowerCase()}`}
-                              onSelect={() => insertHeaderFooterNewField({ type: "DOCPROPERTY", arg: property })}
-                            >
-                              {label}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuSubContent>
-                      </DropdownMenuSub>
-                      <DropdownMenuSub>
-                        <DropdownMenuSubTrigger data-testid="document-toolbar-header-footer-heading-text">
-                          {t("editor.band.headingText")}
-                        </DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent className="note-editor-toolbar-menu" data-header-footer-context-control>
-                          {(
-                            [
-                              ["1", t("toolbar.heading1")],
-                              ["2", t("toolbar.heading2")],
-                              ["3", t("toolbar.heading3")],
-                            ] as const
-                          ).map(([level, label]) => (
-                            <DropdownMenuItem
-                              key={level}
-                              data-testid={`document-toolbar-header-footer-heading-text-${level}`}
-                              onSelect={() => insertHeaderFooterNewField({ type: "STYLEREF", arg: level })}
-                            >
-                              {label}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuSubContent>
-                      </DropdownMenuSub>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <OfficeHomeCommand
-                    disabled={!headerFooterContext?.storyEditor || !editor.isEditable}
-                    displayLabel={t("toolbar.pictures")}
-                    icon={<DocumentHeaderFooterRibbonIcon kind="picture" size={28} />}
-                    label={t("toolbar.pictures")}
-                    onClick={openHeaderFooterPicturePicker}
-                    testId="document-toolbar-header-footer-picture"
-                    variant="large"
-                  />
-                  </div>
-                </OfficeHomeCommandRow>
-              </OfficeHomeRibbonGroup>
-              <OfficeHomeRibbonGroup
-                ribbon="headerFooter"
-                label={t("toolbar.navigation")}
-                testId="document-toolbar-header-footer-navigation-group"
-              >
-                <OfficeHomeCommandRow
-                  className={homeStyles.headerFooterNavigationRow}
-                >
-                  <OfficeHomeCommand
-                    icon={
-                      <DocumentHeaderFooterRibbonIcon
-                        kind="go-header"
-                        size={30}
-                      />
-                    }
-                    label={t("toolbar.goToHeader")}
-                    onClick={() => onNavigateHeaderFooter?.("header")}
-                    testId="document-toolbar-header-footer-header"
-                    variant="large"
-                  />
-                  <OfficeHomeCommand
-                    icon={
-                      <DocumentHeaderFooterRibbonIcon
-                        kind="go-footer"
-                        size={30}
-                      />
-                    }
-                    label={t("toolbar.goToFooter")}
-                    onClick={() => onNavigateHeaderFooter?.("footer")}
-                    testId="document-toolbar-header-footer-footer"
-                    variant="large"
-                  />
-                  <OfficeHomeCommandStack
-                    className={homeStyles.headerFooterNavigationStack}
-                  >
-                    <OfficeHomeCommandRow
-                      testId="document-toolbar-header-footer-navigation-row-previous"
-                    >
-                      <OfficeHomeCommand
-                        disabled={!headerFooterContext.canPrevious}
-                        icon={
-                          <DocumentHeaderFooterRibbonIcon
-                            kind="previous"
-                            size={22}
-                          />
-                        }
-                        label={t("toolbar.previous")}
-                        onClick={() => onNavigateHeaderFooter?.("previous")}
-                        testId="document-toolbar-header-footer-previous"
-                      />
-                    </OfficeHomeCommandRow>
-                    <OfficeHomeCommandRow
-                      testId="document-toolbar-header-footer-navigation-row-next"
-                    >
-                      <OfficeHomeCommand
-                        disabled={!headerFooterContext.canNext}
-                        icon={
-                          <DocumentHeaderFooterRibbonIcon
-                            kind="next"
-                            size={22}
-                          />
-                        }
-                        label={t("toolbar.next")}
-                        onClick={() => onNavigateHeaderFooter?.("next")}
-                        testId="document-toolbar-header-footer-next"
-                      />
-                    </OfficeHomeCommandRow>
-                  </OfficeHomeCommandStack>
-                </OfficeHomeCommandRow>
-              </OfficeHomeRibbonGroup>
-              {desktopInteroperabilityVisible ? (
-                <OfficeHomeRibbonGroup
-                  ribbon="headerFooter"
-                  label={t("toolbar.pageType")}
-                  testId="document-toolbar-header-footer-story-group"
-                >
-                  <OfficeHomeCommandStack>
-                    <OfficeHomeCommandRow>
-                      <OfficeHomeCommand
-                        active={headerFooterContext.variant === "normal"}
-                        displayLabel={t("toolbar.default")}
-                        icon={<FileText size={18} />}
-                        label={t("toolbar.defaultPages")}
-                        onClick={() => onNavigateHeaderFooter?.("normal")}
-                        testId="document-toolbar-header-footer-default-story"
-                      />
-                      <OfficeHomeCommand
-                        active={headerFooterContext.variant === "first"}
-                        displayLabel={t("toolbar.first")}
-                        disabled={
-                          !headerFooterContext.availableVariants.includes(
-                            "first",
-                          )
-                        }
-                        icon={<PanelTop size={18} />}
-                        label={t("toolbar.firstPage")}
-                        onClick={() => onNavigateHeaderFooter?.("first")}
-                        testId="document-toolbar-header-footer-first-story"
-                      />
-                      <OfficeHomeCommand
-                        active={headerFooterContext.variant === "even"}
-                        displayLabel={t("toolbar.even")}
-                        disabled={
-                          !headerFooterContext.availableVariants.includes(
-                            "even",
-                          )
-                        }
-                        icon={<BookOpen size={18} />}
-                        label={t("toolbar.evenPages")}
-                        onClick={() => onNavigateHeaderFooter?.("even")}
-                        testId="document-toolbar-header-footer-even-story"
-                      />
-                    </OfficeHomeCommandRow>
-                  </OfficeHomeCommandStack>
-                </OfficeHomeRibbonGroup>
-              ) : null}
-              <OfficeHomeRibbonGroup
-                ribbon="headerFooter"
-                label={t("toolbar.options")}
-                testId="document-toolbar-header-footer-options-group"
-              >
-                <OfficeHomeCommandStack
-                  className={homeStyles.headerFooterOptionsStack}
-                >
-                  <OfficeHomeCommandRow>
-                    <OfficeHomeCheckbox
-                      checked={headerFooterNativeState.differentFirstPage}
-                      className={homeStyles.headerFooterOptionToggle}
-                      disabled={!headerFooterNativeState.firstPageEditable}
-                      label={
-                        t("toolbar.differentFirstPage")
-                      }
-                      onCheckedChange={(checked: boolean) => { setContextDifferentFirstPage(checked); returnFocusToHeaderFooterStory(); }}
-                      testId="document-toolbar-header-footer-different-first"
-                    />
-                  </OfficeHomeCommandRow>
-                  <OfficeHomeCommandRow>
-                    <OfficeHomeCheckbox
-                      checked={headerFooterNativeState.differentOddEven}
-                      className={homeStyles.headerFooterOptionToggle}
-                      disabled={!headerFooterNativeState.oddEvenEditable}
-                      label={
-                        t("toolbar.differentOddEven")
-                      }
-                      onCheckedChange={(checked: boolean) => { setContextDifferentOddEven(checked); returnFocusToHeaderFooterStory(); }}
-                      testId="document-toolbar-header-footer-different-odd-even"
-                    />
-                  </OfficeHomeCommandRow>
-                  {/* Word's Header & Footer tab always offers Link to
-                      Previous (dimmed while the document has one section)
-                      and Show Document Text ("Link to previous", Microsoft
-                      Support). */}
-                  <OfficeHomeCommandRow>
-                      <OfficeHomeCheckbox
-                        checked={
-                          headerFooterNativeState.linkedToPrevious === true
-                        }
-                        disabled={!headerFooterNativeState.linkEditable}
-                        label={
-                          t("toolbar.linkToPreviousDesktopInteroperability")
-                        }
-                        onCheckedChange={(checked: boolean) => { setContextLinkedToPrevious(checked); returnFocusToHeaderFooterStory(); }}
-                        testId="document-toolbar-header-footer-link-previous"
-                      />
-                      <OfficeHomeCheckbox
-                        checked={headerFooterDocumentTextVisible}
-                        controlId="DOCCTL.CONTEXT.HEADER_FOOTER.SHOW_TEXT"
-                        disabled={!onToggleHeaderFooterDocumentText}
-                        label={
-                          t("toolbar.showDocumentText")
-                        }
-                        onCheckedChange={() => {
-                          onToggleHeaderFooterDocumentText?.();
-                          returnFocusToHeaderFooterStory();
-                        }}
-                        testId="document-toolbar-header-footer-show-document-text"
-                      />
-                    </OfficeHomeCommandRow>
-                </OfficeHomeCommandStack>
-              </OfficeHomeRibbonGroup>
-              {/* Word desktop's Position group: Header from Top / Footer
-                  from Bottom and Insert Alignment Tab. Word for the web has
-                  neither; the distance field stays desktop-only, but the
-                  Alignment Tab dialog MRAI built keeps its entrance here as a
-                  desktop exception (the Watermark policy, DOCS-DIALOG-AUDIT
-                  14), or it could not be opened at all. */}
-              <OfficeHomeRibbonGroup
-                ribbon="headerFooter"
-                label={t("toolbar.position")}
-                testId="document-toolbar-header-footer-position-group"
-              >
-                {/* Word: Header from Top / Footer from Bottom, in the
-                    system's length unit. */}
-                <LayoutRibbonNumberField
-                    disabled={!headerFooterNativeState.distanceEditable}
-                    disabledReason={
-                      t("toolbar.noTrustedSectionMarginAuthorityAvailable")
-                    }
-                    icon={
-                      headerFooterContext.kind === "header" ? (
-                        <PanelTop size={18} />
-                      ) : (
-                        <PanelBottom size={18} />
-                      )
-                    }
-                    label={
-                      headerFooterContext.kind === "header"
-                        ? t("toolbar.headerFromTop")
-                        : t("toolbar.footerFromBottom")
-                    }
-                    testId="document-toolbar-header-footer-distance"
-                    acceptsUnits
-                    value={headerFooterDistanceValue}
-                    min={0}
-                    max={docsLengthUnit === "cm" ? 55.88 : 22}
-                    step={docsLengthUnit === "cm" ? 0.1 : 0.05}
-                    unit={docsLengthUnitLabel}
-                    onRememberSelection={() => undefined}
-                    onCommit={setContextBandDistance}
-                  />
-                  <div data-header-footer-context-control data-ribbon-inline-contents="" style={{ display: "contents" }}>
-                    <OfficeHomeCommand
-                      disabled={!headerFooterContext.storyEditor || !editor.isEditable}
-                      displayLabel={t("toolbar.insertAlignmentTab")}
-                      icon={<AlignHorizontalDistributeCenter size={18} />}
-                      label={t("toolbar.insertAlignmentTab")}
-                      onClick={() => {
-                        rememberEditorSelection();
-                        setAlignmentTabOpen(true);
-                      }}
-                      testId="document-toolbar-header-footer-alignment-tab"
-                      variant="compact"
-                    />
-                  </div>
-              </OfficeHomeRibbonGroup>
-              {docsOfficeParityV2 ? (
-                <OfficeHomeRibbonGroup
-                  ribbon="headerFooter"
-                  label={t("toolbar.delete")}
-                  testId="document-toolbar-header-footer-delete-group"
-                >
-                  <OfficeHomeCommandRow>
-                    <OfficeHomeCommand
-                      disabled={deleteContextHeaderDisabledReason !== null}
-                      disabledReason={
-                        deleteContextHeaderDisabledReason ?? undefined
-                      }
-                      icon={
-                        <DocumentHeaderFooterRibbonIcon
-                          kind="delete-header"
-                          size={28}
-                        />
-                      }
-                      label={t("toolbar.deleteHeader")}
-                      onClick={() => deleteContextBand("header")}
-                      testId="document-toolbar-header-footer-delete-header"
-                      variant="large"
-                    />
-                    <OfficeHomeCommand
-                      disabled={deleteContextFooterDisabledReason !== null}
-                      disabledReason={
-                        deleteContextFooterDisabledReason ?? undefined
-                      }
-                      icon={
-                        <DocumentHeaderFooterRibbonIcon
-                          kind="delete-footer"
-                          size={28}
-                        />
-                      }
-                      label={t("toolbar.deleteFooter")}
-                      onClick={() => deleteContextBand("footer")}
-                      testId="document-toolbar-header-footer-delete-footer"
-                      variant="large"
-                    />
-                  </OfficeHomeCommandRow>
-                </OfficeHomeRibbonGroup>
-              ) : null}
-              {!docsOfficeParityV2 ? (
-                null
-              ) : null}
-              <OfficeHomeRibbonGroup
-                ribbon="headerFooter"
-                label={t("toolbar.close")}
-                testId="document-toolbar-header-footer-close-group"
-              >
-                <OfficeHomeCommandRow>
-                  <OfficeHomeCommand
-                    icon={
-                      <DocumentHeaderFooterRibbonIcon
-                        kind="close-preview"
-                        size={28}
-                      />
-                    }
-                    label={
-                      t("toolbar.closeHeaderAndFooter")
-                    }
-                    onClick={() => onNavigateHeaderFooter?.("close")}
-                    testId="document-toolbar-header-footer-close"
-                    variant="large"
-                  />
-                </OfficeHomeCommandRow>
-              </OfficeHomeRibbonGroup>
-            </>
-          ) : null}
+              {null}
+              {null}
+          {null}
           {isActiveRibbon("home") ? (
             <OfficeHomeUndoRail
             label={t("toolbar.undo")}
@@ -30993,227 +24298,8 @@ function DocumentToolbar({
             }}
           />
           ) : null}
-          {isActiveRibbon("equation") ? (
-            equationContextSelection ? (
-            <DocumentEquationContextRibbon
-              editor={editor}
-              locale={locale}
-              selection={equationContextSelection}
-              onInsertEquation={insertGalleryEquationAndOpen}
-              onInsertNewEquation={insertNewEquationAndOpen}
-            />
-          ) : null
-          ) : null}
-          {ribbonTab === "chartDesign" && chartContextVisible ? (
-            // The one Chart Design tab the deck and the worksheet mount
-            // (OfficeChartDesignRibbon): Office's group order, its Add Chart
-            // Element rows, and Word's Data group (Edit Data, Refresh Data).
-            // Docs supplies only its writer and its own test ids.
-            <OfficeChartDesignRibbon
-              ribbon="chartDesign"
-              frame="groups"
-              locale={isChineseLocale ? "zh" : "en"}
-              testId="document-toolbar-chart-design"
-              testIdPrefix="document-toolbar-chart"
-              testIds={DOCUMENT_CHART_DESIGN_TEST_IDS}
-              classes={{
-                group: homeStyles.chartDesignGroup,
-                stylesGroup: homeStyles.chartStylesGroup,
-                commands: homeStyles.chartDesignCommands,
-              }}
-              onTriggerPointerDown={rememberEditorSelection}
-              elements={{
-                disabled: chartCommandDisabledReason !== null,
-                disabledReason: chartCommandDisabledReason ?? undefined,
-                triggerRef: chartAddElementTriggerRef,
-                contentClassName: "note-editor-toolbar-menu",
-                onCloseAutoFocus: (event) => {
-                  event.preventDefault();
-                  const trigger = chartAddElementTriggerRef.current;
-                  if (trigger?.isConnected && !trigger.disabled) {
-                    trigger.focus({ preventScroll: true });
-                  } else {
-                    safelyFocusEditorAfterToolbarClose(editor);
-                  }
-                },
-                // Office's Add Chart Element lists the elements with no
-                // heading, as the deck and the worksheet draw it.
-                items: documentChartElementItems,
-              }}
-              quickLayout={{
-                control: (
-                  <OfficeChartQuickLayoutGallery
-                    application="docs"
-                    calibrated={chartQuickLayoutCalibrated}
-                    available={chartQuickLayoutRefusal}
-                    disabledReason={chartCommandDisabledReason}
-                    className={homeStyles.chartStyleGallery}
-                    labels={{
-                      ariaLabel: t("toolbar.chartQuickLayout"),
-                      more: t("toolbar.moreLayouts"),
-                      item: (index) => t("toolbar.chartLayoutItem", { index }),
-                    }}
-                    trigger={
-                      <OfficeHomeMenuTrigger
-                        hasMenuIndicator
-                        icon={<OfficeSemanticIcon semanticId="chart.dataTable" size={24} />}
-                        label={t("toolbar.quickLayout")}
-                        variant="large"
-                        testId="document-toolbar-chart-quick-layout"
-                        onPointerDown={rememberEditorSelection}
-                      />
-                    }
-                    testIdPrefix="document-toolbar-chart-quick-layout-gallery"
-                    value={activeChartQuickLayoutId}
-                    onPreview={previewDocumentChartQuickLayout}
-                    onCommit={commitDocumentChartQuickLayout}
-                  />
-                ),
-              }}
-              colors={{
-                disabled:
-                  chartCommandDisabledReason !== null || !chartColorsAvailable,
-                disabledReason:
-                  chartCommandDisabledReason ??
-                  (chartColorsAvailable
-                    ? undefined
-                    : t("toolbar.surfaceChartColouredByHeightBands")),
-                contentClassName: "note-editor-toolbar-menu",
-                onCloseAutoFocus: (event) => {
-                  event.preventDefault();
-                  previewDocumentChartColorPalette(null);
-                  safelyFocusEditorAfterToolbarClose(editor);
-                },
-                items: documentChartColorItems,
-              }}
-              styleGallery={renderDocumentChartStyleGallery()}
-              hiddenEmptyCells={
-                chartContextTarget?.valid
-                  ? officeChartHiddenEmptyCellsMenu(chartContextTarget.attrs, {
-                      translate: t,
-                      disabled: chartCommandDisabledReason !== null,
-                      disabledReason: chartCommandDisabledReason ?? undefined,
-                      onIntent: (intent) =>
-                        commitDocumentChartElement(
-                          chartWithElementIntent(chartContextTarget.attrs, intent),
-                        ),
-                    })
-                  : undefined
-              }
-              switchRowColumn={{
-                disabled: !chartTransposeEnabled,
-                disabledReason: t("toolbar.currentChartDataCannotTransposedWithout"),
-                onClick: switchDocumentChartRowsAndColumns,
-              }}
-              selectData={{
-                buttonRef: chartSelectDataTriggerRef,
-                activation: "click",
-                disabled:
-                  chartCommandDisabledReason !== null || !chartSelectDataAvailable,
-                disabledReason:
-                  chartCommandDisabledReason ??
-                  (chartSelectDataAvailable
-                    ? undefined
-                    : t("toolbar.useEditDataWorksheetForChart")),
-                onClick: openDocumentChartSelectData,
-              }}
-              editData={{
-                buttonRef: chartDataEditorTriggerRef,
-                activation: "click",
-                disabled: !editor.isEditable || !chartContextTarget,
-                onClick: openDocumentChartDataEditor,
-              }}
-              refreshData={{
-                disabled:
-                  chartCommandDisabledReason !== null || !chartWorkbookAvailable,
-                disabledReason:
-                  chartCommandDisabledReason ??
-                  (chartWorkbookAvailable
-                    ? undefined
-                    : t("toolbar.chartHasNoWorkbookToRefresh")),
-                onClick: refreshDocumentChartData,
-              }}
-              changeType={{
-                disabled: chartCommandDisabledReason !== null,
-                disabledReason: chartCommandDisabledReason ?? undefined,
-                family: chartContextTarget?.attrs.chartType ?? "column",
-                contentClassName: "note-editor-toolbar-menu",
-                onCloseAutoFocus: (event) => {
-                  event.preventDefault();
-                  safelyFocusEditorAfterToolbarClose(editor);
-                },
-                items: (
-                  <>
-                      <DropdownMenuLabel>
-                        {t("spreadsheet.chartType")}
-                      </DropdownMenuLabel>
-                      {/* The one Change Chart Type list the deck and the
-                          worksheet mount: every type with its subtypes. */}
-                      <OfficeChartTypeMenuItems
-                        groups={officeChartTypeFamilyGroups((family) =>
-                          t(
-                            `toolbar.chartV2.family.${family}` as "toolbar.chartV2.family.column",
-                          ),
-                        )}
-                        choice={(family, subtype) => {
-                          const checked =
-                            chartContextTarget?.attrs.chartType === family &&
-                            chartContextTarget.attrs.chartSubtype === subtype;
-                          // Custom Combination opens its pane, also on a chart
-                          // that already is one (to change its series).
-                          const enabled =
-                            family === "combo" && subtype === "custom"
-                              ? Boolean(
-                                  chartContextTarget?.valid &&
-                                    officeChartCombinationRows(chartContextTarget.attrs),
-                                )
-                              : Boolean(
-                                  !checked &&
-                                    chartContextTarget &&
-                                    documentChartTypeAttrs(
-                                      chartContextTarget,
-                                      family,
-                                      subtype,
-                                    ),
-                                );
-                          return {
-                            enabled,
-                            checked,
-                            reason:
-                              enabled || checked
-                                ? undefined
-                                : t("toolbar.currentDataCannotConvertedToChart"),
-                          };
-                        }}
-                        subtypeLabel={(family, subtype) =>
-                          t(
-                            `toolbar.chartV2.subtype.${family}.${subtype}` as "toolbar.chartV2.subtype.column.clustered",
-                          )
-                        }
-                        onChoose={changeDocumentChartType}
-                        groupTestId={(group) =>
-                          `document-toolbar-chart-type-${group.id}`
-                        }
-                        itemTestId={(family, subtype) =>
-                          `document-toolbar-chart-type-${family}-${subtype}`
-                        }
-                        groupUnavailableReason={
-                          t("toolbar.currentDataCannotConvertedToChart")
-                        }
-                      />
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        data-testid="document-toolbar-chart-type-all-charts"
-                        disabled={!chartContextTarget?.valid}
-                        onSelect={() => openDocumentAllCharts("change")}
-                      >
-                        {t("office.allCharts.changeOpen")}
-                      </DropdownMenuItem>
-                  </>
-                ),
-              }}
-            />
-          ) : null}
+          {null}
+          {null}
           {isActiveRibbon("home") ? (
             <OfficeHomeRibbonGroup
             className={homeStyles.clipboardGroup}
@@ -31402,250 +24488,8 @@ function DocumentToolbar({
           </OfficeHomeRibbonGroup>
           ) : null}
 
-          {isActiveRibbon("shape") && documentShapeFormatAdapter ? (
-            <OfficeShapeFormatTab
-              adapter={
-                // A SmartArt graphic: Change Shape changes the ONE shape
-                // selected inside it (Word's Format > Shapes); with the whole
-                // graphic selected there is no shape to change, and a picture
-                // slot keeps the layout's frame.
-                documentSmartArtDesignDiagram &&
-                (selectedDocumentShapeMember?.smartArtRole !== "node" ||
-                  selectedDocumentShapeMember.kind === "picture" ||
-                  selectedDocumentShapeMember.smartArtPicturePlaceholder === true)
-                  ? {
-                      ...documentShapeFormatAdapter,
-                      changeShape: {
-                        ...documentShapeFormatAdapter.changeShape,
-                        disabled: true,
-                        disabledReason:
-                          selectedDocumentShapeMember === null
-                            ? t("presentation.smartartContext.formatSelectShape")
-                            : t("presentation.smartartContext.formatUnavailable"),
-                      },
-                      // One shape of the graphic keeps the layout's order (the
-                      // file has no z-order field for it); the whole graphic
-                      // moves in the page's stack as any floating object.
-                      ...(!smartArtGraphicFillable
-                        ? {
-                            zOrder: {
-                              ...documentShapeFormatAdapter.zOrder,
-                              disabled: true,
-                              disabledReason: t("presentation.smartartContext.formatArrangedByLayout"),
-                            },
-                          }
-                        : {}),
-                      // The WHOLE graphic: Shape Outline is its own line on
-                      // the frame (`dgm:whole`) and Shape Effects its
-                      // background's effect (`dgm:bg`: no Bevel or 3-D), on
-                      // the group's own outline / effect.
-                      ...(smartArtGraphicFillable && selectedDocumentShape
-                        ? {
-                            outline: {
-                              ...documentShapeFormatAdapter.outline,
-                              value: selectedDocumentShape.attrs.outline,
-                              // The button's colour: the graphic's own line,
-                              // else Office's default black.
-                              lastColor: selectedDocumentShape.attrs.outline !== "none" ? selectedDocumentShape.attrs.outline : "#000000",
-                              weightPt: selectedDocumentShape.attrs.outlineWidthPt > 0 ? selectedDocumentShape.attrs.outlineWidthPt : null,
-                              disabled: false,
-                              disabledReason: undefined,
-                              lineStyleCapability: { disabled: true, disabledReason: t("presentation.smartartContext.formatUnavailable") },
-                              lineEndsCapability: { disabled: true, disabledReason: t("presentation.smartartContext.formatUnavailable") },
-                              onPick: (color: string | null) => {
-                                setLiveDocumentSmartArtGraphicFormat(editor, { outline: color ?? null });
-                              },
-                              onWeight: (pt: number) => {
-                                setLiveDocumentSmartArtGraphicFormat(editor, { outlineWidthPt: pt });
-                              },
-                            },
-                            effects: {
-                              ...documentShapeFormatAdapter.effects,
-                              render: undefined,
-                              value: (["shadow", "reflection", "glow", "softEdge"] as const).find(
-                                (effect) => effect === selectedDocumentShape.attrs.effect,
-                              ) ?? "none",
-                              available: ["none", "shadow", "reflection", "glow", "softEdge"] as const,
-                              disabled: false,
-                              disabledReason: undefined,
-                              onPick: (effect: string) => {
-                                setLiveDocumentSmartArtGraphicFormat(editor, {
-                                  effect:
-                                    effect === "shadow" || effect === "reflection" || effect === "glow" || effect === "softEdge"
-                                      ? effect
-                                      : null,
-                                });
-                              },
-                            },
-                          }
-                        : {}),
-                    }
-                  : documentShapeFormatAdapter
-              }
-              // Word's SmartArt Format tab opens on Shapes (Change Shape,
-              // Larger, Smaller), not on Insert Shapes.
-              smartArtShapes={
-                documentSmartArtDesignDiagram
-                  ? {
-                      groupLabel: smartArtDesignLabels.shapesGroup ?? t("presentation.smartartContext.shapesGroup"),
-                      larger: smartArtDesignLabels.larger ?? t("presentation.smartartContext.larger"),
-                      smaller: smartArtDesignLabels.smaller ?? t("presentation.smartartContext.smaller"),
-                      canResize: documentSmartArtDesignDiagram.canResizeShape === true,
-                      resizeDisabledReason: documentSmartArtShapesLocked
-                        ? t("presentation.smartartContext.shapesLockedIn3d")
-                        : t("presentation.smartartContext.formatSelectShape"),
-                      onResize: (direction) => documentSmartArtDesignDiagram.onResizeShape?.(direction),
-                      editIn2d: {
-                        label: t("presentation.smartartContext.editIn2d"),
-                        pressed: documentSmartArtEditIn2dAvailable && documentSmartArtEditIn2dOn,
-                        disabled: !documentSmartArtEditIn2dAvailable,
-                        disabledReason: t("presentation.smartartContext.editIn2dNeedsScene"),
-                        onToggle: () => {
-                          if (documentSmartArtEditIn2dKey) toggleSmartArtEditingIn2d(documentSmartArtEditIn2dKey);
-                        },
-                      },
-                    }
-                  : undefined
-              }
-              ribbon="shape"
-              testIdPrefix="document-toolbar-shape"
-              menuClassName="docs-cupertino-menu"
-              onMenuCloseAutoFocus={(event) => {
-                event.preventDefault();
-                safelyFocusEditorAfterToolbarClose(editor);
-              }}
-              ids={{
-                insertGroup: "document-toolbar-shape-insert-group",
-                insert: "document-toolbar-shape-insert",
-                insertMore: "document-toolbar-shape-insert",
-                insertCatalog: "document-toolbar-insert-shape",
-                changeShape: "document-toolbar-shape-change",
-                changeShapeCatalog: "document-toolbar-change-shape",
-                changeShapeTile: "document-toolbar-shape-change",
-                editPoints: "document-toolbar-shape-edit-points",
-                textBox: "document-toolbar-shape-text-box",
-                stylesGroup: "document-toolbar-shape-styles-group",
-                styles: "document-toolbar-shape-styles",
-                fillPrimary: "document-toolbar-shape-fill",
-                fill: "document-toolbar-shape-fill",
-                outlinePrimary: "document-toolbar-shape-outline",
-                outline: "document-toolbar-shape-outline",
-                outlineWeight: "document-toolbar-shape-outline-weight",
-                outlineDashes: "document-toolbar-shape-outline-line-style",
-                arrows: "document-toolbar-shape-arrows-menu",
-                lineEnds: "document-toolbar-shape",
-                effects: "document-toolbar-shape-effects",
-                effect: "document-toolbar-shape-effect",
-                wordArtGroup: "document-toolbar-shape-text-styles-group",
-                wordArt: "document-toolbar-shape-text-styles",
-                textFill: "document-toolbar-shape-text-fill",
-                textOutline: "document-toolbar-shape-text-outline",
-                textEffects: "document-toolbar-shape-text-effects",
-                textEffect: "document-toolbar-shape-text-effect",
-                textGroup: "document-toolbar-shape-text-group",
-                textDirection: "document-toolbar-shape-text-direction",
-                textAlign: "document-toolbar-shape-text-align",
-                createLink: "document-toolbar-shape-create-link",
-                altTextGroup: "document-toolbar-shape-alt-text-group",
-                altText: "document-toolbar-shape-alt-text",
-                arrangeGroup: "document-toolbar-ribbon-layout-arrange",
-                position: "document-toolbar-ribbon-layout-object-position",
-                wrapText: "document-toolbar-ribbon-layout-object-wrap",
-                layer: "document-toolbar-ribbon-layout-object-layer-primary",
-                layerMenu: "document-toolbar-ribbon-layout-object-layer",
-                send: "document-toolbar-ribbon-layout-object-send-primary",
-                sendMenu: "document-toolbar-ribbon-layout-object-send",
-                selectionPane: "document-toolbar-ribbon-shape-selection-pane",
-                align: "document-toolbar-ribbon-layout-object-align",
-                group: "document-toolbar-ribbon-shape-group",
-                groupItem: "document-toolbar-ribbon-shape-group-group",
-                ungroupItem: "document-toolbar-ribbon-shape-group-ungroup",
-                regroupItem: "document-toolbar-ribbon-shape-group-regroup",
-                rotate: "document-toolbar-ribbon-layout-object-rotate",
-                rotateRight90: "document-toolbar-ribbon-layout-object-rotate-right",
-                rotateLeft90: "document-toolbar-ribbon-layout-object-rotate-left",
-                flipHorizontal: "document-toolbar-ribbon-layout-object-flip-horizontal",
-                flipVertical: "document-toolbar-ribbon-layout-object-flip-vertical",
-                rotateReset: "document-toolbar-ribbon-layout-object-rotate-reset",
-                sizeGroup: "document-toolbar-ribbon-layout-object-size",
-                size: "document-toolbar-ribbon-layout-shape",
-                lockAspect: "document-toolbar-ribbon-layout-shape-lock-aspect-ratio",
-                formatPane: "document-toolbar-shape-format-pane",
-              }}
-            />
-          ) : null}
-          {isActiveRibbon("shape") && documentSmartArtSlotPicture ? (
-            // Word's Picture Format for the picture in the SmartArt slot that
-            // is selected: Crop > Fill / Fit, Picture Styles and Reset
-            // Picture (Microsoft Support, "Crop a picture to fit in a shape";
-            // "Add a border or another style to a picture").
-            <OfficeHomeRibbonGroup
-              ribbon="shape"
-              label={t("toolbar.pictureStyles")}
-              testId="document-toolbar-smartart-picture-group"
-            >
-              <OfficeHomeCommandRow>
-                <DropdownMenu modal={false}>
-                  <DropdownMenuTrigger asChild>
-                    <OfficeHomeMenuTrigger
-                      disabled={!editor.isEditable}
-                      hasMenuIndicator
-                      icon={<OfficeSemanticIcon semanticId="image.crop" size={24} />}
-                      label={t("presentation.crop.toggle")}
-                      onPointerDown={rememberEditorSelection}
-                      testId="document-toolbar-smartart-picture-crop"
-                      variant="large"
-                    />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="note-editor-toolbar-menu"
-                    onCloseAutoFocus={(event) => {
-                      event.preventDefault();
-                      safelyFocusEditorAfterToolbarClose(editor);
-                    }}
-                  >
-                    <DropdownMenuItem
-                      data-testid="document-toolbar-smartart-picture-crop-fill"
-                      onSelect={() => void applyDocumentSmartArtSlotPicture({ kind: "crop", mode: "fill" })}
-                    >
-                      {t("presentation.crop.fill")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      data-testid="document-toolbar-smartart-picture-crop-fit"
-                      onSelect={() => void applyDocumentSmartArtSlotPicture({ kind: "crop", mode: "fit" })}
-                    >
-                      {t("presentation.crop.fit")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <OfficePictureStyleGallery
-                  application="docs"
-                  disabled={!editor.isEditable}
-                  labels={{
-                    ariaLabel: t("toolbar.pictureStyles"),
-                    more: t("toolbar.morePictureStyles"),
-                  }}
-                  value={documentSmartArtSlotPicture.format.style ?? null}
-                  visibleItemCount={4}
-                  onPreviewChange={() => undefined}
-                  onCommit={(style) => void applyDocumentSmartArtSlotPicture({ kind: "style", style })}
-                  testIdPrefix="document-toolbar-smartart-picture-style"
-                />
-                <OfficeHomeCommand
-                  disabled={
-                    !editor.isEditable ||
-                    !(documentSmartArtSlotPicture.format.crop || documentSmartArtSlotPicture.format.style)
-                  }
-                  icon={<OfficeSemanticIcon semanticId="image.reset" size={24} />}
-                  label={t("toolbar.resetPicture")}
-                  onClick={() => void applyDocumentSmartArtSlotPicture({ kind: "reset" })}
-                  testId="document-toolbar-smartart-picture-reset"
-                  variant="large"
-                />
-              </OfficeHomeCommandRow>
-            </OfficeHomeRibbonGroup>
-          ) : null}
+          {null}
+          {null}
 
           {isActiveRibbon("home") ? (
             <OfficeHomeRibbonGroup
@@ -35989,43 +28833,7 @@ function DocumentToolbar({
 
 
 }
-          {isActiveRibbon("draw") && handwriting ? (
-            <OfficeHomeRibbonGroup
-              ribbon="draw"
-              label={t("handwriting.toolbar.group")}
-              size="content"
-              className={`${homeStyles.drawPaperGroup} ${homeStyles.drawHandwritingGroup}`}
-              testId="document-toolbar-draw-handwriting-group"
-            >
-              <OfficeHomeCommandRow className={homeStyles.drawCommandRow}>
-                <HandwritingPaperCommands
-                  editor={documentEditor}
-                  disabledReason={inkDisabledReason}
-                  // Insert > Pictures' own entries (this device, a
-                  // screenshot, an AI picture), on the one ribbon there is;
-                  // each lands as a picture floating over the paper.
-                  pictures={{
-                    fromDevice: openLocalImagePicker,
-                    screenshot: () => void captureScreenshot(),
-                    ...(onInsertImageFiles || docsOfficeParityV2 ? { aiPicture: openAiImageDialog } : {}),
-                    busy: imageInsertBusy,
-                  }}
-                />
-                {/* Insert's picture input is not mounted on this ribbon. */}
-                <input
-                  ref={imageFileInputRef}
-                  className="sr-only"
-                  data-testid="document-toolbar-handwriting-image-file-input"
-                  type="file"
-                  accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,image/svg+xml,.svg"
-                  multiple
-                  tabIndex={-1}
-                  disabled={imageInsertBusy || !editor.isEditable}
-                  onChange={insertLocalImageFiles}
-                />
-              </OfficeHomeCommandRow>
-            </OfficeHomeRibbonGroup>
-          ) : null}
+          {null}
           {/* Word exposes drawing as a first-class workspace. MRNote's native
               canvas is an editable Excalidraw block (including freehand ink),
               while Mermaid, SmartArt and reproducible Python charts make the
@@ -36034,357 +28842,16 @@ function DocumentToolbar({
               gallery of pens the user extends with Add Pen (Pen, Highlighter,
               Pencil), each pen's menu choosing its thickness, colour, effect
               or more colours, or deleting it; and Draw with Trackpad. */}
-          {isActiveRibbon("draw") ? (
-            <OfficeHomeRibbonGroup
-              ribbon="draw"
-              label={t("toolbar.ribbonDrawTools")}
-              className={homeStyles.drawToolsGroup}
-              testId="document-toolbar-draw-tools-group"
-            >
-              <OfficeHomeCommandRow className={homeStyles.drawCommandRow}>
-                {/* Drawing Tools in the order every MRAI Draw tab shares
-                    (Office's): Select, Draw, Eraser. */}
-                <OfficeHomeCommand
-                  active={inkMode === null}
-                  controlId="draw.select"
-                  icon={<OfficeSemanticIcon semanticId="draw.select" size={24} />}
-                  label={t("toolbar.select")}
-                  onClick={exitInkMode}
-                  testId="document-toolbar-ribbon-draw-select"
-                  variant="large"
-                />
-                {/* Word (Windows): Lasso Select takes the strokes a loop
-                    goes round or through; they then move, delete and
-                    convert together. */}
-                <OfficeHomeCommand
-                  active={inkMode === "lasso"}
-                  controlId="draw.lasso"
-                  disabled={Boolean(inkExistingDisabledReason)}
-                  disabledReason={inkExistingDisabledReason}
-                  icon={<OfficeSemanticIcon semanticId="draw.lasso" size={24} />}
-                  label={t("toolbar.drawLasso")}
-                  onClick={() => (inkMode === "lasso" ? exitInkMode() : armInkMode("lasso"))}
-                  testId="document-toolbar-ribbon-draw-lasso"
-                  variant="large"
-                />
-                {/* A note-taking app's laser (Goodnotes): the pen draws a line
-                    that fades behind it, for pointing; nothing is saved. */}
-                <OfficeHomeCommand
-                  active={inkMode === "laser"}
-                  controlId="draw.laser"
-                  disabled={Boolean(inkDisabledReason)}
-                  disabledReason={inkDisabledReason}
-                  icon={<OfficeSemanticIcon semanticId="draw.laser" size={24} />}
-                  label={t("toolbar.drawLaser")}
-                  onClick={() => (inkMode === "laser" ? exitInkMode() : armInkMode("laser"))}
-                  testId="document-toolbar-ribbon-draw-laser"
-                  variant="large"
-                />
-                {/* A note-taking app's tape: strips laid over the words, a
-                    tap peels one back or lays it down (learning by heart). */}
-                <DocumentInkTapeCommand
-                  active={inkTapeArmed}
-                  effect={inkTape.effect}
-                  widthPt={inkTape.widthPt}
-                  disabled={Boolean(inkDisabledReason)}
-                  disabledReason={inkDisabledReason}
-                  onArm={armInkTape}
-                  onExit={exitInkMode}
-                />
-                {/* A note-taking app's stickers: MRAI's own, put on the page
-                    as pictures that drag and size. */}
-                <DocumentStickersCommand
-                  disabled={Boolean(inkDisabledReason)}
-                  disabledReason={inkDisabledReason}
-                  onInsert={insertSticker}
-                />
-                <OfficeHomeCommand
-                  active={inkDrawTools.penDrawActive && !inkTapeArmed}
-                  controlId="draw.pen"
-                  disabled={Boolean(inkDisabledReason)}
-                  disabledReason={inkDisabledReason}
-                  icon={<OfficeSemanticIcon semanticId="draw.mode" size={24} />}
-                  label={t("toolbar.drawMode")}
-                  onClick={() => {
-                    if (inkDrawTools.penDrawActive && !inkTapeArmed) {
-                      exitInkMode();
-                      return;
-                    }
-                    setInkTapeArmed(false);
-                    inkDrawTools.choosePenDraw();
-                    if (inkMode !== "draw") armInkMode("draw");
-                  }}
-                  testId="document-toolbar-ribbon-draw-mode"
-                  variant="large"
-                />
-                {/* Draw with Touch, one of the five tools (useInkDrawTools). */}
-                <OfficeInkTouchDrawCommand
-                  inkDrawing={inkMode === "draw"}
-                  controlId="draw.touch"
-                  disabled={Boolean(inkDisabledReason)}
-                  disabledReason={inkDisabledReason}
-                  testId="document-toolbar-ribbon-draw-touch"
-                  onArm={() => armInkMode("draw")}
-                  onExit={exitInkMode}
-                />
-                <OfficeHomeLargeSplitLayout
-                  testId="document-toolbar-ribbon-draw-ink-eraser-split"
-                  primary={
-                    <OfficeHomeCommand
-                      active={inkMode === "eraser"}
-                      controlId="draw.eraser"
-                      disabled={Boolean(inkExistingDisabledReason)}
-                      disabledReason={inkExistingDisabledReason}
-                      icon={<OfficeSemanticIcon semanticId="draw.eraser.stroke" size={24} />}
-                      label={t("toolbar.drawEraser")}
-                      onClick={() => (inkMode === "eraser" ? exitInkMode() : armInkMode("eraser"))}
-                      testId="document-toolbar-ribbon-draw-ink-eraser"
-                      variant="large"
-                    />
-                  }
-                  trigger={
-                    <DropdownMenu modal={false}>
-                      <DropdownMenuTrigger asChild>
-                        <OfficeHomeMenuTrigger
-                          controlId="draw.eraserKind"
-                          disabled={Boolean(inkExistingDisabledReason)}
-                          disabledReason={inkExistingDisabledReason}
-                          icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                          label={t("toolbar.drawEraserKinds")}
-                          title={t("toolbar.drawEraserKinds")}
-                          testId="document-toolbar-ribbon-draw-ink-eraser-menu"
-                          variant="icon"
-                        />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="start"
-                        className="note-editor-toolbar-menu"
-                        data-testid="document-toolbar-ribbon-draw-ink-eraser-menu-content"
-                        onCloseAutoFocus={(event) => event.preventDefault()}
-                      >
-                        <OfficeInkEraserMenuItems
-                          value={inkEraser}
-                          testIdPrefix="document-toolbar-ribbon-draw-ink-eraser"
-                          onChoose={chooseInkEraser}
-                        />
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  }
-                />
-              </OfficeHomeCommandRow>
-            </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("draw") ? (
-            <OfficeHomeRibbonGroup
-              ribbon="draw"
-              label={t("toolbar.ribbonDrawPens")}
-              className={homeStyles.drawPensGroup}
-              testId="document-toolbar-draw-ink-group"
-            >
-              <OfficeHomeCommandRow className={homeStyles.drawCommandRow}>
-                <OfficeInkPenGallery
-                  pens={shownInkPens}
-                  selectedId={inkPresetId}
-                  drawing={inkMode === "draw" && !inkTapeArmed}
-                  disabled={Boolean(inkDisabledReason)}
-                  disabledReason={inkDisabledReason}
-                  testIdPrefix="document-toolbar-ribbon-draw-ink"
-                  onChoose={chooseInkPreset}
-                  onUpdate={updateInkPen}
-                  onRemove={removeInkPen}
-                  onMoreColors={setInkMoreColorsPenId}
-                  penRef={(id, element) => {
-                    inkPenRefs.current.set(id, element);
-                  }}
-                />
-                <DropdownMenu modal={false}>
-                  <DropdownMenuTrigger asChild>
-                    <OfficeHomeMenuTrigger
-                      controlId="draw.addPen"
-                      disabled={Boolean(inkDisabledReason) || inkPens.pens.length >= DOCUMENT_INK_MAX_PENS}
-                      disabledReason={inkDisabledReason}
-                      icon={<Plus size={24} aria-hidden />}
-                      label={t("toolbar.drawAddPen")}
-                      hasMenuIndicator
-                      testId="document-toolbar-ribbon-draw-add-pen"
-                      variant="large"
-                    />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="note-editor-toolbar-menu"
-                    data-testid="document-toolbar-ribbon-draw-add-pen-menu-content"
-                    onCloseAutoFocus={(event) => event.preventDefault()}
-                  >
-                    <OfficeInkAddPenMenuItems
-                      testIdPrefix="document-toolbar-ribbon-draw-add-pen"
-                      onAdd={addInkPen}
-                    />
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </OfficeHomeCommandRow>
-            </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("draw") ? (
-            <OfficeHomeRibbonGroup
-              ribbon="draw"
-              label={t("toolbar.drawConvert")}
-              size="content"
-              className={homeStyles.drawConvertGroup}
-              testId="document-toolbar-draw-convert-group"
-            >
-              {
-}
-              <OfficeHomeCommandStack rows={3}>
-                <OfficeHomeCommand
-                  controlId="draw.inkToShape"
-                  variant="compact"
-                  active={inkToShape}
-                  disabled={Boolean(inkDisabledReason)}
-                  disabledReason={inkDisabledReason}
-                  icon={<OfficeSemanticIcon semanticId="ink.toShape" size={16} />}
-                  label={t("toolbar.drawInkToShape")}
-                  onClick={() => runInkConvert("shape")}
-                  testId="document-toolbar-ribbon-draw-ink-to-shape"
-                />
-                {null}
-                {null}
-              </OfficeHomeCommandStack>
-            </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("draw") ? (
-            <OfficeHomeRibbonGroup
-              ribbon="draw"
-              label={t("toolbar.drawReplay")}
-              size="content"
-              className={homeStyles.drawReplayGroup}
-              testId="document-toolbar-draw-replay-group"
-            >
-              <OfficeHomeCommandRow className={homeStyles.drawCommandRow}>
-                <OfficeHomeCommand
-                  controlId="draw.inkReplay"
-                  variant="large"
-                  active={inkReplay !== null}
-                  disabled={inkStrokeCount === 0}
-                  disabledReason={inkStrokeCount === 0 ? t("toolbar.drawNoInk") : undefined}
-                  icon={<OfficeSemanticIcon semanticId="media.play" size={24} />}
-                  label={t("toolbar.drawInkReplay")}
-                  onClick={() => {
-                    // The strokes are read as they stand: the wet ones land first.
-                    window.dispatchEvent(new Event(DOCUMENT_INK_FLUSH_EVENT));
-                    exitInkMode();
-                    setInkReplay({ position: 0, playing: true });
-                  }}
-                  testId="document-toolbar-ribbon-draw-ink-replay"
-                />
-                {pageId ? (
-                  <DocumentInkAudioControls
-                    pageId={pageId}
-                    canRecord={!inkDisabledReason}
-                    sessionRef={inkRecordingRef}
-                    strokesRoot={inkStrokesRoot}
-                  />
-                ) : null}
-              </OfficeHomeCommandRow>
-            </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("draw") ? (
-            <OfficeHomeRibbonGroup
-              ribbon="draw"
-              label={t("presentation.draw.stencilsGroup")}
-              size="content"
-              className={homeStyles.drawStencilsGroup}
-              testId="document-toolbar-draw-stencils-group"
-            >
-              <OfficeHomeCommandRow className={homeStyles.drawCommandRow}>
-                <OfficeHomeCommand
-                  controlId="draw.ruler"
-                  variant="large"
-                  active={inkRuler !== null}
-                  disabled={Boolean(inkDisabledReason)}
-                  disabledReason={inkDisabledReason}
-                  icon={<IconInkRuler home size={24} />}
-                  label={t("toolbar.ruler")}
-                  onClick={toggleInkRuler}
-                  testId="document-toolbar-ribbon-draw-ruler"
-                />
-              </OfficeHomeCommandRow>
-            </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("draw") && !handwriting ? (
-            <OfficeHomeRibbonGroup
-              ribbon="draw"
-              label={t("toolbar.drawPaper")}
-              size="content"
-              className={homeStyles.drawPaperGroup}
-              testId="document-toolbar-draw-paper-group"
-            >
-              <OfficeHomeCommandRow className={homeStyles.drawCommandRow}>
-                {(
-                  [
-                    ["rule", IconInkPaperRule, "toolbar.drawPaperRule"],
-                    ["grid", IconInkPaperGrid, "toolbar.drawPaperGrid"],
-                    ["dot", IconInkPaperDot, "toolbar.drawPaperDot"],
-                  ] as const
-                ).map(([kind, Icon, label]) => {
-                  const active = snapshot.inkPaper === kind;
-                  return (
-                    <OfficeHomeCommand
-                      key={kind}
-                      controlId={`draw.paper.${kind}`}
-                      variant="large"
-                      active={active}
-                      aria-pressed={active}
-                      disabled={Boolean(inkDisabledReason)}
-                      disabledReason={inkDisabledReason}
-                      icon={<Icon home size={24} />}
-                      label={t(label)}
-                      // Pressing the paper already showing takes it away.
-                      onClick={() => editor.chain().focus().setInkPaper(active ? null : kind).run()}
-                      testId={`document-toolbar-ribbon-draw-paper-${kind}`}
-                    />
-                  );
-                })}
-              </OfficeHomeCommandRow>
-            </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("draw") && !deviceHasTouchScreen ? (
-            <OfficeHomeRibbonGroup
-              ribbon="draw"
-              label={t("toolbar.drawTrackpad")}
-              className={homeStyles.drawTrackpadGroup}
-              testId="document-toolbar-draw-trackpad-group"
-            >
-              <OfficeHomeCommandRow className={homeStyles.drawCommandRow}>
-                <OfficeInkTrackpadSwitch
-                  on={inkTrackpad}
-                  controlId="draw.trackpad"
-                  disabled={Boolean(inkDisabledReason)}
-                  disabledReason={inkDisabledReason}
-                  testId="document-toolbar-ribbon-draw-trackpad"
-                  onToggle={() => setInkTrackpad((current) => !current)}
-                />
-              </OfficeHomeCommandRow>
-            </OfficeHomeRibbonGroup>
-          ) : null}
+          {null}
+          {null}
+          {null}
+          {null}
+          {null}
+          {null}
+          {null}
           {/* The ribbon brought back over the pen palette folds into it
               again from here (lib/pen-first-draw). */}
-          {isActiveRibbon("draw") && penFirst.available && !inkDisabledReason ? (
-            <OfficeHomeRibbonGroup
-              ribbon="draw"
-              label={t("toolbar.penPalette")}
-              className={homeStyles.drawPenPaletteGroup}
-              testId="document-toolbar-draw-pen-palette-group"
-            >
-              <OfficeHomeCommandRow className={homeStyles.drawCommandRow}>
-                <OfficeInkHideRibbonCommand
-                  controlId="draw.hideRibbon"
-                  testId="document-toolbar-ribbon-draw-hide-ribbon"
-                  onHide={penFirst.showPalette}
-                />
-              </OfficeHomeCommandRow>
-            </OfficeHomeRibbonGroup>
-          ) : null}
+          {null}
           {
 
 
@@ -36394,568 +28861,9 @@ function DocumentToolbar({
 
           {/* References mirrors the professional-document workflow rather than
               hiding these commands in Insert/Review overflow menus. */}
-          {isActiveRibbon("references") ? (
-            <OfficeHomeRibbonGroup
-            ribbon="references"
-            label={t("toolbar.ribbonReferencesContents")}
-            className={homeStyles.referencesContentsGroup}
-            testId="document-toolbar-ribbon-references-contents-group"
-          >
-            <OfficeHomeCommandRow className={homeStyles.secondaryCommandRow}>
-              {docsOfficeParityV2 ? (
-                <>
-                  {/* Word's Table of Contents button opens its gallery
-                      (Automatic and Manual tables, Custom Table of Contents,
-                      Remove Table of Contents) wherever it is pressed;
-                      Update Table is its own button beside it. */}
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <OfficeHomeMenuTrigger
-                        disabled={
-                          !referenceCommandDecisions["references.tocSettings"]
-                            .enabled
-                        }
-                        displayLabel={t("toolbar.tableOfContents")}
-                        icon={<DocsHomeIcon name="tableOfContents" size={24} />}
-                        label={
-                          reviewUnavailableTitle(
-                            referenceCommandDecisions[
-                              "references.tocSettings"
-                            ],
-                          ) ?? t("toolbar.tableOfContents")
-                        }
-                        hasMenuIndicator
-                        onPointerDown={rememberTocSelection}
-                        testId="document-toolbar-ribbon-references-toc"
-                        variant="large"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      className="note-editor-toolbar-menu note-editor-toolbar-menu--toc-gallery"
-                      onCloseAutoFocus={(event) => {
-                        event.preventDefault();
-                        safelyFocusEditorAfterToolbarClose(editor);
-                      }}
-                    >
-                      <DocumentTocGalleryMenu
-                        removeEnabled={
-                          referenceCommandDecisions["references.tocRemove"]
-                            .enabled
-                        }
-                        onInsertAutomatic={insertGalleryTableOfContents}
-                        onInsertManual={insertManualTableOfContents}
-                        onCustom={() =>
-                          executeReferenceFeature("references.tocSettings")
-                        }
-                        onRemove={() =>
-                          executeReferenceFeature("references.tocRemove")
-                        }
-                      />
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <OfficeHomeCommandStack>
-                    <DropdownMenu modal={false}>
-                      <DropdownMenuTrigger asChild>
-                        <OfficeHomeMenuTrigger
-                          active={
-                            tocOutlineMenuValue === "1" ||
-                            tocOutlineMenuValue === "2" ||
-                            tocOutlineMenuValue === "3"
-                          }
-                          disabled={
-                            !referenceCommandDecisions[
-                              "references.tocAddText"
-                            ].enabled
-                          }
-                          displayLabel={t("toolbar.tocAddText")}
-                          hasMenuIndicator
-                          icon={<Heading size={16} aria-hidden />}
-                          label={
-                            reviewUnavailableTitle(
-                              referenceCommandDecisions[
-                                "references.tocAddText"
-                              ],
-                            ) ?? t("toolbar.tocAddText")
-                          }
-                          onPointerDown={rememberEditorSelection}
-                          testId="document-toolbar-ribbon-references-toc-add-text"
-                          variant="compact"
-                        />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="start"
-                        className="note-editor-toolbar-menu"
-                        onCloseAutoFocus={(event) => {
-                          event.preventDefault();
-                          safelyFocusEditorAfterToolbarClose(editor);
-                        }}
-                      >
-                        {/* Word's order: Do Not Show in Table of Contents
-                            first, then Level 1-3. */}
-                        <DropdownMenuRadioGroup value={tocOutlineMenuValue}>
-                          <DropdownMenuRadioItem
-                            value="none"
-                            data-testid="document-toolbar-ribbon-references-toc-level-none"
-                            onSelect={() => executeTocOutlineChoice("none")}
-                          >
-                            {t("toolbar.tocNotInTableOfContents")}
-                          </DropdownMenuRadioItem>
-                          {([1, 2, 3] as const).map((level) => (
-                            <DropdownMenuRadioItem
-                              key={level}
-                              value={String(level)}
-                              data-testid={`document-toolbar-ribbon-references-toc-level-${level}`}
-                              onSelect={() => executeTocOutlineChoice(level)}
-                            >
-                              {t(
-                                `toolbar.tocOutlineLevel${level}` as "toolbar.tocOutlineLevel1",
-                              )}
-                            </DropdownMenuRadioItem>
-                          ))}
-                        </DropdownMenuRadioGroup>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <OfficeHomeCommand
-                      disabled={
-                        !referenceCommandDecisions["references.tocUpdate"]
-                          .enabled
-                      }
-                      displayLabel={t("toolbar.updateTableOfContents")}
-                      icon={<RefreshCw size={16} aria-hidden />}
-                      label={
-                        officeCommandAccessibleLabel(
-                          t("toolbar.updateTableOfContents"),
-                          reviewUnavailableTitle(
-                            referenceCommandDecisions["references.tocUpdate"],
-                          ),
-                        )
-                      }
-                      onClick={() =>
-                        executeReferenceFeature("references.tocUpdate")
-                      }
-                      testId="document-toolbar-ribbon-references-toc-update-visible"
-                      variant="compact"
-                    />
-                  </OfficeHomeCommandStack>
-                </>
-              ) : (
-                <OfficeHomeCommand
-                  displayLabel={t("toolbar.tableOfContents")}
-                  icon={<DocsHomeIcon name="tableOfContents" size={24} />}
-                  label={t("toolbar.tableOfContents")}
-                  onClick={pressTableOfContents}
-                  testId="document-toolbar-ribbon-references-toc"
-                  variant="large"
-                />
-              )}
-              {referenceCommandDecisions[
-                "references.crossReferenceSettings"
-              ].visible ? (
-                <OfficeHomeCommand
-                  disabled={
-                    !referenceCommandDecisions[
-                      "references.crossReferenceSettings"
-                    ].enabled
-                  }
-                  disabledReason={reviewUnavailableTitle(
-                    referenceCommandDecisions[
-                      "references.crossReferenceSettings"
-                    ],
-                  )}
-                  displayLabel={t("toolbar.insertCrossReference")}
-                  icon={<DocsHomeIcon name="crossReference" size={24} />}
-                  label={t("toolbar.insertCrossReference")}
-                  onClick={runReferencesCrossReference}
-                  testId="document-toolbar-ribbon-references-cross-reference"
-                  variant="large"
-                />
-              ) : null}
-            </OfficeHomeCommandRow>
-          </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("references") ? (
-            <OfficeHomeRibbonGroup
-            ribbon="references"
-            label={t("toolbar.ribbonReferencesFootnotes")}
-            className={homeStyles.referencesNotesGroup}
-            testId="document-toolbar-ribbon-references-notes-group"
-          >
-            <OfficeHomeCommandRow className={homeStyles.secondaryCommandRow}>
-              <OfficeHomeCommand
-                disabled={
-                  docsOfficeParityV2 &&
-                  !referenceCommandDecisions["references.insertFootnote"]
-                    .enabled
-                }
-                displayLabel={t("toolbar.insertFootnote")}
-                icon={<DocsHomeIcon name="footnote" size={24} />}
-                label={
-                  (docsOfficeParityV2 &&
-                    reviewUnavailableTitle(
-                      referenceCommandDecisions["references.insertFootnote"],
-                    )) ||
-                  t("toolbar.insertFootnote")
-                }
-                onClick={() => runReferencesNote("footnote")}
-                testId="document-toolbar-ribbon-footnote"
-                variant="large"
-              />
-              <OfficeHomeCommand
-                disabled={
-                  docsOfficeParityV2 &&
-                  !referenceCommandDecisions["references.insertEndnote"]
-                    .enabled
-                }
-                displayLabel={t("toolbar.insertEndnote")}
-                icon={<DocsHomeIcon name="endnote" size={24} />}
-                label={
-                  (docsOfficeParityV2 &&
-                    reviewUnavailableTitle(
-                      referenceCommandDecisions["references.insertEndnote"],
-                    )) ||
-                  t("toolbar.insertEndnote")
-                }
-                onClick={() => runReferencesNote("endnote")}
-                testId="document-toolbar-ribbon-endnote"
-                variant="large"
-              />
-              {docsOfficeParityV2 ? (
-                <>
-                  <OfficeHomeSplitLayout
-                    testId="document-toolbar-ribbon-references-note-navigation-split"
-                    primary={
-                      <OfficeHomeCommand
-                        disabled={
-                          !referenceCommandDecisions[
-                            "references.noteNavigation"
-                          ].enabled
-                        }
-                        displayLabel={`${t("spreadsheet.dataFormNext")} ${t("footnotes.title")}`}
-                        icon={<DocsHomeIcon name="noteNavigation" size={24} />}
-                        label={
-                          officeCommandAccessibleLabel(
-                            `${t("spreadsheet.dataFormNext")} ${t("footnotes.title")}`,
-                            referenceNextFootnoteReason,
-                          )
-                        }
-                        onClick={() =>
-                          executeReferenceFeature("references.noteNavigation")
-                        }
-                        testId="document-toolbar-ribbon-references-next-footnote"
-                        variant="large"
-                      />
-                    }
-                    trigger={
-                      <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger asChild>
-                          <OfficeHomeMenuTrigger
-                            disabled={
-                              !referenceCommandDecisions[
-                                "references.noteNavigation"
-                              ].enabled
-                            }
-                            disabledReason={referenceNoteMenuReason}
-                            icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                            label={officeCommandAccessibleLabel(
-                              `${t("spreadsheet.dataFormNext")} ${t("footnotes.title")}`,
-                              referenceNoteMenuReason,
-                            )}
-                            onPointerDown={rememberEditorSelection}
-                            testId="document-toolbar-ribbon-references-note-navigation-menu"
-                            variant="icon"
-                          />
-                        </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="start"
-                        className="note-editor-toolbar-menu"
-                        onCloseAutoFocus={(event) => {
-                          event.preventDefault();
-                          safelyFocusEditorAfterToolbarClose(editor);
-                        }}
-                      >
-                        <DropdownMenuItem
-                          data-testid="document-toolbar-ribbon-references-previous-footnote"
-                          disabled={!snapshot.hasFootnoteNavigationTarget}
-                          onSelect={() =>
-                            navigateNoteReference(editor, "footnote", -1)
-                          }
-                        >
-                          {t("spreadsheet.dataFormPrev")} {t("footnotes.title")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          data-testid="document-toolbar-ribbon-references-next-footnote-menu-item"
-                          disabled={!snapshot.hasFootnoteNavigationTarget}
-                          onSelect={() =>
-                            navigateNoteReference(editor, "footnote", 1)
-                          }
-                        >
-                          {t("spreadsheet.dataFormNext")} {t("footnotes.title")}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          data-testid="document-toolbar-ribbon-references-previous-endnote"
-                          disabled={!snapshot.hasEndnoteNavigationTarget}
-                          onSelect={() =>
-                            navigateNoteReference(editor, "endnote", -1)
-                          }
-                        >
-                          {t("spreadsheet.dataFormPrev")}{" "}
-                          {t("footnotes.endnotesTitle")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          data-testid="document-toolbar-ribbon-references-next-endnote"
-                          disabled={!snapshot.hasEndnoteNavigationTarget}
-                          onSelect={() =>
-                            navigateNoteReference(editor, "endnote", 1)
-                          }
-                        >
-                          {t("spreadsheet.dataFormNext")}{" "}
-                          {t("footnotes.endnotesTitle")}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                      </DropdownMenu>
-                    }
-                  />
-                  <OfficeHomeCommand
-                    disabled={
-                      !referenceCommandDecisions["references.showNotes"]
-                        .enabled || !snapshot.hasAnyNoteNavigationTarget
-                    }
-                    displayLabel={t("presentation.showNotesLabel")}
-                    icon={<DocsHomeIcon name="showNotes" size={24} />}
-                    label={
-                      officeCommandAccessibleLabel(
-                        t("presentation.showNotesLabel"),
-                        reviewUnavailableTitle(
-                          referenceCommandDecisions["references.showNotes"],
-                        ),
-                      )
-                    }
-                    onClick={() =>
-                      executeReferenceFeature("references.showNotes")
-                    }
-                    testId="document-toolbar-ribbon-references-show-notes"
-                    variant="large"
-                  />
-                </>
-              ) : null}
-              {docsOfficeParityV2 ? (
-                <OfficeHomeCommand
-                  disabled={
-                    !referenceCommandDecisions["references.footnoteSettings"]
-                      .enabled
-                  }
-                  displayLabel={t("toolbar.footnoteSettings")}
-                  icon={<DocsHomeIcon name="noteNavigation" size={24} />}
-                  label={
-                    reviewUnavailableTitle(
-                      referenceCommandDecisions["references.footnoteSettings"],
-                    ) ?? t("toolbar.footnoteSettings")
-                  }
-                  onClick={() =>
-                    executeReferenceFeature("references.footnoteSettings")
-                  }
-                  testId="document-toolbar-ribbon-references-footnote-settings"
-                  variant="large"
-                />
-              ) : null}
-            </OfficeHomeCommandRow>
-          </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("references") ? (
-            <OfficeHomeRibbonGroup
-            ribbon="references"
-            label={t("toolbar.ribbonReferencesCitationsBibliography")}
-            className={homeStyles.referencesCitationsGroup}
-            testId="document-toolbar-ribbon-references-citations-group"
-          >
-            <OfficeHomeCommandRow className={homeStyles.secondaryCommandRow}>
-              <OfficeHomeCommand
-                disabled={
-                  !referenceCommandDecisions["references.insertCitation"]
-                    .enabled
-                }
-                displayLabel={t("toolbar.insertCitation")}
-                icon={<DocsHomeIcon name="citation" size={24} />}
-                label={
-                  reviewUnavailableTitle(
-                    referenceCommandDecisions["references.insertCitation"],
-                  ) ?? t("toolbar.insertCitation")
-                }
-                onClick={() =>
-                  executeReferenceFeature("references.insertCitation")
-                }
-                testId="document-toolbar-ribbon-references-citation"
-                variant="large"
-              />
-              {docsOfficeParityV2 ? (
-                <>
-                  <OfficeHomeCommand
-                    disabled={
-                      !referenceCommandDecisions["references.sourceManager"]
-                        .enabled
-                    }
-                    displayLabel={t("toolbar.sourceManager")}
-                    icon={<DocsHomeIcon name="sourceManager" size={24} />}
-                    label={
-                      reviewUnavailableTitle(
-                        referenceCommandDecisions["references.sourceManager"],
-                      ) ?? t("toolbar.sourceManager")
-                    }
-                    onClick={() =>
-                      executeReferenceFeature("references.sourceManager")
-                    }
-                    testId="document-toolbar-ribbon-references-source-manager"
-                    variant="large"
-                  />
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <OfficeHomeMenuTrigger
-                        disabled={
-                          !referenceCommandDecisions["references.citationStyle"]
-                            .enabled
-                        }
-                        hasMenuIndicator
-                        icon={<DocsHomeIcon name="citation" size={24} />}
-                        label={
-                          reviewUnavailableTitle(
-                            referenceCommandDecisions[
-                              "references.citationStyle"
-                            ],
-                          ) ?? t("toolbar.citationStyle")
-                        }
-                        onPointerDown={rememberEditorSelection}
-                        testId="document-toolbar-ribbon-references-citation-style"
-                        variant="large"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      className="note-editor-toolbar-menu"
-                      onCloseAutoFocus={(event) => {
-                        event.preventDefault();
-                        safelyFocusEditorAfterToolbarClose(editor);
-                      }}
-                    >
-                      <DropdownMenuRadioGroup
-                        value={getCitationStyle(editor.state)}
-                      >
-                        {CITATION_STYLES.map((style) => (
-                          <DropdownMenuRadioItem
-                            key={style}
-                            value={style}
-                            data-testid={`document-toolbar-ribbon-references-citation-style-${style}`}
-                            data-feature-id="references.citationStyle"
-                            onSelect={() =>
-                              executeReferenceFeature(
-                                "references.citationStyle",
-                                style,
-                              )
-                            }
-                          >
-                            {CITATION_STYLE_LABELS[style]}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <OfficeHomeSplitLayout
-                    testId="document-toolbar-ribbon-references-bibliography-split"
-                    primary={
-                      <OfficeHomeCommand
-                        disabled={
-                          !referenceCommandDecisions[
-                            "references.bibliographyInsert"
-                          ].enabled
-                        }
-                        displayLabel={t("toolbar.bibliography")}
-                        icon={<DocsHomeIcon name="citation" size={24} />}
-                        label={
-                          officeCommandAccessibleLabel(
-                            t("toolbar.bibliography"),
-                            referenceBibliographyReason,
-                          )
-                        }
-                        onClick={() => {
-                          rememberEditorSelection();
-                          executeReferenceFeature(
-                            "references.bibliographyInsert",
-                          );
-                        }}
-                        testId="document-toolbar-ribbon-references-bibliography"
-                        variant="large"
-                      />
-                    }
-                    trigger={
-                      <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger asChild>
-                          <OfficeHomeMenuTrigger
-                            disabled={
-                              !referenceCommandDecisions[
-                                "references.bibliographyInsert"
-                              ].enabled &&
-                              !referenceCommandDecisions[
-                                "references.bibliographyRemove"
-                              ].enabled
-                            }
-                            disabledReason={referenceBibliographyReason}
-                            icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                            label={officeCommandAccessibleLabel(
-                              t("toolbar.bibliography"),
-                              referenceBibliographyReason,
-                            )}
-                            onPointerDown={rememberEditorSelection}
-                            testId="document-toolbar-ribbon-references-bibliography-menu"
-                            variant="icon"
-                          />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          className="note-editor-toolbar-menu"
-                          onCloseAutoFocus={(event) => {
-                            event.preventDefault();
-                            safelyFocusEditorAfterToolbarClose(editor);
-                          }}
-                        >
-                          <DropdownMenuItem
-                            disabled={
-                              !referenceCommandDecisions[
-                                "references.bibliographyInsert"
-                              ].enabled
-                            }
-                            data-testid="document-toolbar-ribbon-references-bibliography-insert"
-                            onSelect={() =>
-                              executeReferenceFeature(
-                                "references.bibliographyInsert",
-                              )
-                            }
-                          >
-                            {t("toolbar.bibliography")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={
-                              !referenceCommandDecisions[
-                                "references.bibliographyRemove"
-                              ].enabled
-                            }
-                            data-testid="document-toolbar-ribbon-references-bibliography-remove"
-                            onSelect={() =>
-                              executeReferenceFeature(
-                                "references.bibliographyRemove",
-                              )
-                            }
-                          >
-                            {t("toolbar.removeBibliography")}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    }
-                  />
-                </>
-              ) : null}
-            </OfficeHomeCommandRow>
-          </OfficeHomeRibbonGroup>
-          ) : null}
+          {null}
+          {null}
+          {null}
           {/* Captions, Index, Table of Authorities and Mark Entry/Citation are
               References-tab groups on desktop Word only ("Insert a table of
               figures", "Create and update an index", Microsoft Support); Word
@@ -36964,1288 +28872,13 @@ function DocumentToolbar({
               exception, the same policy as Watermark. */}
           {
 }
-          {isActiveRibbon("references") ? (
-            <>
-            <OfficeHomeRibbonGroup
-              ribbon="references"
-              label={t("toolbar.ribbonReferencesCaptions")}
-              className={homeStyles.referencesCaptionsGroup}
-              testId="document-toolbar-ribbon-references-captions-group"
-            >
-                <OfficeHomeCommandRow
-                  className={homeStyles.secondaryCommandRow}
-                >
-              <OfficeHomeCommand
-                disabled={
-                  docsOfficeParityV2 &&
-                  !referenceCommandDecisions["references.captionSettings"]
-                    .enabled
-                }
-                displayLabel={t("toolbar.insertCaption")}
-                icon={<DocsHomeIcon name="caption" size={24} />}
-                label={
-                  docsOfficeParityV2
-                    ? (reviewUnavailableTitle(
-                        referenceCommandDecisions["references.captionSettings"],
-                      ) ?? t("toolbar.insertCaption"))
-                    : t("toolbar.insertCaption")
-                }
-                onClick={runReferencesCaption}
-                testId="document-toolbar-ribbon-references-caption"
-                variant="large"
-              />
-              {docsOfficeParityV2
-                ? (["figure", "table"] as const).map((kind) => {
-                    const insertFeature =
-                      kind === "figure"
-                        ? "references.figureList"
-                        : "references.tableList";
-                    const insertLabel =
-                      kind === "figure"
-                        ? t("toolbar.insertFigureList")
-                        : t("toolbar.insertTableList");
-                    const updateLabel =
-                      kind === "figure"
-                        ? t("toolbar.updateFigureList")
-                        : t("toolbar.updateTableList");
-                    const removeLabel =
-                      kind === "figure"
-                        ? t("toolbar.removeFigureList")
-                        : t("toolbar.removeTableList");
-                    const exactTarget = selectedCaptionListTarget(editor, kind);
-                    const updateEnabled =
-                      exactTarget !== null &&
-                      referenceCommandDecisions[
-                        "references.generatedListUpdate"
-                      ].enabled;
-                    const removeEnabled =
-                      exactTarget !== null &&
-                      referenceCommandDecisions[
-                        "references.generatedListRemove"
-                      ].enabled;
-                    return (
-                      <OfficeHomeSplitLayout
-                        key={kind}
-                        testId={`document-toolbar-ribbon-references-${kind}-list-split`}
-                        primary={
-                          <OfficeHomeCommand
-                            disabled={
-                              !referenceCommandDecisions[insertFeature].enabled
-                            }
-                            displayLabel={insertLabel}
-                            icon={<DocsHomeIcon name="caption" size={24} />}
-                            label={
-                              reviewUnavailableTitle(
-                                referenceCommandDecisions[insertFeature],
-                              ) ?? insertLabel
-                            }
-                            onClick={() => runReferencesCaptionList(kind)}
-                            testId={`document-toolbar-ribbon-references-${kind}-list`}
-                            variant="large"
-                          />
-                        }
-                        trigger={
-                          <DropdownMenu modal={false}>
-                            <DropdownMenuTrigger asChild>
-                              <OfficeHomeMenuTrigger
-                                disabled={
-                                  !referenceCommandDecisions[insertFeature]
-                                    .enabled &&
-                                  !updateEnabled &&
-                                  !removeEnabled
-                                }
-                                icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                                label={insertLabel}
-                                onPointerDown={() =>
-                                  rememberCaptionListSelection(kind)
-                                }
-                                testId={`document-toolbar-ribbon-references-${kind}-list-menu`}
-                                variant="icon"
-                              />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                              align="start"
-                              className="note-editor-toolbar-menu"
-                              onCloseAutoFocus={(event) => {
-                                event.preventDefault();
-                                safelyFocusEditorAfterToolbarClose(editor);
-                              }}
-                            >
-                              <DropdownMenuItem
-                                disabled={
-                                  !referenceCommandDecisions[insertFeature]
-                                    .enabled
-                                }
-                                data-testid={`document-toolbar-ribbon-references-${kind}-list-insert`}
-                                onSelect={() =>
-                                  executeReferenceFeature(insertFeature)
-                                }
-                              >
-                                {insertLabel}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                disabled={!updateEnabled}
-                                data-testid={`document-toolbar-ribbon-references-${kind}-list-update`}
-                                onSelect={() =>
-                                  executeGeneratedListFeature(
-                                    "references.generatedListUpdate",
-                                    kind,
-                                  )
-                                }
-                              >
-                                {updateLabel}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                disabled={!removeEnabled}
-                                data-testid={`document-toolbar-ribbon-references-${kind}-list-remove`}
-                                onSelect={() =>
-                                  executeGeneratedListFeature(
-                                    "references.generatedListRemove",
-                                    kind,
-                                  )
-                                }
-                              >
-                                {removeLabel}
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        }
-                      />
-                    );
-                  })
-                : (["figure", "table"] as const).map((kind) => (
-                    <OfficeHomeCommand
-                      key={kind}
-                      icon={<DocsHomeIcon name="caption" size={24} />}
-                      label={
-                        kind === "figure"
-                          ? t("toolbar.insertFigureList")
-                          : t("toolbar.insertTableList")
-                      }
-                      onClick={() => runReferencesCaptionList(kind)}
-                      testId={`document-toolbar-ribbon-references-${kind}-list`}
-                      variant="large"
-                    />
-                  ))}
-                </OfficeHomeCommandRow>
-            </OfficeHomeRibbonGroup>
-            <OfficeHomeRibbonGroup
-              ribbon="references"
-              label={t("toolbar.ribbonReferencesIndex")}
-              className={homeStyles.referencesIndexGroup}
-              testId="document-toolbar-ribbon-references-index-group"
-            >
-                <OfficeHomeCommandRow
-                  className={homeStyles.secondaryCommandRow}
-                >
-              <OfficeHomeCommand
-                disabled={
-                  docsOfficeParityV2 &&
-                  !referenceCommandDecisions["references.indexMark"].enabled
-                }
-                displayLabel={t("toolbar.markIndexEntry")}
-                icon={<DocsHomeIcon name="indexEntry" size={24} />}
-                label={
-                  docsOfficeParityV2
-                    ? (reviewUnavailableTitle(
-                        referenceCommandDecisions["references.indexMark"],
-                      ) ?? t("toolbar.markIndexEntry"))
-                    : t("toolbar.markIndexEntry")
-                }
-                onClick={runReferencesIndexMark}
-                testId="document-toolbar-ribbon-references-mark-index"
-                variant="large"
-              />
-              {(() => {
-                const selectedIndex = selectedDocumentIndexTarget(editor);
-                const indexLabel = selectedIndex
-                  ? t("toolbar.editIndex")
-                  : t("toolbar.insertIndex");
-                return (
-                  <OfficeHomeSplitLayout
-                    testId="document-toolbar-ribbon-references-index-split"
-                    primary={
-                      <OfficeHomeCommand
-                        disabled={
-                          docsOfficeParityV2 &&
-                          !referenceCommandDecisions["references.indexSettings"]
-                            .enabled
-                        }
-                        displayLabel={indexLabel}
-                        icon={<DocsHomeIcon name="index" size={24} />}
-                        label={
-                          docsOfficeParityV2
-                            ? (reviewUnavailableTitle(
-                                referenceCommandDecisions[
-                                  "references.indexSettings"
-                                ],
-                              ) ?? indexLabel)
-                            : indexLabel
-                        }
-                        onClick={runReferencesInsertIndex}
-                        testId="document-toolbar-ribbon-references-insert-index"
-                        variant="large"
-                      />
-                    }
-                    trigger={
-                      <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger asChild>
-                          <OfficeHomeMenuTrigger
-                            icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                            label={t("toolbar.indexActions")}
-                            onPointerDown={rememberDocumentIndexSelection}
-                            testId="document-toolbar-ribbon-references-index-menu"
-                            variant="icon"
-                          />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          className="note-editor-toolbar-menu"
-                          onCloseAutoFocus={(event) => {
-                            event.preventDefault();
-                            safelyFocusEditorAfterToolbarClose(editor);
-                          }}
-                        >
-                          <DropdownMenuItem
-                            data-testid="document-toolbar-ribbon-references-index-settings"
-                            onSelect={() =>
-                              executeReferenceFeature(
-                                "references.indexSettings",
-                              )
-                            }
-                          >
-                            {indexLabel}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={
-                              !referenceCommandDecisions[
-                                "references.indexUpdate"
-                              ].enabled
-                            }
-                            data-testid="document-toolbar-ribbon-references-index-update"
-                            onSelect={() =>
-                              executeReferenceFeature("references.indexUpdate")
-                            }
-                          >
-                            {t("toolbar.updateIndex")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={
-                              !referenceCommandDecisions[
-                                "references.indexRemove"
-                              ].enabled
-                            }
-                            data-testid="document-toolbar-ribbon-references-index-remove"
-                            onSelect={() =>
-                              executeReferenceFeature("references.indexRemove")
-                            }
-                          >
-                            {t("toolbar.removeIndex")}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    }
-                  />
-                );
-              })()}
-            </OfficeHomeCommandRow>
-            </OfficeHomeRibbonGroup>
-            <OfficeHomeRibbonGroup
-              ribbon="references"
-              label={t("toolbar.ribbonReferencesAuthorities")}
-              className={homeStyles.referencesAuthoritiesGroup}
-              testId="document-toolbar-ribbon-references-authorities-group"
-            >
-            <OfficeHomeCommandRow className={homeStyles.secondaryCommandRow}>
-              <div onPointerDown={rememberEditorSelection}>
-                <OfficeHomeCommand
-                  disabled={
-                    !referenceCommandDecisions["references.authorityMark"].enabled
-                  }
-                  displayLabel={t("toolbar.markAuthorityCitation")}
-                  icon={<DocsHomeIcon name="citation" size={24} />}
-                  label={
-                    officeCommandAccessibleLabel(
-                      t("toolbar.markAuthorityCitation"),
-                      reviewUnavailableTitle(
-                        referenceCommandDecisions["references.authorityMark"],
-                      ),
-                    )
-                  }
-                  onClick={() =>
-                    executeReferenceFeature("references.authorityMark")
-                  }
-                  testId="document-toolbar-ribbon-references-mark-authority"
-                  variant="large"
-                />
-              </div>
-              {(() => {
-                const selectedTable = selectedAuthorityTableTarget(editor);
-                const tableLabel = selectedTable
-                  ? t("toolbar.editAuthorityTable")
-                  : t("toolbar.insertAuthorityTable");
-                return (
-                  <OfficeHomeSplitLayout
-                    testId="document-toolbar-ribbon-references-authority-split"
-                    primary={
-                      <OfficeHomeCommand
-                        displayLabel={tableLabel}
-                        icon={<DocsHomeIcon name="index" size={24} />}
-                        label={tableLabel}
-                        onClick={() =>
-                          executeReferenceFeature(
-                            "references.authoritySettings",
-                          )
-                        }
-                        testId="document-toolbar-ribbon-references-insert-authority-table"
-                        variant="large"
-                      />
-                    }
-                    trigger={
-                      <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger asChild>
-                          <OfficeHomeMenuTrigger
-                            icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                            label={t("toolbar.authorityTableActions")}
-                            onPointerDown={rememberAuthoritySelection}
-                            testId="document-toolbar-ribbon-references-authority-menu"
-                            variant="icon"
-                          />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          className="note-editor-toolbar-menu"
-                          onCloseAutoFocus={(event) => {
-                            event.preventDefault();
-                            safelyFocusEditorAfterToolbarClose(editor);
-                          }}
-                        >
-                          <DropdownMenuItem
-                            data-testid="document-toolbar-ribbon-references-authority-settings"
-                            onSelect={() =>
-                              executeReferenceFeature(
-                                "references.authoritySettings",
-                              )
-                            }
-                          >
-                            {tableLabel}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={
-                              !referenceCommandDecisions[
-                                "references.authorityUpdate"
-                              ].enabled
-                            }
-                            data-testid="document-toolbar-ribbon-references-authority-update"
-                            onSelect={() =>
-                              executeReferenceFeature(
-                                "references.authorityUpdate",
-                              )
-                            }
-                          >
-                            {t("toolbar.updateAuthorityTable")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={
-                              !referenceCommandDecisions[
-                                "references.authorityRemove"
-                              ].enabled
-                            }
-                            data-testid="document-toolbar-ribbon-references-authority-remove"
-                            onSelect={() =>
-                              executeReferenceFeature(
-                                "references.authorityRemove",
-                              )
-                            }
-                          >
-                            {t("toolbar.removeAuthorityTable")}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    }
-                  />
-                );
-              })()}
-                </OfficeHomeCommandRow>
-            </OfficeHomeRibbonGroup>
-            </>
-          ) : null}
+          {null}
 
-          {isActiveRibbon("mailings") ? (
-            <div
-            className="note-editor-office-toolbar__group"
-            data-ribbon="mailings"
-            data-ribbon-label={t("toolbar.ribbonMailMerge")}
-          >
-            <div className="note-editor-ribbon-row note-editor-ribbon-row--fill">
-              <button
-                type="button"
-                className="office-ribbon-control note-editor-ribbon-big" data-office-control-part="button"
-                data-testid="document-toolbar-ribbon-mailings-recipients"
-                disabled={
-                  !mailingsCommandDecisions["mailings.recipients"].enabled
-                }
-                title={mailingsUnavailableTitle(
-                  mailingsCommandDecisions["mailings.recipients"],
-                )}
-                onPointerDown={rememberEditorSelection}
-                onClick={() => executeMailingsFeature("mailings.recipients")}
-              >
-                <Users size={18} aria-hidden />
-                <span>{t("toolbar.mailMergeRecipients")}</span>
-              </button>
-              <button
-                type="button"
-                className="office-ribbon-control note-editor-ribbon-big" data-office-control-part="button"
-                data-testid="document-toolbar-ribbon-mailings-field"
-                disabled={
-                  !mailingsCommandDecisions["mailings.mergeField"].enabled
-                }
-                title={mailingsUnavailableTitle(
-                  mailingsCommandDecisions["mailings.mergeField"],
-                )}
-                onPointerDown={rememberEditorSelection}
-                onClick={() => executeMailingsFeature("mailings.mergeField")}
-              >
-                <Database size={18} aria-hidden />
-                <span>{t("toolbar.insertMergeField")}</span>
-              </button>
-              {docsOfficeParityV2 ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="office-ribbon-control note-editor-ribbon-big" data-office-control-part="button"
-                      data-testid="document-toolbar-ribbon-mailings-actions"
-                      onPointerDown={rememberEditorSelection}
-                    >
-                      <SlidersHorizontal size={18} aria-hidden />
-                      <span>{t("toolbar.mailingsMergeType")}</span>
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    onCloseAutoFocus={(event) => {
-                      event.preventDefault();
-                      safelyFocusEditorAfterToolbarClose(editor);
-                    }}
-                  >
-                    {(
-                      [
-                        ["mailings.envelopes", "toolbar.mailingsEnvelopes"],
-                        ["mailings.labels", "toolbar.mailingsLabels"],
-                        ["mailings.mergeType", "toolbar.mailingsMergeType"],
-                        ["mailings.filterSort", "toolbar.mailingsFilterSort"],
-                        [
-                          "mailings.addressBlock",
-                          "toolbar.mailingsAddressBlock",
-                        ],
-                        [
-                          "mailings.greetingLine",
-                          "toolbar.mailingsGreetingLine",
-                        ],
-                        ["mailings.matchFields", "toolbar.mailingsMatchFields"],
-                        ["mailings.rules", "toolbar.mailingsRules"],
-                        ["mailings.preview", "toolbar.mailingsPreview"],
-                        ["mailings.finishDocx", "toolbar.mailingsFinishDocx"],
-                        ["mailings.sendEmail", "toolbar.mailingsSendEmail"],
-                      ] as const
-                    ).map(([featureId, label]) => {
-                      const decision = mailingsCommandDecisions[featureId];
-                      return (
-                        <DropdownMenuItem
-                          key={featureId}
-                          data-testid={`document-toolbar-ribbon-${featureId.replaceAll(".", "-")}`}
-                          disabled={!decision.enabled}
-                          title={mailingsUnavailableTitle(decision)}
-                          onSelect={() => executeMailingsFeature(featureId)}
-                        >
-                          {t(label)}
-                        </DropdownMenuItem>
-                      );
-                    })}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
-            </div>
-          </div>
-          ) : null}
+          {null}
 
-          {isActiveRibbon("layout") ? (
-            <OfficeHomeRibbonGroup
-            ribbon="layout"
-            label={t("toolbar.ribbonPageSetup")}
-            className={homeStyles.layoutPageSetupGroup}
-            testId="document-toolbar-ribbon-layout-page-setup"
-          >
-            <OfficeHomeCommandRow className={homeStyles.layoutCommandRow}>
-              <DropdownMenu
-                onOpenChange={(open) => {
-                  if (open) setLastCustomMargins(readLastCustomMargins());
-                }}
-              >
-                <DropdownMenuTrigger asChild>
-                  <OfficeHomeMenuTrigger
-                    ref={layoutMarginsTriggerRef}
-                    disabled={!editor.isEditable}
-                    icon={<DocsHomeIcon name="pageMargins" size={24} />}
-                    label={t("toolbar.pageMargins")}
-                    hasMenuIndicator
-                    onPointerDown={rememberEditorSelection}
-                    testId="document-toolbar-ribbon-page-margins"
-                    variant="large"
-                  />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  className={`note-editor-toolbar-menu ${officePageSetupMenuClassNames.presetMenu}`}
-                  onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    const trigger = layoutMarginsTriggerRef.current;
-                    if (trigger?.isConnected && !trigger.disabled) {
-                      trigger.focus({ preventScroll: true });
-                    } else if (!editor.isDestroyed) {
-                      editor.view.dom.tabIndex = -1;
-                      editor.view.dom.focus({ preventScroll: true });
-                    }
-                  }}
-                >
-                  <DropdownMenuRadioGroup value={marginGalleryValue}>
-                    {[
-                      ...(lastCustomMargins
-                        ? [
-                            {
-                              id: "lastCustom" as const,
-                              twips: lastCustomMargins.twips,
-                              mirrored: lastCustomMargins.mirrored,
-                            },
-                          ]
-                        : []),
-                      ...(docsOfficeParityV2
-                        ? MARGIN_GALLERY_PRESETS
-                        : MARGIN_GALLERY_PRESETS.filter((preset) => !preset.mirrored)),
-                    ].map((row) => (
-                      <DropdownMenuRadioItem
-                        key={row.id}
-                        value={row.id}
-                        className={officePageSetupMenuClassNames.presetItem}
-                        aria-describedby={`${layoutGalleryId}-margins-${row.id}`}
-                        data-testid={`document-toolbar-ribbon-page-margins-${row.id}`}
-                        disabled={!editor.isEditable}
-                        onSelect={() => {
-                          // The row already in force: nothing to write.
-                          if (row.id === marginGalleryValue) return;
-                          applyMarginGallery(
-                            row.twips,
-                            row.mirrored,
-                            row.id === "lastCustom" ? null : row.id,
-                          );
-                        }}
-                      >
-                        <OfficePageSetupPresetRow
-                          preview={
-                            <DocsMarginsPreview
-                              className={officePageSetupMenuClassNames.presetPreview}
-                              margins={row.twips}
-                              mirrored={row.mirrored}
-                              star={row.id === "lastCustom"}
-                            />
-                          }
-                          title={t(
-                            `toolbar.pageMarginsPreset_${row.id}` as "toolbar.pageMarginsPreset_normal",
-                          )}
-                          details={marginGalleryDetails(row.twips, row.mirrored)}
-                          detailsId={`${layoutGalleryId}-margins-${row.id}`}
-                        />
-                      </DropdownMenuRadioItem>
-                    ))}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuRadioItem
-                      value="custom"
-                      className={officePageSetupMenuClassNames.customItem}
-                      data-testid="document-toolbar-ribbon-page-margins-custom"
-                      disabled={!editor.isEditable}
-                      onSelect={openCustomMarginsDialog}
-                    >
-                      {t("toolbar.pageMargins_custom")}
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem
-                      value="grid"
-                      className={officePageSetupMenuClassNames.customItem}
-                      data-testid="document-toolbar-ribbon-document-grid"
-                      disabled={!editor.isEditable}
-                      onSelect={openDocumentGridDialog}
-                    >
-                      {t("toolbar.pageSetupDocumentGrid")}
-                    </DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
+          {null}
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <OfficeHomeMenuTrigger
-                    active={currentPageOrientation === "landscape"}
-                    disabled={!editor.isEditable}
-                    icon={<DocsHomeIcon name="pageOrientation" size={24} />}
-                    label={t("toolbar.pageOrientation")}
-                    hasMenuIndicator
-                    onPointerDown={rememberEditorSelection}
-                    testId="document-toolbar-ribbon-orientation"
-                    variant="large"
-                  />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  className={`note-editor-toolbar-menu ${officePageSetupMenuClassNames.presetMenu}`}
-                  onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    safelyFocusEditorAfterToolbarClose(editor);
-                  }}
-                >
-                  <DropdownMenuRadioGroup value={currentPageOrientation}>
-                    {PAGE_ORIENTATION_VALUES.map((value) => (
-                      <DropdownMenuRadioItem
-                        key={value}
-                        value={value}
-                        className={officePageSetupMenuClassNames.presetItem}
-                        data-testid={`document-toolbar-ribbon-page-orientation-${value}`}
-                        disabled={!editor.isEditable}
-                        onSelect={() => setPageOrientation(value)}
-                      >
-                        <OfficePageSetupPresetRow
-                          preview={
-                            <OfficeSemanticIcon
-                              semanticId={
-                                OFFICE_PAGE_ORIENTATION_ICON_IDS[value]
-                              }
-                              size={32}
-                            />
-                          }
-                          title={t(
-                            `toolbar.pageOrientation_${value}` as "toolbar.pageOrientation_portrait",
-                          )}
-                        />
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <OfficeHomeMenuTrigger
-                    disabled={!editor.isEditable}
-                    icon={<DocsHomeIcon name="pageSize" size={24} />}
-                    label={t("toolbar.pageSize")}
-                    hasMenuIndicator
-                    onPointerDown={rememberEditorSelection}
-                    testId="document-toolbar-ribbon-page-size"
-                    variant="large"
-                  />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  className={`note-editor-toolbar-menu ${officePageSetupMenuClassNames.paperMenu}`}
-                  onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    safelyFocusEditorAfterToolbarClose(editor);
-                  }}
-                >
-                  <DropdownMenuRadioGroup value={currentPageSize}>
-                    {PAGE_SIZE_PRESET_VALUES.map((value) => {
-                      const sheet = PAGE_SIZE_PX[value];
-                      // Every row is the same sheet drawn to its own aspect
-                      // ratio, scaled against the tallest stock, so the gallery
-                      // reads as a stack of real papers (Excel's Size gallery).
-                      const scale = 30 / PAGE_SIZE_PX.a3.height;
-                      return (
-                        <DropdownMenuRadioItem
-                          key={value}
-                          value={value}
-                          className={`${officePageSetupMenuClassNames.presetItem} ${officePageSetupMenuClassNames.paperItem}`}
-                          aria-describedby={`${layoutGalleryId}-paper-${value}`}
-                          data-testid={`document-toolbar-ribbon-page-size-${value}`}
-                          disabled={!editor.isEditable}
-                          onSelect={() => setPageSize(value)}
-                        >
-                          <OfficePageSetupPresetRow
-                            preview={
-                              <OfficePaperSizePreview
-                                width={sheet.width * scale}
-                                height={sheet.height * scale}
-                              />
-                            }
-                            title={t(
-                              `toolbar.pageSize_${value}` as "toolbar.pageSize_letter",
-                            )}
-                            details={pageSizePresetDimensionsLabel(value)}
-                            detailsId={`${layoutGalleryId}-paper-${value}`}
-                            detailsVariant="single"
-                          />
-                        </DropdownMenuRadioItem>
-                      );
-                    })}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuRadioItem
-                      value="custom"
-                      className={officePageSetupMenuClassNames.customItem}
-                      data-testid="document-toolbar-ribbon-page-size-custom"
-                      disabled={!editor.isEditable}
-                      onSelect={openCustomSizeDialog}
-                    >
-                      {t("toolbar.pageSize_custom")}
-                    </DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                  {onTogglePagePreview ? (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuCheckboxItem
-                        checked={pagePreviewEnabled === true}
-                        data-testid="document-toolbar-page-preview"
-                        onSelect={() => onTogglePagePreview()}
-                      >
-                        {t("toolbar.pageView")}
-                      </DropdownMenuCheckboxItem>
-                    </>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <OfficeHomeMenuTrigger
-                    active={currentColumns > 1}
-                    disabled={!editor.isEditable}
-                    icon={<DocsHomeIcon name="pageColumns" size={24} />}
-                    label={t("toolbar.columns")}
-                    hasMenuIndicator
-                    onPointerDown={rememberEditorSelection}
-                    testId="document-toolbar-ribbon-columns"
-                    variant="large"
-                  />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  className={`note-editor-toolbar-menu ${officePageSetupMenuClassNames.presetMenu}`}
-                  onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    safelyFocusEditorAfterToolbarClose(editor);
-                  }}
-                >
-                  <DropdownMenuRadioGroup value={currentColumnsPreset}>
-                    {COLUMN_GALLERY_ROWS.map((row) => (
-                      <DropdownMenuRadioItem
-                        key={row.id}
-                        value={row.id}
-                        className={officePageSetupMenuClassNames.presetItem}
-                        data-testid={`document-toolbar-ribbon-columns-${row.id}`}
-                        disabled={
-                          !editor.isEditable ||
-                          // Left/Right derive their widths from the section's
-                          // real text width (the page's, before any is stored).
-                          (row.count === null && !columnsSectionLayout)
-                        }
-                        onSelect={() =>
-                          row.count === null
-                            ? setColumnsPreset(row.id as "left" | "right")
-                            : setColumns(row.count)
-                        }
-                      >
-                        <OfficePageSetupPresetRow
-                          preview={
-                            <DocsLayoutIcon
-                              className={
-                                officePageSetupMenuClassNames.presetPreview
-                              }
-                              name={DOCS_COLUMNS_PRESET_ICON_NAMES[row.id]}
-                              size={34}
-                              viewBox="3 2 18 20"
-                            />
-                          }
-                          title={t(row.labelKey)}
-                        />
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuCheckboxItem
-                    checked={currentColumnSeparator}
-                    className="docs-check-row"
-                    disabled={!editor.isEditable || currentColumns <= 1}
-                    data-testid="document-toolbar-ribbon-columns-line-between"
-                    onSelect={() =>
-                      toggleColumnSeparator(!currentColumnSeparator)
-                    }
-                  >
-                    <Check aria-hidden className="docs-check-row__mark" size={16} />
-                    {t("toolbar.columnsLineBetween")}
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuItem
-                    className={officePageSetupMenuClassNames.customItem}
-                    // Word's More Columns… is always available: its dialog
-                    // also sets the number of columns (One included).
-                    disabled={!editor.isEditable || !columnsSectionLayout}
-                    data-testid="document-toolbar-ribbon-columns-unequal"
-                    onSelect={openUnequalColumns}
-                  >
-                    <DocsLayoutIcon name="columnsMore" size={18} />
-                    {t("toolbar.columnsUnequal")}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <OfficeHomeMenuTrigger
-                    disabled={!editor.isEditable}
-                    icon={<DocsHomeIcon name="pageBreaks" size={24} />}
-                    label={t("toolbar.breaks")}
-                    hasMenuIndicator
-                    onPointerDown={rememberEditorSelection}
-                    testId="document-toolbar-ribbon-breaks"
-                    variant="large"
-                  />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  className={`note-editor-toolbar-menu ${officePageSetupMenuClassNames.describedMenu}`}
-                  onCloseAutoFocus={(event) => event.preventDefault()}
-                >
-                  <DropdownMenuLabel
-                    className={officePageSetupMenuClassNames.groupLabel}
-                  >
-                    {t("toolbar.breaksPageGroup")}
-                  </DropdownMenuLabel>
-                  <DropdownMenuItem
-                    className={officePageSetupMenuClassNames.describedItem}
-                    aria-describedby={`${layoutGalleryId}-break-page`}
-                    data-testid="document-toolbar-ribbon-break-page"
-                    disabled={!editor.isEditable}
-                    onSelect={() => insertionChain().setPageBreak().run()}
-                  >
-                    <OfficePageSetupPresetRow
-                      preview={
-                        <DocsLayoutIcon
-                          className={
-                            officePageSetupMenuClassNames.presetPreview
-                          }
-                          name={DOCS_BREAK_ICON_NAMES.page}
-                          size={36}
-                          viewBox="3 2 18 20"
-                        />
-                      }
-                      title={t("toolbar.breakPageTitle")}
-                      details={t("toolbar.breakPageDescription")}
-                      detailsId={`${layoutGalleryId}-break-page`}
-                      detailsVariant="description"
-                    />
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className={officePageSetupMenuClassNames.describedItem}
-                    aria-describedby={`${layoutGalleryId}-break-column`}
-                    data-testid="document-toolbar-ribbon-break-column"
-                    disabled={!editor.isEditable}
-                    onSelect={() => insertionChain().setColumnBreak().run()}
-                  >
-                    <OfficePageSetupPresetRow
-                      preview={
-                        <DocsLayoutIcon
-                          className={
-                            officePageSetupMenuClassNames.presetPreview
-                          }
-                          name={DOCS_BREAK_ICON_NAMES.column}
-                          size={36}
-                          viewBox="3 2 18 20"
-                        />
-                      }
-                      title={t("toolbar.breakColumnTitle")}
-                      details={t("toolbar.breakColumnDescription")}
-                      detailsId={`${layoutGalleryId}-break-column`}
-                      detailsVariant="description"
-                    />
-                  </DropdownMenuItem>
-                  {/* Word: Breaks ▸ Page Breaks also holds Text Wrapping, a
-                      line break (`w:br`, type textWrapping) that ends the
-                      line where the text continues. */}
-                  <DropdownMenuItem
-                    className={officePageSetupMenuClassNames.describedItem}
-                    aria-describedby={`${layoutGalleryId}-break-text-wrapping`}
-                    data-testid="document-toolbar-ribbon-break-text-wrapping"
-                    disabled={!editor.isEditable}
-                    onSelect={() => insertionChain().setHardBreak().run()}
-                  >
-                    <OfficePageSetupPresetRow
-                      preview={
-                        <DocsLayoutIcon
-                          className={
-                            officePageSetupMenuClassNames.presetPreview
-                          }
-                          name={DOCS_BREAK_ICON_NAMES.textWrapping}
-                          size={36}
-                          viewBox="3 2 18 20"
-                        />
-                      }
-                      title={t("toolbar.breakTextWrappingTitle")}
-                      details={t("toolbar.breakTextWrappingDescription")}
-                      detailsId={`${layoutGalleryId}-break-text-wrapping`}
-                      detailsVariant="description"
-                    />
-                  </DropdownMenuItem>
-                  {/* Word's Breaks gallery always lists the four section
-                      breaks ("Insert a section break", Microsoft Support).
-                      They were once kept to desktop-interoperability hosts
-                      because a new break left the header/footer story graph
-                      one section short; sectionStoryBoundarySync now keeps
-                      every per-section chain aligned. */}
-                  <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuLabel
-                        className={officePageSetupMenuClassNames.groupLabel}
-                      >
-                        {t("toolbar.breaksSectionGroup")}
-                      </DropdownMenuLabel>
-                      {SECTION_BREAK_GALLERY_ROWS.map((row) => (
-                        <DropdownMenuItem
-                          key={row.kind}
-                          className={
-                            officePageSetupMenuClassNames.describedItem
-                          }
-                          aria-describedby={`${layoutGalleryId}-break-${row.kind}`}
-                          data-testid={row.testId}
-                          disabled={!editor.isEditable}
-                          onSelect={() =>
-                            insertionChain().setSectionBreak(row.kind).run()
-                          }
-                        >
-                          <OfficePageSetupPresetRow
-                            preview={
-                              <DocsLayoutIcon
-                                className={
-                                  officePageSetupMenuClassNames.presetPreview
-                                }
-                                name={DOCS_BREAK_ICON_NAMES[row.kind]}
-                                size={36}
-                                viewBox="2 2 20 20"
-                              />
-                            }
-                            title={t(row.titleKey)}
-                            details={t(row.descriptionKey)}
-                            detailsId={`${layoutGalleryId}-break-${row.kind}`}
-                            detailsVariant="description"
-                          />
-                        </DropdownMenuItem>
-                      ))}
-                  </>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <OfficeHomeMenuTrigger
-                    active={currentLineNumbers !== null}
-                    disabled={!editor.isEditable}
-                    icon={<DocsHomeIcon name="lineNumbers" size={24} />}
-                    label={t("toolbar.lineNumbers")}
-                    hasMenuIndicator
-                    onPointerDown={rememberEditorSelection}
-                    testId="document-toolbar-ribbon-line-numbers"
-                    variant="large"
-                  />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  className="note-editor-toolbar-menu"
-                  onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    safelyFocusEditorAfterToolbarClose(editor);
-                  }}
-                >
-                  {/* Word's Line Numbers menu: four mutually exclusive
-                      section-level modes, then the paragraph-level exception,
-                      then the options launcher. 无 is the checked row while the
-                      section carries no `w:lnNumType`. */}
-                  <DropdownMenuRadioGroup
-                    value={
-                      currentLineNumbers === null
-                        ? "none"
-                        : currentLineNumbers.restart
-                    }
-                  >
-                    <DropdownMenuRadioItem
-                      value="none"
-                      className="docs-check-row"
-                      data-testid="document-toolbar-ribbon-line-numbers-none"
-                      disabled={!editor.isEditable}
-                      onSelect={() => {
-                        if (currentLineNumbers !== null) {
-                          toggleLineNumbers(false);
-                        }
-                      }}
-                    >
-                      <Check aria-hidden className="docs-check-row__mark" size={16} />
-                      <DocsLayoutIcon name="lineNumbersNone" size={20} className="mr-2" />
-                      {t("toolbar.lineNumbersNone")}
-                    </DropdownMenuRadioItem>
-                    {LINE_NUMBER_RESTART_VALUES.map((value) => (
-                      <DropdownMenuRadioItem
-                        key={value}
-                        value={value}
-                        className="docs-check-row"
-                        data-testid={`document-toolbar-ribbon-line-numbers-restart-${value}`}
-                        disabled={!editor.isEditable}
-                        onSelect={() =>
-                          setLineNumberMode(value as LineNumberRestart)
-                        }
-                      >
-                        <Check aria-hidden className="docs-check-row__mark" size={16} />
-                        <DocsLayoutIcon name={LINE_NUMBER_MODE_ICON[value as LineNumberRestart]} size={20} className="mr-2" />
-                        {t(
-                          `toolbar.lineNumbersRestart_${value}` as "toolbar.lineNumbersRestart_continuous",
-                        )}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuCheckboxItem
-                    checked={snapshot.suppressLineNumbers}
-                    className="docs-check-row"
-                    data-testid="document-toolbar-ribbon-line-numbers-suppress"
-                    disabled={!editor.isEditable}
-                    onSelect={() =>
-                      toggleSuppressLineNumbers(!snapshot.suppressLineNumbers)
-                    }
-                  >
-                    <Check aria-hidden className="docs-check-row__mark" size={16} />
-                    <DocsLayoutIcon name="lineNumbersSuppress" size={20} className="mr-2" />
-                    {t("toolbar.lineNumbersSuppress")}
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="docs-check-row pl-8"
-                    data-testid="document-toolbar-ribbon-line-numbers-options"
-                    disabled={!editor.isEditable}
-                    onSelect={openLineNumbersDialog}
-                  >
-                    <DocsLayoutIcon name="lineNumbersOptions" size={20} className="mr-2" />
-                    {t("toolbar.lineNumbersOptions")}
-                  </DropdownMenuItem>
-                  {currentLineNumbers !== null ? (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuLabel>
-                        {t("toolbar.lineNumbersCountBy")}
-                      </DropdownMenuLabel>
-                      <DropdownMenuRadioGroup
-                        value={String(currentLineNumbers.countBy)}
-                      >
-                        {[1, 2, 5, 10].map((value) => (
-                          <DropdownMenuRadioItem
-                            key={value}
-                            value={String(value)}
-                            data-testid={`document-toolbar-ribbon-line-numbers-count-by-${value}`}
-                            disabled={!editor.isEditable}
-                            onSelect={() =>
-                              updateLineNumberField({ countBy: value })
-                            }
-                          >
-                            {t("toolbar.lineNumbersCountByValue", {
-                              count: value,
-                            })}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                      <DropdownMenuSeparator />
-                      {docsOfficeParityV2 ? (
-                        <SpacingNumberField
-                          label={t("toolbar.startAt")}
-                          testId="document-toolbar-ribbon-line-numbers-start"
-                          value={String(currentSectionLineNumberStart)}
-                          disabled={!editor.isEditable}
-                          min={1}
-                          max={1000000}
-                          step={1}
-                          onCommit={updateSectionLineNumberStart}
-                        />
-                      ) : null}
-                      <SpacingNumberField
-                        label={
-                          t("toolbar.distanceFromText")
-                        }
-                        testId="document-toolbar-ribbon-line-numbers-distance"
-                        value={String(currentLineNumbers.distancePt)}
-                        disabled={!editor.isEditable}
-                        min={0}
-                        max={72}
-                        step={0.5}
-                        onCommit={(raw) =>
-                          updateLineNumberField({
-                            distancePt: raw === "" ? 0 : Number(raw),
-                          })
-                        }
-                      />
-                    </>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {desktopInteroperabilityVisible ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <OfficeHomeMenuTrigger
-                      active={snapshot.autoHyphenation}
-                      disabled={
-                        !layoutCommandDecisions["layout.hyphenation.auto"].enabled
-                      }
-                      title={reviewUnavailableTitle(
-                        layoutCommandDecisions["layout.hyphenation.auto"],
-                      )}
-                      icon={<DocsHomeIcon name="hyphenation" size={24} />}
-                      label={t("toolbar.hyphenation")}
-                      hasMenuIndicator
-                      onPointerDown={rememberEditorSelection}
-                      testId="document-toolbar-ribbon-hyphenation"
-                      variant="large"
-                    />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    className="note-editor-toolbar-menu"
-                    onCloseAutoFocus={(event) => {
-                      event.preventDefault();
-                      safelyFocusEditorAfterToolbarClose(editor);
-                    }}
-                  >
-                    <DropdownMenuRadioGroup
-                      value={snapshot.autoHyphenation ? "automatic" : "none"}
-                    >
-                      <DropdownMenuRadioItem
-                        value="none"
-                        data-testid="document-toolbar-ribbon-hyphenation-none"
-                        onSelect={() =>
-                          executeLayoutFeature("layout.hyphenation.auto", false)
-                        }
-                      >
-                        {t("toolbar.hyphenationNone")}
-                      </DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem
-                        value="automatic"
-                        data-testid="document-toolbar-ribbon-hyphenation-automatic"
-                        onSelect={() =>
-                          executeLayoutFeature("layout.hyphenation.auto", true)
-                        }
-                      >
-                        {t("toolbar.hyphenationAutomatic")}
-                      </DropdownMenuRadioItem>
-                    </DropdownMenuRadioGroup>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      disabled
-                      title={t("toolbar.hyphenationManualUnavailable")}
-                      data-testid="document-toolbar-ribbon-hyphenation-manual"
-                    >
-                      {t("toolbar.hyphenationManual")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={!editor.isEditable}
-                      data-testid="document-toolbar-ribbon-hyphenation-options"
-                      onSelect={() => setHyphenationOptionsOpen(true)}
-                    >
-                      {t("toolbar.hyphenationOptions")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
-            </OfficeHomeCommandRow>
-          </OfficeHomeRibbonGroup>
-          ) : null}
-
-          {isActiveRibbon("layout") ? (
-            <OfficeHomeRibbonGroup
-            ribbon="layout"
-            label={t("toolbar.ribbonParagraph")}
-            className={homeStyles.layoutParagraphGroup}
-            testId="document-toolbar-ribbon-layout-paragraph"
-          >
-            <div className={homeStyles.layoutParagraphGrid}>
-              <div className={homeStyles.layoutParagraphStack}>
-                <span className={homeStyles.layoutParagraphStackTitle}>
-                  {t("toolbar.paragraphSectionIndentation")}
-                </span>
-                <LayoutRibbonNumberField
-                  icon={<DocsHomeIcon name="indentLeftValue" size={22} />}
-                  label={t("toolbar.indentLeft")}
-                  testId="document-toolbar-ribbon-indent-left"
-                  acceptsUnits
-                  value={layoutIndentShown("left", snapshot.indentLeftPt)}
-                  disabled={!editor.isEditable}
-                  mixed={snapshot.indentLeftPtMixed}
-                  mixedLabel={t("toolbar.fontPickerMixed")}
-                  min={0}
-                  max={layoutIndentField.max}
-                  step={layoutIndentField.step}
-                  unit={layoutIndentField.unitLabel}
-                  onRememberSelection={rememberEditorSelection}
-                  onCommit={(raw) => commitLayoutIndent("left", raw)}
-                />
-                <LayoutRibbonNumberField
-                  icon={<DocsHomeIcon name="indentRightValue" size={22} />}
-                  label={t("toolbar.indentRight")}
-                  testId="document-toolbar-ribbon-indent-right"
-                  acceptsUnits
-                  value={layoutIndentShown("right", snapshot.indentRightPt)}
-                  disabled={!editor.isEditable}
-                  mixed={snapshot.indentRightPtMixed}
-                  mixedLabel={t("toolbar.fontPickerMixed")}
-                  min={0}
-                  max={layoutIndentField.max}
-                  step={layoutIndentField.step}
-                  unit={layoutIndentField.unitLabel}
-                  onRememberSelection={rememberEditorSelection}
-                  onCommit={(raw) => commitLayoutIndent("right", raw)}
-                />
-              </div>
-              <div className={homeStyles.layoutParagraphStack}>
-                <span className={homeStyles.layoutParagraphStackTitle}>
-                  {t("toolbar.paragraphSectionSpacing")}
-                </span>
-                <LayoutRibbonNumberField
-                  icon={<DocsHomeIcon name="spaceBeforeValue" size={22} />}
-                  label={t("toolbar.paragraphBefore")}
-                  testId="document-toolbar-ribbon-space-before"
-                  value={String(snapshot.spaceBefore || 0)}
-                  disabled={!editor.isEditable}
-                  mixed={snapshot.spaceBeforeMixed}
-                  mixedLabel={t("toolbar.fontPickerMixed")}
-                  min={0}
-                  max={MAX_PARAGRAPH_SPACING_PT}
-                  step={1}
-                  unit={t("toolbar.indentUnitPt")}
-                  onRememberSelection={rememberEditorSelection}
-                  onCommit={(raw) => {
-                    if (editor.isDestroyed || !editor.isEditable) return;
-                    (restoredChain() as OfficeChain)
-                      .setSpaceBefore(raw === "" ? null : raw)
-                      .run();
-                  }}
-                />
-                <LayoutRibbonNumberField
-                  icon={<DocsHomeIcon name="spaceAfterValue" size={22} />}
-                  label={t("toolbar.paragraphAfter")}
-                  testId="document-toolbar-ribbon-space-after"
-                  value={String(snapshot.spaceAfter || 0)}
-                  disabled={!editor.isEditable}
-                  mixed={snapshot.spaceAfterMixed}
-                  mixedLabel={t("toolbar.fontPickerMixed")}
-                  min={0}
-                  max={MAX_PARAGRAPH_SPACING_PT}
-                  step={1}
-                  unit={t("toolbar.indentUnitPt")}
-                  onRememberSelection={rememberEditorSelection}
-                  onCommit={(raw) => {
-                    if (editor.isDestroyed || !editor.isEditable) return;
-                    (restoredChain() as OfficeChain)
-                      .setSpaceAfter(raw === "" ? null : raw)
-                      .run();
-                  }}
-                />
-              </div>
-            </div>
-          </OfficeHomeRibbonGroup>
-          ) : null}
+          {null}
 
           {/* Word desktop's Design tab, Document Formatting group (Word for
               Mac 16.86: Themes, the style-set gallery, Colors, Fonts,
@@ -38254,7423 +28887,37 @@ function DocumentToolbar({
               (native-document/documentDesignThemes.ts). Themes, Colors and
               Fonts are Office's one catalog, the galleries Excel's Page
               Layout and PowerPoint's Design tab draw. */}
-          {isActiveRibbon("design") ? (
-            <OfficeHomeRibbonGroup
-            ribbon="design"
-            label={t("toolbar.designDocumentFormatting")}
-            className={homeStyles.designDocumentFormattingGroup}
-            testId="document-toolbar-ribbon-design-document-formatting-group"
-          >
-            <OfficeHomeCommandRow className={homeStyles.layoutCommandRow}>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <OfficeHomeMenuTrigger
-                    ref={designThemesReturnFocusRef}
-                    disabled={!editor.isEditable}
-                    icon={<DocsDesignIcon name="themes" size={24} />}
-                    label={t("toolbar.designTheme")}
-                    hasMenuIndicator
-                    onPointerDown={rememberEditorSelection}
-                    testId="document-toolbar-ribbon-design-themes"
-                    variant="large"
-                  />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="start"
-                  className={`note-editor-toolbar-menu ${officeGalleryMenuStyles.menu}`}
-                  onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    designThemesReturnFocusRef.current?.focus({ preventScroll: true });
-                  }}
-                >
-                  <SpreadsheetThemeGallery
-                    disabled={!editor.isEditable}
-                    locale={locale}
-                    translate={(key) => t(key as "toolbar.designTheme")}
-                    value={designThemeValue}
-                    onValueChange={(themeId) =>
-                      runDesignCommand(() => applyDocumentTheme(editor, themeId))
-                    }
-                    onBrowse={() => designThemeFileInputRef.current?.click()}
-                    onSaveCurrent={saveCurrentDesignTheme}
-                    custom={{
-                      label: t("toolbar.designStyleSetCustom"),
-                      items: customThemes.map((entry) => ({
-                        id: entry.id,
-                        name: entry.name,
-                        ...customThemeTileColors(entry, designState),
-                      })),
-                      onSelect: (id) => {
-                        const entry = customThemes.find((item) => item.id === id);
-                        if (entry) runDesignCommand(() => applyDocumentThemeFile(editor, entry.theme));
-                      },
-                      onContextMenu: (id, x, y) => setCustomThemeMenu({ id, x, y }),
-                    }}
-                    reset={{
-                      label: t("toolbar.designThemeReset"),
-                      onSelect: () => runDesignCommand(() => resetDocumentTheme(editor)),
-                    }}
-                    testId="document-toolbar-ribbon-design-theme-gallery"
-                    itemTestIdPrefix="document-toolbar-ribbon-design-theme-"
-                  />
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <input
-                ref={designThemeFileInputRef}
-                type="file"
-                accept={OFFICE_THEME_FILE_ACCEPT}
-                hidden
-                data-testid="document-toolbar-ribbon-design-theme-file"
-                onChange={openDesignThemeFile}
-              />
-              <DocumentStyleSetGallery
-                design={designState}
-                disabled={!editor.isEditable}
-                locale={locale}
-                labels={{
-                  gallery: t("toolbar.designStyleSet"),
-                  thisDocument: t("toolbar.designStyleSetThisDocument"),
-                  builtIn: t("toolbar.designStyleSetBuiltIn"),
-                  reset: t("toolbar.designStyleSetReset"),
-                  title: t("toolbar.style_title"),
-                  heading1: t("toolbar.heading1"),
-                  sample: t("toolbar.designStyleSetSample"),
-                }}
-                onRememberSelection={rememberEditorSelection}
-                onSelect={(styleSetId) =>
-                  runDesignCommand(() => applyDocumentStyleSet(editor, styleSetId))
-                }
-                onReset={() => runDesignCommand(() => resetDocumentStyleSet(editor))}
-                custom={{
-                  sets: customStyleSets,
-                  label: t("toolbar.designStyleSetCustom"),
-                  deleteLabel: t("toolbar.delete"),
-                  onSelect: (entry) => runDesignCommand(() => applyDocumentCustomStyleSet(editor, entry)),
-                  onDelete: (entry) => {
-                    deleteCustomStyleSet(entry.id);
-                  },
-                }}
-                saveAs={{
-                  label: t("toolbar.designStyleSetSaveAs"),
-                  // An imported document whose styles are its own (no Word
-                  // style set read from them) has none MRAI can save.
-                  disabled: !snapshot.documentDesign && editor.state.doc.attrs.documentThemeColors != null,
-                  onSelect: () => setStyleSetSaveName(""),
-                }}
-              />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <OfficeHomeMenuTrigger
-                    ref={designColorsReturnFocusRef}
-                    disabled={!editor.isEditable}
-                    icon={<DocsDesignIcon name="themeColors" size={24} />}
-                    label={t("toolbar.designColors")}
-                    hasMenuIndicator
-                    onPointerDown={rememberEditorSelection}
-                    testId="document-toolbar-ribbon-design-colors"
-                    variant="large"
-                  />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="start"
-                  className={`note-editor-toolbar-menu ${spreadsheetThemeAxisStyles.colorMenu}`}
-                  onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    designColorsReturnFocusRef.current?.focus({ preventScroll: true });
-                  }}
-                >
-                  <SpreadsheetThemeColorGallery
-                    disabled={!editor.isEditable}
-                    locale={locale}
-                    value={designState.colors}
-                    onValueChange={(colorsId) =>
-                      runDesignCommand(() => applyDocumentColors(editor, colorsId))
-                    }
-                    testId="document-toolbar-ribbon-design-colors-gallery"
-                    itemTestIdPrefix="document-toolbar-ribbon-design-colors-"
-                  />
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <OfficeHomeMenuTrigger
-                    ref={designFontSetReturnFocusRef}
-                    disabled={!editor.isEditable}
-                    icon={<DocsDesignIcon name="themeFonts" size={24} />}
-                    label={t("toolbar.designFonts")}
-                    hasMenuIndicator
-                    onPointerDown={rememberEditorSelection}
-                    testId="document-toolbar-ribbon-design-font-set"
-                    variant="large"
-                  />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="start"
-                  className={`note-editor-toolbar-menu ${spreadsheetThemeAxisStyles.fontMenu}`}
-                  onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    designFontSetReturnFocusRef.current?.focus({ preventScroll: true });
-                  }}
-                >
-                  <SpreadsheetThemeFontGallery
-                    disabled={!editor.isEditable}
-                    locale={locale}
-                    showEastAsianFaces={isChineseLocale}
-                    fonts={DOCUMENT_DESIGN_FONT_GALLERY}
-                    value={designState.nativeFonts ? "custom:document" : designState.fonts}
-                    onValueChange={(fontsId) =>
-                      runDesignCommand(() => applyDocumentFonts(editor, fontsId))
-                    }
-                    customFonts={designCustomFonts}
-                    customHeading={t("officeThemeFonts.custom")}
-                    onCustomize={editor.isEditable ? () => setDesignFontsDialogOpen(true) : undefined}
-                    customizeLabel={t("officeThemeFonts.customize")}
-                    testId="document-toolbar-ribbon-design-font-gallery"
-                    itemTestIdPrefix="document-toolbar-ribbon-design-font-set-"
-                  />
-                </DropdownMenuContent>
-              </DropdownMenu>
-              {designFontsDialogOpen ? (
-                <OfficeCreateThemeFontsDialog
-                  open
-                  initial={designFontsDialogInitial}
-                  showEastAsian={
-                    isChineseLocale ||
-                    Boolean(designFontsDialogInitial.headingEastAsian || designFontsDialogInitial.bodyEastAsian)
-                  }
-                  locale={locale}
-                  returnFocusRef={designFontSetReturnFocusRef}
-                  onSave={applyDesignCustomFonts}
-                  onCancel={() => setDesignFontsDialogOpen(false)}
-                  testIdPrefix="document-theme-fonts-dialog"
-                />
-              ) : null}
-              {/* Word for Mac stacks Paragraph Spacing over Set as Default,
-                  two small commands beside Fonts. */}
-              <OfficeHomeCommandStack>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <OfficeHomeMenuTrigger
-                    ref={designParagraphSpacingReturnFocusRef}
-                    disabled={!editor.isEditable}
-                    icon={<DocsDesignIcon name="paragraphSpacing" size={16} />}
-                    label={t("toolbar.designParagraphSpacing")}
-                    displayLabel={t("toolbar.designParagraphSpacing")}
-                    hasMenuIndicator
-                    onPointerDown={rememberEditorSelection}
-                    testId="document-toolbar-ribbon-design-paragraph-spacing"
-                    variant="compact"
-                  />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  className={`note-editor-toolbar-menu ${officePageSetupMenuClassNames.presetMenu}`}
-                  onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    designParagraphSpacingReturnFocusRef.current?.focus({
-                      preventScroll: true,
-                    });
-                  }}
-                >
-                  {/* Word for Mac's two sections: the style set's own
-                      spacing (named after the set), then the built-in ones. */}
-                  <DropdownMenuRadioGroup
-                    value={designState.paragraphSpacing ?? "default"}
-                  >
-                    {DOCUMENT_PARAGRAPH_SPACING_PRESETS.map((preset) => (
-                      <Fragment key={preset.id}>
-                        {preset.id === "default" || preset.id === "none" ? (
-                          <DropdownMenuLabel className="note-style-gallery__section">
-                            {t(
-                              preset.id === "default"
-                                ? "toolbar.designParagraphSpacingStyleSetSection"
-                                : "toolbar.designParagraphSpacingBuiltInSection",
-                            )}
-                          </DropdownMenuLabel>
-                        ) : null}
-                        <DropdownMenuRadioItem
-                          value={preset.id}
-                          className={officePageSetupMenuClassNames.presetItem}
-                          aria-describedby={`${layoutGalleryId}-paragraph-spacing-${preset.id}`}
-                          data-testid={`document-toolbar-ribbon-design-paragraph-spacing-${preset.id}`}
-                          disabled={!editor.isEditable}
-                          onSelect={() =>
-                            runDesignCommand(() =>
-                              applyDocumentParagraphSpacing(editor, preset.id),
-                            )
-                          }
-                        >
-                          <OfficePageSetupPresetRow
-                            preview={
-                              <DocsParagraphSpacingPreview
-                                className={officePageSetupMenuClassNames.presetPreview}
-                                afterPt={
-                                  preset.id === "default"
-                                    ? (designStyleSetSpacing ?? preset).afterPt
-                                    : preset.afterPt
-                                }
-                                lineHeight={
-                                  preset.id === "default"
-                                    ? (designStyleSetSpacing ?? preset).lineHeight
-                                    : preset.lineHeight
-                                }
-                              />
-                            }
-                            title={
-                              preset.id === "default"
-                                ? designStyleSetName
-                                : t(
-                                    `toolbar.designParagraphSpacing_${preset.id}` as "toolbar.designParagraphSpacing_none",
-                                  )
-                            }
-                            details={[
-                              <span key="before">
-                                {t("toolbar.spaceBeforeValue", {
-                                  points:
-                                    preset.id === "default"
-                                      ? (designStyleSetSpacing?.beforePt ?? "–")
-                                      : preset.beforePt,
-                                })}
-                              </span>,
-                              <span key="after">
-                                {t("toolbar.spaceAfterValue", {
-                                  points:
-                                    preset.id === "default"
-                                      ? (designStyleSetSpacing?.afterPt ?? "–")
-                                      : preset.afterPt,
-                                })}
-                              </span>,
-                              <span key="line">
-                                {t("toolbar.lineSpacingDefault")}:{" "}
-                                {preset.id === "default"
-                                  ? (designStyleSetSpacing ?? preset).lineHeight
-                                  : preset.lineHeight}
-                              </span>,
-                            ]}
-                            detailsId={`${layoutGalleryId}-paragraph-spacing-${preset.id}`}
-                          />
-                        </DropdownMenuRadioItem>
-                      </Fragment>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <OfficeHomeCommand
-                disabled={!editor.isEditable}
-                icon={<OfficeSemanticIcon semanticId="file.checked" size={16} />}
-                label={t("toolbar.designSetAsDefault")}
-                displayLabel={t("toolbar.designSetAsDefault")}
-                onClick={() => setDesignSetDefaultOpen(true)}
-                testId="document-toolbar-ribbon-design-set-default"
-                variant="compact"
-              />
-              </OfficeHomeCommandStack>
-            </OfficeHomeCommandRow>
-          </OfficeHomeRibbonGroup>
-          ) : null}
+          {null}
 
-          {isActiveRibbon("design") ? (
-            <OfficeHomeRibbonGroup
-            ribbon="design"
-            label={t("toolbar.ribbonDesignBackground")}
-            className={homeStyles.layoutBackgroundGroup}
-            testId="document-toolbar-ribbon-layout-page-background"
-          >
-            <OfficeHomeCommandRow className={homeStyles.layoutCommandRow}>
-              {/* Word puts Watermark first in Design ▸ Page Background
-                  ("Insert a watermark", Microsoft Support). Word for the web
-                  has no Design tab, and WORD_WEB_EXCLUDED_RIBBONS drops ours
-                  with it — which left the watermark editor with no entrance at
-                  all, since its only other entry sits in the Review ▸ More menu
-                  behind `desktopInteroperabilityVisible`, and that is false by
-                  default. So the command is a desktop exception here, in the
-                  Page Background group Layout already carries, keeping its
-                  original testid. With the desktop tools on, Review > More
-                  hosts it instead and this one is not rendered. */}
-              {!desktopInteroperabilityVisible ? (
-                <OfficeHomeCommand
-                  disabled={!editor.isEditable}
-                  icon={<OfficeSemanticIcon semanticId="page.watermark" size={24} />}
-                  label={t("toolbar.watermarkLabel")}
-                  onClick={openWatermarkEditor}
-                  testId="document-toolbar-ribbon-design-watermark"
-                  variant="large"
-                />
-              ) : null}
-              <div className={homeStyles.layoutColorHost}>
-                <OfficeHomeMenuTrigger
-                  ref={pageColorTriggerRef}
-                  active={snapshot.pageBackgroundColor !== null}
-                  disabled={!editor.isEditable}
-                  icon={<DocsHomeIcon name="pageColor" size={24} />}
-                  label={t("toolbar.pageColor")}
-                  hasMenuIndicator
-                  aria-expanded={pageColorMenuOpen}
-                  aria-haspopup="dialog"
-                  onPointerDown={rememberEditorSelection}
-                  onClick={() => setPageColorMenuOpen((open) => !open)}
-                  testId="document-toolbar-ribbon-page-color"
-                  variant="large"
-                />
-                {pageColorMenuOpen ? (
-                  <OfficeColorPalettePopover
-                    anchorRef={pageColorTriggerRef}
-                    paletteId={snapshot.designColorSet ?? undefined}
-                    value={
-                      snapshot.pageBackgroundColor
-                        ? `#${snapshot.pageBackgroundColor}`
-                        : undefined
-                    }
-                    allowNoFill
-                    noFillSelected={!snapshot.pageBackgroundColor}
-                    labels={{
-                      themeColors: t("toolbar.themeColors"),
-                      standardColors: t("toolbar.standardColors"),
-                      recentColors: t("spreadsheet.recentColors"),
-                      moreColors: t("toolbar.pageColor"),
-                      noFill: t("toolbar.pageColorClear"),
-                    }}
-                    onPick={(color) => {
-                      if (color) applyPageBackgroundColor(color.slice(1));
-                      else clearPageBackgroundColor();
-                      setPageColorMenuOpen(false);
-                    }}
-                    onDismiss={() => setPageColorMenuOpen(false)}
-                    testIdPrefix="document-toolbar-ribbon-page-color"
-                  />
-                ) : null}
-              </div>
-              {/* Word's order in Page Background: Watermark, Page Color,
-                  Page Borders. */}
-              <DocumentPageBorderMenu
-                borders={currentSectionPageBorders}
-                commands={pageBorderMenuCommands}
-                disabled={!editor.isEditable}
-                onPointerDown={rememberEditorSelection}
-                spacingField={pageBorderSpacingField}
-              />
-            </OfficeHomeCommandRow>
-          </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("review") ? (
-            <OfficeHomeRibbonGroup
-            className={homeStyles.reviewProofingGroup}
-            controlId="review.proofing"
-            label={t("toolbar.reviewProofing")}
-            ribbon="review"
-            testId="document-toolbar-ribbon-word-count-group"
-          >
-            <OfficeHomeCommandRow>
-              {/* Word's Editor pane: the document's spelling, grammar and
-                  refinement suggestions with a count each, checked in the
-                  browser. The AI assistant keeps its own button. */}
-              <OfficeHomeCommand
-                activation="click"
-                active={documentEditorView !== null}
-                ariaExpanded={documentEditorView !== null}
-                displayLabel={t("toolbar.editorAssistant")}
-                icon={<DocsHomeIcon name="editor" size={24} />}
-                label={t("toolbar.editorAssistant")}
-                onClick={() => openDocumentEditor({ kind: "overview" })}
-                testId="document-toolbar-ribbon-editor"
-                variant="large"
-              />
-              <OfficeHomeCommand
-                activation="click"
-                icon={
-                  <OfficeSemanticIcon
-                    semanticId="review.spellcheck"
-                    size={24}
-                  />
-                }
-                label={t("toolbar.spellingAndGrammar")}
-                onClick={() =>
-                  openDocumentEditor({ kind: "step", filter: "corrections" })
-                }
-                testId="document-toolbar-ribbon-spelling-grammar"
-                variant="large"
-              />
-              <OfficeHomeCommand
-                active={spellcheckEnabled === true}
-                disabled={!onToggleSpellcheck}
-                icon={
-                  <OfficeSemanticIcon
-                    semanticId="review.spellcheck"
-                    size={24}
-                  />
-                }
-                label={t("toolbar.spellcheck")}
-                onClick={() => onToggleSpellcheck?.()}
-                testId="document-toolbar-ribbon-spellcheck"
-                variant="large"
-              />
-              <OfficeHomeCommand
-                activation="click"
-                active={readabilityStats !== null}
-                ariaExpanded={readabilityStats !== null}
-                icon={
-                  <OfficeSemanticIcon semanticId="review.wordCount" size={24} />
-                }
-                label={t("toolbar.wordCountCommand")}
-                onClick={toggleReadabilityStats}
-                testId="document-toolbar-ribbon-word-count"
-                variant="large"
-              />
-            </OfficeHomeCommandRow>
-          </OfficeHomeRibbonGroup>
-          ) : null}
+          {null}
+          {null}
 
-          {isActiveRibbon("review") ? (
-            <OfficeHomeRibbonGroup
-            className={homeStyles.reviewAccessibilityGroup}
-            controlId="review.accessibility"
-            label={t("toolbar.reviewAccessibility")}
-            ribbon="review"
-            testId="document-toolbar-ribbon-accessibility-group"
-          >
-            <OfficeHomeCommand
-              active={accessibilityOpen}
-              icon={
-                <OfficeSemanticIcon
-                  semanticId="review.accessibility"
-                  size={24}
-                />
-              }
-              label={t("toolbar.accessibilityCheck")}
-              onClick={toggleAccessibilityPanel}
-              testId="document-toolbar-ribbon-accessibility-check"
-              variant="large"
-            />
-          </OfficeHomeRibbonGroup>
-          ) : null}
+          {null}
 
-          {isActiveRibbon("review") ? (
-            <OfficeHomeRibbonGroup
-            className={homeStyles.reviewLanguageGroup}
-            controlId="review.language"
-            label={t("toolbar.proofingLanguage")}
-            ribbon="review"
-            testId="document-toolbar-ribbon-language-group"
-          >
-            <OfficeHomeCommandRow>
-              {desktopInteroperabilityVisible ? (
-                null
-              ) : null}
-              <OfficeHomeCommand
-                activation="click"
-                ariaExpanded={proofingLanguageTarget !== null}
-                buttonRef={proofingLanguageReturnFocusRef}
-                disabled={!reviewCommandDecisions["review.language"].enabled}
-                icon={<OfficeSemanticIcon semanticId="review.language" size={24} />}
-                label={
-                  officeCommandAccessibleLabel(
-                    t("toolbar.proofingLanguage"),
-                    reviewUnavailableTitle(
-                      reviewCommandDecisions["review.language"],
-                    ),
-                  )
-                }
-                displayLabel={t("toolbar.proofingLanguage")}
-                onClick={() => executeReviewFeature("review.language")}
-                testId="document-toolbar-ribbon-proofing-language"
-                variant="large"
-              />
-            </OfficeHomeCommandRow>
-          </OfficeHomeRibbonGroup>
-          ) : null}
+          {null}
 
-          {isActiveRibbon("review") ? (
-            <OfficeHomeRibbonGroup
-            className={
-              docsOfficeParityV2
-                ? homeStyles.reviewMarkupGroup
-                : homeStyles.reviewTrackingGroup
-            }
-            controlId={
-              docsOfficeParityV2 ? "review.markup" : "review.tracking"
-            }
-            label={
-              docsOfficeParityV2
-                ? t("toolbar.markup")
-                : t("toolbar.ribbonTracking")
-            }
-            ribbon="review"
-            testId={
-              docsOfficeParityV2
-                ? "document-toolbar-ribbon-markup-group"
-                : "document-toolbar-ribbon-tracking-group"
-            }
-          >
-            <OfficeHomeCommandRow>
-              {!docsOfficeParityV2 ? (
-                <DropdownMenu modal={false}>
-                <OfficeHomeSplitLayout
-                  testId="document-toolbar-ribbon-track-changes-split"
-                  primary={
-                    <OfficeHomeCommand
-                      active={snapshot.suggesting}
-                      controlId="DOCCTL.RIBBON.REVIEW.TRACK.TOGGLE"
-                      disabled={
-                        !reviewCommandDecisions["review.trackChanges"].enabled
-                      }
-                      displayLabel={t("toolbar.suggesting")}
-                      icon={
-                        <OfficeSemanticIcon
-                          semanticId="review.trackChanges"
-                          size={24}
-                        />
-                      }
-                      label={
-                        reviewUnavailableTitle(
-                          reviewCommandDecisions["review.trackChanges"],
-                        ) ?? t("toolbar.suggesting")
-                      }
-                      onClick={() =>
-                        executeReviewFeature("review.trackChanges")
-                      }
-                      testId="document-toolbar-ribbon-suggesting"
-                      variant="large"
-                    />
-                  }
-                  trigger={
-                    <DropdownMenuTrigger asChild>
-                      <OfficeHomeMenuTrigger
-                        className="note-editor-office-toolbar__split-chevron"
-                        disabled={!editor.isEditable}
-                        icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                        label={t("toolbar.suggesting")}
-                        onPointerDown={rememberEditorSelection}
-                        testId="document-toolbar-ribbon-suggesting-menu"
-                        variant="icon"
-                      />
-                    </DropdownMenuTrigger>
-                  }
-                />
-                <DropdownMenuContent
-                  align="start"
-                  className="note-editor-toolbar-menu"
-                  data-testid="document-toolbar-ribbon-suggesting-menu-content"
-                  onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    safelyFocusEditorAfterToolbarClose(editor);
-                  }}
-                >
-                  {renderTrackChangesModeItems()}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuCheckboxItem
-                    checked={trackingLocked}
-                    disabled={
-                      !reviewCommandDecisions["review.lockTracking"].enabled
-                    }
-                    title={reviewUnavailableTitle(
-                      reviewCommandDecisions["review.lockTracking"],
-                    )}
-                    data-testid="document-toolbar-ribbon-lock-tracking"
-                    onSelect={() =>
-                      executeReviewFeature("review.lockTracking")
-                    }
-                  >
-                    {t("toolbar.lockTracking")}
-                  </DropdownMenuCheckboxItem>
-                </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
-              {docsOfficeParityV2 ? (
-                <>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <OfficeHomeMenuTrigger
-                        disabled={
-                          !reviewCommandDecisions["review.markupFilter"].enabled
-                        }
-                        controlId="DOCCTL.RIBBON.REVIEW.TRACK.DISPLAY"
-                        displayLabel={
-                          t("toolbar.displayForReview")
-                        }
-                        hasMenuIndicator
-                        icon={
-                          <OfficeSemanticIcon
-                            semanticId="review.markup"
-                            size={24}
-                          />
-                        }
-                        label={
-                          t("toolbar.displayForReview")
-                        }
-                        onPointerDown={rememberEditorSelection}
-                        testId="document-toolbar-ribbon-markup-filter"
-                        variant="large"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      className="note-editor-toolbar-menu"
-                      data-testid="document-toolbar-ribbon-display-review-menu"
-                      onCloseAutoFocus={(event) => {
-                        event.preventDefault();
-                        safelyFocusEditorAfterToolbarClose(editor);
-                      }}
-                    >
-                      <DropdownMenuRadioGroup
-                        value={snapshot.trackedChangeMarkupFilter}
-                      >
-                        {TRACKED_CHANGE_DISPLAY_FILTERS.map((filter) => (
-                          <DropdownMenuRadioItem
-                            key={filter}
-                            value={filter}
-                            data-testid={`document-toolbar-ribbon-markup-filter-${filter}`}
-                            data-feature-id="review.markupFilter"
-                            onSelect={() =>
-                              executeReviewFeature(
-                                "review.markupFilter",
-                                filter,
-                              )
-                            }
-                          >
-                            {t(
-                              `toolbar.markupFilter_${filter}` as "toolbar.markupFilter_all",
-                            )}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                      {/* Word for the web's Display for Review documents only
-                          Simple / All / No Markup; Original is a desktop view
-                          and stays a desktop-interoperability placeholder. */}
-                      {desktopInteroperabilityVisible ? (
-                        <DropdownMenuItem
-                          disabled
-                          title={
-                            t("toolbar.originalViewRequiresProjectionPreviousFormatting")
-                          }
-                          data-testid="document-toolbar-ribbon-display-review-original"
-                        >
-                          {t("toolbar.original")}
-                        </DropdownMenuItem>
-                      ) : null}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <OfficeHomeMenuTrigger
-                        disabled={
-                          !reviewCommandDecisions["review.markupFilter"].enabled
-                        }
-                        controlId="DOCCTL.RIBBON.REVIEW.TRACK.MARKUP_OPTIONS"
-                        hasMenuIndicator
-                        icon={
-                          <OfficeSemanticIcon
-                            semanticId="review.markup"
-                            size={24}
-                          />
-                        }
-                        label={t("toolbar.showMarkup")}
-                        onPointerDown={rememberEditorSelection}
-                        testId="document-toolbar-ribbon-show-markup"
-                        variant="large"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      className="note-editor-toolbar-menu"
-                      data-testid="document-toolbar-ribbon-show-markup-menu"
-                      onCloseAutoFocus={(event) => {
-                        event.preventDefault();
-                        safelyFocusEditorAfterToolbarClose(editor);
-                      }}
-                    >
-                      <DropdownMenuItem
-                        data-testid="document-toolbar-ribbon-show-markup-all"
-                        onSelect={() =>
-                          executeReviewFeature("review.markupFilter", "all")
-                        }
-                      >
-                        {t("toolbar.markupFilter_all")}
-                      </DropdownMenuItem>
-                      <DropdownMenuRadioGroup
-                        value={snapshot.trackedChangeMarkupFilter}
-                      >
-                        {TRACKED_CHANGE_TYPE_FILTERS.map((filter) => (
-                          <DropdownMenuRadioItem
-                            key={filter}
-                            value={filter}
-                            data-testid={`document-toolbar-ribbon-markup-filter-${filter}`}
-                            data-feature-id="review.markupFilter"
-                            onSelect={() =>
-                              executeReviewFeature(
-                                "review.markupFilter",
-                                filter,
-                              )
-                            }
-                          >
-                            {t(
-                              `toolbar.markupFilter_${filter}` as "toolbar.markupFilter_all",
-                            )}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                      {/* Comments / Ink / Specific People are desktop Show
-                          Markup sub-options Microsoft does not document for
-                          Word for the web; keep them as desktop-interop
-                          placeholders rather than permanently gray Web items. */}
-                      {desktopInteroperabilityVisible ? (
-                        <DropdownMenuSeparator />
-                      ) : null}
-                      {desktopInteroperabilityVisible ? (
-                        [
-                          [
-                            "comments",
-                            t("toolbar.comments"),
-                            t("toolbar.commentVisibilityControlledByModernComments"),
-                          ],
-                          [
-                            "ink",
-                            t("toolbar.ink"),
-                            t("toolbar.nativeInkVisibilityNotAvailable"),
-                          ],
-                          [
-                            "reviewers",
-                            t("toolbar.specificPeople"),
-                            t("toolbar.reviewerFilteringRequiresAuthenticatedAuthorIndex"),
-                          ],
-                        ] as const
-                      ).map(([id, label, reason]) => (
-                        <DropdownMenuItem
-                          key={id}
-                          disabled
-                          title={reason}
-                          data-testid={`document-toolbar-ribbon-show-markup-${id}`}
-                        >
-                          {label}
-                        </DropdownMenuItem>
-                      )) : null}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              ) : null}
-              {!docsOfficeParityV2 && panes?.trackChanges ? (
-                <OfficeHomeCommand
-                  active={panes.trackChanges.open}
-                  disabled={
-                    !reviewCommandDecisions["review.changesPane"].enabled
-                  }
-                  displayLabel={t("trackChanges.title")}
-                  icon={
-                    <OfficeSemanticIcon
-                      semanticId="review.trackChanges"
-                      size={24}
-                    />
-                  }
-                  label={
-                    reviewUnavailableTitle(
-                      reviewCommandDecisions["review.changesPane"],
-                    ) ?? t("trackChanges.title")
-                  }
-                  onClick={() => executeReviewFeature("review.changesPane")}
-                  testId="note-editor-track-changes-toggle"
-                  variant="large"
-                />
-              ) : null}
-            </OfficeHomeCommandRow>
-          </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("review") ? (
-            docsOfficeParityV2 ? (
-            <OfficeHomeRibbonGroup
-              className={homeStyles.reviewTrackingGroup}
-              controlId="review.tracking"
-              label={t("toolbar.ribbonTracking")}
-              ribbon="review"
-              testId="document-toolbar-ribbon-tracking-group"
-            >
-              <OfficeHomeCommandRow>
-                <DropdownMenu modal={false}>
-                  <OfficeHomeSplitLayout
-                    testId="document-toolbar-ribbon-track-changes-split"
-                    primary={
-                      <OfficeHomeCommand
-                        active={snapshot.suggesting}
-                        controlId="DOCCTL.RIBBON.REVIEW.TRACK.TOGGLE"
-                        disabled={
-                          !reviewCommandDecisions["review.trackChanges"].enabled
-                        }
-                        displayLabel={t("toolbar.suggesting")}
-                        icon={
-                          <OfficeSemanticIcon
-                            semanticId="review.trackChanges"
-                            size={24}
-                          />
-                        }
-                        label={
-                          reviewUnavailableTitle(
-                            reviewCommandDecisions["review.trackChanges"],
-                          ) ?? t("toolbar.suggesting")
-                        }
-                        onClick={() =>
-                          executeReviewFeature("review.trackChanges")
-                        }
-                        testId="document-toolbar-ribbon-suggesting"
-                        variant="large"
-                      />
-                    }
-                    trigger={
-                      <DropdownMenuTrigger asChild>
-                        <OfficeHomeMenuTrigger
-                          className="note-editor-office-toolbar__split-chevron"
-                          disabled={!editor.isEditable}
-                          icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                          label={t("toolbar.suggesting")}
-                          onPointerDown={rememberEditorSelection}
-                          testId="document-toolbar-ribbon-suggesting-menu"
-                          variant="icon"
-                        />
-                      </DropdownMenuTrigger>
-                    }
-                  />
-                  <DropdownMenuContent
-                    align="start"
-                    className="note-editor-toolbar-menu"
-                    data-testid="document-toolbar-ribbon-suggesting-menu-content"
-                    onCloseAutoFocus={(event) => {
-                      event.preventDefault();
-                      safelyFocusEditorAfterToolbarClose(editor);
-                    }}
-                  >
-                    {renderTrackChangesModeItems()}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuCheckboxItem
-                      checked={trackingLocked}
-                      disabled={
-                        !reviewCommandDecisions["review.lockTracking"].enabled
-                      }
-                      title={reviewUnavailableTitle(
-                        reviewCommandDecisions["review.lockTracking"],
-                      )}
-                      data-testid="document-toolbar-ribbon-lock-tracking"
-                      onSelect={() =>
-                        executeReviewFeature("review.lockTracking")
-                      }
-                    >
-                      {t("toolbar.lockTracking")}
-                    </DropdownMenuCheckboxItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                {panes?.trackChanges ? (
-                  <OfficeHomeCommand
-                    active={panes.trackChanges.open}
-                    disabled={
-                      !reviewCommandDecisions["review.changesPane"].enabled
-                    }
-                    displayLabel={t("trackChanges.title")}
-                    icon={
-                      <OfficeSemanticIcon
-                        semanticId="review.trackChanges"
-                        size={24}
-                      />
-                    }
-                    label={
-                      reviewUnavailableTitle(
-                        reviewCommandDecisions["review.changesPane"],
-                      ) ?? t("trackChanges.title")
-                    }
-                    onClick={() => executeReviewFeature("review.changesPane")}
-                    testId="note-editor-track-changes-toggle"
-                    variant="large"
-                  />
-                ) : null}
-              </OfficeHomeCommandRow>
-            </OfficeHomeRibbonGroup>
-          ) : null
-          ) : null}
-          {isActiveRibbon("review") ? (
-            <OfficeHomeRibbonGroup
-            className={homeStyles.reviewChangesGroup}
-            controlId="review.changes"
-            label={t("toolbar.reviewChanges")}
-            ribbon="review"
-            testId="document-toolbar-ribbon-changes-group"
-          >
-            <OfficeHomeCommandRow>
-              {docsOfficeParityV2 ? (
-                <>
-                  <OfficeHomeSplitLayout
-                    testId="document-toolbar-ribbon-accept-split"
-                    primary={
-                      <OfficeHomeCommand
-                        disabled={
-                          !reviewCommandDecisions["review.acceptOne"].enabled
-                        }
-                        controlId="review.acceptOne"
-                        displayLabel={t("toolbar.acceptChange")}
-                        icon={
-                          <OfficeSemanticIcon
-                            semanticId="review.change.accept"
-                            size={24}
-                          />
-                        }
-                        label={
-                          officeCommandAccessibleLabel(
-                            t("toolbar.acceptChange"),
-                            reviewUnavailableTitle(
-                              reviewCommandDecisions["review.acceptOne"],
-                            ),
-                          )
-                        }
-                        onClick={() =>
-                          executeReviewFeature("review.acceptOne")
-                        }
-                        testId="document-toolbar-ribbon-accept-change"
-                        variant="large"
-                      />
-                    }
-                    trigger={
-                      <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger asChild>
-                          <OfficeHomeMenuTrigger
-                            disabled={
-                              !reviewCommandDecisions["review.acceptAll"].enabled
-                            }
-                            disabledReason={reviewUnavailableTitle(
-                              reviewCommandDecisions["review.acceptAll"],
-                            )}
-                            icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                            label={officeCommandAccessibleLabel(
-                              t("toolbar.acceptChange"),
-                              reviewUnavailableTitle(
-                                reviewCommandDecisions["review.acceptAll"],
-                              ),
-                            )}
-                            onPointerDown={rememberEditorSelection}
-                            testId="document-toolbar-ribbon-accept-menu"
-                            variant="icon"
-                          />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          className="note-editor-toolbar-menu"
-                          onCloseAutoFocus={(event) => {
-                            event.preventDefault();
-                            safelyFocusEditorAfterToolbarClose(editor);
-                          }}
-                        >
-                        <DropdownMenuItem
-                          data-testid="document-toolbar-ribbon-accept-current"
-                          disabled={
-                            !reviewCommandDecisions["review.acceptOne"].enabled
-                          }
-                          onSelect={() => {
-                            (
-                              editor.commands as unknown as ReviewCommandSurface
-                            ).acceptChange();
-                          }}
-                        >
-                          <OfficeSemanticIcon semanticId="review.change.accept" size={16} />
-                          {t("toolbar.acceptChange")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          data-testid="document-toolbar-ribbon-accept-all-shown"
-                          disabled={
-                            !reviewCommandDecisions["review.acceptAll"].enabled ||
-                            !snapshot.hasShownTrackedChanges ||
-                            snapshot.trackedChangeMarkupFilter === "all" ||
-                            snapshot.trackedChangeMarkupFilter === "simple"
-                          }
-                          title={
-                            snapshot.trackedChangeMarkupFilter === "all" ||
-                            snapshot.trackedChangeMarkupFilter === "simple" ||
-                            snapshot.trackedChangeMarkupFilter === "none"
-                              ? t("toolbar.chooseSpecificRevisionTypeInShow")
-                              : !snapshot.hasShownTrackedChanges
-                                ? t("toolbar.noTrackedChangesVisibleInSelected")
-                                : undefined
-                          }
-                          onSelect={() =>
-                            editor.commands.acceptAllShownChanges()
-                          }
-                        >
-                          <OfficeSemanticIcon semanticId="review.change.accept" size={16} />
-                          {t("toolbar.acceptAllChangesShown")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          data-testid="document-toolbar-ribbon-accept-all"
-                          disabled={
-                            !reviewCommandDecisions["review.acceptAll"].enabled
-                          }
-                          onSelect={() =>
-                            executeReviewFeature("review.acceptAll")
-                          }
-                        >
-                          <OfficeSemanticIcon semanticId="review.change.accept" size={16} />
-                          {t("toolbar.acceptAllChanges")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          data-testid="document-toolbar-ribbon-accept-all-stop-tracking"
-                          disabled={
-                            !reviewCommandDecisions["review.acceptAll"].enabled
-                          }
-                          onSelect={() =>
-                            editor.commands.acceptAllChangesAndStopTracking()
-                          }
-                        >
-                          <OfficeSemanticIcon semanticId="review.change.accept" size={16} />
-                          {t("toolbar.acceptAllChangesAndStopTracking")}
-                        </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    }
-                  />
-                  <OfficeHomeSplitLayout
-                    testId="document-toolbar-ribbon-reject-split"
-                    primary={
-                      <OfficeHomeCommand
-                        disabled={
-                          !reviewCommandDecisions["review.rejectOne"].enabled
-                        }
-                        controlId="review.rejectOne"
-                        displayLabel={t("toolbar.rejectChange")}
-                        icon={
-                          <OfficeSemanticIcon
-                            semanticId="review.change.reject"
-                            size={24}
-                          />
-                        }
-                        label={
-                          officeCommandAccessibleLabel(
-                            t("toolbar.rejectChange"),
-                            reviewUnavailableTitle(
-                              reviewCommandDecisions["review.rejectOne"],
-                            ),
-                          )
-                        }
-                        onClick={() =>
-                          executeReviewFeature("review.rejectOne")
-                        }
-                        testId="document-toolbar-ribbon-reject-change"
-                        variant="large"
-                      />
-                    }
-                    trigger={
-                      <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger asChild>
-                          <OfficeHomeMenuTrigger
-                            disabled={trackingLocked || !editor.isEditable}
-                            disabledReason={reviewUnavailableTitle(
-                              reviewCommandDecisions["review.rejectOne"],
-                            )}
-                            icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                            label={officeCommandAccessibleLabel(
-                              t("toolbar.rejectChange"),
-                              reviewUnavailableTitle(
-                                reviewCommandDecisions["review.rejectOne"],
-                              ),
-                            )}
-                            onPointerDown={rememberEditorSelection}
-                            testId="document-toolbar-ribbon-reject-menu"
-                            variant="icon"
-                          />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          className="note-editor-toolbar-menu"
-                          onCloseAutoFocus={(event) => {
-                            event.preventDefault();
-                            safelyFocusEditorAfterToolbarClose(editor);
-                          }}
-                        >
-                        <DropdownMenuItem
-                          data-testid="document-toolbar-ribbon-reject-current"
-                          disabled={
-                            !reviewCommandDecisions["review.rejectOne"].enabled
-                          }
-                          onSelect={() => {
-                            (
-                              editor.commands as unknown as ReviewCommandSurface
-                            ).rejectChange();
-                          }}
-                        >
-                          <OfficeSemanticIcon semanticId="review.change.reject" size={16} />
-                          {t("toolbar.rejectChange")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          data-testid="document-toolbar-ribbon-reject-all-shown"
-                          disabled={
-                            trackingLocked ||
-                            !editor.isEditable ||
-                            !snapshot.hasTrackedChanges ||
-                            !snapshot.hasShownTrackedChanges ||
-                            snapshot.trackedChangeMarkupFilter === "all" ||
-                            snapshot.trackedChangeMarkupFilter === "simple"
-                          }
-                          title={
-                            snapshot.trackedChangeMarkupFilter === "all" ||
-                            snapshot.trackedChangeMarkupFilter === "simple" ||
-                            snapshot.trackedChangeMarkupFilter === "none"
-                              ? t("toolbar.chooseSpecificRevisionTypeInShow")
-                              : !snapshot.hasShownTrackedChanges
-                                ? t("toolbar.noTrackedChangesVisibleInSelectedType")
-                                : undefined
-                          }
-                          onSelect={() =>
-                            editor.commands.rejectAllShownChanges()
-                          }
-                        >
-                          <OfficeSemanticIcon semanticId="review.change.reject" size={16} />
-                          {t("toolbar.rejectAllChangesShown")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          data-testid="document-toolbar-ribbon-reject-all"
-                          disabled={
-                            trackingLocked ||
-                            !editor.isEditable ||
-                            !snapshot.hasTrackedChanges
-                          }
-                          onSelect={() => {
-                            if (getTrackedChanges(editor.state).length === 0)
-                              return;
-                            editor.commands.rejectAllChanges();
-                          }}
-                        >
-                          <OfficeSemanticIcon semanticId="review.change.reject" size={16} />
-                          {t("toolbar.rejectAllChanges")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          data-testid="document-toolbar-ribbon-reject-all-stop-tracking"
-                          disabled={
-                            trackingLocked ||
-                            !editor.isEditable ||
-                            !snapshot.hasTrackedChanges
-                          }
-                          onSelect={() => {
-                            if (getTrackedChanges(editor.state).length === 0)
-                              return;
-                            editor.commands.rejectAllChangesAndStopTracking();
-                          }}
-                        >
-                          <OfficeSemanticIcon semanticId="review.change.reject" size={16} />
-                          {t("toolbar.rejectAllChangesAndStopTracking")}
-                        </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    }
-                  />
-                  <OfficeHomeCommandStack
-                    className={homeStyles.reviewChangeNavigationStack}
-                  >
-                    <OfficeHomeCommand
-                      disabled={
-                        !reviewCommandDecisions["review.previousChange"].enabled
-                      }
-                      controlId="review.previousChange"
-                      displayLabel={t("toolbar.previousChange")}
-                      icon={<ChevronLeft size={16} aria-hidden />}
-                      label={
-                        officeCommandAccessibleLabel(
-                          t("toolbar.previousChange"),
-                          reviewUnavailableTitle(
-                            reviewCommandDecisions["review.previousChange"],
-                          ),
-                        )
-                      }
-                      onClick={() =>
-                        executeReviewFeature("review.previousChange")
-                      }
-                      testId="document-toolbar-ribbon-previous-change"
-                      variant="compact"
-                    />
-                    <OfficeHomeCommand
-                      disabled={
-                        !reviewCommandDecisions["review.nextChange"].enabled
-                      }
-                      controlId="review.nextChange"
-                      displayLabel={t("toolbar.nextChange")}
-                      icon={<ChevronRight size={16} aria-hidden />}
-                      label={
-                        officeCommandAccessibleLabel(
-                          t("toolbar.nextChange"),
-                          reviewUnavailableTitle(
-                            reviewCommandDecisions["review.nextChange"],
-                          ),
-                        )
-                      }
-                      onClick={() => executeReviewFeature("review.nextChange")}
-                      testId="document-toolbar-ribbon-next-change"
-                      variant="compact"
-                    />
-                  </OfficeHomeCommandStack>
-                </>
-              ) : null}
-              {!docsOfficeParityV2 ? (
-                <button
-                  type="button"
-                  className="office-ribbon-control note-editor-ribbon-big" data-office-control-part="button"
-                  data-testid="document-toolbar-ribbon-accept-all"
-                  disabled={
-                    trackingLocked ||
-                    !editor.isEditable ||
-                    !snapshot.hasTrackedChanges
-                  }
-                  onPointerDown={rememberEditorSelection}
-                  onClick={() => {
-                    if (!canWriteEditor()) return;
-                    chain(editor).acceptAllChanges().run();
-                  }}
-                >
-                  <CheckCheck size={18} aria-hidden />
-                  <span>{t("toolbar.acceptAllChanges")}</span>
-                </button>
-              ) : null}
-            </OfficeHomeCommandRow>
-          </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("review") ? (
-            <OfficeHomeRibbonGroup
-            className={homeStyles.reviewCommentsGroup}
-            controlId="review.comments"
-            label={t("comments.title")}
-            ribbon="review"
-            testId="document-toolbar-ribbon-comments-group"
-          >
-            <OfficeHomeCommandRow>
-              <OfficeHomeCommand
-                disabled={!reviewCommandDecisions["review.comment"].enabled}
-                displayLabel={t("toolbar.addComment")}
-                icon={<OfficeSemanticIcon semanticId="comment.add" size={24} />}
-                label={
-                  officeCommandAccessibleLabel(
-                    t("toolbar.addComment"),
-                    reviewUnavailableTitle(
-                      reviewCommandDecisions["review.comment"],
-                    ),
-                  )
-                }
-                onClick={() => executeReviewFeature("review.comment")}
-                testId="document-toolbar-ribbon-comment"
-                variant="large"
-              />
-              <OfficeHomeSplitLayout
-                testId="document-toolbar-ribbon-comment-delete-split"
-                primary={
-                  <OfficeHomeCommand
-                    disabled={
-                      !commentsWritable(editor) ||
-                      snapshot.selectedCommentThreadId === null
-                    }
-                    icon={
-                      <OfficeSemanticIcon
-                        semanticId="review.comment.delete"
-                        size={24}
-                      />
-                    }
-                    label={t("comments.delete")}
-                    onClick={() => removeCurrentComment(editor)}
-                    testId="document-toolbar-ribbon-comment-delete"
-                    variant="large"
-                  />
-                }
-                trigger={
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <OfficeHomeMenuTrigger
-                        disabled={!commentsWritable(editor) || !snapshot.hasComments}
-                        icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                        label={t("comments.delete")}
-                        onPointerDown={rememberEditorSelection}
-                        testId="document-toolbar-ribbon-comment-delete-menu"
-                        variant="icon"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      className="note-editor-toolbar-menu"
-                      onCloseAutoFocus={(event) => {
-                        event.preventDefault();
-                        safelyFocusEditorAfterToolbarClose(editor);
-                      }}
-                    >
-                    <DropdownMenuItem
-                      data-testid="document-toolbar-ribbon-comment-delete-current"
-                      disabled={
-                        !commentsWritable(editor) ||
-                        snapshot.selectedCommentThreadId === null
-                      }
-                      onSelect={() => removeCurrentComment(editor)}
-                    >
-                      <OfficeSemanticIcon semanticId="review.comment.delete" size={16} />
-                      {t("comments.delete")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      data-testid="document-toolbar-ribbon-comment-delete-all"
-                      disabled={!commentsWritable(editor) || !snapshot.hasComments}
-                      onSelect={() => {
-                        if (!editor.commands.removeAllComments()) return;
-                        editor.commands.focus(null, { scrollIntoView: false });
-                      }}
-                    >
-                      <OfficeSemanticIcon semanticId="review.comment.delete" size={16} />
-                      {t("spreadsheet.clearComments")}
-                    </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                }
-              />
-              <OfficeHomeCommand
-                disabled={
-                  !commentsWritable(editor) ||
-                  snapshot.selectedCommentThreadId === null
-                }
-                icon={
-                  snapshot.selectedCommentResolved ? (
-                    <RefreshCw size={24} aria-hidden />
-                  ) : (
-                    <Check size={24} aria-hidden />
-                  )
-                }
-                label={
-                  snapshot.selectedCommentResolved
-                    ? t("comments.reopen")
-                    : t("comments.resolve")
-                }
-                onClick={() => toggleCurrentCommentResolved(editor)}
-                testId="document-toolbar-ribbon-comment-resolve"
-                variant="large"
-              />
-              <OfficeHomeCommandStack>
-                <OfficeHomeCommand
-                  disabled={!snapshot.hasAnchoredComments}
-                  icon={<ChevronLeft size={16} aria-hidden />}
-                  label={t("spreadsheet.previousComment")}
-                  onClick={() => navigateComment(editor, -1)}
-                  testId="document-toolbar-ribbon-comment-previous"
-                  variant="compact"
-                />
-                <OfficeHomeCommand
-                  disabled={!snapshot.hasAnchoredComments}
-                  icon={<ChevronRight size={16} aria-hidden />}
-                  label={t("spreadsheet.nextComment")}
-                  onClick={() => navigateComment(editor, 1)}
-                  testId="document-toolbar-ribbon-comment-next"
-                  variant="compact"
-                />
-              </OfficeHomeCommandStack>
-              {panes?.comments ? (
-                <OfficeHomeCommand
-                  active={panes.comments.open}
-                  disabled={
-                    !reviewCommandDecisions["review.commentsPane"].enabled
-                  }
-                  displayLabel={t("comments.title")}
-                  icon={
-                    <OfficeSemanticIcon semanticId="review.comment" size={24} />
-                  }
-                  label={
-                    reviewUnavailableTitle(
-                      reviewCommandDecisions["review.commentsPane"],
-                    ) ?? t("comments.title")
-                  }
-                  onClick={() => executeReviewFeature("review.commentsPane")}
-                  testId="note-editor-comments-toggle"
-                  variant="large"
-                />
-              ) : null}
-            </OfficeHomeCommandRow>
-          </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("review") ? (
-            reviewCommandDecisions["review.compare"].visible ? (
-            <OfficeHomeRibbonGroup
-              className={homeStyles.reviewCompareGroup}
-              label={t("toolbar.compareDocuments")}
-              ribbon="review"
-              testId="document-toolbar-ribbon-compare-group"
-              data-review-order={75}
-            >
-            <DropdownMenu modal={false}>
-              <OfficeHomeSplitLayout
-                testId="document-toolbar-ribbon-compare-split"
-                primary={
-                  <OfficeHomeCommand
-                    active={compareDocumentsOpen}
-                    buttonRef={compareDocumentsTriggerRef}
-                    displayLabel={t("toolbar.compareDocuments")}
-                    icon={
-                      <OfficeSemanticIcon
-                        semanticId="review.compare"
-                        size={24}
-                      />
-                    }
-                    label={t("toolbar.compareDocuments")}
-                    onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Compare Documents"))}
-                    testId="document-toolbar-ribbon-compare-documents"
-                    variant="large"
-                  />
-                }
-                trigger={
-                    <OfficeHomeMenuTrigger
-                      className="note-editor-office-toolbar__split-chevron"
-                      icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                      label={t("toolbar.compareDocuments")}
-                      onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Compare Documents"))}
-                      testId="document-toolbar-ribbon-compare-menu"
-                      variant="icon"
-                    />
-                }
-              />
-              <DropdownMenuContent
-                align="start"
-                className="note-editor-toolbar-menu"
-                data-testid="document-toolbar-ribbon-compare-menu-content"
-                onCloseAutoFocus={(event) => {
-                  event.preventDefault();
-                  compareDocumentsTriggerRef.current?.focus({
-                    preventScroll: true,
-                  });
-                }}
-              >
-                <DropdownMenuItem
-                  data-testid="document-toolbar-ribbon-compare-two-documents"
-                  onSelect={() => {
-                    compareDocumentsReturnFocusRef.current =
-                      compareDocumentsTriggerRef.current;
-                    executeReviewFeature("review.compare");
-                  }}
-                >
-                  <OfficeSemanticIcon semanticId="review.compare" size={16} />
-                  {t("toolbar.compareDocumentsLabel")}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={
-                    !pageId ||
-                    !editor.isEditable ||
-                    !reviewCommandDecisions["review.compare"].enabled
-                  }
-                  data-testid="document-toolbar-ribbon-combine-documents"
-                  onSelect={() => {
-                    compareDocumentsReturnFocusRef.current =
-                      compareDocumentsTriggerRef.current;
-                    openCombineDocuments();
-                  }}
-                >
-                  <OfficeSemanticIcon semanticId="review.compare" size={16} />
-                  {t("toolbar.combineDocuments")}
-                </DropdownMenuItem>
-                {/* Word greys Show Source Documents out until a compare or
-                    combine result is open; then it chooses which of the two
-                    sources show beside the result. */}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger
-                    disabled={!compareResultSources}
-                    title={
-                      compareResultSources
-                        ? undefined
-                        : t("toolbar.showSourceDocumentsUnavailable")
-                    }
-                    data-testid="document-toolbar-ribbon-show-source-documents"
-                  >
-                    <OfficeSemanticIcon semanticId="review.compare" size={16} />
-                    {t("toolbar.showSourceDocuments")}
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent data-testid="document-toolbar-ribbon-show-source-documents-menu">
-                    <DropdownMenuRadioGroup
-                      value={sourceDocumentsMode}
-                      onValueChange={(value) => {
-                        if (isSourceDocumentsMode(value)) {
-                          setSourceDocumentsMode(value);
-                        }
-                      }}
-                    >
-                      {(
-                        [
-                          ["none", "toolbar.hideSourceDocuments"],
-                          ["original", "toolbar.showOriginalSourceDocument"],
-                          ["revised", "toolbar.showRevisedSourceDocument"],
-                          ["both", "toolbar.showBothSourceDocuments"],
-                        ] as const
-                      ).map(([value, key]) => (
-                        <DropdownMenuRadioItem
-                          key={value}
-                          value={value}
-                          data-testid={`document-toolbar-ribbon-source-documents-${value}`}
-                        >
-                          {t(key)}
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            </OfficeHomeRibbonGroup>
-          ) : null
-          ) : null}
-          {isActiveRibbon("review") ? (
-            reviewCommandDecisions["review.protectDocument"].visible ? (
-            <OfficeHomeRibbonGroup
-              className={homeStyles.reviewProtectGroup}
-              label={t("toolbar.restrictEditing")}
-              ribbon="review"
-              testId="document-toolbar-ribbon-protect-group"
-              data-review-order={76}
-            >
-            <DropdownMenu modal={false}>
-              <OfficeHomeSplitLayout
-                testId="document-toolbar-ribbon-protect-split"
-                primary={
-                  <OfficeHomeCommand
-                    active={isDocumentReadOnlyProtected(
-                      snapshot.documentProtection,
-                    )}
-                    controlId="DOCCTL.RIBBON.REVIEW.PROTECT.DOCUMENT"
-                    disabled={
-                      !reviewCommandDecisions["review.protectDocument"].enabled
-                    }
-                    displayLabel={t("toolbar.restrictEditing")}
-                    icon={
-                      <OfficeSemanticIcon
-                        semanticId="review.protect"
-                        size={24}
-                      />
-                    }
-                    label={
-                      reviewUnavailableTitle(
-                        reviewCommandDecisions["review.protectDocument"],
-                      ) ?? t("toolbar.restrictEditing")
-                    }
-                    onClick={() =>
-                      executeReviewFeature("review.protectDocument")
-                    }
-                    testId="document-toolbar-ribbon-protect-document"
-                    variant="large"
-                  />
-                }
-                trigger={
-                  <DropdownMenuTrigger asChild>
-                    <OfficeHomeMenuTrigger
-                      className="note-editor-office-toolbar__split-chevron"
-                      disabled={
-                        !reviewCommandDecisions["review.protectDocument"].enabled
-                      }
-                      icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                      label={t("toolbar.restrictEditing")}
-                      onPointerDown={rememberEditorSelection}
-                      testId="document-toolbar-ribbon-protect-menu"
-                      variant="icon"
-                    />
-                  </DropdownMenuTrigger>
-                }
-              />
-              <DropdownMenuContent
-                align="start"
-                className="note-editor-toolbar-menu"
-                data-testid="document-toolbar-ribbon-protect-menu-content"
-                onCloseAutoFocus={(event) => {
-                  event.preventDefault();
-                  safelyFocusEditorAfterToolbarClose(editor);
-                }}
-              >
-                <DropdownMenuCheckboxItem
-                  checked={isDocumentReadOnlyProtected(
-                    snapshot.documentProtection,
-                  )}
-                  data-testid="document-toolbar-ribbon-protect-read-only"
-                  onSelect={() =>
-                    executeReviewFeature("review.protectDocument")
-                  }
-                >
-                  {t("toolbar.noChangesReadOnly")}
-                </DropdownMenuCheckboxItem>
-                {editableRangesPresent(editor.state) ? (
-                  <>
-                    {/* Word's Restrict Editing pane under exceptions
-                        (w:permStart/w:permEnd): find the next region the
-                        reader may edit, and shade them all. */}
-                    <DropdownMenuItem
-                      data-testid="document-toolbar-ribbon-protect-next-region"
-                      onSelect={() => {
-                        editor.chain().focus().goToNextEditableRegion().run();
-                      }}
-                    >
-                      {t("toolbar.findNextEditableRegion")}
-                    </DropdownMenuItem>
-                    <DropdownMenuCheckboxItem
-                      checked={editableRegionHighlightOn(editor.state)}
-                      data-testid="document-toolbar-ribbon-protect-highlight-regions"
-                      onSelect={() => {
-                        editor.commands.setEditableRegionHighlight(
-                          !editableRegionHighlightOn(editor.state),
-                        );
-                      }}
-                    >
-                      {t("toolbar.highlightEditableRegions")}
-                    </DropdownMenuCheckboxItem>
-                  </>
-                ) : null}
-                {(
-                  [
-                    [
-                      "tracked-changes",
-                      t("toolbar.trackedChanges"),
-                      t("toolbar.trackedChangesOnlyProtectionRequiresRange"),
-                    ],
-                    [
-                      "comments",
-                      t("toolbar.comments"),
-                      t("toolbar.commentsOnlyProtectionRequiresEditableRange"),
-                    ],
-                    [
-                      "forms",
-                      t("toolbar.fillingInForms"),
-                      t("toolbar.formsProtectionRequiresContentControlPolicy"),
-                    ],
-                  ] as const
-                ).map(([id, label]) => {
-                  // Restrict Editing's "Allow only this type of editing":
-                  // pressing the one in force stops the protection.
-                  const mode = id === "tracked-changes" ? "trackedChanges" : id;
-                  const active =
-                    normalizeDocumentProtection(snapshot.documentProtection)?.mode === mode;
-                  return (
-                    <DropdownMenuCheckboxItem
-                      key={id}
-                      checked={active}
-                      data-testid={`document-toolbar-ribbon-protect-${id}`}
-                      onSelect={() =>
-                        (editor.chain() as OfficeChain)
-                          .setDocumentProtectionMode(active ? null : mode)
-                          .run()
-                      }
-                    >
-                      {label}
-                    </DropdownMenuCheckboxItem>
-                  );
-                })}
-                <DropdownMenuSeparator />
-                <DropdownMenuCheckboxItem
-                  checked={normalizeWordDocumentSettings(editor.state.doc.attrs.wordSettings)?.readOnlyRecommended === true}
-                  disabled={!editor.isEditable}
-                  data-control-id="DOCCTL.RIBBON.REVIEW.PROTECT.READ_ONLY"
-                  data-testid="document-toolbar-ribbon-always-open-read-only"
-                  onSelect={() => {
-                    // Word's Always Open Read-Only (w:readOnlyRecommended):
-                    // Word offers to open the file read-only.
-                    const settings = normalizeWordDocumentSettings(editor.state.doc.attrs.wordSettings) ?? {};
-                    const { readOnlyRecommended, ...rest } = settings;
-                    const next = readOnlyRecommended ? rest : { ...rest, readOnlyRecommended: true as const };
-                    editor.view.dispatch(
-                      editor.state.tr.setDocAttribute("wordSettings", Object.keys(next).length ? next : null),
-                    );
-                  }}
-                >
-                  {t("toolbar.alwaysOpenReadOnly")}
-                </DropdownMenuCheckboxItem>
-                {/* File > Info > Protect Document > Encrypt with Password:
-                    the .docx is saved encrypted (ECMA-376 Agile Encryption).
-                    The password lives in this session only. */}
-                <DropdownMenuCheckboxItem
-                  checked={documentEncryptedWithPassword}
-                  disabled={!editor.isEditable || !pageId}
-                  data-control-id="DOCCTL.RIBBON.REVIEW.PROTECT.ENCRYPT"
-                  data-testid="document-toolbar-ribbon-encrypt-with-password"
-                  onSelect={() => void encryptDocumentWithPassword(documentEncryptedWithPassword)}
-                >
-                  {t("officeEncryption.menuEncrypt")}
-                </DropdownMenuCheckboxItem>
-                {documentEncryptedWithPassword ? (
-                  <DropdownMenuItem
-                    disabled={!editor.isEditable}
-                    data-testid="document-toolbar-ribbon-remove-password"
-                    onSelect={removeDocumentPassword}
-                  >
-                    {t("officeEncryption.menuRemove")}
-                  </DropdownMenuItem>
-                ) : null}
-                <DropdownMenuItem
-                  disabled
-                  title={
-                    t("toolbar.restrictPermissionRequiresAuthenticatedIrmProvider")
-                  }
-                  data-control-id="DOCCTL.RIBBON.REVIEW.PROTECT.PERMISSION"
-                  data-testid="document-toolbar-ribbon-restrict-permission"
-                >
-                  <OfficeSemanticIcon semanticId="review.protect" size={16} />
-                  {t("toolbar.restrictPermission")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            </OfficeHomeRibbonGroup>
-          ) : null
-          ) : null}
-          {isActiveRibbon("forms") ? (
-            <DocumentFormsRibbon
-              editor={editor}
-              ribbon="forms"
-              onExportFillablePdf={
-                pageId && onBeforeServerExport
-                  ? () => void requestExportRef.current?.(FILLABLE_PDF_EXPORT_INTENT)
-                  : undefined
-              }
-            />
-          ) : null}
+          {null}
+          {null}
+          {null}
+          {null}
+          {null}
+          {null}
+          {null}
           {/* (The old 页面 fields group dissolved into the WPS-ordered insert
           groups above: header/footer/page-numbers/page-break → 页面, TOC /
           watermark → 文本, equation → 符号.) */}
-          {isActiveRibbon("view") ? (
-            <OfficeHomeRibbonGroup
-            className={homeStyles.viewViewsGroup}
-            ribbon="view"
-            label={t("toolbar.view.viewsGroup")}
-            size="content"
-          >
-            <OfficeHomeCommandRow>
-              {documentView || onTogglePagePreview ? (
-                <OfficeHomeCommand
-                  active={
-                    documentView
-                      ? documentView.mode === "print" &&
-                        documentView.readingViewActive !== true
-                      : pagePreviewEnabled === true
-                  }
-                  disabled={!viewCommandDecisions["view.page"].enabled}
-                  icon={
-                    <OfficeSemanticIcon semanticId="view.document" size={24} />
-                  }
-                  label={
-                    reviewUnavailableTitle(
-                      viewCommandDecisions["view.page"],
-                    ) ?? t("toolbar.pageView")
-                  }
-                  onClick={() => executeViewFeature("view.page")}
-                  testId="document-toolbar-ribbon-page-view"
-                  variant="large"
-                />
-              ) : null}
-              {documentView ? (
-                <OfficeHomeCommand
-                  active={
-                    documentView.mode === "web" &&
-                    documentView.readingViewActive !== true
-                  }
-                  disabled={!viewCommandDecisions["view.web"].enabled}
-                  displayLabel={t("toolbar.webView")}
-                  icon={
-                    <OfficeSemanticIcon semanticId="view.webLayout" size={24} />
-                  }
-                  label={
-                    reviewUnavailableTitle(viewCommandDecisions["view.web"]) ??
-                    t("toolbar.webView")
-                  }
-                  onClick={() => executeViewFeature("view.web")}
-                  testId="document-toolbar-ribbon-web-layout"
-                  variant="large"
-                />
-              ) : null}
-              {viewCommandDecisions["view.reading"].visible &&
-              documentView?.toggleReadingView ? (
-                <OfficeHomeCommand
-                  active={documentView.readingViewActive === true}
-                  disabled={!viewCommandDecisions["view.reading"].enabled}
-                  displayLabel={t("toolbar.readingView")}
-                  icon={
-                    <OfficeSemanticIcon semanticId="view.reading" size={24} />
-                  }
-                  label={
-                    reviewUnavailableTitle(
-                      viewCommandDecisions["view.reading"],
-                    ) ?? t("toolbar.readingView")
-                  }
-                  onClick={() => executeViewFeature("view.reading")}
-                  testId="document-toolbar-ribbon-reading-view"
-                  variant="large"
-                />
-              ) : null}
-              <OfficeHomeCommand
-                activation="click"
-                active={immersiveReaderOpen}
-                buttonRef={immersiveReaderReturnFocusRef}
-                displayLabel={t("toolbar.immersiveReader")}
-                disabled={
-                  !viewCommandDecisions["view.immersiveReader"].enabled
-                }
-                icon={
-                  <OfficeSemanticIcon
-                    semanticId="view.immersiveReader"
-                    size={24}
-                  />
-                }
-                label={
-                  reviewUnavailableTitle(
-                    viewCommandDecisions["view.immersiveReader"],
-                  ) ?? t("toolbar.immersiveReader")
-                }
-                onClick={() => executeViewFeature("view.immersiveReader")}
-                testId="document-toolbar-ribbon-immersive-reader"
-                variant="large"
-              />
-              <OfficeHomeCommand
-                active={focusModeOwner === "self"}
-                disabled={!viewCommandDecisions["view.focus"].enabled}
-                displayLabel={t("toolbar.focusMode")}
-                icon={<OfficeSemanticIcon semanticId="view.focus" size={24} />}
-                label={
-                  reviewUnavailableTitle(viewCommandDecisions["view.focus"]) ??
-                  t("toolbar.focusMode")
-                }
-                onClick={() => executeViewFeature("view.focus")}
-                testId="document-toolbar-ribbon-focus-mode"
-                variant="large"
-              />
-            </OfficeHomeCommandRow>
-          </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("view") && zoom ? (
-            // Word's Zoom group: One Page, Multiple Pages and Page Width as
-            // three rows beside the views, not under a menu.
-            <OfficeHomeRibbonGroup
-              className={homeStyles.viewZoomGroup}
-              ribbon="view"
-              label={t("toolbar.view.zoomGroup")}
-              size="content"
-              testId="document-toolbar-ribbon-view-zoom-group"
-            >
-              {/* The group is a column (its commands over its label): its two
-                  stacks stand side by side in one row. */}
-              <OfficeHomeCommandRow>
-              {/* Word's Zoom (its dialog) and 100%. */}
-              <OfficeHomeCommandStack>
-                <OfficeHomeCommand
-                  displayLabel={t("toolbar.zoomDialog")}
-                  icon={<OfficeSemanticIcon semanticId="view.zoom" size={18} />}
-                  label={t("toolbar.zoomDialog")}
-                  onClick={() => setZoomDialogOpen(true)}
-                  testId="document-toolbar-ribbon-zoom-dialog"
-                  variant="compact"
-                />
-                <OfficeHomeCommand
-                  displayLabel="100%"
-                  icon={<OfficeSemanticIcon semanticId="view.document" size={18} />}
-                  label={t("toolbar.zoom100")}
-                  onClick={() => zoom.reset()}
-                  testId="document-toolbar-ribbon-zoom-100"
-                  variant="compact"
-                />
-              </OfficeHomeCommandStack>
-              <OfficeHomeCommandStack rows={3}>
-                <OfficeHomeCommand
-                  disabled={!viewCommandDecisions["view.onePage"].enabled}
-                  displayLabel={t("toolbar.onePage")}
-                  icon={<OfficeSemanticIcon semanticId="view.onePage" size={18} />}
-                  label={
-                    reviewUnavailableTitle(viewCommandDecisions["view.onePage"]) ??
-                    t("toolbar.onePage")
-                  }
-                  onClick={() => executeViewFeature("view.onePage")}
-                  testId="document-toolbar-ribbon-one-page"
-                  variant="compact"
-                />
-                <OfficeHomeCommand
-                  active={zoom.multiplePagesActive}
-                  disabled={!viewCommandDecisions["view.multiplePages"].enabled}
-                  displayLabel={t("toolbar.multiplePages")}
-                  icon={
-                    <OfficeSemanticIcon semanticId="view.multiplePages" size={18} />
-                  }
-                  label={
-                    reviewUnavailableTitle(
-                      viewCommandDecisions["view.multiplePages"],
-                    ) ?? t("toolbar.multiplePages")
-                  }
-                  onClick={() => executeViewFeature("view.multiplePages")}
-                  testId="document-toolbar-ribbon-multiple-pages"
-                  variant="compact"
-                />
-                <OfficeHomeCommand
-                  disabled={!viewCommandDecisions["view.pageWidth"].enabled}
-                  displayLabel={t("toolbar.pageWidth")}
-                  icon={<OfficeSemanticIcon semanticId="view.pageWidth" size={18} />}
-                  label={
-                    reviewUnavailableTitle(viewCommandDecisions["view.pageWidth"]) ??
-                    t("toolbar.pageWidth")
-                  }
-                  onClick={() => executeViewFeature("view.pageWidth")}
-                  testId="document-toolbar-ribbon-page-width"
-                  variant="compact"
-                />
-              </OfficeHomeCommandStack>
-              </OfficeHomeCommandRow>
-            </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("view") ? (
-            <OfficeHomeRibbonGroup
-            className={homeStyles.viewShowGroup}
-            ribbon="view"
-            label={t("toolbar.view.showGroup")}
-            size="standard"
-            testId="document-toolbar-ribbon-view-show-group"
-          >
-            <OfficeHomeCommandRow>
-              <OfficeHomeCommand
-                active={rulerVisible}
-                disabled={!viewCommandDecisions["view.ruler"].enabled}
-                icon={<OfficeSemanticIcon semanticId="view.ruler" size={24} />}
-                label={
-                  reviewUnavailableTitle(
-                    viewCommandDecisions["view.ruler"],
-                  ) ?? t("toolbar.ruler")
-                }
-                onClick={() => executeViewFeature("view.ruler")}
-                testId="document-toolbar-ribbon-ruler"
-                variant="large"
-              />
-              {panes?.outline ? (
-                <OfficeHomeCommand
-                  active={panes.outline.open}
-                  disabled={
-                    !viewCommandDecisions["view.navigationPane"].enabled
-                  }
-                  icon={
-                    <OfficeSemanticIcon
-                      semanticId="view.navigationPane"
-                      size={24}
-                    />
-                  }
-                  label={
-                    reviewUnavailableTitle(
-                      viewCommandDecisions["view.navigationPane"],
-                    ) ?? t("toolbar.navigationPane")
-                  }
-                  onClick={() => executeViewFeature("view.navigationPane")}
-                  testId="note-editor-outline-toggle"
-                  variant="large"
-                />
-              ) : null}
-              {panes?.backlinks ? (
-                // The pages that link to this one: a pane, shown with the
-                // other panes rather than under More Views.
-                <OfficeHomeCommand
-                  active={panes.backlinks.open}
-                  icon={<OfficeSemanticIcon semanticId="link.insert" size={24} />}
-                  label={t("backlinks.title")}
-                  onClick={panes.backlinks.toggle}
-                  testId="note-editor-backlinks-toggle"
-                  variant="large"
-                />
-              ) : null}
-              <OfficeHomeCommand
-                activation="click"
-                disabled={!onEditBandOnPage && !editor.isEditable}
-                icon={<DocsInsertIcon name="header" size={24} />}
-                label={t("toolbar.ribbonInsertHeaderFooter")}
-                onClick={() =>
-                  onEditBandOnPage
-                    ? onEditBandOnPage("header")
-                    : openHeaderFooterEditor("header")
-                }
-                testId="document-toolbar-ribbon-view-header-footer"
-                variant="large"
-              />
-              <OfficeHomeCommand
-                disabled={!snapshot.hasFootnoteNavigationTarget}
-                icon={<DocsHomeIcon name="footnote" size={24} />}
-                label={t("footnotes.title")}
-                onClick={() => navigateNoteReference(editor, "footnote", 1)}
-                testId="document-toolbar-ribbon-view-footnote"
-                variant="large"
-              />
-              <OfficeHomeCommand
-                disabled={!snapshot.hasEndnoteNavigationTarget}
-                icon={<DocsHomeIcon name="endnote" size={24} />}
-                label={t("footnotes.endnotesTitle")}
-                onClick={() => navigateNoteReference(editor, "endnote", 1)}
-                testId="document-toolbar-ribbon-view-endnote"
-                variant="large"
-              />
-            </OfficeHomeCommandRow>
-          </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("view") ? (
-            <OfficeHomeRibbonGroup
-            className={homeStyles.viewDarkModeGroup}
-            ribbon="view"
-            label={t("toolbar.darkMode")}
-          >
-            <OfficeHomeCommand
-              active={documentDarkMode}
-              icon={
-                <OfficeSemanticIcon semanticId="view.darkMode" size={24} />
-              }
-              label={t("toolbar.darkMode")}
-              onClick={() => setDocumentDarkMode((enabled) => !enabled)}
-              testId="document-toolbar-ribbon-dark-mode"
-              variant="large"
-            />
-          </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("view") ? (
-            documentView && viewWindowGroupVisible ? (
-            <OfficeHomeRibbonGroup
-              className={homeStyles.viewWindowGroup}
-              ribbon="view"
-              label={t("toolbar.view.windowGroup")}
-              size="content"
-            >
-              <OfficeHomeCommandRow>
-                <OfficeHomeCommand
-                  active={documentView.splitActive}
-                  disabled={!viewCommandDecisions["view.split"].enabled}
-                  displayLabel={t("toolbar.splitView")}
-                  icon={
-                    <OfficeSemanticIcon semanticId="view.reading" size={24} />
-                  }
-                  label={
-                    officeCommandAccessibleLabel(
-                      t("toolbar.splitView"),
-                      reviewUnavailableTitle(
-                        viewCommandDecisions["view.split"],
-                      ),
-                    )
-                  }
-                  onClick={() => executeViewFeature("view.split")}
-                  testId="document-toolbar-ribbon-split-view"
-                  variant="large"
-                />
-                <OfficeHomeCommand
-                  active={documentView.sideBySideActive}
-                  disabled={!viewCommandDecisions["view.sideBySide"].enabled}
-                  displayLabel={t("toolbar.sideBySide")}
-                  icon={
-                    <OfficeSemanticIcon semanticId="view.document" size={24} />
-                  }
-                  label={
-                    officeCommandAccessibleLabel(
-                      t("toolbar.sideBySide"),
-                      reviewUnavailableTitle(
-                        viewCommandDecisions["view.sideBySide"],
-                      ),
-                    )
-                  }
-                  onClick={() => executeViewFeature("view.sideBySide")}
-                  testId="document-toolbar-ribbon-side-by-side"
-                  variant="large"
-                />
-                <OfficeHomeCommand
-                  active={documentView.synchronousScrollingActive === true}
-                  disabled={
-                    !viewCommandDecisions["view.synchronousScrolling"].enabled
-                  }
-                  displayLabel={t("toolbar.synchronousScrolling")}
-                  icon={
-                    <OfficeSemanticIcon semanticId="view.reading" size={24} />
-                  }
-                  label={
-                    officeCommandAccessibleLabel(
-                      t("toolbar.synchronousScrolling"),
-                      reviewUnavailableTitle(
-                        viewCommandDecisions["view.synchronousScrolling"],
-                      ),
-                    )
-                  }
-                  onClick={() =>
-                    executeViewFeature("view.synchronousScrolling")
-                  }
-                  testId="document-toolbar-ribbon-synchronous-scrolling"
-                  variant="large"
-                />
-                <OfficeHomeCommand
-                  disabled={!viewCommandDecisions["view.newWindow"].enabled}
-                  displayLabel={t("toolbar.newWindow")}
-                  icon={
-                    <OfficeSemanticIcon semanticId="view.document" size={24} />
-                  }
-                  label={
-                    officeCommandAccessibleLabel(
-                      t("toolbar.newWindow"),
-                      reviewUnavailableTitle(
-                        viewCommandDecisions["view.newWindow"],
-                      ),
-                    )
-                  }
-                  onClick={() => executeViewFeature("view.newWindow")}
-                  testId="document-toolbar-ribbon-new-window"
-                  variant="large"
-                />
-                <OfficeHomeCommand
-                  disabled={!viewCommandDecisions["view.arrangeAll"].enabled}
-                  displayLabel={t("toolbar.arrangeAll")}
-                  icon={<LayoutGrid size={24} aria-hidden />}
-                  label={
-                    officeCommandAccessibleLabel(
-                      t("toolbar.arrangeAll"),
-                      reviewUnavailableTitle(
-                        viewCommandDecisions["view.arrangeAll"],
-                      ),
-                    )
-                  }
-                  onClick={() => executeViewFeature("view.arrangeAll")}
-                  testId="document-toolbar-ribbon-arrange-all"
-                  variant="large"
-                />
-                <DropdownMenu
-                  modal={false}
-                  onOpenChange={refreshDocumentWindowMenu}
-                >
-                  <DropdownMenuTrigger asChild>
-                    <OfficeHomeMenuTrigger
-                      disabled={
-                        !viewCommandDecisions["view.switchWindows"].enabled
-                      }
-                      disabledReason={reviewUnavailableTitle(
-                        viewCommandDecisions["view.switchWindows"],
-                      )}
-                      hasMenuIndicator
-                      icon={
-                        <OfficeSemanticIcon
-                          semanticId="view.document"
-                          size={24}
-                        />
-                      }
-                      label={t("toolbar.switchWindows")}
-                      testId="document-toolbar-ribbon-switch-windows"
-                      variant="large"
-                    />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="note-editor-toolbar-menu"
-                    onCloseAutoFocus={(event) => event.preventDefault()}
-                  >
-                    {documentWindowMenuItems.map((choice, index) => (
-                      <DropdownMenuItem
-                        aria-current={choice.current ? "true" : undefined}
-                        data-testid={`document-toolbar-switch-window-${choice.id}`}
-                        key={choice.id}
-                        onSelect={() => switchDocumentWindow(choice.id)}
-                      >
-                        {choice.current ? (
-                          <Check size={14} aria-hidden />
-                        ) : (
-                          <span aria-hidden style={{ width: 14 }} />
-                        )}
-                        {t("toolbar.windowListItem", {
-                          index: index + 1,
-                          title: choice.title,
-                        })}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </OfficeHomeCommandRow>
-            </OfficeHomeRibbonGroup>
-          ) : null
-          ) : null}
-          {isActiveRibbon("view") &&
-          // The Styles pane opens from Home's Styles group and Backlinks sits
-          // with the panes above: without a view or window command of its own
-          // to offer, More Views is not shown.
-          (panes?.sheetStack ||
-            (documentView &&
-              (viewCommandDecisions["view.outline"].visible ||
-                viewCommandDecisions["view.draft"].visible ||
-                viewWindowGroupVisible))) ? (
-            <OfficeHomeRibbonGroup
-              className={homeStyles.viewPanesGroup}
-              ribbon="view"
-              label={t("toolbar.more")}
-              size="content"
-              testId="document-toolbar-ribbon-view-more-group"
-            >
-              <DropdownMenu modal={false}>
-                <DropdownMenuTrigger asChild>
-                  <OfficeHomeMenuTrigger
-                    ref={viewMoreTriggerRef}
-                    hasMenuIndicator
-                    icon={
-                      <OfficeSemanticIcon semanticId="view.document" size={24} />
-                    }
-                    label={t("toolbar.moreView")}
-                    testId="document-toolbar-ribbon-view-more"
-                    variant="large"
-                  />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="note-editor-toolbar-menu"
-                  onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    viewMoreTriggerRef.current?.focus({ preventScroll: true });
-                  }}
-                >
-                  <OfficeHomeCommandRow>
-                {panes?.sheetStack ? (
-                  <OfficeHomeCommand
-                    active={panes.sheetStack.open}
-                    icon={
-                      <OfficeSemanticIcon
-                        semanticId="view.reading"
-                        size={24}
-                      />
-                    }
-                    label={t("toolbar.sheetStack")}
-                    onClick={panes.sheetStack.toggle}
-                    testId="note-editor-sheet-stack-toggle"
-                    variant="large"
-                  />
-                ) : null}
-                  </OfficeHomeCommandRow>
-                  {documentView &&
-                  (viewCommandDecisions["view.outline"].visible ||
-                    viewCommandDecisions["view.draft"].visible) ? (
-                    <DropdownMenuSeparator />
-                  ) : null}
-                  {documentView ? (
-                    <>
-                      {viewCommandDecisions["view.outline"].visible ? (
-                        <DropdownMenuCheckboxItem
-                          checked={documentView.mode === "outline"}
-                          disabled={
-                            !viewCommandDecisions["view.outline"].enabled
-                          }
-                          onSelect={() => executeViewFeature("view.outline")}
-                          title={reviewUnavailableTitle(
-                            viewCommandDecisions["view.outline"],
-                          )}
-                          data-testid="document-toolbar-view-more-outline"
-                        >
-                          {t("toolbar.outlineView")}
-                        </DropdownMenuCheckboxItem>
-                      ) : null}
-                      {viewCommandDecisions["view.draft"].visible ? (
-                        <DropdownMenuCheckboxItem
-                          checked={documentView.mode === "draft"}
-                          disabled={!viewCommandDecisions["view.draft"].enabled}
-                          onSelect={() => executeViewFeature("view.draft")}
-                          title={reviewUnavailableTitle(
-                            viewCommandDecisions["view.draft"],
-                          )}
-                          data-testid="document-toolbar-view-more-draft"
-                        >
-                          {t("toolbar.draftView")}
-                        </DropdownMenuCheckboxItem>
-                      ) : null}
-                    </>
-                  ) : null}
-                  {documentView && viewWindowGroupVisible ? (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuCheckboxItem
-                        checked={documentView.splitActive}
-                        disabled={!viewCommandDecisions["view.split"].enabled}
-                        onSelect={() => executeViewFeature("view.split")}
-                      >
-                        {t("toolbar.splitView")}
-                      </DropdownMenuCheckboxItem>
-                      <DropdownMenuCheckboxItem
-                        checked={documentView.sideBySideActive}
-                        disabled={
-                          !viewCommandDecisions["view.sideBySide"].enabled
-                        }
-                        onSelect={() => executeViewFeature("view.sideBySide")}
-                      >
-                        {t("toolbar.sideBySide")}
-                      </DropdownMenuCheckboxItem>
-                      <DropdownMenuCheckboxItem
-                        checked={
-                          documentView.synchronousScrollingActive === true
-                        }
-                        disabled={
-                          !viewCommandDecisions["view.synchronousScrolling"]
-                            .enabled
-                        }
-                        onSelect={() =>
-                          executeViewFeature("view.synchronousScrolling")
-                        }
-                      >
-                        {t("toolbar.synchronousScrolling")}
-                      </DropdownMenuCheckboxItem>
-                      <DropdownMenuItem
-                        disabled={
-                          !viewCommandDecisions["view.newWindow"].enabled
-                        }
-                        onSelect={() => executeViewFeature("view.newWindow")}
-                      >
-                        {t("toolbar.newWindow")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={
-                          !viewCommandDecisions["view.arrangeAll"].enabled
-                        }
-                        onSelect={() => executeViewFeature("view.arrangeAll")}
-                      >
-                        {t("toolbar.arrangeAll")}
-                      </DropdownMenuItem>
-                      <DropdownMenuSub>
-                        <DropdownMenuSubTrigger
-                          disabled={
-                            !viewCommandDecisions["view.switchWindows"].enabled
-                          }
-                        >
-                          {t("toolbar.switchWindows")}
-                        </DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                          {documentWindowMenuItems.map((choice, index) => (
-                            <DropdownMenuItem
-                              aria-current={
-                                choice.current ? "true" : undefined
-                              }
-                              data-testid={
-                                "document-toolbar-view-more-window-" +
-                                choice.id
-                              }
-                              key={choice.id}
-                              onSelect={() =>
-                                switchDocumentWindow(choice.id)
-                              }
-                            >
-                              {choice.current ? (
-                                <Check size={14} aria-hidden />
-                              ) : (
-                                <span aria-hidden style={{ width: 14 }} />
-                              )}
-                              {t("toolbar.windowListItem", {
-                                index: index + 1,
-                                title: choice.title,
-                              })}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuSubContent>
-                      </DropdownMenuSub>
-                    </>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </OfficeHomeRibbonGroup>
-          ) : null}
-          {isActiveRibbon("review") ? (
-            desktopInteroperabilityVisible ? (
-            <div
-              className={`note-editor-office-toolbar__group note-editor-office-toolbar__menus ${homeStyles.reviewMenusGroup}`}
-              data-ribbon="review"
-              data-ribbon-label={t("toolbar.more")}
-              data-testid="document-toolbar-review-menus-group"
-            >
-            <div className="note-editor-ribbon-row note-editor-ribbon-row--fill">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="office-ribbon-control note-editor-ribbon-big" data-office-control-part="button"
-                    data-testid="document-toolbar-insert-menu"
-                    onPointerDown={rememberEditorSelection}
-                  >
-                    <LayoutGrid size={18} aria-hidden />
-                    <span>
-                      {t("toolbar.insertMenu")}
-                      <ChevronDown
-                        size={10}
-                        aria-hidden
-                        style={{ marginLeft: 2 }}
-                      />
-                    </span>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  className="note-editor-toolbar-menu"
-                  onCloseAutoFocus={(event) => event.preventDefault()}
-                >
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-quote"
-                    disabled={bandStoryStructureLocked}
-                    title={bandStoryStructureReason}
-                    onSelect={() => restoredChain().toggleBlockquote().run()}
-                  >
-                    <Quote size={16} />
-                    {t("toolbar.quote")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-code-block"
-                    disabled={bandStoryStructureLocked}
-                    title={bandStoryStructureReason}
-                    onSelect={() => restoredChain().toggleCodeBlock().run()}
-                  >
-                    <Code2 size={16} />
-                    {t("toolbar.codeBlock")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-divider"
-                    disabled={bandStoryStructureLocked}
-                    title={bandStoryStructureReason}
-                    onSelect={() => insertionChain().setHorizontalRule().run()}
-                  >
-                    <Minus size={16} />
-                    {t("toolbar.divider")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-page-break"
-                    onSelect={() => insertionChain().setPageBreak().run()}
-                  >
-                    <SeparatorHorizontal size={16} />
-                    {t("toolbar.pageBreak")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-section-break"
-                    onSelect={() =>
-                      insertionChain().setSectionBreak("nextPage").run()
-                    }
-                  >
-                    <SeparatorVertical size={16} />
-                    {t("toolbar.sectionBreak.nextPage")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-section-break-continuous"
-                    onSelect={() =>
-                      insertionChain().setSectionBreak("continuous").run()
-                    }
-                  >
-                    <SeparatorVertical size={16} />
-                    {t("toolbar.sectionBreakContinuous")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-section-break-even-page"
-                    onSelect={() =>
-                      insertionChain().setSectionBreak("evenPage").run()
-                    }
-                  >
-                    <SeparatorVertical size={16} />
-                    {t("toolbar.sectionBreakEvenPage")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-section-break-odd-page"
-                    onSelect={() =>
-                      insertionChain().setSectionBreak("oddPage").run()
-                    }
-                  >
-                    <SeparatorVertical size={16} />
-                    {t("toolbar.sectionBreakOddPage")}
-                  </DropdownMenuItem>
-                  {/* Multilevel heading auto-numbering (Word/WPS "1 / 1.1 / 1.1.1"):
-                a document-wide toggle that paints live numbers before every
-                heading (decoration, not typed text). */}
-                  <DropdownMenuCheckboxItem
-                    data-testid="document-toolbar-heading-numbering"
-                    checked={snapshot.headingNumbering}
-                    onSelect={(event) => {
-                      // Keep the menu's selection from stealing focus; toggle the doc attr.
-                      event.preventDefault();
-                      restoredChain().toggleHeadingNumbering().run();
-                    }}
-                  >
-                    {t("toolbar.headingNumbering")}
-                  </DropdownMenuCheckboxItem>
-                  {/* Convert Text ↔ Table (Word "Convert Text to Table" / "Convert
-                Table to Text"). Text→Table is enabled only with a selection;
-                Table→Text only when the caret is in a table. Both reuse the
-                tested pure helpers (textTableConvert). */}
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-convert-text-to-table"
-                    disabled={snapshot.selectionEmpty || snapshot.table}
-                    onSelect={openConvertTextToTableDialog}
-                  >
-                    <Table2 size={16} />
-                    {t("toolbar.convertTextToTable")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-convert-table-to-text"
-                    disabled={!snapshot.table}
-                    onSelect={openConvertTableToTextDialog}
-                  >
-                    <ArrowRightLeft size={16} />
-                    {t("toolbar.convertTableToText")}
-                  </DropdownMenuItem>
-                  {/* Document Index (Word "Mark Index Entry" XE + "Insert Index"). Mark
-                tags the selection (or arms the cursor); Insert collects every
-                marked term, sorts them and inserts an alphabetized index. */}
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-mark-index-entry"
-                    onSelect={openIndexMarkDialog}
-                  >
-                    <BookmarkCheck size={16} />
-                    {t("toolbar.markIndexEntry")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-insert-index"
-                    onSelect={openIndexSettingsDialog}
-                  >
-                    <BookMarked size={16} />
-                    {t("toolbar.insertIndex")}
-                  </DropdownMenuItem>
-                  {/* Math nodes are inserted through insertionChain() like the
-                toolbar's other node insertions, so the remembered editor
-                selection is respected. */}
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-insert-math-block"
-                    onSelect={() =>
-                      insertEquationAndOpen({
-                        type: "mathBlock",
-                        attrs: { latex: "" },
-                      })
-                    }
-                  >
-                    <Sigma size={16} />
-                    {t("toolbar.mathBlock")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-insert-inline-math"
-                    onSelect={() =>
-                      insertEquationAndOpen({
-                        type: "inlineMath",
-                        attrs: { latex: "" },
-                      })
-                    }
-                  >
-                    <Radical size={16} />
-                    {t("toolbar.inlineMath")}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    disabled={!onEditBandOnPage && !editor.isEditable}
-                    data-testid="document-toolbar-header"
-                    onSelect={() =>
-                      onEditBandOnPage
-                        ? onEditBandOnPage("header")
-                        : openHeaderFooterEditor("header")
-                    }
-                  >
-                    <PanelTop size={16} />
-                    {t("toolbar.documentHeader")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={!onEditBandOnPage && !editor.isEditable}
-                    data-testid="document-toolbar-footer"
-                    onSelect={() =>
-                      onEditBandOnPage
-                        ? onEditBandOnPage("footer")
-                        : openHeaderFooterEditor("footer")
-                    }
-                  >
-                    <PanelBottom size={16} />
-                    {t("toolbar.documentFooter")}
-                  </DropdownMenuItem>
-                  <DropdownMenuCheckboxItem
-                    disabled={!editor.isEditable}
-                    // A footer that already shows the page number (an
-                    // imported Word file's PAGE field) is page numbers on;
-                    // turning them off is Word's Remove Page Numbers on it.
-                    checked={snapshot.showPageNumbers || snapshot.footerOwnsPageNumber}
-                    data-testid="document-toolbar-page-numbers"
-                    onSelect={() => {
-                      if (snapshot.footerOwnsPageNumber) {
-                        removeAllNativePageNumbers();
-                        if (snapshot.showPageNumbers) {
-                          restoredChain().setDocumentPageNumbers(false).run();
-                        }
-                        return;
-                      }
-                      restoredChain()
-                        .setDocumentPageNumbers(!snapshot.showPageNumbers)
-                        .run();
-                    }}
-                  >
-                    {t("toolbar.pageNumbers")}
-                  </DropdownMenuCheckboxItem>
-                  {/* Format Page Numbers (Word 设置页码格式 / <w:pgNumType>): the
-                numbering STYLE (1/2/3, i/ii/iii, A/B/C) + "Start at N". Shown
-                only when page numbers are on (the field they format). */}
-                  {snapshot.showPageNumbers || snapshot.footerOwnsPageNumber ? (
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger data-testid="document-toolbar-page-number-format-trigger">
-                        <Hash size={16} />
-                        {t("toolbar.pageNumberFormatLabel")}
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                        <DropdownMenuLabel>
-                          {t("toolbar.pageNumberFormatStyle")}
-                        </DropdownMenuLabel>
-                        <DropdownMenuRadioGroup
-                          value={currentSectionPageNumberFormat}
-                          onValueChange={(value) => {
-                            const fmt = normalizePageNumberFormat(value);
-                            if (fmt) {
-                              setPageNumberFormatFromToolbar(fmt);
-                            }
-                          }}
-                        >
-                          <DropdownMenuRadioItem
-                            value="decimal"
-                            data-testid="document-toolbar-page-number-format-decimal"
-                          >
-                            {t("toolbar.pageNumberFormatDecimal")}
-                          </DropdownMenuRadioItem>
-                          <DropdownMenuRadioItem
-                            value="lowerRoman"
-                            data-testid="document-toolbar-page-number-format-lower-roman"
-                          >
-                            {t("toolbar.pageNumberFormatLowerRoman")}
-                          </DropdownMenuRadioItem>
-                          <DropdownMenuRadioItem
-                            value="upperRoman"
-                            data-testid="document-toolbar-page-number-format-upper-roman"
-                          >
-                            {t("toolbar.pageNumberFormatUpperRoman")}
-                          </DropdownMenuRadioItem>
-                          <DropdownMenuRadioItem
-                            value="lowerLetter"
-                            data-testid="document-toolbar-page-number-format-lower-letter"
-                          >
-                            {t("toolbar.pageNumberFormatLowerLetter")}
-                          </DropdownMenuRadioItem>
-                          <DropdownMenuRadioItem
-                            value="upperLetter"
-                            data-testid="document-toolbar-page-number-format-upper-letter"
-                          >
-                            {t("toolbar.pageNumberFormatUpperLetter")}
-                          </DropdownMenuRadioItem>
-                          <DropdownMenuRadioItem
-                            value="numberInDash"
-                            data-testid="document-toolbar-page-number-format-number-in-dash"
-                          >
-                            {t("toolbar.pageNumberFormatNumberInDash")}
-                          </DropdownMenuRadioItem>
-                        </DropdownMenuRadioGroup>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuLabel>
-                          {t("toolbar.pageNumberStartLabel")}
-                        </DropdownMenuLabel>
-                        {/* Start-at input: stop key/select propagation so typing a
-                      number doesn't trigger the menu's typeahead or close it. */}
-                        <div
-                          className="note-editor-toolbar-menu__field"
-                          onKeyDown={(event) => event.stopPropagation()}
-                        >
-                          <PageNumberStartField
-                            value={currentSectionPageNumberStart}
-                            onCommit={setPageNumberStartFromToolbar}
-                            disabled={!editor.isEditable}
-                          />
-                        </div>
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
-                  ) : null}
-                  <DropdownMenuCheckboxItem
-                    disabled={!editor.isEditable}
-                    checked={snapshot.differentFirstPage}
-                    data-testid="document-toolbar-different-first-page"
-                    onSelect={() =>
-                      restoredChain()
-                        .setDifferentFirstPage(!snapshot.differentFirstPage)
-                        .run()
-                    }
-                  >
-                    {t("toolbar.differentFirstPageLabel")}
-                  </DropdownMenuCheckboxItem>
-                  {snapshot.differentFirstPage ? (
-                    <>
-                      <DropdownMenuItem
-                        disabled={!editor.isEditable}
-                        data-testid="document-toolbar-first-page-header"
-                        onSelect={() => openHeaderFooterEditor("firstHeader")}
-                      >
-                        <PanelTop size={16} />
-                        {t("toolbar.firstPageHeader")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={!editor.isEditable}
-                        data-testid="document-toolbar-first-page-footer"
-                        onSelect={() => openHeaderFooterEditor("firstFooter")}
-                      >
-                        <PanelBottom size={16} />
-                        {t("toolbar.firstPageFooter")}
-                      </DropdownMenuItem>
-                    </>
-                  ) : null}
-                  {/* Different odd/even-page header/footer (Word 奇偶页不同 /
-                w:evenAndOddHeaders): even pages can carry their own band. */}
-                  <DropdownMenuCheckboxItem
-                    disabled={!editor.isEditable}
-                    checked={snapshot.differentOddEven}
-                    data-testid="document-toolbar-different-odd-even"
-                    onSelect={() =>
-                      restoredChain()
-                        .setDifferentOddEven(!snapshot.differentOddEven)
-                        .run()
-                    }
-                  >
-                    {t("toolbar.differentOddEvenLabel")}
-                  </DropdownMenuCheckboxItem>
-                  {snapshot.differentOddEven ? (
-                    <>
-                      <DropdownMenuItem
-                        disabled={!editor.isEditable}
-                        data-testid="document-toolbar-even-page-header"
-                        onSelect={() => openHeaderFooterEditor("evenHeader")}
-                      >
-                        <PanelTop size={16} />
-                        {t("toolbar.evenPageHeader")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={!editor.isEditable}
-                        data-testid="document-toolbar-even-page-footer"
-                        onSelect={() => openHeaderFooterEditor("evenFooter")}
-                      >
-                        <PanelBottom size={16} />
-                        {t("toolbar.evenPageFooter")}
-                      </DropdownMenuItem>
-                    </>
-                  ) : null}
-                  <DropdownMenuItem
-                    disabled={!editor.isEditable}
-                    data-testid="document-toolbar-watermark"
-                    onSelect={openWatermarkEditor}
-                  >
-                    <OfficeSemanticIcon semanticId="page.watermark" size={16} />
-                    {t("toolbar.watermarkLabel")}
-                  </DropdownMenuItem>
-                  {/* Document properties / metadata (Word "File → Properties"):
-                Title/Author/Subject/Keywords/Company, round-tripped through the
-                DOCX docProps parts. */}
-                  <DropdownMenuItem
-                    disabled={!editor.isEditable}
-                    data-testid="document-toolbar-document-properties"
-                    onSelect={openMetadataEditor}
-                  >
-                    <Info size={16} />
-                    {t("toolbar.documentPropertiesLabel")}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {/* Quick Parts / Building Blocks (Word "Insert → Quick Parts →
-                AutoText"): save a named fragment from the current selection,
-                browse the gallery, insert or delete an entry. The gallery is
-                persisted in localStorage (keyed by workspace). */}
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      data-testid="document-toolbar-quick-parts-menu"
-                      onPointerDown={rememberEditorSelection}
-                    >
-                      <FileText size={16} />
-                      {t("toolbar.quickPartsMenu")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      {/* Save selection */}
-                      <DropdownMenuItem
-                        disabled={snapshot.selectionEmpty}
-                        data-testid="document-toolbar-quick-parts-save"
-                        onSelect={() => {
-                          setQuickPartsDraft("");
-                          setQuickPartsSaveOpen(true);
-                        }}
-                      >
-                        <FileDown size={16} />
-                        {t("toolbar.quickPartsSave")}
-                      </DropdownMenuItem>
-                      {quickPartsEntries.length > 0 ? (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuLabel>
-                            {t("toolbar.quickPartsGallery")}
-                          </DropdownMenuLabel>
-                          {quickPartsEntries.map((entry) => (
-                            <DropdownMenuSub key={entry.id}>
-                              <DropdownMenuSubTrigger
-                                data-testid={`document-toolbar-qp-entry-${entry.id}`}
-                              >
-                                {entry.name}
-                              </DropdownMenuSubTrigger>
-                              <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                                <DropdownMenuItem
-                                  disabled={!editor.isEditable}
-                                  data-testid={`document-toolbar-qp-insert-${entry.id}`}
-                                  onSelect={() => insertQuickPart(entry)}
-                                >
-                                  <FileText size={16} />
-                                  {t("toolbar.quickPartsInsert")}
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  data-testid={`document-toolbar-qp-delete-${entry.id}`}
-                                  onSelect={() => deleteQuickPart(entry.id)}
-                                >
-                                  <Trash2 size={16} />
-                                  {t("toolbar.quickPartsDelete")}
-                                </DropdownMenuItem>
-                              </DropdownMenuSubContent>
-                            </DropdownMenuSub>
-                          ))}
-                        </>
-                      ) : null}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuItem
-                    disabled={!editor.isEditable}
-                    data-testid="document-toolbar-date-time"
-                    onSelect={openDateTimeDialog}
-                  >
-                    <CalendarDays size={16} />
-                    {t("toolbar.dateTime")}
-                  </DropdownMenuItem>
-                  {/* Field insertion (Word "Insert → Field"): every leaf is a
-                structured atom or opens the corresponding operand picker. */}
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      disabled={!editor.isEditable}
-                      data-testid="document-toolbar-field-menu"
-                    >
-                      <CalendarDays size={16} />
-                      {t("toolbar.fieldMenu")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      {DOCUMENT_FIELD_TYPES.map((fieldType) => (
-                        <DropdownMenuItem
-                          key={fieldType}
-                          data-testid={`document-toolbar-field-${fieldType.toLowerCase()}`}
-                          onSelect={() => insertDocumentField(fieldType)}
-                        >
-                          <DocumentFieldIcon type={fieldType} size={16} />
-                          {t(
-                            `toolbar.field_${fieldType}` as "toolbar.field_DATE",
-                          )}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                </DropdownMenuContent>
-              </DropdownMenu>
+          {null}
+          {null}
+          {null}
+          {null}
+          {null}
+          {null}
+          {null}
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="office-ribbon-control note-editor-office-toolbar__menu-trigger" data-office-control-part="button"
-                    data-testid="document-toolbar-layout-menu"
-                    onPointerDown={rememberEditorSelection}
-                  >
-                    {t("toolbar.layoutMenu")}
-                    <ChevronDown size={12} aria-hidden />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  className="note-editor-toolbar-menu"
-                  onCloseAutoFocus={(event) => event.preventDefault()}
-                >
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger data-testid="document-toolbar-line-spacing">
-                      {t("toolbar.lineSpacing")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuRadioGroup value={snapshot.lineHeight ?? ""}>
-                        <DropdownMenuRadioItem
-                          value=""
-                          data-testid="document-toolbar-line-spacing-default"
-                          onSelect={() =>
-                            restoredChain().unsetLineHeight().run()
-                          }
-                        >
-                          {t("toolbar.lineSpacingDefaultOption")}
-                        </DropdownMenuRadioItem>
-                        {LINE_HEIGHT_VALUES.map((value) => (
-                          <DropdownMenuRadioItem
-                            key={value}
-                            value={value}
-                            data-testid={`document-toolbar-line-spacing-${value}`}
-                            onSelect={() =>
-                              restoredChain().setLineHeight(value).run()
-                            }
-                          >
-                            {value}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                      <DropdownMenuSeparator />
-                      <SpacingNumberField
-                        label={t("toolbar.lineSpacingCustom")}
-                        testId="document-toolbar-line-spacing-custom"
-                        value={snapshot.lineHeight ?? ""}
-                        min={WORD_LINE_MULTIPLE_MIN}
-                        max={WORD_LINE_MULTIPLE_MAX}
-                        step={0.05}
-                        onCommit={(raw) =>
-                          restoredChain()
-                            .setLineHeight(raw === "" ? null : raw)
-                            .run()
-                        }
-                      />
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger data-testid="document-toolbar-space-before">
-                      {t("toolbar.spaceBefore")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuRadioGroup
-                        value={String(snapshot.spaceBefore)}
-                      >
-                        {PARAGRAPH_SPACING_VALUES.map((value) => (
-                          <DropdownMenuRadioItem
-                            key={value}
-                            value={String(value)}
-                            data-testid={`document-toolbar-space-before-${value}`}
-                            onSelect={() =>
-                              restoredChain().setSpaceBefore(value).run()
-                            }
-                          >
-                            {t("toolbar.spaceBeforeValue", { points: value })}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                      <DropdownMenuSeparator />
-                      <SpacingNumberField
-                        label={t("toolbar.spaceBeforeCustom")}
-                        testId="document-toolbar-space-before-custom"
-                        value={
-                          snapshot.spaceBefore
-                            ? String(snapshot.spaceBefore)
-                            : ""
-                        }
-                        min={0}
-                        max={MAX_PARAGRAPH_SPACING_PT}
-                        step={1}
-                        onCommit={(raw) =>
-                          restoredChain()
-                            .setSpaceBefore(raw === "" ? null : raw)
-                            .run()
-                        }
-                      />
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger data-testid="document-toolbar-space-after">
-                      {t("toolbar.spaceAfter")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuRadioGroup
-                        value={String(snapshot.spaceAfter)}
-                      >
-                        {PARAGRAPH_SPACING_VALUES.map((value) => (
-                          <DropdownMenuRadioItem
-                            key={value}
-                            value={String(value)}
-                            data-testid={`document-toolbar-space-after-${value}`}
-                            onSelect={() =>
-                              restoredChain().setSpaceAfter(value).run()
-                            }
-                          >
-                            {t("toolbar.spaceAfterValue", { points: value })}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                      <DropdownMenuSeparator />
-                      <SpacingNumberField
-                        label={t("toolbar.spaceAfterCustom")}
-                        testId="document-toolbar-space-after-custom"
-                        value={
-                          snapshot.spaceAfter ? String(snapshot.spaceAfter) : ""
-                        }
-                        min={0}
-                        max={MAX_PARAGRAPH_SPACING_PT}
-                        step={1}
-                        onCommit={(raw) =>
-                          restoredChain()
-                            .setSpaceAfter(raw === "" ? null : raw)
-                            .run()
-                        }
-                      />
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger data-testid="document-toolbar-paragraph-border">
-                      {t("toolbar.paragraphBorder")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuRadioGroup
-                        value={snapshot.borderPreset ?? "none"}
-                      >
-                        {(["none", "box", "bottom", "left"] as const).map(
-                          (value) => (
-                            <DropdownMenuRadioItem
-                              key={value}
-                              value={value}
-                              data-testid={`document-toolbar-paragraph-border-${value}`}
-                              onSelect={() =>
-                                restoredChain()
-                                  .setParagraphBorder(
-                                    value === "none" ? null : value,
-                                  )
-                                  .run()
-                              }
-                            >
-                              {t(
-                                `toolbar.paragraphBorder_${value}` as "toolbar.paragraphBorder_none",
-                              )}
-                            </DropdownMenuRadioItem>
-                          ),
-                        )}
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger data-testid="document-toolbar-paragraph-shading">
-                      {t("toolbar.paragraphShading")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuItem
-                        data-testid="document-toolbar-paragraph-shading-none"
-                        onSelect={() => applyParagraphShading(null)}
-                      >
-                        {t("toolbar.paragraphShadingNone")}
-                      </DropdownMenuItem>
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(6, 22px)",
-                          gap: 4,
-                          padding: "4px 8px",
-                        }}
-                      >
-                        {PARAGRAPH_SHADING_SWATCHES.map((color) => (
-                          <button
-                            key={color}
-                            type="button"
-                            data-testid={`document-toolbar-paragraph-shading-${color.slice(1)}`}
-                            aria-label={color}
-                            onClick={() => applyParagraphShading(color)}
-                            style={{
-                              width: 22,
-                              height: 22,
-                              borderRadius: 4,
-                              cursor: "pointer",
-                              background: color,
-                              border:
-                                !snapshot.shadingColorMixed &&
-                                snapshot.shadingColor === color
-                                  ? "2px solid #2563eb"
-                                  : "1px solid rgba(15, 23, 42, 0.15)",
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuCheckboxItem
-                    checked={snapshot.textDirection === "rtl"}
-                    data-testid="document-toolbar-text-direction-rtl"
-                    onSelect={() => restoredChain().toggleTextDirection().run()}
-                  >
-                    {t("toolbar.textDirectionRtl")}
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuCheckboxItem
-                    checked={snapshot.keepNext}
-                    data-testid="document-toolbar-keep-next"
-                    onSelect={() =>
-                      restoredChain().setKeepNext(!snapshot.keepNext).run()
-                    }
-                  >
-                    {t("toolbar.keepNext")}
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuCheckboxItem
-                    checked={snapshot.keepLines}
-                    data-testid="document-toolbar-keep-lines"
-                    onSelect={() =>
-                      restoredChain().setKeepLines(!snapshot.keepLines).run()
-                    }
-                  >
-                    {t("toolbar.keepLines")}
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuCheckboxItem
-                    checked={snapshot.widowControl}
-                    data-testid="document-toolbar-widow-control"
-                    onSelect={() =>
-                      restoredChain()
-                        .setWidowControl(!snapshot.widowControl)
-                        .run()
-                    }
-                  >
-                    {t("toolbar.widowControl")}
-                  </DropdownMenuCheckboxItem>
-                  {/* Drop cap (首字下沉): toggle the paragraph's first letter into the
-                enlarged, dropped state. A checkbox over the single "dropped"
-                mode — clearing it restores a normal paragraph. */}
-                  <DropdownMenuCheckboxItem
-                    checked={snapshot.dropCap !== null}
-                    disabled={
-                      !insertDrawingCommandDecisions["insert.dropCap"].enabled
-                    }
-                    data-testid="document-toolbar-drop-cap"
-                    onSelect={() =>
-                      executeInsertDrawingFeature("insert.dropCap")
-                    }
-                  >
-                    {t("toolbar.dropCap")}
-                  </DropdownMenuCheckboxItem>
-                  {/* Tab stops (制表位): open the dialog to add/edit/remove the current
-                paragraph's custom tab stops (position + alignment + leader). */}
-                  <DropdownMenuItem
-                    data-testid="document-tab-stops-open"
-                    onSelect={() => {
-                      setTabStopsOpen(true);
-                    }}
-                  >
-                    {t("toolbar.tabStops")}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger data-testid="document-toolbar-page-size">
-                      {t("toolbar.pageSize")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuRadioGroup value={currentPageSize}>
-                        {PAGE_SIZE_PRESET_VALUES.map((value) => (
-                          <DropdownMenuRadioItem
-                            key={value}
-                            value={value}
-                            data-testid={`document-toolbar-page-size-${value}`}
-                            onSelect={() => setPageSize(value)}
-                          >
-                            {t(
-                              `toolbar.pageSize_${value}` as "toolbar.pageSize_letter",
-                            )}
-                          </DropdownMenuRadioItem>
-                        ))}
-                        <DropdownMenuSeparator />
-                        {/* Custom size escape hatch: selecting it opens the numeric
-                      width/height dialog (does not set the attr directly). */}
-                        <DropdownMenuRadioItem
-                          value="custom"
-                          data-testid="document-toolbar-page-size-custom"
-                          onSelect={(event) => {
-                            // Keep the menu's default close, but open our dialog after.
-                            event.preventDefault();
-                            openCustomSizeDialog();
-                          }}
-                        >
-                          {t("toolbar.pageSize_custom")}
-                        </DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger data-testid="document-toolbar-page-margins">
-                      {t("toolbar.pageMargins")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuRadioGroup value={currentPageMargins}>
-                        {PAGE_MARGIN_PRESET_VALUES.map((value) => (
-                          <DropdownMenuRadioItem
-                            key={value}
-                            value={value}
-                            data-testid={`document-toolbar-page-margins-${value}`}
-                            onSelect={() => setPageMargins(value)}
-                          >
-                            {t(
-                              `toolbar.pageMargins_${value}` as "toolbar.pageMargins_normal",
-                            )}
-                          </DropdownMenuRadioItem>
-                        ))}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuRadioItem
-                          value="custom"
-                          data-testid="document-toolbar-page-margins-custom"
-                          onSelect={(event) => {
-                            event.preventDefault();
-                            openCustomMarginsDialog();
-                          }}
-                        >
-                          {t("toolbar.pageMargins_custom")}
-                        </DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger data-testid="document-toolbar-page-orientation">
-                      {t("toolbar.pageOrientation")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuRadioGroup value={currentPageOrientation}>
-                        {PAGE_ORIENTATION_VALUES.map((value) => (
-                          <DropdownMenuRadioItem
-                            key={value}
-                            value={value}
-                            className="gap-2"
-                            data-testid={`document-toolbar-page-orientation-${value}`}
-                            onSelect={() => setPageOrientation(value)}
-                          >
-                            <OfficeSemanticIcon
-                              semanticId={OFFICE_PAGE_ORIENTATION_ICON_IDS[value]}
-                              size={24}
-                            />
-                            {t(
-                              `toolbar.pageOrientation_${value}` as "toolbar.pageOrientation_portrait",
-                            )}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger data-testid="document-toolbar-columns">
-                      {t("toolbar.columns")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuRadioGroup value={String(currentColumns)}>
-                        {COLUMN_COUNT_VALUES.map((value) => (
-                          <DropdownMenuRadioItem
-                            key={value}
-                            value={String(value)}
-                            data-testid={`document-toolbar-columns-${value}`}
-                            onSelect={() => setColumns(value)}
-                          >
-                            {t(
-                              `toolbar.columns_${value}` as "toolbar.columns_1",
-                            )}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                      {/* "Line between" (Word 分栏分隔线): a vertical rule between
-                    columns. Meaningful only for a multi-column layout, so the
-                    toggle is disabled (greyed) for a single column. Fully
-                    round-trips to DOCX (the exporter adds w:sep="1"). */}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuCheckboxItem
-                        checked={currentColumnSeparator}
-                        disabled={currentColumns <= 1}
-                        data-testid="document-toolbar-columns-line-between"
-                        onSelect={() =>
-                          toggleColumnSeparator(!currentColumnSeparator)
-                        }
-                      >
-                        {t("toolbar.columnsLineBetween")}
-                      </DropdownMenuCheckboxItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        disabled={!editor.isEditable || !columnsSectionLayout}
-                        data-testid="document-toolbar-columns-unequal"
-                        onSelect={openUnequalColumns}
-                      >
-                        {t("toolbar.columnsUnequal")}
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      disabled={
-                        !layoutCommandDecisions[
-                          "layout.section.verticalAlignment"
-                        ].enabled
-                      }
-                      title={reviewUnavailableTitle(
-                        layoutCommandDecisions[
-                          "layout.section.verticalAlignment"
-                        ],
-                      )}
-                      data-testid="document-toolbar-section-vertical-alignment"
-                    >
-                      {t("toolbar.sectionVerticalAlignment")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuRadioGroup
-                        value={currentSectionVerticalAlignment}
-                      >
-                        {(["top", "center", "both", "bottom"] as const).map(
-                          (value) => (
-                            <DropdownMenuRadioItem
-                              key={value}
-                              value={value}
-                              data-testid={`document-toolbar-section-vertical-alignment-${value}`}
-                              onSelect={() =>
-                                executeLayoutFeature(
-                                  "layout.section.verticalAlignment",
-                                  value,
-                                )
-                              }
-                            >
-                              {t(
-                                `toolbar.sectionVerticalAlignment_${value}` as "toolbar.sectionVerticalAlignment_top",
-                              )}
-                            </DropdownMenuRadioItem>
-                          ),
-                        )}
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuCheckboxItem
-                    checked={snapshot.autoHyphenation}
-                    disabled={
-                      !layoutCommandDecisions["layout.hyphenation.auto"].enabled
-                    }
-                    title={reviewUnavailableTitle(
-                      layoutCommandDecisions["layout.hyphenation.auto"],
-                    )}
-                    data-testid="document-toolbar-auto-hyphenation"
-                    onSelect={() =>
-                      executeLayoutFeature(
-                        "layout.hyphenation.auto",
-                        !snapshot.autoHyphenation,
-                      )
-                    }
-                  >
-                    {t("toolbar.hyphenationAuto")}
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      disabled={
-                        !layoutCommandDecisions["layout.object.wrap"].enabled
-                      }
-                      title={reviewUnavailableTitle(
-                        layoutCommandDecisions["layout.object.wrap"],
-                      )}
-                      data-testid="document-toolbar-object-wrap"
-                    >
-                      {t("toolbar.objectWrap")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuRadioGroup
-                        value={snapshot.imageFloat ?? "inline"}
-                      >
-                        {(
-                          ["inline", "left", "right", "topAndBottom"] as const
-                        ).map((value) => (
-                          <DropdownMenuRadioItem
-                            key={value}
-                            value={value}
-                            data-testid={`document-toolbar-object-wrap-${value}`}
-                            onSelect={() =>
-                              executeLayoutFeature(
-                                "layout.object.wrap",
-                                value === "inline" ? null : value,
-                              )
-                            }
-                          >
-                            {t(
-                              `toolbar.objectWrap_${value}` as "toolbar.objectWrap_inline",
-                            )}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      disabled={
-                        !layoutCommandDecisions["layout.object.layer"].enabled
-                      }
-                      title={reviewUnavailableTitle(
-                        layoutCommandDecisions["layout.object.layer"],
-                      )}
-                      data-testid="document-toolbar-object-layer"
-                    >
-                      {t("toolbar.objectLayer")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      {selectedDocumentShape ? (
-                        (
-                          [
-                            ["bringToFront", "presentation.contextMenu.bringToFront", ArrowUpToLine],
-                            ["bringForward", "presentation.contextMenu.bringForward", ChevronUp],
-                            ["sendBackward", "presentation.contextMenu.sendBackward", ChevronDown],
-                            ["sendToBack", "presentation.contextMenu.sendToBack", ArrowDownToLine],
-                          ] as const
-                        ).map(([action, label, Icon]) => (
-                          <DropdownMenuItem
-                            key={action}
-                            disabled={shapeZOrderAtBoundary(action)}
-                            data-testid={`document-toolbar-object-layer-${action}`}
-                            onSelect={() =>
-                              executeLayoutFeature(
-                                "layout.object.layer",
-                                action,
-                              )
-                            }
-                          >
-                            <Icon size={16} aria-hidden />
-                            {t(label)}
-                          </DropdownMenuItem>
-                        ))
-                      ) : (
-                        <>
-                          {selectedPictureCanReorder ? (
-                            <>
-                              {(
-                                [
-                                  ["bringToFront", "presentation.contextMenu.bringToFront", ArrowUpToLine],
-                                  ["bringForward", "presentation.contextMenu.bringForward", ChevronUp],
-                                  ["sendBackward", "presentation.contextMenu.sendBackward", ChevronDown],
-                                  ["sendToBack", "presentation.contextMenu.sendToBack", ArrowDownToLine],
-                                ] as const
-                              ).map(([action, label, Icon]) => (
-                                <DropdownMenuItem
-                                  key={action}
-                                  disabled={shapeZOrderAtBoundary(action)}
-                                  data-testid={`document-toolbar-object-layer-${action}`}
-                                  onSelect={() =>
-                                    executeLayoutFeature(
-                                      "layout.object.layer",
-                                      action,
-                                    )
-                                  }
-                                >
-                                  <Icon size={16} aria-hidden />
-                                  {t(label)}
-                                </DropdownMenuItem>
-                              ))}
-                              <DropdownMenuSeparator />
-                            </>
-                          ) : null}
-                          <DropdownMenuRadioGroup value={snapshot.imageFloat ?? ""}>
-                            {(["behindText", "inFrontOfText"] as const).map(
-                              (value) => (
-                                <DropdownMenuRadioItem
-                                  key={value}
-                                  value={value}
-                                  data-testid={`document-toolbar-object-layer-${value}`}
-                                  onSelect={() =>
-                                    executeLayoutFeature(
-                                      "layout.object.layer",
-                                      value,
-                                    )
-                                  }
-                                >
-                                  {t(
-                                    `toolbar.objectLayer_${value}` as "toolbar.objectLayer_behindText",
-                                  )}
-                                </DropdownMenuRadioItem>
-                              ),
-                            )}
-                          </DropdownMenuRadioGroup>
-                        </>
-                      )}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      disabled={
-                        !layoutCommandDecisions["layout.object.align"].enabled
-                      }
-                      title={reviewUnavailableTitle(
-                        layoutCommandDecisions["layout.object.align"],
-                      )}
-                      data-testid="document-toolbar-object-align"
-                    >
-                      {t("toolbar.objectAlign")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuRadioGroup value={snapshot.imageAlign ?? ""}>
-                        {(["left", "center", "right"] as const).map((value) => (
-                          <DropdownMenuRadioItem
-                            key={value}
-                            value={value}
-                            data-testid={`document-toolbar-object-align-${value}`}
-                            onSelect={() =>
-                              executeLayoutFeature("layout.object.align", value)
-                            }
-                          >
-                            {t(
-                              `toolbar.objectAlign_${value}` as "toolbar.objectAlign_left",
-                            )}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      disabled={
-                        !layoutCommandDecisions["layout.object.position"]
-                          .enabled
-                      }
-                      title={reviewUnavailableTitle(
-                        layoutCommandDecisions["layout.object.position"],
-                      )}
-                      data-testid="document-toolbar-layout-object-position"
-                    >
-                      {t("toolbar.objectPosition")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuLabel>
-                        MRAI · {t("toolbar.objectPosition")}
-                      </DropdownMenuLabel>
-                      {DOCUMENT_SHAPE_POSITION_DIRECTIONS.map(
-                        ([action, label, DirectionIcon]) => (
-                          <DropdownMenuItem
-                            key={action}
-                            data-testid={`document-toolbar-layout-object-position-${action}`}
-                            onSelect={() =>
-                              executeLayoutFeature(
-                                "layout.object.position",
-                                action,
-                              )
-                            }
-                          >
-                            <DirectionIcon size={16} aria-hidden />
-                            {t(
-                              label as "presentation.transition.directionLeft",
-                            )}
-                          </DropdownMenuItem>
-                        ),
-                      )}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        disabled={
-                          selectedDocumentShape?.attrs.xEmu === 0 &&
-                          selectedDocumentShape?.attrs.yEmu === 0
-                        }
-                        data-testid="document-toolbar-layout-object-position-reset"
-                        onSelect={() =>
-                          executeLayoutFeature(
-                            "layout.object.position",
-                            "reset",
-                          )
-                        }
-                      >
-                        <RefreshCw size={16} aria-hidden />
-                        {t("presentation.printReset")}
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      disabled={
-                        !layoutCommandDecisions["layout.object.rotate"].enabled
-                      }
-                      title={reviewUnavailableTitle(
-                        layoutCommandDecisions["layout.object.rotate"],
-                      )}
-                      data-testid="document-toolbar-layout-object-rotate"
-                    >
-                      {t("toolbar.objectRotate")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      {selectedDocumentShape ? (
-                        <DropdownMenuLabel>
-                          MRAI · {t("toolbar.objectRotate")}
-                        </DropdownMenuLabel>
-                      ) : null}
-                      <DropdownMenuItem
-                        data-testid="document-toolbar-layout-object-rotate-left"
-                        onSelect={() =>
-                          executeLayoutFeature("layout.object.rotate", -90)
-                        }
-                      >
-                        <span
-                          aria-hidden="true"
-                          style={{ display: "inline-flex", transform: "scaleX(-1)" }}
-                        >
-                          <OfficeSemanticIcon semanticId="object.rotate" size={16} />
-                        </span>
-                        {t("presentation.rotate.left")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        data-testid="document-toolbar-layout-object-rotate-right"
-                        onSelect={() =>
-                          executeLayoutFeature("layout.object.rotate", 90)
-                        }
-                      >
-                        <OfficeSemanticIcon semanticId="object.rotate" size={16} />
-                        {t("presentation.rotate.right")}
-                      </DropdownMenuItem>
-                      {selectedDocumentShape ? (
-                        <>
-                          <DropdownMenuCheckboxItem
-                            checked={snapshot.documentShapeFlipH === true}
-                            data-testid="document-toolbar-layout-object-flip-horizontal"
-                            onSelect={() =>
-                              executeLayoutFeature("layout.object.rotate", {
-                                flip: "flipH",
-                              })
-                            }
-                          >
-                            {t("presentation.flip.horizontal")}
-                          </DropdownMenuCheckboxItem>
-                          <DropdownMenuCheckboxItem
-                            checked={snapshot.documentShapeFlipV === true}
-                            data-testid="document-toolbar-layout-object-flip-vertical"
-                            onSelect={() =>
-                              executeLayoutFeature("layout.object.rotate", {
-                                flip: "flipV",
-                              })
-                            }
-                          >
-                            {t("presentation.flip.vertical")}
-                          </DropdownMenuCheckboxItem>
-                        </>
-                      ) : null}
-                      <DropdownMenuSeparator />
-                      {selectedDocumentShape ? (
-                        <SpacingNumberField
-                          label={t("presentation.geometry.rotation")}
-                          testId="document-toolbar-layout-object-rotate-exact"
-                          value={String(snapshot.documentShapeRotation ?? 0)}
-                          min={-360}
-                          max={360}
-                          step={0.1}
-                          onCommit={(raw) =>
-                            executeLayoutFeature("layout.object.rotate", {
-                              exact: raw,
-                            })
-                          }
-                        />
-                      ) : null}
-                      {selectedDocumentShape ? <DropdownMenuSeparator /> : null}
-                      <DropdownMenuItem
-                        disabled={
-                          selectedDocumentShape
-                            ? selectedDocumentShape.attrs.rotation === 0
-                            : snapshot.imageRotation === 0
-                        }
-                        data-testid="document-toolbar-layout-object-rotate-reset"
-                        onSelect={() =>
-                          executeLayoutFeature("layout.object.rotate", 0)
-                        }
-                      >
-                        {t("presentation.image.reset")}
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuItem
-                    disabled={!selectedDocumentShape}
-                    title={
-                      selectedDocumentShape
-                        ? undefined
-                        : reviewUnavailableTitle(
-                            layoutCommandDecisions["layout.object.group"],
-                          )
-                    }
-                    data-testid="document-toolbar-layout-object-group"
-                    onSelect={() => {
-                      if (!selectedDocumentShape) return;
-                      if (
-                        documentShapeUngroupAttrs(
-                          selectedDocumentShape.attrs,
-                        ) !== null
-                      ) {
-                        ungroupDocumentShape(
-                          editor,
-                          editor.state.doc,
-                          selectedDocumentShape.pos,
-                        );
-                        return;
-                      }
-                      setFindReplaceOpen(false);
-                      setGoToMode(null);
-                      setSelectionPaneOpen(true);
-                    }}
-                  >
-                    <OfficeSemanticIcon semanticId="object.group" size={16} />
-                    {t(
-                      selectedDocumentShape &&
-                        documentShapeUngroupAttrs(
-                          selectedDocumentShape.attrs,
-                        ) !== null
-                        ? "presentation.group.ungroup"
-                        : "toolbar.objectGroup",
-                    )}
-                  </DropdownMenuItem>
-                  {
-
-
-
-
-
-}
-                  <DropdownMenuCheckboxItem
-                    checked={isVerticalWritingMode(snapshot.writingMode)}
-                    disabled={!isVerticalWritingMode(snapshot.writingMode)}
-                    title={
-                      isVerticalWritingMode(snapshot.writingMode)
-                        ? undefined
-                        : t("toolbar.verticalTextUnavailable")
-                    }
-                    data-testid="document-toolbar-vertical-text"
-                    onSelect={() =>
-                      toggleVerticalText(
-                        !isVerticalWritingMode(snapshot.writingMode),
-                      )
-                    }
-                  >
-                    {t("toolbar.verticalText")}
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuCheckboxItem
-                    checked={isManuscriptGridEnabled(snapshot.manuscriptGrid)}
-                    disabled={!isManuscriptGridEnabled(snapshot.manuscriptGrid)}
-                    title={
-                      isManuscriptGridEnabled(snapshot.manuscriptGrid)
-                        ? undefined
-                        : t("toolbar.manuscriptGridUnavailable")
-                    }
-                    data-testid="document-toolbar-manuscript-grid"
-                    onSelect={() =>
-                      toggleManuscriptGrid(
-                        !isManuscriptGridEnabled(snapshot.manuscriptGrid),
-                      )
-                    }
-                  >
-                    {t("toolbar.manuscriptGrid")}
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuSeparator />
-                  {/* Restrict editing (Word/WPS 限制编辑 → read-only): locks the whole
-                document so it renders non-editable until unlocked here. Round-
-                trips to DOCX as <w:documentProtection w:edit="readOnly"/>. */}
-                  <DropdownMenuCheckboxItem
-                    checked={isDocumentReadOnlyProtected(
-                      snapshot.documentProtection,
-                    )}
-                    disabled={
-                      !reviewCommandDecisions["review.protectDocument"].enabled
-                    }
-                    data-testid="document-toolbar-restrict-editing"
-                    onSelect={() =>
-                      executeReviewFeature("review.protectDocument")
-                    }
-                  >
-                    {t("toolbar.restrictEditing")}
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuSeparator />
-                  {/* Page border (Word 页面边框 / <w:pgBorders>): a whole-page box.
-                The toggle adds/removes a default box; the nested controls pick
-                the line style, width and color. Fully round-trips to DOCX (the
-                exporter reads the same doc attr). */}
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger data-testid="document-toolbar-page-border">
-                      {t("toolbar.pageBorder")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuCheckboxItem
-                        checked={pageBorderAllEdgesState(
-                          currentSectionPageBorders,
-                        )}
-                        data-testid="document-toolbar-page-border-toggle"
-                        onSelect={(event) => {
-                          event.preventDefault();
-                          pageBorderMenuCommands.toggleAllEdges();
-                        }}
-                      >
-                        {t("toolbar.pageBorderEdgeAll")}
-                      </DropdownMenuCheckboxItem>
-                      {SECTION_BORDER_EDGES.map((edgeName) => (
-                        <DropdownMenuCheckboxItem
-                          key={edgeName}
-                          checked={Boolean(
-                            currentSectionPageBorders?.edges[edgeName],
-                          )}
-                          data-testid={`document-toolbar-page-border-edge-${edgeName}`}
-                          onSelect={(event) => {
-                            event.preventDefault();
-                            pageBorderMenuCommands.toggleSide(edgeName);
-                          }}
-                        >
-                          {t(
-                            `toolbar.pageBorderEdge${edgeName[0].toUpperCase()}${edgeName.slice(1)}` as "toolbar.pageBorderEdgeTop",
-                          )}
-                        </DropdownMenuCheckboxItem>
-                      ))}
-                      {currentSectionPageBorders ? (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuLabel>
-                            {t("toolbar.pageBorderStyle")}
-                          </DropdownMenuLabel>
-                          <DropdownMenuRadioGroup
-                            value={
-                              pageBorderStyle(currentSectionPageBorders) ?? ""
-                            }
-                          >
-                            {PAGE_BORDER_MENU_STYLES.map((value) => (
-                              <DropdownMenuRadioItem
-                                key={value}
-                                value={value}
-                                data-testid={`document-toolbar-page-border-style-${value}`}
-                                onSelect={(event) => {
-                                  event.preventDefault();
-                                  pageBorderMenuCommands.setStyle(value);
-                                }}
-                              >
-                                {t(
-                                  `toolbar.pageBorderStyle_${value}` as "toolbar.pageBorderStyle_single",
-                                )}
-                              </DropdownMenuRadioItem>
-                            ))}
-                          </DropdownMenuRadioGroup>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuLabel>
-                            {t("toolbar.pageBorderWeight")}
-                          </DropdownMenuLabel>
-                          <DropdownMenuRadioGroup
-                            value={String(
-                              pageBorderWeightPt(currentSectionPageBorders) ??
-                                "",
-                            )}
-                          >
-                            {PAGE_BORDER_WEIGHT_POINTS.map((points) => (
-                              <DropdownMenuRadioItem
-                                key={points}
-                                value={String(points)}
-                                data-testid={`document-toolbar-page-border-weight-${points}`}
-                                onSelect={(event) => {
-                                  event.preventDefault();
-                                  pageBorderMenuCommands.setWeightPt(points);
-                                }}
-                              >
-                                {officeBorderWeightLabel(points)}
-                              </DropdownMenuRadioItem>
-                            ))}
-                          </DropdownMenuRadioGroup>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            data-testid="document-toolbar-page-border-remove"
-                            onSelect={() => pageBorderMenuCommands.remove()}
-                          >
-                            {t("toolbar.pageBorderRemove")}
-                          </DropdownMenuItem>
-                        </>
-                      ) : null}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  {/* Page color (Word/WPS 设计 → 页面颜色 / <w:background>): a solid
-                page-surface fill. The swatches apply a soft tint; "No color"
-                clears it. Fully round-trips to DOCX (the exporter reads the same
-                doc attr + writes <w:displayBackgroundShape/> so Word paints it). */}
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger data-testid="document-toolbar-page-color">
-                      {t("toolbar.pageColor")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuItem
-                        data-testid="document-toolbar-page-color-clear"
-                        onSelect={() => clearPageBackgroundColor()}
-                      >
-                        {t("toolbar.pageColorClear")}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(6, 22px)",
-                          gap: 4,
-                          padding: "4px 8px",
-                        }}
-                      >
-                        {PAGE_BACKGROUND_COLOR_SWATCHES.map((color) => (
-                          <button
-                            key={color}
-                            type="button"
-                            data-testid={`document-toolbar-page-color-${color}`}
-                            aria-label={`#${color}`}
-                            onClick={() => applyPageBackgroundColor(color)}
-                            style={{
-                              width: 22,
-                              height: 22,
-                              borderRadius: 4,
-                              cursor: "pointer",
-                              background: `#${color}`,
-                              border:
-                                snapshot.pageBackgroundColor === color
-                                  ? "2px solid #2563eb"
-                                  : "1px solid rgba(15, 23, 42, 0.15)",
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  {/* Line numbering (Word 行号 / <w:lnNumType>): margin line numbers.
-                The toggle adds/removes the feature; the nested controls pick the
-                count-by step and the restart mode. Round-trips to DOCX. */}
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger data-testid="document-toolbar-line-numbers">
-                      {t("toolbar.lineNumbers")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuCheckboxItem
-                        checked={currentLineNumbers !== null}
-                        data-testid="document-toolbar-line-numbers-toggle"
-                        onSelect={() =>
-                          toggleLineNumbers(currentLineNumbers === null)
-                        }
-                      >
-                        {t("toolbar.lineNumbersEnable")}
-                      </DropdownMenuCheckboxItem>
-                      {currentLineNumbers !== null ? (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuLabel>
-                            {t("toolbar.lineNumbersCountBy")}
-                          </DropdownMenuLabel>
-                          <DropdownMenuRadioGroup
-                            value={String(currentLineNumbers.countBy)}
-                          >
-                            {[1, 2, 5, 10].map((value) => (
-                              <DropdownMenuRadioItem
-                                key={value}
-                                value={String(value)}
-                                data-testid={`document-toolbar-line-numbers-count-by-${value}`}
-                                onSelect={() =>
-                                  updateLineNumberField({ countBy: value })
-                                }
-                              >
-                                {t("toolbar.lineNumbersCountByValue", {
-                                  count: value,
-                                })}
-                              </DropdownMenuRadioItem>
-                            ))}
-                          </DropdownMenuRadioGroup>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuLabel>
-                            {t("toolbar.lineNumbersRestart")}
-                          </DropdownMenuLabel>
-                          <DropdownMenuRadioGroup
-                            value={currentLineNumbers.restart}
-                          >
-                            {LINE_NUMBER_RESTART_VALUES.map((value) => (
-                              <DropdownMenuRadioItem
-                                key={value}
-                                value={value}
-                                data-testid={`document-toolbar-line-numbers-restart-${value}`}
-                                onSelect={() =>
-                                  updateLineNumberField({
-                                    restart: value as LineNumberRestart,
-                                  })
-                                }
-                              >
-                                {t(
-                                  `toolbar.lineNumbersRestart_${value}` as "toolbar.lineNumbersRestart_continuous",
-                                )}
-                              </DropdownMenuRadioItem>
-                            ))}
-                          </DropdownMenuRadioGroup>
-                        </>
-                      ) : null}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="office-ribbon-control note-editor-office-toolbar__menu-trigger" data-office-control-part="button"
-                    data-testid="document-toolbar-review-menu"
-                    onPointerDown={rememberEditorSelection}
-                  >
-                    {t("toolbar.more")}
-                    <ChevronDown size={12} aria-hidden />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  className="note-editor-toolbar-menu"
-                  onCloseAutoFocus={(event) => event.preventDefault()}
-                >
-                  {/* Suggesting toggle (its checked state stays visible here). */}
-                  <DropdownMenuCheckboxItem
-                    checked={snapshot.suggesting}
-                    data-testid="document-toolbar-suggesting"
-                    disabled={!editor.isEditable}
-                    onSelect={() => {
-                      if (!canWriteEditor()) return;
-                      chain(editor).toggleSuggesting().run();
-                    }}
-                  >
-                    {t("toolbar.suggesting")}
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuItem
-                    disabled={!editor.isEditable || !snapshot.hasTrackedChanges}
-                    data-testid="document-toolbar-accept-all-changes"
-                    onSelect={() => {
-                      if (!canWriteEditor()) return;
-                      chain(editor).acceptAllChanges().run();
-                    }}
-                  >
-                    <CheckCheck size={16} />
-                    {t("toolbar.acceptAllChanges")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={!editor.isEditable || !snapshot.hasTrackedChanges}
-                    data-testid="document-toolbar-reject-all-changes"
-                    onSelect={() => {
-                      if (!canWriteEditor()) return;
-                      chain(editor).rejectAllChanges().run();
-                    }}
-                  >
-                    <Ban size={16} />
-                    {t("toolbar.rejectAllChanges")}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {/* Comment threads (Word/WPS "comments"): anchors a comment to the
-                current text selection, or to the word at a collapsed caret
-                (Word). The item opens the comments panel + composer via an
-                event NoteEditor listens for, so the text-entry UX lives in the
-                sidebar (reply/resolve). */}
-                  <DropdownMenuItem
-                    disabled={!editor.isEditable || !commentTargetAvailable}
-                    data-testid="document-toolbar-add-comment"
-                    onSelect={() => {
-                      if (!canWriteEditor()) return;
-                      if (typeof window === "undefined") return;
-                      window.dispatchEvent(new CustomEvent(ADD_COMMENT_EVENT));
-                    }}
-                  >
-                    <MessageSquarePlus size={16} />
-                    {t("toolbar.addComment")}
-                  </DropdownMenuItem>
-                  {/* Footnote (Word/WPS parity): inserts an auto-numbered footnote
-                marker at the caret and a note body in the rendered list at the
-                document end. Always available (a footnote anchors at the
-                caret, not a selection); the item dispatches an event
-                NoteEditor handles by running the addFootnote command. */}
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-insert-footnote"
-                    onSelect={() => {
-                      if (typeof window === "undefined") return;
-                      window.dispatchEvent(
-                        new CustomEvent(INSERT_FOOTNOTE_EVENT),
-                      );
-                    }}
-                  >
-                    <Asterisk size={16} />
-                    {t("toolbar.insertFootnote")}
-                  </DropdownMenuItem>
-                  {/* Endnote (Word 引用 ribbon parity — 插入脚注/插入尾注 side by
-                side). One note stream with a doc-level placement mode:
-                inserting an endnote flips the mode (the document-end list
-                relabels 尾注, Word's convert-all behaviour) and drops an
-                auto-numbered marker at the caret. */}
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-insert-endnote"
-                    onSelect={() => {
-                      if (typeof window === "undefined") return;
-                      window.dispatchEvent(
-                        new CustomEvent(INSERT_ENDNOTE_EVENT),
-                      );
-                    }}
-                  >
-                    <Asterisk size={16} />
-                    {t("toolbar.insertEndnote")}
-                  </DropdownMenuItem>
-                  {/* Citation (Word/WPS parity): inserts an in-text citation
-                referencing a source and adds it to the bibliography at the
-                document end via the source picker NoteEditor opens. */}
-                  <DropdownMenuItem
-                    disabled={
-                      !referenceCommandDecisions["references.insertCitation"]
-                        .enabled
-                    }
-                    data-testid="document-toolbar-insert-citation"
-                    title={
-                      reviewUnavailableTitle(
-                        referenceCommandDecisions["references.insertCitation"],
-                      ) ?? undefined
-                    }
-                    onSelect={() =>
-                      executeReferenceFeature("references.insertCitation")
-                    }
-                  >
-                    <BookMarked size={16} />
-                    {t("toolbar.insertCitation")}
-                  </DropdownMenuItem>
-                  {/* Cross-reference (Word/WPS parity): inserts a clickable internal
-                link to a HEADING showing that heading's text. The item opens
-                the heading picker via an event NoteEditor listens for. */}
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-insert-cross-reference"
-                    onSelect={() => {
-                      dispatchCrossReferencePicker();
-                    }}
-                  >
-                    <Link2 size={16} />
-                    {t("toolbar.insertCrossReference")}
-                  </DropdownMenuItem>
-                  {/* Ruby text / phonetic guide (Word "拼音指南" / WPS phonetic guide /
-                furigana): wraps the selected text (the base) with a small
-                annotation typed above it. Requires a non-empty selection (the
-                guide needs a base to sit over). Prompts for the annotation
-                inline, then runs the setRubyAnnotation command — the user
-                supplies the reading (no auto-pinyin, matching Word). */}
-                  <DropdownMenuItem
-                    disabled={!snapshot.phoneticGuideAvailable}
-                    data-testid="document-toolbar-insert-ruby"
-                    onSelect={runRubyGuide}
-                  >
-                    <Languages size={16} />
-                    {t("toolbar.insertRuby")}
-                  </DropdownMenuItem>
-                  {/* Mail merge — Insert merge field (Word/WPS "邮件合并 → 插入合并域"):
-                drops a «FieldName» placeholder bound to a recipient-data column.
-                The item opens the column picker via an event NoteEditor listens
-                for (the picker offers a free-text field when no data is attached
-                yet). */}
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-insert-merge-field"
-                    disabled={
-                      !mailingsCommandDecisions["mailings.mergeField"].enabled
-                    }
-                    title={mailingsUnavailableTitle(
-                      mailingsCommandDecisions["mailings.mergeField"],
-                    )}
-                    onSelect={() =>
-                      executeMailingsFeature("mailings.mergeField")
-                    }
-                  >
-                    <Database size={16} />
-                    {t("toolbar.insertMergeField")}
-                  </DropdownMenuItem>
-                  {/* Mail merge — Recipients (Word/WPS "邮件合并 → 收件人 / 预览 / 完成"):
-                opens the dialog to paste the CSV/TSV data source, step through the
-                preview records, and run Finish & Merge. The item opens the dialog
-                via an event NoteEditor listens for. */}
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-mail-merge-recipients"
-                    disabled={
-                      !mailingsCommandDecisions["mailings.recipients"].enabled
-                    }
-                    title={mailingsUnavailableTitle(
-                      mailingsCommandDecisions["mailings.recipients"],
-                    )}
-                    onSelect={() =>
-                      executeMailingsFeature("mailings.recipients")
-                    }
-                  >
-                    <Users size={16} />
-                    {t("toolbar.mailMergeRecipients")}
-                  </DropdownMenuItem>
-                  {/* Bookmark (Word/WPS "Insert → Bookmark"): names the current
-                selection so "Go to bookmark" can jump back to it. Requires a
-                non-empty selection (a bookmark spans a range); the item opens the
-                name prompt via an event NoteEditor listens for. */}
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-insert-bookmark"
-                    onSelect={() => {
-                      if (typeof window === "undefined") return;
-                      window.dispatchEvent(
-                        new CustomEvent(INSERT_BOOKMARK_EVENT),
-                      );
-                    }}
-                  >
-                    <Bookmark size={16} />
-                    {t("toolbar.insertBookmark")}
-                  </DropdownMenuItem>
-                  {/* Go To bookmark (Word/WPS "Go To"): lists the document's bookmarks
-                and jumps the selection to the chosen one. Always available; the
-                item opens the bookmark list panel via an event NoteEditor
-                listens for. */}
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-go-to-bookmark"
-                    onSelect={() => {
-                      if (typeof window === "undefined") return;
-                      window.dispatchEvent(
-                        new CustomEvent(GO_TO_BOOKMARK_EVENT),
-                      );
-                    }}
-                  >
-                    <BookmarkCheck size={16} />
-                    {t("toolbar.goToBookmark")}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {/* Simplified <-> Traditional Chinese (简繁转换), the Word/WPS
-                "Review → 简转繁 / 繁转简" feature. Converts the selected text (or
-                the whole document when nothing is selected) through OpenCC,
-                preserving marks and structure — only the characters change. The
-                converter dictionaries load lazily on first use. */}
-                  <DropdownMenuItem
-                    disabled={!editor.isEditable}
-                    data-testid="document-toolbar-to-traditional"
-                    onSelect={() => runChineseConversion("s2t")}
-                  >
-                    <ArrowRightLeft size={16} />
-                    {t("toolbar.convertToTraditional")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={!editor.isEditable}
-                    data-testid="document-toolbar-to-simplified"
-                    onSelect={() => runChineseConversion("t2s")}
-                  >
-                    <ArrowRightLeft size={16} />
-                    {t("toolbar.convertToSimplified")}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {/* Sort (Word/WPS "Sort"): a table by the caret's column, or the
-                selected paragraphs / list items, alphabetically or numerically. */}
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger data-testid="document-toolbar-sort">
-                      <ArrowDownAZ size={16} />
-                      {t("toolbar.sort")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="note-editor-toolbar-menu">
-                      <DropdownMenuItem
-                        data-testid="document-toolbar-sort-asc"
-                        onSelect={() => runSort({ direction: "asc" })}
-                      >
-                        <ArrowDownAZ size={16} />
-                        {t("toolbar.sortAscending")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        data-testid="document-toolbar-sort-desc"
-                        onSelect={() => runSort({ direction: "desc" })}
-                      >
-                        <ArrowUpAZ size={16} />
-                        {t("toolbar.sortDescending")}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        data-testid="document-toolbar-sort-numeric-asc"
-                        onSelect={() =>
-                          runSort({ direction: "asc", numeric: true })
-                        }
-                      >
-                        <OfficeSemanticIcon semanticId="table.sortAscending" size={16} />
-                        {t("toolbar.sortNumericAscending")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        data-testid="document-toolbar-sort-numeric-desc"
-                        onSelect={() =>
-                          runSort({ direction: "desc", numeric: true })
-                        }
-                      >
-                        <OfficeSemanticIcon semanticId="table.sortDescending" size={16} />
-                        {t("toolbar.sortNumericDescending")}
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSeparator />
-                  {/* Paragraph cleanup (段落整理 / 删除空段), the Word/WPS Writer "tidy
-                up the document" gesture. Collapses runs of blank paragraphs and
-                trims trailing whitespace across the whole document in one
-                transaction; paragraphs holding an inline atom (image/footnote/
-                math) are preserved, and a clean document is a no-op. */}
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-cleanup-paragraphs"
-                    onSelect={cleanUpParagraphs}
-                  >
-                    <Eraser size={16} />
-                    {t("toolbar.cleanUpParagraphs")}
-                  </DropdownMenuItem>
-                  {onToggleAutoCorrect ? (
-                    <DropdownMenuCheckboxItem
-                      checked={autoCorrectEnabled === true}
-                      data-testid="document-toolbar-autocorrect"
-                      onSelect={() => onToggleAutoCorrect()}
-                    >
-                      {t("toolbar.autoCorrect")}
-                    </DropdownMenuCheckboxItem>
-                  ) : null}
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-autocorrect-options"
-                    onSelect={() => setAutoCorrectDialogOpen(true)}
-                  >
-                    {t("autoCorrectDialog.menu")}
-                  </DropdownMenuItem>
-                  {/* Read Aloud (Word Review ▸ Read Aloud): speaks the selection — or
-                the whole document when nothing is selected — via the Web Speech
-                API. Hidden where the API is unavailable. preventDefault keeps the
-                menu open so the SAME item flips to "Stop" while it reads. */}
-                  {readAloud.supported ? (
-                    <DropdownMenuItem
-                      data-testid="document-toolbar-read-aloud"
-                      onSelect={(event) => {
-                        event.preventDefault();
-                        executeReviewFeature("review.readAloud");
-                      }}
-                    >
-                      {readAloud.playing ? (
-                        <Square size={16} />
-                      ) : (
-                        <Volume2 size={16} />
-                      )}
-                      {readAloud.playing
-                        ? t("toolbar.readAloudStop")
-                        : t("toolbar.readAloud")}
-                    </DropdownMenuItem>
-                  ) : null}
-                  <DropdownMenuItem
-                    data-testid="document-toolbar-accessibility-check"
-                    onSelect={toggleAccessibilityPanel}
-                  >
-                    <Accessibility size={16} aria-hidden />
-                    {t("toolbar.accessibilityCheck")}
-                  </DropdownMenuItem>
-                  {pageId ? (
-                    <>
-                      <DropdownMenuSeparator />
-                      {contentVersion && onBeforeVersionWrite ? (
-                        <DropdownMenuCheckboxItem
-                          checked={versionHistoryOpen}
-                          data-testid="document-toolbar-version-history"
-                          onSelect={toggleVersionHistory}
-                        >
-                          {t("toolbar.versionHistory")}
-                        </DropdownMenuCheckboxItem>
-                      ) : null}
-                      {/* Compare Documents (Word "比较文档" / legal blackline): computes
-                    a word-level diff between a selected version snapshot and the
-                    current document, loading the result as track-change marks so
-                    the user can accept/reject via the existing Track Changes UI. */}
-                      <DropdownMenuItem
-                        disabled={
-                          !reviewCommandDecisions["review.compare"].enabled
-                        }
-                        data-testid="document-toolbar-compare-documents"
-                        onSelect={() => executeReviewFeature("review.compare")}
-                      >
-                        <OfficeSemanticIcon
-                          semanticId="review.compare"
-                          size={16}
-                        />
-                        {t("toolbar.compareDocuments")}
-                      </DropdownMenuItem>
-                    </>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-            </div>
-          ) : null
-          ) : null}
-
-          {isActiveRibbon("tableDesign tableLayout") ? (
-            snapshot.table ? (
-            <div
-              className={homeStyles.tableContextSurface}
-              data-ribbon="tableDesign tableLayout"
-              aria-label={
-                ribbonTab === "tableDesign"
-                  ? tableDesignTabLabel
-                  : tableLayoutTabLabel
-              }
-              data-testid="document-toolbar-cell-controls"
-            >
-              {ribbonTab === "tableDesign" ? (
-                <div
-                  className={homeStyles.tableDesignSurface}
-                  data-testid="document-toolbar-table-design-context-surface"
-                >
-                  {nativeTableDesignTarget ? (
-                <DocumentTableStyleGallery
-                    mode="native"
-                  editor={editor}
-                  target={nativeTableDesignTarget}
-                    look={tableDesignLook}
-                    onLookChange={updateTableDesignLook}
-                  disabledReason={
-                    editor.isEditable
-                      ? undefined
-                      : t("toolbar.documentReadOnly")
-                  }
-                    labels={tableDesignLabels}
-                    borders={tableDesignBordersControl}
-                    shading={tableDesignShadingControl}
-                    tableColor={tableDesignColorControl}
-                        />
-                ) : (
-                  <DocumentTableStyleGallery
-                    mode="local"
-                    editor={editor}
-                    currentStyleId={snapshot.tableStyleThemeId}
-                    legacyStyleLabel={
-                      localTableStyleEntries.find(
-                        (entry) => entry.id === snapshot.tableStyleThemeId,
-                      )?.label ?? null
-                    }
-                    look={tableDesignLook}
-                    onLookChange={updateTableDesignLook}
-                    disabledReason={
-                      editor.isEditable
-                        ? undefined
-                        : t("toolbar.documentReadOnly")
-                  }
-                    labels={tableDesignLabels}
-                    borders={tableDesignBordersControl}
-                    shading={tableDesignShadingControl}
-                    tableColor={tableDesignColorControl}
-                />
-                    )}
-                  {!docsOfficeParityV2 ? (
-                    <OfficeHomeRibbonGroup
-                      ribbon="tableDesign"
-                      label={t("toolbar.drawBorders")}
-                      className={homeStyles.tableDesignDrawGroup}
-                      testId="document-toolbar-table-design-group-draw-borders"
-                    >
-                      <OfficeHomeCommandRow
-                        className={homeStyles.tableDesignDrawRow}
-                      >
-                      <OfficeHomeCommand
-                        active={tableDrawMode === "draw"}
-                        controlId="DOCCTL.APP.TABLE.DRAW"
-                        disabled={!editor.isEditable}
-                        displayLabel={
-                          t("toolbar.drawTable")
-                        }
-                        icon={<Pencil size={24} aria-hidden />}
-                        label={t("toolbar.drawTable")}
-                        onClick={() =>
-                          setTableDrawMode((current) =>
-                            current === "draw" ? null : "draw",
-                          )
-                        }
-                        testId="document-toolbar-table-design-draw"
-                        variant="large"
-                      />
-                      <OfficeHomeCommand
-                        active={tableDrawMode === "erase"}
-                        disabled={!editor.isEditable}
-                        displayLabel={t("toolbar.eraser")}
-                        icon={<Eraser size={24} aria-hidden />}
-                        label={t("toolbar.eraser")}
-                        onClick={() =>
-                          setTableDrawMode((current) =>
-                            current === "erase" ? null : "erase",
-                          )
-                        }
-                        testId="document-toolbar-table-design-eraser"
-                        variant="large"
-                      />
-                      <OfficeHomeCommand
-                        active={tableDrawMode === "paint"}
-                        controlId="DOCCTL.CONTEXT.TABLE_DESIGN.BORDERS.PAINTER"
-                        disabled={!editor.isEditable}
-                        displayLabel={
-                          t("toolbar.borderPainter")
-                        }
-                        icon={
-                          <OfficeSemanticIcon
-                            semanticId="format.painter"
-                            size={24}
-                          />
-                        }
-                        label={
-                          t("toolbar.borderPainterApplyCurrentLineStyle")
-                        }
-                        onClick={() => {
-                          if (tableDrawMode === "paint") {
-                            setTableDrawMode(null);
-                            return;
-                          }
-                          setTableBorderPainterPen(
-                            tablePropertiesBordersRef.current?.readPen() ??
-                              DEFAULT_DOCUMENT_TABLE_BORDER,
-                          );
-                          setTableDrawMode("paint");
-                        }}
-                        testId="document-toolbar-table-design-border-painter"
-                        variant="large"
-                      />
-                      </OfficeHomeCommandRow>
-                    </OfficeHomeRibbonGroup>
-                  ) : null}
-                </div>
-              ) : ribbonTab === "tableLayout" ? (
-                <div
-                  className={homeStyles.tableLayoutSurface}
-                  data-testid="document-toolbar-table-layout-surface"
-                >
-                  <OfficeHomeRibbonGroup
-                    ribbon="tableLayout"
-                    label={tableRowsColumnsGroupLabel}
-                    className={homeStyles.tableLayoutGroup}
-                    testId="document-toolbar-table-layout-group-rows-columns"
-                  >
-                    <OfficeHomeCommandRow
-                      className={homeStyles.tableLayoutLargeRow}
-                >
-                <DropdownMenu
-                  onOpenChange={(open) => {
-                          if (open)
-                            tableSelectionMenuCommittedRef.current = false;
-                  }}
-                >
-                  <DropdownMenuTrigger asChild>
-                          <OfficeHomeMenuTrigger
-                            active={snapshot.tableSelectionScope !== null}
-                            hasMenuIndicator
-                            icon={
-                              <OfficeSemanticIcon
-                                semanticId="table.select"
-                                size={24}
-                              />
-                      }
-                            label={t("toolbar.select")}
-                            testId="document-toolbar-table-select-menu"
-                            variant="large"
-                          />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="note-editor-toolbar-menu"
-                    onCloseAutoFocus={(event) => {
-                            if (!tableSelectionMenuCommittedRef.current) return;
-                      event.preventDefault();
-                            tableSelectionMenuCommittedRef.current = false;
-                      safelyFocusEditorAfterToolbarClose(editor);
-                    }}
-                  >
-                          <DropdownMenuLabel>
-                            {t("toolbar.select")}
-                          </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                          <DropdownMenuRadioGroup
-                            value={snapshot.tableSelectionScope ?? ""}
-                          >
-                            <DropdownMenuRadioItem
-                              value="cell"
-                              data-testid="document-toolbar-table-select-cell"
-                      onSelect={() =>
-                                runSelectDocumentTableScope("cell")
-                      }
-                    >
-                              {t("toolbar.tableSelectCell")}
-                            </DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem
-                              value="row"
-                              data-testid="document-toolbar-table-select-row"
-                      onSelect={() =>
-                                runSelectDocumentTableScope("row")
-                      }
-                    >
-                              {t("toolbar.tableSelectRow")}
-                            </DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem
-                              value="column"
-                              data-testid="document-toolbar-table-select-column"
-                      onSelect={() =>
-                                runSelectDocumentTableScope("column")
-                      }
-                    >
-                              {t("toolbar.tableSelectColumn")}
-                            </DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem
-                              value="table"
-                              data-testid="document-toolbar-table-select-table"
-                      onSelect={() =>
-                                runSelectDocumentTableScope("table")
-                      }
-                    >
-                              {t("toolbar.tableSelectTable")}
-                            </DropdownMenuRadioItem>
-                          </DropdownMenuRadioGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                <DropdownMenu
-                  onOpenChange={(open) => {
-                          if (open)
-                            tableStructureMenuCommittedRef.current = false;
-                  }}
-                >
-                  <DropdownMenuTrigger asChild>
-                          <OfficeHomeMenuTrigger
-                      disabled={tableStructureDisabledReason !== null}
-                            disabledReason={
-                              tableStructureDisabledReason ?? undefined
-                      }
-                            hasMenuIndicator
-                            icon={
-                              <OfficeSemanticIcon
-                                semanticId="table.delete"
-                                size={24}
-                              />
-                      }
-                            label={tableDeleteMenuLabel}
-                            testId="document-toolbar-table-delete-menu"
-                            variant="large"
-                          />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="note-editor-toolbar-menu"
-                    onCloseAutoFocus={(event) => {
-                      if (!tableStructureMenuCommittedRef.current) return;
-                      event.preventDefault();
-                      tableStructureMenuCommittedRef.current = false;
-                      safelyFocusEditorAfterToolbarClose(editor);
-                    }}
-                  >
-                          <DropdownMenuLabel>
-                            {tableDeleteMenuLabel}
-                          </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      disabled={tableStructureDisabledReason !== null}
-                      title={tableStructureDisabledReason ?? undefined}
-                      data-testid="document-toolbar-delete-cells"
-                      onSelect={() => openTableDeleteCellsDialog()}
-                    >
-                            <OfficeSemanticIcon
-                              semanticId="table.delete"
-                              size={16}
-                            />
-                      {t("document.tableDeleteCells.menuItem")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={tableRowColumnDisabledReason !== null}
-                      title={tableRowColumnDisabledReason ?? undefined}
-                      data-testid="document-toolbar-delete-row"
-                      onSelect={() =>
-                        runTableStructureCommand((commandChain) =>
-                          commandChain.deleteRow(),
-                        )
-                      }
-                    >
-                            <OfficeSemanticIcon
-                              semanticId="table.delete"
-                              size={16}
-                            />
-                      {t("toolbar.deleteRow")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={tableRowColumnDisabledReason !== null}
-                      title={tableRowColumnDisabledReason ?? undefined}
-                      data-testid="document-toolbar-delete-column"
-                      onSelect={() =>
-                        runTableStructureCommand((commandChain) =>
-                          commandChain.deleteColumn(),
-                        )
-                      }
-                    >
-                            <OfficeSemanticIcon
-                              semanticId="table.delete"
-                              size={16}
-                            />
-                      {t("toolbar.deleteColumn")}
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      disabled={tableStructureDisabledReason !== null}
-                      data-testid="document-toolbar-delete-table"
-                      onSelect={() =>
-                        runTableStructureCommand((commandChain) =>
-                          commandChain.deleteTable(),
-                        )
-                      }
-                    >
-                            <OfficeSemanticIcon
-                              semanticId="table.delete"
-                              size={16}
-                            />
-                      {t("toolbar.deleteTable")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                <DropdownMenu
-                  onOpenChange={(open) => {
-                          if (open)
-                            tableStructureMenuCommittedRef.current = false;
-                  }}
-                >
-                  <DropdownMenuTrigger asChild>
-                          <OfficeHomeMenuTrigger
-                      disabled={tableRowColumnDisabledReason !== null}
-                            disabledReason={
-                              tableRowColumnDisabledReason ?? undefined
-                      }
-                            hasMenuIndicator
-                            icon={
-                              <OfficeSemanticIcon
-                                semanticId="table.insert"
-                                size={24}
-                              />
-                      }
-                            label={tableInsertMenuLabel}
-                            testId="document-toolbar-table-insert-menu"
-                            variant="large"
-                          />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="note-editor-toolbar-menu"
-                    onCloseAutoFocus={(event) => {
-                      if (!tableStructureMenuCommittedRef.current) return;
-                      event.preventDefault();
-                      tableStructureMenuCommittedRef.current = false;
-                      safelyFocusEditorAfterToolbarClose(editor);
-                    }}
-                  >
-                          <DropdownMenuLabel>
-                            {tableInsertMenuLabel}
-                          </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                            disabled={tableRowColumnDisabledReason !== null}
-                            title={tableRowColumnDisabledReason ?? undefined}
-                            data-testid="document-toolbar-add-row-before"
-                      onSelect={() =>
-                        runTableStructureCommand((commandChain) =>
-                                commandChain.addRowBefore(),
-                        )
-                      }
-                    >
-                            <OfficeSemanticIcon
-                              semanticId="table.insertAbove"
-                              size={16}
-                            />
-                            {t("toolbar.addRowBefore")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                            disabled={tableRowColumnDisabledReason !== null}
-                            title={tableRowColumnDisabledReason ?? undefined}
-                            data-testid="document-toolbar-add-row-after"
-                      onSelect={() =>
-                        runTableStructureCommand((commandChain) =>
-                                commandChain.addRowAfter(),
-                        )
-                      }
-                    >
-                            <OfficeSemanticIcon
-                              semanticId="table.insertBelow"
-                              size={16}
-                            />
-                            {t("toolbar.addRowAfter")}
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                            disabled={tableRowColumnDisabledReason !== null}
-                            title={tableRowColumnDisabledReason ?? undefined}
-                            data-testid="document-toolbar-add-column-before"
-                      onSelect={() =>
-                        runTableStructureCommand((commandChain) =>
-                                commandChain.addColumnBefore(),
-                        )
-                      }
-                    >
-                            <OfficeSemanticIcon
-                              semanticId="table.insertLeft"
-                              size={16}
-                            />
-                            {t("toolbar.addColumnBefore")}
-                    </DropdownMenuItem>
-                          <DropdownMenuItem
-                      disabled={tableRowColumnDisabledReason !== null}
-                      title={tableRowColumnDisabledReason ?? undefined}
-                            data-testid="document-toolbar-add-column-after"
-                        onSelect={() =>
-                          runTableStructureCommand((commandChain) =>
-                                commandChain.addColumnAfter(),
-                          )
-                        }
-                      >
-                            <OfficeSemanticIcon
-                              semanticId="table.insertRight"
-                              size={16}
-                            />
-                            {t("toolbar.addColumnAfter")}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </OfficeHomeCommandRow>
-                  </OfficeHomeRibbonGroup>
-
-                  <OfficeHomeRibbonGroup
-                    ribbon="tableLayout"
-                    label={tableMergeMenuLabel}
-                    className={homeStyles.tableLayoutGroup}
-                    testId="document-toolbar-table-layout-group-merge"
-                      >
-                    <OfficeHomeCommandRow
-                      className={homeStyles.tableLayoutLargeRow}
-                      >
-                      <OfficeHomeCommand
-                        disabled={mergeCellsDisabledReason !== null}
-                        displayLabel={t("toolbar.merge")}
-                        icon={
-                          <OfficeSemanticIcon
-                            semanticId="table.merge"
-                            size={24}
-                          />
-                      }
-                        label={
-                          mergeCellsDisabledReason
-                            ? `${t("toolbar.mergeCells")}: ${mergeCellsDisabledReason}`
-                            : t("toolbar.mergeCells")
-                      }
-                        onClick={() =>
-                        runTableStructureCommand((commandChain) =>
-                            commandChain.mergeCells(),
-                        )
-                      }
-                        testId="document-toolbar-merge-cells"
-                        variant="large"
-                      />
-                <DropdownMenu
-                  onOpenChange={(open) => {
-                          if (open)
-                            tableStructureMenuCommittedRef.current = false;
-                  }}
-                >
-                  <DropdownMenuTrigger asChild>
-                          <OfficeHomeMenuTrigger
-                            disabled={splitMenuDisabledReason !== null}
-                            disabledReason={
-                              splitMenuDisabledReason ?? undefined
-                      }
-                            hasMenuIndicator
-                            icon={
-                              <OfficeSemanticIcon
-                                semanticId="table.split"
-                                size={24}
-                              />
-                            }
-                            label={t("toolbar.split")}
-                            testId="document-toolbar-table-merge-menu"
-                            variant="large"
-                          />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                          className="note-editor-toolbar-menu"
-                    onCloseAutoFocus={(event) => {
-                            if (!tableStructureMenuCommittedRef.current) return;
-                      event.preventDefault();
-                            tableStructureMenuCommittedRef.current = false;
-                      safelyFocusEditorAfterToolbarClose(editor);
-                    }}
-                  >
-                          <DropdownMenuLabel>
-                            {t("toolbar.split")}
-                          </DropdownMenuLabel>
-                          <DropdownMenuItem
-                            disabled={splitCellsNumericDisabledReason !== null}
-                            aria-label={
-                              splitCellsNumericDisabledReason
-                                ? `${splitCellsNumericLabel}: ${splitCellsNumericDisabledReason}`
-                                : splitCellsNumericLabel
-                            }
-                            title={splitCellsNumericDisabledReason ?? undefined}
-                            data-testid="document-toolbar-split-cells"
-                            onSelect={openTableSplitCellsDialog}
-                    >
-                            <OfficeSemanticIcon
-                              semanticId="table.split"
-                              size={16}
-                            />
-                            {splitCellsNumericLabel}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={splitCellDisabledReason !== null}
-                            aria-label={
-                              splitCellDisabledReason
-                                ? `${splitMergedCellLabel}: ${splitCellDisabledReason}`
-                                : splitMergedCellLabel
-                            }
-                            title={splitCellDisabledReason ?? undefined}
-                            data-testid="document-toolbar-split-cell"
-                            onSelect={() =>
-                              runTableStructureCommand((commandChain) =>
-                                commandChain.splitCell(),
-                              )
-                            }
-                  >
-                            <OfficeSemanticIcon
-                              semanticId="table.split"
-                              size={16}
-                            />
-                            {splitMergedCellLabel}
-                          </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                            disabled={splitTableDisabledReason !== null}
-                            aria-label={
-                              splitTableDisabledReason
-                                ? `${t("toolbar.splitTable")}: ${splitTableDisabledReason}`
-                                : t("toolbar.splitTable")
-                            }
-                            title={splitTableDisabledReason ?? undefined}
-                            data-testid="document-toolbar-split-table"
-                            onSelect={() =>
-                              runTableStructureCommand((commandChain) =>
-                                commandChain.splitTableAtCursor(),
-                              )
-                            }
-                        >
-                            <OfficeSemanticIcon
-                              semanticId="table.split"
-                              size={16}
-                          />
-                            {t("toolbar.splitTable")}
-                      </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                    </OfficeHomeCommandRow>
-                  </OfficeHomeRibbonGroup>
-
-                  <OfficeHomeRibbonGroup
-                    ribbon="tableLayout"
-                    label={tableCellSizeGroupLabel}
-                    className={homeStyles.tableLayoutGroup}
-                    testId="document-toolbar-table-layout-group-cell-size"
-                  >
-                    <div
-                      className={homeStyles.tableCellSizeBody}
-                      data-web-parity={docsOfficeParityV2 ? "true" : "false"}
-                    >
-                <div
-                  className={homeStyles.tableRowHeightControl}
-                  data-testid="document-toolbar-table-row-height-control"
-                        title={
-                          tableRowHeightDisabledReason ?? tableRowHeightLabel
-                        }
-                >
-                  <LayoutRibbonNumberField
-                    resetGeneration={tableRowHeightFieldEpoch}
-                    classNames={{
-                      field: homeStyles.tableRowHeightField,
-                      label: homeStyles.tableRowHeightLabel,
-                    }}
-                    controlId="DOCCTL.CONTEXT.TABLE_LAYOUT.CELL_SIZE.ROW_HEIGHT"
-                    controlOccurrenceId={String(tableRowHeightFieldEpoch)}
-                    disabled={tableRowHeightDisabledReason !== null}
-                    disabledReason={tableRowHeightDisabledReason ?? undefined}
-                    icon={
-                      <OfficeSemanticIcon
-                        semanticId="table.rowHeight"
-                        size={16}
-                      />
-                    }
-                    label={
-                      tableRowHeightDisabledReason
-                        ? `${tableRowHeightLabel}: ${tableRowHeightDisabledReason}`
-                        : `${tableRowHeightLabel} (${tableMeasurementUnit})`
-                    }
-                    max={MAX_ROW_HEIGHT_PX / docsPxPerLengthUnit}
-                    min={MIN_ROW_HEIGHT_PX / docsPxPerLengthUnit}
-                    onCommit={commitTableRowHeightDraft}
-                    onRememberSelection={beginTableRowHeightEdit}
-                    step={0.1}
-                    testId="document-toolbar-table-row-height"
-                    acceptsUnits
-                    unit={
-                      docsOfficeParityV2 ? undefined : tableMeasurementUnit
-                    }
-                    value={formattedTableRowHeight}
-                    visibleLabel={tableRowHeightLabel}
-                    inputWidthPx={56}
-                  />
-                </div>
-                <div
-                  className={homeStyles.tableColumnWidthControl}
-                  data-testid="document-toolbar-table-column-width-control"
-                  title={
-                          tableColumnWidthDisabledReason ??
-                          tableColumnWidthLabel
-                  }
-                >
-                  <LayoutRibbonNumberField
-                    resetGeneration={tableColumnWidthFieldEpoch}
-                    classNames={{
-                      field: homeStyles.tableColumnWidthField,
-                      label: homeStyles.tableColumnWidthLabel,
-                    }}
-                    controlId="DOCCTL.CONTEXT.TABLE_LAYOUT.CELL_SIZE.COLUMN_WIDTH"
-                    controlOccurrenceId={String(tableColumnWidthFieldEpoch)}
-                    disabled={tableColumnWidthDisabledReason !== null}
-                    disabledReason={
-                      tableColumnWidthDisabledReason ?? undefined
-                    }
-                    icon={
-                      <OfficeSemanticIcon
-                        semanticId="table.columnWidth"
-                        size={16}
-                      />
-                    }
-                    label={
-                      tableColumnWidthDisabledReason
-                        ? `${tableColumnWidthLabel}: ${tableColumnWidthDisabledReason}`
-                        : `${tableColumnWidthLabel} (${tableMeasurementUnit})`
-                    }
-                    max={MAX_TABLE_COLUMN_WIDTH / docsPxPerLengthUnit}
-                    min={MIN_TABLE_COLUMN_WIDTH / docsPxPerLengthUnit}
-                    onCommit={commitTableColumnWidthDraft}
-                    onRememberSelection={beginTableColumnWidthEdit}
-                    step={0.1}
-                    testId="document-toolbar-table-column-width"
-                    acceptsUnits
-                    unit={
-                      docsOfficeParityV2 ? undefined : tableMeasurementUnit
-                    }
-                    value={formattedTableColumnWidth}
-                    visibleLabel={tableColumnWidthLabel}
-                    inputWidthPx={56}
-                  />
-                      </div>
-                      {!docsOfficeParityV2 ? (
-                        <DropdownMenu
-                        onOpenChange={(open) => {
-                          if (open)
-                            tableStructureMenuCommittedRef.current = false;
-                        }}
-                      >
-                        <DropdownMenuTrigger asChild>
-                          <OfficeHomeMenuTrigger
-                            active={snapshot.tableAutoFitMode !== null}
-                            className={homeStyles.tableAutoFitMenu}
-                            disabled={
-                              autoFitContentsDisabledReason !== null &&
-                              autoFitWindowDisabledReason !== null &&
-                              fixedColumnWidthDisabledReason !== null
-                            }
-                            disabledReason={
-                              autoFitContentsDisabledReason ??
-                              autoFitWindowDisabledReason ??
-                              fixedColumnWidthDisabledReason ??
-                              undefined
-                            }
-                            hasMenuIndicator
-                            icon={
-                              <OfficeSemanticIcon
-                                semanticId="table.resize"
-                                size={24}
-                              />
-                            }
-                            label={tableAutoFitMenuLabel}
-                            onPointerDown={rememberEditorSelection}
-                            testId="document-toolbar-table-autofit-visible"
-                            variant="large"
-                          />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          className="note-editor-toolbar-menu"
-                          onCloseAutoFocus={(event) => {
-                            if (!tableStructureMenuCommittedRef.current) return;
-                            event.preventDefault();
-                            tableStructureMenuCommittedRef.current = false;
-                            safelyFocusEditorAfterToolbarClose(editor);
-                          }}
-                        >
-                          <DropdownMenuRadioGroup
-                            value={snapshot.tableAutoFitMode ?? ""}
-                          >
-                            <DropdownMenuRadioItem
-                              value="contents"
-                              disabled={autoFitContentsDisabledReason !== null}
-                              title={autoFitContentsDisabledReason ?? undefined}
-                              data-testid="document-toolbar-autofit-contents"
-                              onSelect={() =>
-                                runTableAutoFitCommand((commandChain) =>
-                                  commandChain.autoFitTableContents(),
-                                )
-                              }
-                            >
-                              {t("toolbar.autoFitContents")}
-                            </DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem
-                              value="window"
-                              disabled={autoFitWindowDisabledReason !== null}
-                              title={autoFitWindowDisabledReason ?? undefined}
-                              data-testid="document-toolbar-autofit-window"
-                              onSelect={() =>
-                                runTableAutoFitCommand((commandChain) =>
-                                  commandChain.autoFitTableWindow(
-                                    autoFitWindowWidth(),
-                                  ),
-                                )
-                              }
-                            >
-                              {t("toolbar.autoFitWindow")}
-                            </DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem
-                              value="fixed"
-                              disabled={fixedColumnWidthDisabledReason !== null}
-                              title={
-                                fixedColumnWidthDisabledReason ?? undefined
-                              }
-                              data-testid="document-toolbar-autofit-fixed"
-                              onSelect={() =>
-                                runTableAutoFitCommand((commandChain) =>
-                                  commandChain.fixTableColumnWidths(),
-                                )
-                              }
-                            >
-                              {tableAutoFitFixedLabel}
-                            </DropdownMenuRadioItem>
-                          </DropdownMenuRadioGroup>
-                        </DropdownMenuContent>
-                        </DropdownMenu>
-                      ) : null}
-                      <OfficeHomeCommandRow
-                        className={homeStyles.tableDistributeRow}
-                      >
-                        <OfficeHomeCommand
-                          disabled={distributeRowsDisabledReason !== null}
-                          displayLabel={t("toolbar.distributeRows")}
-                          icon={
-                            <OfficeSemanticIcon
-                              semanticId="table.distributeRows"
-                              size={20}
-                            />
-                          }
-                          label={
-                            distributeRowsDisabledReason
-                              ? `${t("toolbar.distributeRows")}: ${distributeRowsDisabledReason}`
-                              : t("toolbar.distributeRows")
-                          }
-                          onClick={() =>
-                            runTableStructureCommand((commandChain) =>
-                              commandChain.distributeTableRows(),
-                            )
-                          }
-                          testId="document-toolbar-distribute-rows"
-                        />
-                        <OfficeHomeCommand
-                          disabled={distributeColumnsDisabledReason !== null}
-                          displayLabel={t("toolbar.distributeColumns")}
-                          icon={
-                            <OfficeSemanticIcon
-                              semanticId="table.distributeColumns"
-                              size={20}
-                            />
-                          }
-                          label={
-                            distributeColumnsDisabledReason
-                              ? `${t("toolbar.distributeColumns")}: ${distributeColumnsDisabledReason}`
-                              : t("toolbar.distributeColumns")
-                          }
-                          onClick={() =>
-                            runTableStructureCommand((commandChain) =>
-                              commandChain.distributeTableColumns(),
-                            )
-                          }
-                          testId="document-toolbar-distribute-columns"
-                        />
-                      </OfficeHomeCommandRow>
-                    </div>
-                  </OfficeHomeRibbonGroup>
-
-                  <OfficeHomeRibbonGroup
-                    ribbon="tableLayout"
-                    label={tableAlignmentGroupLabel}
-                    className={homeStyles.tableLayoutGroup}
-                    testId="document-toolbar-table-layout-group-alignment"
-                  >
-                    <div className={homeStyles.tableAlignmentBody}>
-                      <OfficeTableCellAlignmentMenu
-                        className={homeStyles.tableAlignmentInline}
-                        disabled={!editor.isEditable}
-                        horizontal={snapshot.cellTextAlign ?? "left"}
-                        horizontalLabels={{
-                          left: t("toolbar.cellAlignmentLeft"),
-                          center: t("toolbar.cellAlignmentCenter"),
-                          right: t("toolbar.cellAlignmentRight"),
-                        }}
-                        label={t("toolbar.cellAlignment")}
-                        mixed={snapshot.cellAlignmentMixed}
-                        mixedLabel={t("toolbar.cellAlignmentMixed")}
-                        onSelect={setCellAlignment}
-                        presentation="inline"
-                        testId="document-toolbar-cell-alignment"
-                        vertical={snapshot.cellVerticalAlign ?? "top"}
-                        verticalLabels={{
-                          top: t("toolbar.cellAlignmentTop"),
-                          middle: t("toolbar.cellAlignmentMiddle"),
-                          bottom: t("toolbar.cellAlignmentBottom"),
-                        }}
-                      />
-                      <OfficeHomeCommandStack
-                        className={homeStyles.tableAlignmentCommandStack}
-                      >
-                        <DropdownMenu modal={false}>
-                          <DropdownMenuTrigger asChild>
-                            <OfficeHomeMenuTrigger
-                              active={
-                                snapshot.cellTextDirection !== null &&
-                                snapshot.cellTextDirection !== "lrTb"
-                              }
-                              disabled={!editor.isEditable}
-                              displayLabel={
-                                t("toolbar.textDirection")
-                              }
-                              hasMenuIndicator
-                              icon={
-                                <OfficeSemanticIcon
-                                  semanticId="table.cell.textDirection"
-                                  size={16}
-                                />
-                              }
-                              label={cellTextDirectionCommandLabel}
-                              testId="document-toolbar-cell-text-direction"
-                              variant="compact"
-                            />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="start"
-                            className="note-editor-toolbar-menu"
-                          >
-                            <DropdownMenuRadioGroup
-                              value={snapshot.cellTextDirection ?? "lrTb"}
-                            >
-                              <DropdownMenuRadioItem
-                                value="lrTb"
-                                data-testid="document-toolbar-cell-text-direction-horizontal"
-                                onSelect={() => setCellTextDirection("lrTb")}
-                              >
-                                {t("toolbar.cellTextDirectionHorizontal")}
-                              </DropdownMenuRadioItem>
-                              <DropdownMenuRadioItem
-                                value="tbRl"
-                                data-testid="document-toolbar-cell-text-direction-top-to-bottom"
-                                onSelect={() => setCellTextDirection("tbRl")}
-                              >
-                                {t("toolbar.cellTextDirectionTopToBottom")}
-                              </DropdownMenuRadioItem>
-                              <DropdownMenuRadioItem
-                                value="btLr"
-                                data-testid="document-toolbar-cell-text-direction-bottom-to-top"
-                                onSelect={() => setCellTextDirection("btLr")}
-                              >
-                                {t("toolbar.cellTextDirectionBottomToTop")}
-                              </DropdownMenuRadioItem>
-                            </DropdownMenuRadioGroup>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                        <DropdownMenu
-                          modal={false}
-                          onOpenChange={(open) => {
-                            if (
-                              open &&
-                              document.activeElement instanceof HTMLButtonElement
-                            ) {
-                              cellMarginsReturnFocusRef.current =
-                                document.activeElement;
-                            }
-                          }}
-                        >
-                          <DropdownMenuTrigger asChild>
-                            <OfficeHomeMenuTrigger
-                              active={
-                                snapshot.cellMargin !== null ||
-                                snapshot.cellMarginMixed
-                              }
-                              disabled={!editor.isEditable}
-                              displayLabel={t("toolbar.cellMargin")}
-                              hasMenuIndicator
-                              icon={
-                                <OfficeSemanticIcon
-                                  semanticId="table.cellMargins"
-                                  size={16}
-                                />
-                              }
-                              label={t("toolbar.cellMargin")}
-                              onPointerDown={(event) => {
-                                cellMarginsReturnFocusRef.current =
-                                  event.currentTarget;
-                                rememberEditorSelection();
-                              }}
-                              testId="document-toolbar-cell-margin-menu"
-                              variant="compact"
-                            />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="start"
-                            className="note-editor-toolbar-menu"
-                          >
-                            <DropdownMenuLabel>
-                              {t("toolbar.cellMargin")}
-                            </DropdownMenuLabel>
-                            <DropdownMenuRadioGroup value={cellMarginMenuValue}>
-                              <DropdownMenuRadioItem
-                                value=""
-                                disabled={!editor.isEditable}
-                                data-testid="document-toolbar-cell-margin-none"
-                                onSelect={() => setCellMargin(null)}
-                              >
-                                {t("toolbar.cellMarginNone")}
-                              </DropdownMenuRadioItem>
-                              {CELL_MARGIN_VALUES.map((value) => (
-                                <DropdownMenuRadioItem
-                                  key={value}
-                                  value={String(value)}
-                                  disabled={!editor.isEditable}
-                                  data-testid={`document-toolbar-cell-margin-${value}`}
-                                  onSelect={() => setCellMargin(value)}
-                                >
-                                  {t("toolbar.cellMarginValue", { px: value })}
-                                </DropdownMenuRadioItem>
-                              ))}
-                              {cellMarginMenuValue === "mixed" ? (
-                                <DropdownMenuRadioItem
-                                  value="mixed"
-                                  disabled
-                                  data-testid="document-toolbar-cell-margin-mixed"
-                                >
-                                  {t("toolbar.cellMarginMixed")}
-                                </DropdownMenuRadioItem>
-                              ) : null}
-                              <DropdownMenuRadioItem
-                                value="custom"
-                                disabled={
-                                  cellMarginCustomDisabledReason !== null
-                                }
-                                data-testid="document-toolbar-cell-margin-custom"
-                                onSelect={() => openCellMarginsDialog("cells")}
-                              >
-                                {t("toolbar.cellMarginCustom")}
-                              </DropdownMenuRadioItem>
-                            </DropdownMenuRadioGroup>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              disabled={!editor.isEditable}
-                              data-testid="document-toolbar-table-options"
-                              onSelect={() => openCellMarginsDialog("table")}
-                            >
-                              {t("toolbar.tableOptions")}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </OfficeHomeCommandStack>
-                    </div>
-                  </OfficeHomeRibbonGroup>
-
-                  <OfficeHomeRibbonGroup
-                    ribbon="tableLayout"
-                    label={tableDataGroupLabel}
-                    className={homeStyles.tableLayoutGroup}
-                    testId="document-toolbar-table-layout-group-data"
-                  >
-                    <OfficeHomeCommandRow
-                      className={homeStyles.tableLayoutLargeRow}
-                    >
-                      {docsOfficeParityV2 ? (
-                        <>
-                          {webTableSortCommand("asc")}
-                          {webTableSortCommand("desc")}
-                          {/* Word for the web sorts a column one way or the
-                              other; the Sort dialog (Layout ▸ Data ▸ Sort,
-                              "Sort the contents of a table", Microsoft
-                              Support) is desktop-only. MRAI has the dialog,
-                              so it stays reachable here as a desktop
-                              exception under the id the desktop split uses. */}
-                          <OfficeHomeCommand
-                            activation="click"
-                            disabled={
-                              tableSortCommandDisabled || !editor.isEditable
-                            }
-                            displayLabel={t("toolbar.sort")}
-                            icon={
-                              <OfficeSemanticIcon
-                                semanticId="table.sortAscending"
-                                size={24}
-                              />
-                            }
-                            label={tableSortCommandLabel}
-                            onClick={openTableSortDialog}
-                            testId="document-toolbar-table-sort-dialog-visible"
-                            variant="large"
-                          />
-                        </>
-                      ) : (
-                      <DropdownMenu modal={false}>
-                        <OfficeHomeSplitLayout
-                          testId="document-toolbar-table-sort-split"
-                          primary={
-                            <OfficeHomeCommand
-                              activation="click"
-                              disabled={
-                                tableSortCommandDisabled || !editor.isEditable
-                              }
-                              displayLabel={t("toolbar.sort")}
-                              icon={
-                                <OfficeSemanticIcon
-                                  semanticId="table.sortAscending"
-                                  size={24}
-                                />
-                              }
-                              label={tableSortCommandLabel}
-                              onClick={openTableSortDialog}
-                              testId="document-toolbar-table-sort-dialog-visible"
-                              variant="large"
-                            />
-                          }
-                          trigger={
-                            <DropdownMenuTrigger asChild>
-                              <OfficeHomeMenuTrigger
-                                className="note-editor-office-toolbar__split-chevron"
-                                disabled={
-                                  tableSortCommandDisabled || !editor.isEditable
-                                }
-                                icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                                label={tableSortCommandLabel}
-                                onPointerDown={rememberEditorSelection}
-                                testId="document-toolbar-table-sort-menu"
-                                variant="icon"
-                              />
-                            </DropdownMenuTrigger>
-                          }
-                        />
-                        <DropdownMenuContent
-                          align="start"
-                          className="note-editor-toolbar-menu"
-                          onCloseAutoFocus={(event) => {
-                            event.preventDefault();
-                            safelyFocusEditorAfterToolbarClose(editor);
-                          }}
-                        >
-                          <DropdownMenuItem
-                            disabled={
-                              tableSortCommandDisabled || !editor.isEditable
-                            }
-                            data-testid="document-toolbar-table-sort-ascending"
-                            onSelect={() => runQuickTableSort("asc")}
-                          >
-                            <OfficeSemanticIcon
-                              semanticId="table.sortAscending"
-                              size={16}
-                            />
-                            {t("toolbar.sortAscendingLabel")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={
-                              tableSortCommandDisabled || !editor.isEditable
-                            }
-                            data-testid="document-toolbar-table-sort-descending"
-                            onSelect={() => runQuickTableSort("desc")}
-                          >
-                            <OfficeSemanticIcon
-                              semanticId="table.sortDescending"
-                              size={16}
-                            />
-                            {t("toolbar.sortDescendingLabel")}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            disabled={
-                              tableSortCommandDisabled || !editor.isEditable
-                            }
-                            data-testid="document-toolbar-table-sort-dialog"
-                            onSelect={openTableSortDialog}
-                          >
-                            <Settings2 size={16} aria-hidden />
-                            {tableSortCommandLabel}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      )}
-                      <OfficeHomeCommandStack
-                        className={`${homeStyles.tableDataCommandStack}${
-                          docsOfficeParityV2
-                            ? ` ${homeStyles.tableDataWebDirect}`
-                            : ""
-                        }`}
-                      >
-                        <OfficeHomeCommand
-                          active={repeatHeaderRowsState.active === true}
-                          controlId="DOCCTL.CONTEXT.TABLE_LAYOUT.REPEAT_HEADER"
-                          disabled={pinHeaderRowsDisabledReason !== null}
-                          displayLabel={pinHeaderRowsLabel}
-                          icon={
-                            <OfficeSemanticIcon
-                              semanticId="table.pinRow"
-                              size={docsOfficeParityV2 ? 24 : 16}
-                            />
-                          }
-                          label={
-                            pinHeaderRowsDisabledReason
-                              ? `${pinHeaderRowsLabel}: ${pinHeaderRowsDisabledReason}`
-                              : `${pinHeaderRowsLabel}: ${repeatHeaderRowsLabel}`
-                          }
-                          onClick={() => runSetRepeatHeaderRows(true)}
-                          testId="document-toolbar-repeat-header-rows"
-                          variant={docsOfficeParityV2 ? "large" : "compact"}
-                        />
-                        <OfficeHomeCommand
-                          disabled={unpinHeaderRowsDisabledReason !== null}
-                          displayLabel={unpinHeaderRowsLabel}
-                          icon={
-                            <OfficeSemanticIcon
-                              semanticId="table.unpinRow"
-                              size={docsOfficeParityV2 ? 24 : 16}
-                            />
-                          }
-                          label={
-                            unpinHeaderRowsDisabledReason
-                              ? `${unpinHeaderRowsLabel}: ${unpinHeaderRowsDisabledReason}`
-                              : `${unpinHeaderRowsLabel}: ${repeatHeaderRowsLabel}`
-                          }
-                          onClick={() => runSetRepeatHeaderRows(false)}
-                          testId="document-toolbar-unpin-header-rows"
-                          variant={docsOfficeParityV2 ? "large" : "compact"}
-                        />
-                      </OfficeHomeCommandStack>
-                      {/* Word for the web has neither Formula nor Convert
-                          Table to Text (both are Layout ▸ Data on the
-                          desktop). MRAI has both dialogs, so the stack is a
-                          desktop exception in the web ribbon too. */}
-                      <OfficeHomeCommandStack
-                        className={homeStyles.tableDataCommandStack}
-                      >
-                        <OfficeHomeCommand
-                          activation="click"
-                          disabled={!editor.isEditable}
-                          displayLabel={convertTableToTextLabel}
-                          icon={
-                            <OfficeSemanticIcon
-                              semanticId="table.convertRange"
-                              size={16}
-                            />
-                          }
-                          label={convertTableToTextCommandLabel}
-                          onClick={openConvertTableToTextDialog}
-                          testId="document-toolbar-convert-table-to-text"
-                          variant="compact"
-                        />
-                        <OfficeHomeCommand
-                          activation="click"
-                          disabled={tableFormulaDisabledReason !== null}
-                          displayLabel={tableFormulaLabel}
-                          icon={<Sigma size={16} aria-hidden />}
-                          label={
-                            tableFormulaDisabledReason
-                              ? `${tableFormulaLabel}: ${tableFormulaDisabledReason}`
-                              : tableFormulaLabel
-                          }
-                          onClick={openFormulaEditor}
-                          testId="document-toolbar-cell-formula"
-                          variant="compact"
-                        />
-                      </OfficeHomeCommandStack>
-                    </OfficeHomeCommandRow>
-                  </OfficeHomeRibbonGroup>
-
-                  <OfficeHomeRibbonGroup
-                    ribbon="tableLayout"
-                    label={tableGroupLabel}
-                    className={homeStyles.tableLayoutGroup}
-                    testId="document-toolbar-table-layout-group-table"
-                  >
-                    <OfficeHomeCommandRow
-                      className={homeStyles.tableLayoutLargeRow}
-                    >
-                      {docsOfficeParityV2 ? (
-                        <>
-                          {tableAltTextCommand}
-                          {/* Table Properties is Layout ▸ Table on the
-                              desktop ("Table properties", Microsoft Support)
-                              and absent from Word for the web; the MRAI
-                              dialog stays reachable as a desktop exception,
-                              with the table-wide find/replace dialog that has
-                              no Word counterpart at all. Same ids as the
-                              desktop advanced menu, which is not rendered in
-                              this mode. */}
-                          <OfficeHomeCommandStack
-                            className={homeStyles.tableToolsCommandStack}
-                          >
-                            <OfficeHomeCommand
-                              activation="click"
-                              controlId="DOCCTL.CONTEXT.TABLE_LAYOUT.PROPERTIES"
-                              disabled={!editor.isEditable}
-                              displayLabel={
-                                t("toolbar.tableProperties")
-                              }
-                              icon={<Settings2 size={16} aria-hidden />}
-                              label={
-                                t("toolbar.tablePropertiesLabel")
-                              }
-                              onClick={openTablePropertiesDialog}
-                              testId="document-toolbar-table-properties-visible"
-                              variant="compact"
-                            />
-                            <OfficeHomeCommand
-                              activation="click"
-                              disabled={!editor.isEditable}
-                              displayLabel={
-                                t("toolbar.replaceInTable")
-                              }
-                              icon={<ArrowRightLeft size={16} aria-hidden />}
-                              label={
-                                t("toolbar.findAndReplaceInTable")
-                              }
-                              onClick={openTableReplaceTextDialog}
-                              testId="document-toolbar-table-replace-text"
-                              variant="compact"
-                            />
-                          </OfficeHomeCommandStack>
-                        </>
-                      ) : (
-                        <>
-                      <DropdownMenu
-                        onOpenChange={(open) => {
-                          if (open)
-                            tableStructureMenuCommittedRef.current = false;
-                        }}
-                      >
-                        <OfficeHomeSplitLayout
-                          className={homeStyles.tableAdvancedSplit}
-                          testId="document-toolbar-table-alt-text-advanced-split"
-                          primary={tableAltTextCommand}
-                          trigger={
-                            <DropdownMenuTrigger asChild>
-                              <OfficeHomeMenuTrigger
-                                icon={
-                                  <OfficeSemanticIcon
-                                    semanticId="menu.chevron.down"
-                                    size={12}
-                                  />
-                                }
-                                label={tableAdvancedLabel}
-                                testId="document-toolbar-table-autofit-menu"
-                                title={tableAdvancedLabel}
-                                variant="icon"
-                              />
-                            </DropdownMenuTrigger>
-                          }
-                        />
-                        <DropdownMenuContent
-                          align="start"
-                          className="note-editor-toolbar-menu"
-                          onCloseAutoFocus={(event) => {
-                            event.preventDefault();
-                            if (tableStructureMenuCommittedRef.current) {
-                              tableStructureMenuCommittedRef.current = false;
-                              safelyFocusEditorAfterToolbarClose(editor);
-                      }
-                    }}
-                >
-                          <DropdownMenuLabel>
-                            {tableAdvancedLabel}
-                          </DropdownMenuLabel>
-                          <DropdownMenuCheckboxItem
-                            checked={tableDrawMode === "draw"}
-                            disabled={!editor.isEditable}
-                            data-testid="document-toolbar-table-draw-pencil"
-                            onSelect={() =>
-                              setTableDrawMode((current) =>
-                                current === "draw" ? null : "draw",
-                      )
-                  }
-                >
-                            <Pencil size={16} aria-hidden />
-                            {t("toolbar.drawTable")}
-                          </DropdownMenuCheckboxItem>
-                          <DropdownMenuCheckboxItem
-                            checked={tableDrawMode === "erase"}
-                            disabled={!editor.isEditable || !snapshot.table}
-                            data-testid="document-toolbar-table-eraser"
-                            onSelect={() =>
-                              setTableDrawMode((current) =>
-                                current === "erase" ? null : "erase",
-                      )
-                  }
-                >
-                            <Eraser size={16} aria-hidden />
-                            {t("toolbar.eraserLabel")}
-                          </DropdownMenuCheckboxItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuCheckboxItem
-                            checked={snapshot.tableGridlinesVisible}
-                            data-testid="document-toolbar-table-gridlines"
-                            onSelect={runToggleTableGridlines}
-                          >
-                            <OfficeSemanticIcon
-                              semanticId="table.gridlines"
-                              size={16}
-                />
-                            {t("toolbar.tableViewGridlines")}
-                          </DropdownMenuCheckboxItem>
-                          <DropdownMenuItem
-                            disabled={!editor.isEditable}
-                            data-testid="document-toolbar-table-properties"
-                            onSelect={openTablePropertiesDialog}
-                          >
-                            <Settings2 size={16} aria-hidden />
-                            {t("toolbar.tablePropertiesLabel")}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuLabel>
-                            {t("toolbar.tableAlignment")}
-                          </DropdownMenuLabel>
-                          <DropdownMenuRadioGroup
-                            value={snapshot.tableAlign ?? "left"}
-                          >
-                            <DropdownMenuRadioItem
-                              value="left"
-                              disabled={!editor.isEditable}
-                              data-testid="document-toolbar-table-align-left"
-                              onSelect={() =>
-                                tableChain().setTableAlign("left").run()
-                              }
-                            >
-                              {t("toolbar.tableAlignLeft")}
-                            </DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem
-                              value="center"
-                              disabled={!editor.isEditable}
-                              data-testid="document-toolbar-table-align-center"
-                              onSelect={() =>
-                                tableChain().setTableAlign("center").run()
-                              }
-                            >
-                              {t("toolbar.tableAlignCenter")}
-                            </DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem
-                              value="right"
-                              disabled={!editor.isEditable}
-                              data-testid="document-toolbar-table-align-right"
-                              onSelect={() =>
-                                tableChain().setTableAlign("right").run()
-                  }
-                            >
-                              {t("toolbar.tableAlignRight")}
-                            </DropdownMenuRadioItem>
-                          </DropdownMenuRadioGroup>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                  disabled={!editor.isEditable}
-                            data-testid="document-toolbar-table-replace-text"
-                            onSelect={openTableReplaceTextDialog}
-                >
-                            <ArrowRightLeft size={16} aria-hidden />
-                            {t("toolbar.findAndReplaceInTable")}
-                          </DropdownMenuItem>
-                          <DropdownMenuCheckboxItem
-                            checked={rowBreakAcrossPagesState.active === true}
-                  disabled={!rowBreakAcrossPagesState.enabled}
-                            data-testid="document-toolbar-row-break-across-pages"
-                            onSelect={runToggleRowBreakAcrossPages}
-                >
-                            {rowBreakAcrossPagesCommandLabel}
-                          </DropdownMenuCheckboxItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                      <OfficeHomeCommandStack
-                        className={homeStyles.tableToolsCommandStack}
-                      >
-                        <OfficeHomeCommand
-                          active={snapshot.tableGridlinesVisible}
-                          controlId="DOCCTL.CONTEXT.TABLE_LAYOUT.GRIDLINES"
-                          displayLabel={t("toolbar.tableViewGridlines")}
-                          icon={
-                            <OfficeSemanticIcon
-                              semanticId="table.gridlines"
-                              size={16}
-                            />
-                          }
-                          label={t("toolbar.tableViewGridlines")}
-                          onClick={runToggleTableGridlines}
-                          testId="document-toolbar-table-gridlines-visible"
-                          variant="compact"
-                        />
-                        <OfficeHomeCommand
-                          activation="click"
-                          controlId="DOCCTL.CONTEXT.TABLE_LAYOUT.PROPERTIES"
-                          disabled={!editor.isEditable}
-                          displayLabel={
-                            t("toolbar.tableProperties")
-                          }
-                          icon={<Settings2 size={16} aria-hidden />}
-                          label={
-                            t("toolbar.tablePropertiesLabel")
-                          }
-                          onClick={openTablePropertiesDialog}
-                          testId="document-toolbar-table-properties-visible"
-                          variant="compact"
-                        />
-                      </OfficeHomeCommandStack>
-                        </>
-                      )}
-                    </OfficeHomeCommandRow>
-                  </OfficeHomeRibbonGroup>
-              </div>
-              ) : null}
-            </div>
-          ) : null
-          ) : null}
-          {isActiveRibbon("picture") ? (
-            snapshot.image ? (
-            <PictureRibbonGroupOrder>
-              <OfficeHomeRibbonGroup
-                ribbon="picture"
-                className={homeStyles.pictureAdjustGroup}
-                label={t("toolbar.adjust")}
-                testId="document-toolbar-picture-adjust-group"
-              >
-                <OfficeHomeCommandRow className={homeStyles.pictureCommandRow}>
-                  <OfficeHomeCommand
-                    active={pictureFormatPaneTarget !== null}
-                    ariaExpanded={pictureFormatPaneTarget !== null}
-                    buttonRef={pictureFormatTriggerRef}
-                    disabled={
-                      !pictureFormatDecision.enabled ||
-                      snapshot.imageWidthPx === null ||
-                      snapshot.imageHeightPx === null
-                    }
-                    icon={<OfficeSemanticIcon semanticId="image.format" size={24} />}
-                    label={t("presentation.image.formatPicture")}
-                    onClick={openPictureFormatPane}
-                    testId="document-toolbar-picture-set-format"
-                    variant="large"
-                  />
-                  {desktopInteroperabilityVisible ? (
-                    <OfficeHomeMenuTrigger
-                      disabled
-                      icon={
-                        <OfficeSemanticIcon
-                          semanticId="image.removeBackground"
-                          size={24}
-                        />
-                      }
-                      label={t("toolbar.removeBackground")}
-                      title={pictureWriterUnavailableReason}
-                      testId="document-toolbar-picture-remove-background"
-                      variant="large"
-                    />
-                  ) : null}
-                  {(() => {
-                    // Word's Picture Format > Adjust > Artistic Effects: the
-                    // shared gallery; a picture whose effect came from the file
-                    // keeps Word's rendered bitmap and is not re-effected.
-                    const selection = editor.state.selection;
-                    const imageAttrs =
-                      selection instanceof NodeSelection &&
-                      selection.node.type.name.toLowerCase().includes("image")
-                        ? (selection.node.attrs as Record<string, unknown>)
-                        : null;
-                    if (!imageAttrs) return null;
-                    const rendered = imageAttrs.artisticEffectRendered === true;
-                    return (
-                      <OfficeArtisticEffectsMenu
-                        value={normalizeOfficeArtisticEffect(imageAttrs.artisticEffect)}
-                        disabled={!editor.isEditable || rendered}
-                        disabledReason={
-                          rendered
-                            ? t("toolbar.pictureSEffectCameFromWord")
-                            : !editor.isEditable
-                              ? readOnlyReason
-                              : undefined
-                        }
-                        onCommit={(id) => {
-                          const effect = normalizeOfficeArtisticEffect(id);
-                          updateLiveImageFormatting(editor, { artisticEffect: effect });
-                        }}
-                        testIdPrefix="document-toolbar-picture-artistic-effects"
-                        trigger={
-                          <OfficeHomeMenuTrigger
-                            hasMenuIndicator
-                            disabled={!editor.isEditable}
-                            icon={<OfficeSemanticIcon semanticId="image.corrections" size={24} />}
-                            label={t("toolbar.artisticEffects")}
-                            onPointerDown={rememberEditorSelection}
-                            testId="document-toolbar-picture-artistic-effects"
-                            variant="large"
-                          />
-                        }
-                      />
-                    );
-                  })()}
-                  {desktopInteroperabilityVisible ? (
-                    <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <OfficeHomeMenuTrigger
-                        active={
-                          pictureBrightnessDelta !== 0 ||
-                          pictureContrastDelta !== 0
-                        }
-                        disabled={pictureVisualFormattingDisabled}
-                        hasMenuIndicator
-                        icon={
-                          <OfficeSemanticIcon
-                            semanticId="image.corrections"
-                            size={24}
-                          />
-                        }
-                        label={t("toolbar.corrections")}
-                        title={
-                          pictureVisualFormattingDisabled
-                            ? `${t("toolbar.corrections")}: ${pictureUnsupported}`
-                            : undefined
-                        }
-                        onPointerDown={rememberEditorSelection}
-                        testId="document-toolbar-picture-corrections"
-                        variant="large"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      className="note-editor-toolbar-menu"
-                      data-testid="document-toolbar-picture-corrections-menu"
-                      onPointerLeave={restoreImageFilterPreview}
-                      onCloseAutoFocus={(event) => {
-                        event.preventDefault();
-                        restoreImageFilterPreview();
-                        safelyFocusEditorAfterToolbarClose(editor);
-                      }}
-                    >
-                      <DropdownMenuLabel>
-                        {t("toolbar.sharpenSoften")}
-                      </DropdownMenuLabel>
-                      <DropdownMenuItem
-                        disabled
-                        title={pictureWriterUnavailableReason}
-                        data-testid="document-toolbar-picture-corrections-sharpness"
-                      >
-                        <OfficePictureMenuIcon icon={{ kind: "sharpness" }} />
-                        {t("toolbar.nativeSharpnessWriterRequired")}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuLabel>
-                        {t("toolbar.brightnessContrast")}
-                      </DropdownMenuLabel>
-                      <DropdownMenuRadioGroup
-                        value={`${pictureBrightnessDelta}:${pictureContrastDelta}`}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(5, minmax(52px, 1fr))",
-                          gap: 4,
-                          padding: 4,
-                        }}
-                      >
-                        {IMAGE_CORRECTION_PRESET_DELTAS.flatMap(
-                          (contrastDelta) =>
-                            IMAGE_CORRECTION_PRESET_DELTAS.map(
-                              (brightnessDelta) => {
-                                const filter =
-                                  imageFilterCss(
-                                    resolveImageEffects({
-                                      recolor: snapshot.imageRecolor,
-                                      saturation: snapshot.imageSaturation,
-                                      brightness:
-                                        imageCorrectionStoredFromDelta(
-                                          brightnessDelta,
-                                        ),
-                                      contrast:
-                                        imageCorrectionStoredFromDelta(
-                                          contrastDelta,
-                                        ),
-                                    }),
-                                  ) ?? "";
-                                const label = t("toolbar.brightnessContrastPreset", {
-                                  brightness: `${brightnessDelta >= 0 ? "+" : ""}${brightnessDelta}`,
-                                  contrast: `${contrastDelta >= 0 ? "+" : ""}${contrastDelta}`,
-                                });
-                                return (
-                                  <DropdownMenuRadioItem
-                                    key={`${brightnessDelta}:${contrastDelta}`}
-                                    value={`${brightnessDelta}:${contrastDelta}`}
-                                    aria-label={label}
-                                    data-testid={`document-toolbar-picture-corrections-b${brightnessDelta}-c${contrastDelta}`}
-                                    onFocus={() =>
-                                      previewImageCorrections(
-                                        brightnessDelta,
-                                        contrastDelta,
-                                      )
-                                    }
-                                    onPointerEnter={() =>
-                                      previewImageCorrections(
-                                        brightnessDelta,
-                                        contrastDelta,
-                                      )
-                                    }
-                                    onSelect={() =>
-                                      commitImageCorrections(
-                                        brightnessDelta,
-                                        contrastDelta,
-                                      )
-                                    }
-                                    style={{
-                                      minWidth: 52,
-                                      minHeight: 56,
-                                      padding: 4,
-                                      display: "flex",
-                                      flexDirection: "column",
-                                      justifyContent: "center",
-                                      gap: 2,
-                                    }}
-                                  >
-                                    <span
-                                      aria-hidden="true"
-                                      style={{
-                                        width: 38,
-                                        height: 25,
-                                        border: "1px solid #cbd5e1",
-                                        borderRadius: 3,
-                                        background:
-                                          PICTURE_ADJUSTMENT_PREVIEW_BACKGROUND,
-                                        filter: filter || "none",
-                                      }}
-                                    />
-                                    <span
-                                      aria-hidden="true"
-                                      style={{ fontSize: 9, lineHeight: 1 }}
-                                    >
-                                      {brightnessDelta}/{contrastDelta}
-                                    </span>
-                                  </DropdownMenuRadioItem>
-                                );
-                              },
-                            ),
-                        )}
-                      </DropdownMenuRadioGroup>
-                      <DropdownMenuSeparator />
-                      <SpacingNumberField
-                        label={t("toolbar.brightness")}
-                        testId="document-toolbar-picture-corrections-brightness"
-                        value={String(pictureBrightnessDelta)}
-                        min={-100}
-                        max={100}
-                        step={1}
-                        onCommit={(raw) => {
-                          const next = Number(raw);
-                          if (isImageCorrectionDelta(next)) {
-                            commitImageCorrections(next, pictureContrastDelta);
-                          }
-                        }}
-                      />
-                      <SpacingNumberField
-                        label={t("toolbar.contrast")}
-                        testId="document-toolbar-picture-corrections-contrast"
-                        value={String(pictureContrastDelta)}
-                        min={-100}
-                        max={100}
-                        step={1}
-                        onCommit={(raw) => {
-                          const next = Number(raw);
-                          if (isImageCorrectionDelta(next)) {
-                            commitImageCorrections(
-                              pictureBrightnessDelta,
-                              next,
-                            );
-                          }
-                        }}
-                      />
-                    </DropdownMenuContent>
-                    </DropdownMenu>
-                  ) : null}
-                  {desktopInteroperabilityVisible ? (
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <OfficeHomeMenuTrigger
-                        active={
-                          snapshot.imageRecolor !== "none" ||
-                          snapshot.imageSaturation !== 100
-                        }
-                        disabled={pictureVisualFormattingDisabled}
-                        hasMenuIndicator
-                        icon={
-                          <OfficeSemanticIcon
-                            semanticId="image.color"
-                            size={24}
-                          />
-                        }
-                        label={t("toolbar.color")}
-                        title={
-                          pictureVisualFormattingDisabled
-                            ? `${t("toolbar.color")}: ${pictureUnsupported}`
-                            : undefined
-                        }
-                        onPointerDown={rememberEditorSelection}
-                        testId="document-toolbar-picture-color"
-                        variant="large"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      className="note-editor-toolbar-menu"
-                      data-testid="document-toolbar-picture-color-menu"
-                      onPointerLeave={restoreImageFilterPreview}
-                      onCloseAutoFocus={(event) => {
-                        event.preventDefault();
-                        restoreImageFilterPreview();
-                        safelyFocusEditorAfterToolbarClose(editor);
-                      }}
-                    >
-                      <DropdownMenuLabel>
-                        {t("toolbar.colorSaturation")}
-                      </DropdownMenuLabel>
-                      <DropdownMenuRadioGroup
-                        value={String(snapshot.imageSaturation)}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(3, minmax(72px, 1fr))",
-                          gap: 4,
-                          padding: 4,
-                        }}
-                      >
-                        {IMAGE_SATURATION_PRESETS.map((saturation) => {
-                          const filter =
-                            imageFilterCss(
-                              resolveImageEffects({
-                                recolor: snapshot.imageRecolor,
-                                saturation,
-                                brightness: snapshot.imageBrightness,
-                                contrast: snapshot.imageContrast,
-                              }),
-                            ) ?? "none";
-                          const label = t("toolbar.saturationPreset", {
-                            saturation,
-                          });
-                          return (
-                            <DropdownMenuRadioItem
-                              key={saturation}
-                              value={String(saturation)}
-                              aria-label={label}
-                              data-testid={`document-toolbar-picture-color-saturation-${saturation}`}
-                              onFocus={() =>
-                                previewImageSaturation(saturation)
-                              }
-                              onPointerEnter={() =>
-                                previewImageSaturation(saturation)
-                              }
-                              onSelect={() =>
-                                commitImageSaturation(saturation)
-                              }
-                              style={{
-                                minWidth: 72,
-                                minHeight: 64,
-                                padding: 5,
-                                display: "flex",
-                                flexDirection: "column",
-                                justifyContent: "center",
-                                gap: 4,
-                              }}
-                            >
-                              <span
-                                aria-hidden="true"
-                                style={{
-                                  width: 44,
-                                  height: 32,
-                                  border: "1px solid #cbd5e1",
-                                  borderRadius: 3,
-                                  background:
-                                    PICTURE_ADJUSTMENT_PREVIEW_BACKGROUND,
-                                  filter,
-                                }}
-                              />
-                              <span>{saturation}%</span>
-                            </DropdownMenuRadioItem>
-                          );
-                        })}
-                      </DropdownMenuRadioGroup>
-                      <SpacingNumberField
-                        label={t("toolbar.saturation")}
-                        testId="document-toolbar-picture-color-saturation-custom"
-                        value={String(snapshot.imageSaturation)}
-                        min={0}
-                        max={200}
-                        step={1}
-                        onCommit={(raw) => {
-                          const next = Number(raw);
-                          if (
-                            Number.isInteger(next) &&
-                            next >= 0 &&
-                            next <= 200
-                          ) {
-                            commitImageSaturation(next);
-                          }
-                        }}
-                      />
-                      <DropdownMenuSeparator />
-                      <DropdownMenuLabel>
-                        {t("toolbar.recolor")}
-                      </DropdownMenuLabel>
-                      <DropdownMenuRadioGroup
-                        value={snapshot.imageRecolor}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(2, minmax(72px, 1fr))",
-                          gap: 4,
-                          padding: 4,
-                        }}
-                      >
-                        {NATIVE_IMAGE_RECOLOR_MODES.map((recolor) => (
-                          <DropdownMenuRadioItem
-                            key={recolor}
-                            value={recolor}
-                            data-testid={`document-toolbar-picture-color-${recolor}`}
-                            onFocus={() => previewImageRecolor(recolor)}
-                            onPointerEnter={() => previewImageRecolor(recolor)}
-                            onSelect={() => commitImageRecolor(recolor)}
-                            style={{
-                              minWidth: 72,
-                              minHeight: 64,
-                              padding: 5,
-                              display: "flex",
-                              flexDirection: "column",
-                              justifyContent: "center",
-                              gap: 4,
-                            }}
-                          >
-                            <span
-                              aria-hidden="true"
-                              style={{
-                                width: 44,
-                                height: 32,
-                                border: "1px solid #cbd5e1",
-                                borderRadius: 3,
-                                background:
-                                  PICTURE_ADJUSTMENT_PREVIEW_BACKGROUND,
-                                filter:
-                                  imageFilterCss(
-                                    resolveImageEffects({
-                                      recolor,
-                                      saturation: snapshot.imageSaturation,
-                                      brightness: snapshot.imageBrightness,
-                                      contrast: snapshot.imageContrast,
-                                    }),
-                                  ) ?? "none",
-                              }}
-                            />
-                            <span>
-                              {recolor === "grayscale"
-                                ? t("toolbar.grayscale")
-                                : t("toolbar.noRecolor")}
-                            </span>
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuLabel>
-                        {t("toolbar.moreColorOptions")}
-                      </DropdownMenuLabel>
-                      {(
-                        [
-                          ["tone", t("toolbar.colorTone")],
-                          [
-                            "variations",
-                            t("toolbar.moreVariations"),
-                          ],
-                          [
-                            "transparent-color",
-                            t("toolbar.setTransparentColor"),
-                          ],
-                        ] as const
-                      ).map(([id, label]) => (
-                        <DropdownMenuItem
-                          key={id}
-                          disabled
-                          title={pictureWriterUnavailableReason}
-                          data-testid={`document-toolbar-picture-color-${id}`}
-                        >
-                          <OfficePictureMenuIcon
-                            icon={{
-                              kind:
-                                id === "tone"
-                                  ? "color-tone"
-                                  : id === "variations"
-                                    ? "color-variations"
-                                    : "set-transparent-color",
-                            }}
-                          />
-                          {label}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  ) : null}
-                  {desktopInteroperabilityVisible ? (
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <OfficeHomeMenuTrigger
-                        active={snapshot.imageOpacity < 100}
-                        disabled={pictureVisualFormattingDisabled}
-                        hasMenuIndicator
-                        icon={
-                          <OfficeSemanticIcon
-                            semanticId="image.transparency"
-                            size={24}
-                          />
-                        }
-                        label={t("toolbar.transparency")}
-                        title={
-                          pictureVisualFormattingDisabled
-                            ? `${t("toolbar.transparency")}: ${pictureUnsupported}`
-                            : undefined
-                        }
-                        onPointerDown={rememberEditorSelection}
-                        testId="document-toolbar-picture-transparency"
-                        variant="large"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      className="note-editor-toolbar-menu"
-                      data-testid="document-toolbar-picture-transparency-menu"
-                      onCloseAutoFocus={(event) => {
-                        event.preventDefault();
-                        safelyFocusEditorAfterToolbarClose(editor);
-                      }}
-                    >
-                      <DropdownMenuLabel>
-                        {t("toolbar.pictureTransparencyPresets")}
-                      </DropdownMenuLabel>
-                      <DropdownMenuRadioGroup
-                        value={String(
-                          imageTransparencyFromOpacity(snapshot.imageOpacity),
-                        )}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(4, minmax(56px, 1fr))",
-                          gap: 4,
-                          padding: 4,
-                        }}
-                      >
-                        {IMAGE_TRANSPARENCY_PRESETS.map((transparency) => (
-                          <DropdownMenuRadioItem
-                            key={transparency}
-                            value={String(transparency)}
-                            data-testid={`document-toolbar-picture-transparency-${transparency}`}
-                            onSelect={() => setImageTransparency(transparency)}
-                            style={{
-                              minWidth: 56,
-                              minHeight: 56,
-                              padding: 5,
-                              display: "flex",
-                              flexDirection: "column",
-                              justifyContent: "center",
-                              gap: 3,
-                            }}
-                          >
-                            <span
-                              aria-hidden="true"
-                              style={{
-                                position: "relative",
-                                width: 40,
-                                height: 28,
-                                overflow: "hidden",
-                                border: "1px solid #cbd5e1",
-                                borderRadius: 3,
-                                backgroundColor: "#fff",
-                                backgroundImage:
-                                  "linear-gradient(45deg,#e2e8f0 25%,transparent 25%),linear-gradient(-45deg,#e2e8f0 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e2e8f0 75%),linear-gradient(-45deg,transparent 75%,#e2e8f0 75%)",
-                                backgroundPosition:
-                                  "0 0,0 4px,4px -4px,-4px 0px",
-                                backgroundSize: "8px 8px",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  position: "absolute",
-                                  inset: 4,
-                                  borderRadius: 2,
-                                  background:
-                                    PICTURE_ADJUSTMENT_PREVIEW_BACKGROUND,
-                                  opacity: (100 - transparency) / 100,
-                                }}
-                              />
-                            </span>
-                            <span>{transparency}%</span>
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                      <DropdownMenuSeparator />
-                      <SpacingNumberField
-                        label={
-                          t("toolbar.transparencyLabel")
-                        }
-                        testId="document-toolbar-picture-transparency-custom"
-                        value={String(
-                          imageTransparencyFromOpacity(snapshot.imageOpacity),
-                        )}
-                        min={0}
-                        max={100}
-                        step={1}
-                        onCommit={(raw) => {
-                          const next = Number(raw);
-                          if (Number.isFinite(next)) {
-                            setImageTransparency(next);
-                          }
-                        }}
-                      />
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  ) : null}
-                  {/* Picture Format ▸ Adjust ▸ Compress Pictures is desktop
-                      Word ("Reduce the file size of a picture", Microsoft
-                      Support); Word for the web has no such command. The
-                      MRAI dialog exists, so this is a desktop exception. */}
-                  {(
-                    <OfficeHomeMenuTrigger
-                      ref={pictureCompressionReturnFocusRef}
-                      controlId="DOCCTL.CONTEXT.PICTURE_FORMAT.COMPRESS"
-                      disabled={pictureCompressionDisabled}
-                      disabledReason={pictureCompressionUnavailableReason}
-                      icon={<OfficeSemanticIcon semanticId="image.compress" size={24} />}
-                      label={t("toolbar.compressPictures")}
-                      title={pictureCompressionUnavailableReason}
-                      onClick={openPictureCompression}
-                      testId="document-toolbar-picture-compress"
-                      variant="large"
-                    />
-                  )}
-                  {desktopInteroperabilityVisible ? (
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <OfficeHomeMenuTrigger
-                        ref={pictureChangeMenuReturnFocusRef}
-                        disabled={pictureChangeDisabled}
-                        hasMenuIndicator
-                        icon={
-                          <OfficeSemanticIcon
-                            semanticId="image.change"
-                            size={24}
-                          />
-                        }
-                        label={t("toolbar.changePicture")}
-                        title={pictureChangeUnavailableReason}
-                        aria-busy={pictureReplaceBusy}
-                        onPointerDown={rememberEditorSelection}
-                        testId="document-toolbar-picture-change"
-                        variant="large"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      className="note-editor-toolbar-menu"
-                      data-testid="document-toolbar-picture-change-menu"
-                      onCloseAutoFocus={(event) => {
-                        event.preventDefault();
-                        pictureChangeMenuReturnFocusRef.current?.focus({
-                          preventScroll: true,
-                        });
-                      }}
-                    >
-                      <DropdownMenuItem
-                        disabled={pictureChangeDisabled}
-                        data-testid="document-toolbar-picture-change-from-device"
-                        onSelect={beginPictureChangeFromDevice}
-                      >
-                        <OfficePictureMenuIcon
-                          icon={{ kind: "picture-from-device" }}
-                        />
-                        {t("toolbar.pictureFromDevice")}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        disabled
-                        title={pictureWriterUnavailableReason}
-                        data-testid="document-toolbar-picture-change-online"
-                      >
-                        <OfficePictureMenuIcon icon={{ kind: "picture-online" }} />
-                        {t("toolbar.onlinePictures")}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  ) : null}
-                  {desktopInteroperabilityVisible ? (
-                  <DropdownMenu modal={false}>
-                    <OfficeHomeSplitLayout
-                      className={homeStyles.pictureResetSplit}
-                      testId="document-toolbar-picture-reset-split"
-                      primary={pictureResetCommand}
-                      trigger={
-                        <DropdownMenuTrigger asChild>
-                          <OfficeHomeMenuTrigger
-                            ref={pictureResetMenuReturnFocusRef}
-                            className="note-editor-office-toolbar__split-chevron"
-                            disabled={pictureResetMenuDisabled}
-                            icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                            label={
-                              t("toolbar.resetPicture")
-                            }
-                            onPointerDown={rememberEditorSelection}
-                            testId="document-toolbar-picture-reset-menu"
-                            variant="icon"
-                          />
-                        </DropdownMenuTrigger>
-                      }
-                    />
-                    <DropdownMenuContent
-                      align="start"
-                      className="note-editor-toolbar-menu"
-                      data-testid="document-toolbar-picture-reset-menu-content"
-                      onCloseAutoFocus={(event) => {
-                        event.preventDefault();
-                        pictureResetMenuReturnFocusRef.current?.focus({
-                          preventScroll: true,
-                        });
-                      }}
-                    >
-                      <DropdownMenuItem
-                        disabled={pictureResetDisabled}
-                        data-testid="document-toolbar-picture-reset-menu-picture"
-                        onSelect={resetImagePicture}
-                      >
-                        <OfficePictureMenuIcon icon={{ kind: "picture-reset" }} />
-                        {t("toolbar.resetPicture")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={pictureResetAndSizeDisabled}
-                        title={
-                          pictureResetAndSizeDisabled
-                            ? pictureResetAndSizeUnavailableReason
-                            : undefined
-                        }
-                        data-testid="document-toolbar-picture-reset-menu-picture-and-size"
-                        onSelect={resetImagePictureAndSize}
-                      >
-                        <OfficePictureMenuIcon
-                          icon={{ kind: "picture-reset-size" }}
-                        />
-                        {t("presentation.image.resetAndSize")}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  ) : (
-                    pictureResetCommand
-                  )}
-                </OfficeHomeCommandRow>
-              </OfficeHomeRibbonGroup>
-
-              <OfficeHomeRibbonGroup
-                ribbon="picture"
-                className={homeStyles.pictureDrawGroup}
-                label={t("toolbar.draw")}
-                testId="document-toolbar-picture-draw-group"
-              >
-                <OfficeHomeCommandRow
-                  className={homeStyles.pictureCommandRow}
-                >
-                  <OfficeHomeCommand
-                    active={pictureDrawTarget !== null}
-                    ariaExpanded={pictureDrawTarget !== null}
-                    buttonRef={pictureDrawReturnFocusRef}
-                    disabled={pictureDrawDisabledReason !== null}
-                    disabledReason={pictureDrawDisabledReason ?? undefined}
-                    icon={<DocumentPictureDrawIcon size={24} />}
-                    label={t("toolbar.draw")}
-                    onClick={openPictureDraw}
-                    testId="document-toolbar-picture-draw"
-                    variant="large"
-                  />
-                </OfficeHomeCommandRow>
-              </OfficeHomeRibbonGroup>
-
-              <OfficeHomeRibbonGroup
-                ribbon="picture"
-                className={homeStyles.pictureStylesGroup}
-                label={t("toolbar.pictureStyles")}
-                testId="document-toolbar-picture-styles-group"
-              >
-                <OfficeHomeCommandRow className={homeStyles.pictureCommandRow}>
-                  {pictureStyleTarget ? (
-                    <DocumentPictureStyleGallery
-                      editor={editor}
-                      target={pictureStyleTarget}
-                      labels={{
-                        ariaLabel: t("toolbar.pictureStyles"),
-                        more: t("toolbar.morePictureStyles"),
-                        disabledReason: pictureUnsupported,
-                      }}
-                    />
-                  ) : null}
-                  <div className={homeStyles.colorPopoverHost}>
-                    <DropdownMenu modal={false}>
-                      <OfficeHomeSplitLayout
-                        testId="document-toolbar-picture-border-split"
-                        primary={
-                          <OfficeHomeMenuTrigger
-                            active={snapshot.imageBorderWidth > 0}
-                            disabled={pictureVisualFormattingDisabled}
-                            icon={
-                              <OfficeSemanticIcon
-                                semanticId="image.border"
-                                size={24}
-                              />
-                            }
-                            label={t("toolbar.paragraphBorders")}
-                            title={
-                              pictureVisualFormattingDisabled
-                                ? `${t("toolbar.paragraphBorders")}: ${pictureUnsupported}`
-                                : undefined
-                            }
-                            aria-expanded={pictureBorderPaletteOpen}
-                            aria-haspopup="dialog"
-                            onPointerDown={rememberEditorSelection}
-                            onClick={() =>
-                              setPictureBorderPaletteOpen((open) => !open)
-                            }
-                            testId="document-toolbar-picture-border"
-                            variant="large"
-                          />
-                        }
-                        trigger={
-                          <DropdownMenuTrigger asChild>
-                            <OfficeHomeMenuTrigger
-                              className="note-editor-office-toolbar__split-chevron"
-                              disabled={pictureVisualFormattingDisabled}
-                              icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                              label={t("toolbar.paragraphBorders")}
-                              onPointerDown={() => {
-                                setPictureBorderPaletteOpen(false);
-                                rememberEditorSelection();
-                              }}
-                              testId="document-toolbar-picture-border-menu"
-                              variant="icon"
-                            />
-                          </DropdownMenuTrigger>
-                        }
-                      />
-                      <DropdownMenuContent
-                        align="start"
-                        className="note-editor-toolbar-menu"
-                        data-testid="document-toolbar-picture-border-menu-content"
-                        onCloseAutoFocus={(event) => {
-                          event.preventDefault();
-                          safelyFocusEditorAfterToolbarClose(editor);
-                        }}
-                      >
-                        <DropdownMenuItem
-                          data-testid="document-toolbar-picture-border-none"
-                          onSelect={() => setImageBorder(0)}
-                        >
-                          <OfficePictureMenuIcon icon={{ kind: "no-outline" }} />
-                          {t("toolbar.noBorder")}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuLabel>
-                          {t("toolbar.weight")}
-                        </DropdownMenuLabel>
-                        <DropdownMenuRadioGroup
-                          value={
-                            snapshot.imageBorderWidth === 0
-                              ? ""
-                              : String(snapshot.imageBorderWidth)
-                          }
-                        >
-                          {[0.5, 1, 1.5, 2.25, 3, 4.5, 6].map((width) => (
-                            <DropdownMenuRadioItem
-                              key={width}
-                              value={String(width)}
-                              data-testid={`document-toolbar-picture-border-width-${width}`}
-                              onSelect={() => setImageBorder(width)}
-                            >
-                              <OfficePictureMenuIcon
-                                icon={{ kind: "line-weight", weightPt: width }}
-                                size={20}
-                              />
-                              {width} pt
-                            </DropdownMenuRadioItem>
-                          ))}
-                        </DropdownMenuRadioGroup>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuLabel>
-                          {t("toolbar.dash")}
-                        </DropdownMenuLabel>
-                        <DropdownMenuRadioGroup
-                          value={snapshot.imageBorderStyle}
-                        >
-                          {(["solid", "dashed", "dotted"] as const).map(
-                            (style) => (
-                              <DropdownMenuRadioItem
-                                key={style}
-                                value={style}
-                                data-testid={`document-toolbar-picture-border-style-${style}`}
-                                onSelect={() =>
-                                  setImageBorder(
-                                    snapshot.imageBorderWidth || 1,
-                                    snapshot.imageBorderColor,
-                                    style,
-                                  )
-                                }
-                              >
-                                <OfficePictureMenuIcon
-                                  icon={{ kind: "line-dash", dash: style }}
-                                  size={20}
-                                />
-                                {style === "solid"
-                                  ? t("toolbar.solid")
-                                  : style === "dashed"
-                                    ? t("toolbar.dashed")
-                                    : t("toolbar.dotted")}
-                              </DropdownMenuRadioItem>
-                            ),
-                          )}
-                        </DropdownMenuRadioGroup>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    {pictureBorderPaletteOpen ? (
-                      <OfficeColorPalettePopover
-                        paletteId={snapshot.designColorSet ?? undefined}
-                        value={snapshot.imageBorderColor}
-                        allowNoFill
-                        noFillSelected={!snapshot.imageBorderColor}
-                        labels={{
-                          themeColors: t("toolbar.themeColors"),
-                          standardColors: t("toolbar.standardColors"),
-                          recentColors: t("spreadsheet.recentColors"),
-                          moreColors: t("presentation.imageBorderColor"),
-                          noFill: t("presentation.home.noOutline"),
-                        }}
-                        onPick={(color) => {
-                          if (color) {
-                            setImageBorder(
-                              snapshot.imageBorderWidth || 1,
-                              color,
-                            );
-                          } else {
-                            setImageBorder(0);
-                          }
-                          setPictureBorderPaletteOpen(false);
-                        }}
-                        onDismiss={() => setPictureBorderPaletteOpen(false)}
-                        testIdPrefix="document-toolbar-picture-border"
-                      />
-                    ) : null}
-                  </div>
-                  {desktopInteroperabilityVisible ? (() => {
-                    // Picture Format > Picture Effects: Shadow (reading row
-                    // 547), Reflection, Glow and Soft Edges on the picture's
-                    // own effect list (reading row 545) and Bevel and 3-D
-                    // Rotation on its `picture3d` (the shared menu; 3-D
-                    // Options... opens Format Picture > Effects). A kind its blocker
-                    // holds (a Picture Style owns both; a file read before the
-                    // reading keeps either) is left out.
-                    const target = liveImageAltTarget(editor);
-                    const attrs = (target?.attrs ?? {}) as Record<string, unknown>;
-                    const threeDBlock = target ? picture3dBlocker(attrs) : "preserved";
-                    const lookBlock = target ? pictureLookEffectsBlocker(attrs) : "preserved";
-                    const shadowBlock = target ? pictureShadowBlocker(attrs) : "preserved";
-                    const kinds = [
-                      ...(shadowBlock ? [] : (["shadow"] as const)),
-                      ...(lookBlock ? [] : (["reflection", "glow", "softEdge"] as const)),
-                      ...(threeDBlock ? [] : (["bevel", "rotation3d"] as const)),
-                    ];
-                    const block =
-                      threeDBlock && lookBlock && shadowBlock
-                        ? threeDBlock === "styled" || lookBlock === "styled" || shadowBlock === "styled"
-                          ? "styled"
-                          : "preserved"
-                        : null;
-                    const pictureShadow = pictureShadowEffect(attrs);
-                    const reason = !editor.isEditable
-                      ? t("toolbar.documentReadOnly")
-                      : block === "styled"
-                        ? t("pictureFormatPane.effectsHint")
-                        : block === "preserved"
-                          ? pictureWriterUnavailableReason
-                          : undefined;
-                    return (
-                      <OfficePictureEffectsMenu
-                        effects={{
-                          ...(pictureShadow ? { shadow: pictureShadow } : {}),
-                          ...pictureLookEffects(attrs),
-                          ...(normalizePicture3d(target?.attrs.picture3d) ?? {}),
-                        }}
-                        shadow={false}
-                        accentColors={{
-                          accent1: "#4472c4",
-                          accent2: "#ed7d31",
-                          accent3: "#a5a5a5",
-                          accent4: "#ffc000",
-                          accent5: "#5b9bd5",
-                          accent6: "#70ad47",
-                        }}
-                        kinds={kinds.length ? kinds : ["bevel", "rotation3d"]}
-                        disabled={Boolean(reason)}
-                        disabledReason={reason}
-                        testId="document-toolbar-picture-effects"
-                        iconSemanticId="image.enhance"
-                        labels={presentationEffectsMenuLabels(t, t("toolbar.pictureEffects"))}
-                        onPick={(kind, value) =>
-                          void (kind === "shadow"
-                            ? setPictureShadowEffect(editor, value)
-                            : (PICTURE_LOOK_EFFECT_KINDS as readonly string[]).includes(kind)
-                              ? setPictureLookEffect(editor, kind, value)
-                              : setPicture3dEffect(editor, kind, value))
-                        }
-                        onEffectOptions={(section) => {
-                          setPictureFormatPaneOpening({ tab: "effects", focusAlt: false, section });
-                          setPictureFormatPaneTarget(liveImageAltTarget(editor));
-                        }}
-                      />
-                    );
-                  })() : null}
-                </OfficeHomeCommandRow>
-              </OfficeHomeRibbonGroup>
-
-              <OfficeHomeRibbonGroup
-                ribbon="picture"
-                className={homeStyles.pictureArrangeGroup}
-                label={t("toolbar.arrange")}
-                testId="document-toolbar-picture-arrange-group"
-              >
-                <OfficeHomeCommandRow className={homeStyles.pictureCommandRow}>
-                  {pictureContextPlacement ? (
-                    // Word's Layout Options on the picture: Position, Wrap
-                    // Text (Move with Text / Fix Position on Page), the
-                    // floating stack -- the chart's controls on its anchor.
-                    <DocumentChartPlacementControls
-                      placement={pictureContextPlacement}
-                      onPlacement={(command) => setLiveDocumentDrawingPlacement(editor, command)}
-                      disabledReason={editor.isEditable ? null : t("toolbar.documentReadOnly")}
-                      copy={(key) => t(key as Parameters<typeof t>[0])}
-                      testIdPrefix="document-toolbar-picture"
-                      officeProfile
-                      showAlign={false}
-                      onMoreLayoutOptions={openFloatLayoutDialog}
-                      moreLayoutOptionsLabel={t("document.floatLayout.moreLayoutOptions")}
-                    />
-                  ) : (
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <OfficeHomeMenuTrigger
-                        ref={pictureWrapMenuReturnFocusRef}
-                        active={snapshot.imageFloat !== null}
-                        hasMenuIndicator
-                        icon={<OfficeSemanticIcon semanticId="object.textWrap" size={24} />}
-                        label={t("toolbar.objectWrap")}
-                        onPointerDown={rememberEditorSelection}
-                        testId="document-toolbar-picture-wrap"
-                        variant="large"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      className="note-editor-toolbar-menu"
-                      onCloseAutoFocus={(event) => {
-                        event.preventDefault();
-                        const trigger = pictureWrapMenuReturnFocusRef.current;
-                        if (trigger?.isConnected && !trigger.disabled) {
-                          trigger.focus({ preventScroll: true });
-                        } else {
-                          safelyFocusEditorAfterToolbarClose(editor);
-                        }
-                      }}
-                    >
-                      <DropdownMenuLabel>
-                        {t("toolbar.objectWrap")}
-                      </DropdownMenuLabel>
-                      <DropdownMenuRadioGroup
-                        value={snapshot.imageFloat ?? "inline"}
-                      >
-                        <DropdownMenuRadioItem
-                          value="inline"
-                          data-testid="document-toolbar-image-wrap-inline"
-                          onSelect={() => setImageFloat(null)}
-                        >
-                          <OfficePictureMenuIcon icon={{ kind: "wrap-inline" }} />
-                          {t("toolbar.imageWrapInline")}
-                        </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem
-                          value="left"
-                          disabled={importedPictureAnchorReason !== null}
-                          title={importedPictureAnchorReason ?? undefined}
-                          data-testid="document-toolbar-image-wrap-left"
-                          onSelect={() => setImageFloat("left")}
-                        >
-                          <OfficePictureMenuIcon icon={{ kind: "wrap-square-left" }} />
-                          {t("toolbar.imageWrapLeft")}
-                        </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem
-                          value="right"
-                          disabled={importedPictureAnchorReason !== null}
-                          title={importedPictureAnchorReason ?? undefined}
-                          data-testid="document-toolbar-image-wrap-right"
-                          onSelect={() => setImageFloat("right")}
-                        >
-                          <OfficePictureMenuIcon icon={{ kind: "wrap-square-right" }} />
-                          {t("toolbar.imageWrapRight")}
-                        </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem
-                          value="topAndBottom"
-                          disabled={importedPictureAnchorReason !== null}
-                          title={importedPictureAnchorReason ?? undefined}
-                          data-testid="document-toolbar-image-wrap-topAndBottom"
-                          onSelect={() => setImageFloat("topAndBottom")}
-                        >
-                          <OfficePictureMenuIcon icon={{ kind: "wrap-top-bottom" }} />
-                          {t("toolbar.objectWrap_topAndBottom")}
-                        </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem
-                          value="behindText"
-                          disabled={importedPictureAnchorReason !== null}
-                          title={importedPictureAnchorReason ?? undefined}
-                          data-testid="document-toolbar-image-wrap-behindText"
-                          onSelect={() => setImageFloat("behindText")}
-                        >
-                          <OfficePictureMenuIcon icon={{ kind: "wrap-behind" }} />
-                          {t("toolbar.objectLayer_behindText")}
-                        </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem
-                          value="inFrontOfText"
-                          disabled={importedPictureAnchorReason !== null}
-                          title={importedPictureAnchorReason ?? undefined}
-                          data-testid="document-toolbar-image-wrap-inFrontOfText"
-                          onSelect={() => setImageFloat("inFrontOfText")}
-                        >
-                          <OfficePictureMenuIcon icon={{ kind: "wrap-front" }} />
-                          {t("toolbar.objectLayer_inFrontOfText")}
-                        </DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
-                      {desktopInteroperabilityVisible ? (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            disabled
-                            data-testid="document-toolbar-image-wrap-tight"
-                        title={
-                          t("toolbar.tightWrappingRequiresPictureContourWriter")
-                        }
-                      >
-                        <OfficePictureMenuIcon icon={{ kind: "wrap-tight" }} />
-                        {t("toolbar.tight")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                        disabled
-                        data-testid="document-toolbar-image-wrap-through"
-                        title={
-                          t("toolbar.throughWrappingRequiresTransparentAreaContour")
-                        }
-                      >
-                        <OfficePictureMenuIcon icon={{ kind: "wrap-through" }} />
-                        {t("toolbar.through")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                        disabled
-                        data-testid="document-toolbar-image-wrap-edit-points"
-                        title={
-                          t("toolbar.editWrapPointsRequiresWpWrappolygon")
-                        }
-                      >
-                        <OfficePictureMenuIcon icon={{ kind: "wrap-edit-points" }} />
-                        {t("toolbar.editWrapPoints")}
-                          </DropdownMenuItem>
-                        </>
-                      ) : null}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  )}
-                  <DropdownMenu modal={false}>
-                      <DropdownMenuTrigger asChild>
-                        <OfficeHomeMenuTrigger
-                          ref={pictureAlignMenuReturnFocusRef}
-                          active={snapshot.imageAlign !== null}
-                        disabled={!pictureAlignDecision.enabled}
-                        hasMenuIndicator
-                        icon={
-                          <OfficeSemanticIcon
-                            semanticId="object.align"
-                            size={24}
-                          />
-                        }
-                        label={t("toolbar.objectAlign")}
-                        title={reviewUnavailableTitle(pictureAlignDecision)}
-                        onPointerDown={rememberEditorSelection}
-                        testId="document-toolbar-picture-align"
-                        variant="large"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      className="note-editor-toolbar-menu"
-                      onCloseAutoFocus={(event) => {
-                        event.preventDefault();
-                        const trigger =
-                          pictureAlignMenuReturnFocusRef.current;
-                        if (trigger?.isConnected && !trigger.disabled) {
-                          trigger.focus({ preventScroll: true });
-                        } else safelyFocusEditorAfterToolbarClose(editor);
-                      }}
-                    >
-                      <DropdownMenuLabel>
-                        {t("toolbar.objectAlign")}
-                      </DropdownMenuLabel>
-                      <DropdownMenuRadioGroup
-                        value={snapshot.imageAlign ?? ""}
-                      >
-                        <DropdownMenuRadioItem
-                          value="left"
-                          data-testid="document-toolbar-image-align-left"
-                          onSelect={() => alignPicture("left")}
-                        >
-                          <OfficePictureMenuIcon icon={{ kind: "align-left" }} />
-                          {t("toolbar.imageAlignLeft")}
-                        </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem
-                          value="center"
-                          data-testid="document-toolbar-image-align-center"
-                          onSelect={() => alignPicture("center")}
-                        >
-                          <OfficePictureMenuIcon icon={{ kind: "align-center" }} />
-                          {t("toolbar.imageAlignCenter")}
-                        </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem
-                          value="right"
-                          data-testid="document-toolbar-image-align-right"
-                          onSelect={() => alignPicture("right")}
-                        >
-                          <OfficePictureMenuIcon icon={{ kind: "align-right" }} />
-                          {t("toolbar.imageAlignRight")}
-                        </DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  <DropdownMenu modal={false}>
-                      <DropdownMenuTrigger asChild>
-                        <OfficeHomeMenuTrigger
-                          ref={pictureRotateMenuReturnFocusRef}
-                        active={
-                          snapshot.imageRotation !== 0 ||
-                          snapshot.imageFlipHorizontal ||
-                          snapshot.imageFlipVertical
-                        }
-                        disabled={!pictureRotateDecision.enabled}
-                        hasMenuIndicator
-                        icon={
-                          <OfficeSemanticIcon
-                            semanticId="object.rotate"
-                            size={24}
-                          />
-                        }
-                        label={t("toolbar.objectRotate")}
-                        title={reviewUnavailableTitle(pictureRotateDecision)}
-                        onPointerDown={rememberEditorSelection}
-                        testId="document-toolbar-picture-rotate"
-                        variant="large"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      className="note-editor-toolbar-menu"
-                      onCloseAutoFocus={(event) => {
-                        event.preventDefault();
-                        const trigger = pictureRotateMenuReturnFocusRef.current;
-                        if (trigger?.isConnected && !trigger.disabled) {
-                          trigger.focus({ preventScroll: true });
-                        } else {
-                          safelyFocusEditorAfterToolbarClose(editor);
-                        }
-                      }}
-                    >
-                      <DropdownMenuItem
-                        data-testid="document-toolbar-picture-rotate-right"
-                        onSelect={() => transformPicture(90)}
-                      >
-                        <OfficePictureMenuIcon icon={{ kind: "rotate-right-90" }} />
-                        {t("presentation.rotate.right")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        data-testid="document-toolbar-picture-rotate-left"
-                        onSelect={() => transformPicture(-90)}
-                      >
-                        <OfficePictureMenuIcon icon={{ kind: "rotate-left-90" }} />
-                        {t("presentation.rotate.left")}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuCheckboxItem
-                        checked={snapshot.imageFlipVertical}
-                        data-testid="document-toolbar-picture-flip-vertical"
-                        onSelect={() =>
-                          transformPicture({ flip: "flipV" })
-                        }
-                      >
-                        <OfficeSemanticIcon
-                          semanticId="object.flipVertical"
-                          size={16}
-                        />
-                        {t("presentation.flip.vertical")}
-                      </DropdownMenuCheckboxItem>
-                      <DropdownMenuCheckboxItem
-                        checked={snapshot.imageFlipHorizontal}
-                        data-testid="document-toolbar-picture-flip-horizontal"
-                        onSelect={() =>
-                          transformPicture({ flip: "flipH" })
-                        }
-                      >
-                        <OfficeSemanticIcon
-                          semanticId="object.flipHorizontal"
-                          size={16}
-                        />
-                        {t("presentation.flip.horizontal")}
-                      </DropdownMenuCheckboxItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        data-testid="document-toolbar-picture-rotate-reset"
-                        onSelect={() => transformPicture(0)}
-                      >
-                        <OfficePictureMenuIcon icon={{ kind: "picture-reset" }} />
-                        {t("presentation.image.reset")}
-                      </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                </OfficeHomeCommandRow>
-              </OfficeHomeRibbonGroup>
-
-              <OfficeHomeRibbonGroup
-                ribbon="picture"
-                className={homeStyles.pictureSizeGroup}
-                label={t("toolbar.size")}
-                testId="document-toolbar-picture-size-group"
-              >
-                <OfficeHomeCommandRow className={homeStyles.pictureCommandRow}>
-                  <OfficeHomeSplitLayout
-                    testId="document-toolbar-picture-crop-split"
-                    primary={
-                      <OfficeHomeCommand
-                        activation="click"
-                        active={pictureCropModeActive}
-                        disabled={
-                          pictureVisualFormattingDisabled ||
-                          snapshot.imageWidthPx === null ||
-                          snapshot.imageHeightPx === null
-                        }
-                        icon={
-                          <OfficeSemanticIcon
-                            semanticId="image.crop"
-                            size={24}
-                          />
-                        }
-                        label={t("presentation.crop.toggle")}
-                        onClick={toggleImageCropMode}
-                        testId="document-toolbar-picture-crop"
-                        variant="large"
-                      />
-                    }
-                    trigger={
-                      <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger asChild>
-                          <OfficeHomeMenuTrigger
-                            className="note-editor-office-toolbar__split-chevron"
-                            disabled={pictureVisualFormattingDisabled}
-                            icon={<OfficeSemanticIcon semanticId="menu.chevron.down" size={12} />}
-                            label={t("presentation.crop.toggle")}
-                            onPointerDown={rememberEditorSelection}
-                            testId="document-toolbar-picture-crop-menu"
-                            variant="icon"
-                          />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          className="note-editor-toolbar-menu"
-                          onCloseAutoFocus={(event) => {
-                            event.preventDefault();
-                            safelyFocusEditorAfterToolbarClose(editor);
-                          }}
-                        >
-                          <DropdownMenuItem
-                            data-testid="document-toolbar-picture-crop-menu-crop"
-                            disabled={
-                              snapshot.imageWidthPx === null ||
-                              snapshot.imageHeightPx === null
-                            }
-                            onSelect={() => {
-                              if (!isDocumentImageCropActive(editor.state)) {
-                                toggleImageCropMode();
-                              }
-                            }}
-                          >
-                            <OfficeSemanticIcon semanticId="image.crop" size={16} />
-                            {t("presentation.crop.toggle")}
-                          </DropdownMenuItem>
-                          {/* Word's Crop > Crop to Shape: the shapes gallery
-                              (Lines left out, as Office does); a pick draws
-                              the picture in that preset, stretched to its
-                              frame, crop and size kept (cropPictureToShape). */}
-                          <DropdownMenuSub>
-                            <DropdownMenuSubTrigger
-                              data-testid="document-toolbar-picture-crop-to-shape"
-                              disabled={pictureVisualFormattingDisabled}
-                              title={
-                                pictureVisualFormattingDisabled
-                                  ? `${t("presentation.cameo.cropToShape")}: ${pictureUnsupported}`
-                                  : undefined
-                              }
-                            >
-                              <OfficeSemanticIcon semanticId="shape.change" size={16} />
-                              {t("presentation.cameo.cropToShape")}
-                            </DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent
-                              className={`note-editor-toolbar-menu ${officeShapeCatalogStyles.menu}`}
-                              alignOffset={DOCUMENT_SHAPE_CATALOG_ALIGN_OFFSET}
-                              collisionPadding={DOCUMENT_SHAPE_CATALOG_VIEWPORT_PADDING}
-                              sticky="always"
-                              data-testid="document-toolbar-picture-crop-to-shape-gallery"
-                            >
-                              <OfficeShapeCatalogPanel
-                                application="document"
-                                ariaLabel={t("presentation.cameo.cropToShape")}
-                                excludeCategories={["lines"]}
-                                onSelect={(preset) =>
-                                  cropPictureToShape(
-                                    editor,
-                                    officeShapeDefinition(preset).drawingPreset,
-                                  )
-                                }
-                                recentStorageKey="mrai.document.pictureCropToShape.recent"
-                                selectedPreset={
-                                  selectedImageTarget
-                                    ? officeShapePresetFromDrawingMl(
-                                        documentPictureGeometry(
-                                          selectedImageTarget.attrs,
-                                        ).preset,
-                                      )
-                                    : null
-                                }
-                                testIdPrefix="document-toolbar-picture-crop-shape"
-                              />
-                            </DropdownMenuSubContent>
-                          </DropdownMenuSub>
-                          <OfficePictureCropAspectRatioMenu
-                            icon={
-                              <OfficeSemanticIcon semanticId="image.crop" size={16} />
-                            }
-                            testIdPrefix="document-toolbar-picture-crop-aspect-ratio"
-                            disabled={false}
-                            labels={{
-                              aspectRatio: t("presentation.crop.aspectRatioLabel"),
-                              square: t("presentation.crop.aspectRatio.square"),
-                              portrait: t("presentation.crop.aspectRatio.portrait"),
-                              landscape: t("presentation.crop.aspectRatio.landscape"),
-                            }}
-                            onSelect={(ratioId) => {
-                              void applyImageCropAspectRatio(ratioId);
-                            }}
-                          />
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            disabled={
-                              snapshot.imageWidthPx === null ||
-                              snapshot.imageHeightPx === null
-                            }
-                            data-testid="document-toolbar-picture-crop-fill"
-                            onSelect={() => void fillImageCrop()}
-                          >
-                            <OfficePictureMenuIcon icon={{ kind: "crop-fill" }} />
-                            {t("presentation.crop.fill")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={
-                              snapshot.imageWidthPx === null ||
-                              snapshot.imageHeightPx === null
-                            }
-                            data-testid="document-toolbar-picture-crop-fit"
-                            onSelect={() => void applyImageCropFit()}
-                          >
-                            <OfficePictureMenuIcon icon={{ kind: "crop-fit" }} />
-                            {t("presentation.crop.fit")}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            data-testid="document-toolbar-picture-crop-reset"
-                            onSelect={() => resetImageCrop()}
-                          >
-                            <OfficePictureMenuIcon icon={{ kind: "crop-reset" }} />
-                            {t("presentation.crop.reset")}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    }
-                  />
-                  <OfficeHomeCommandStack
-                    className={homeStyles.pictureSizeStack}
-                  >
-                    <OfficeHomeCommandRow
-                      className={homeStyles.pictureSizeRow}
-                      testId="document-toolbar-picture-size-aspect-row"
-                    >
-                      {pictureLockAspectRatioControl}
-                    </OfficeHomeCommandRow>
-                    <OfficeHomeCommandRow
-                      className={homeStyles.pictureSizeRow}
-                      testId="document-toolbar-picture-size-height-row"
-                    >
-                      {pictureHeightField}
-                    </OfficeHomeCommandRow>
-                    <OfficeHomeCommandRow
-                      className={homeStyles.pictureSizeRow}
-                      testId="document-toolbar-picture-size-width-row"
-                    >
-                      {pictureWidthField}
-                      {desktopInteroperabilityVisible ? (
-                        <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger asChild>
-                          <OfficeHomeMenuTrigger
-                            hasMenuIndicator
-                            icon={<Proportions size={18} />}
-                            label={t("toolbar.imageWidthOriginal")}
-                            onPointerDown={rememberEditorSelection}
-                            testId="document-toolbar-image-width-presets"
-                            variant="compact"
-                          />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          className="note-editor-toolbar-menu"
-                          onCloseAutoFocus={(event) => {
-                            event.preventDefault();
-                            safelyFocusEditorAfterToolbarClose(editor);
-                          }}
-                        >
-                          <DropdownMenuRadioGroup
-                            value={
-                              snapshot.imageWidthPercent === null
-                                ? "original"
-                                : String(snapshot.imageWidthPercent)
-                            }
-                          >
-                            <DropdownMenuRadioItem
-                              value="original"
-                              data-testid="document-toolbar-image-width-original"
-                              onSelect={() => setImageWidthPreset(null)}
-                            >
-                              <OfficePictureMenuIcon
-                                icon={{ kind: "size-original" }}
-                              />
-                              {t("toolbar.imageWidthOriginal")}
-                            </DropdownMenuRadioItem>
-                            {IMAGE_WIDTH_PRESETS.map((percent) => (
-                              <DropdownMenuRadioItem
-                                key={percent}
-                                value={String(percent)}
-                                data-testid={`document-toolbar-image-width-${percent}`}
-                                onSelect={() => setImageWidthPreset(percent)}
-                              >
-                                <OfficePictureMenuIcon
-                                  icon={{ kind: "size-percent", percent }}
-                                />
-                                {t("toolbar.imageWidthPreset", { percent })}
-                              </DropdownMenuRadioItem>
-                            ))}
-                          </DropdownMenuRadioGroup>
-                        </DropdownMenuContent>
-                        </DropdownMenu>
-                      ) : null}
-                      {desktopInteroperabilityVisible &&
-                      imageResetDisabled ? (
-                        <OfficeHomeMenuTrigger
-                          disabled
-                          displayLabel={t("toolbar.imageWidthOriginalShort")}
-                          icon={
-                            <OfficeSemanticIcon
-                              semanticId="image.reset"
-                              size={18}
-                            />
-                          }
-                          label={t("toolbar.imageWidthOriginal")}
-                          title={`${t("toolbar.imageWidthOriginal")}: ${pictureUnsupported}`}
-                          testId="document-toolbar-image-reset"
-                          variant="compact"
-                        />
-                      ) : desktopInteroperabilityVisible ? (
-                        <OfficeHomeCommand
-                          displayLabel={t("toolbar.imageWidthOriginalShort")}
-                          icon={
-                            <OfficeSemanticIcon
-                              semanticId="image.reset"
-                              size={18}
-                            />
-                          }
-                          label={t("toolbar.imageWidthOriginal")}
-                          onClick={resetImageSize}
-                          testId="document-toolbar-image-reset"
-                          variant="compact"
-                        />
-                      ) : null}
-                    </OfficeHomeCommandRow>
-                    </OfficeHomeCommandStack>
-                </OfficeHomeCommandRow>
-              </OfficeHomeRibbonGroup>
-
-              <OfficeHomeRibbonGroup
-                ribbon="picture"
-                className={homeStyles.pictureAltGroup}
-                label={t("toolbar.accessibility")}
-                testId="document-toolbar-picture-alt-group"
-              >
-                <OfficeHomeCommandRow className={homeStyles.pictureCommandRow}>
-                  <OfficeHomeCommand
-                    active={altPaneOpen || snapshot.imageAlt.length > 0}
-                    icon={
-                      <OfficeSemanticIcon semanticId="object.altText" size={24} />
-                    }
-                    label={t("toolbar.imageAlt")}
-                    onClick={openAltEditor}
-                    testId="document-toolbar-image-alt"
-                    variant="large"
-                  />
-                </OfficeHomeCommandRow>
-              </OfficeHomeRibbonGroup>
-            </PictureRibbonGroupOrder>
-          ) : null
-          ) : null}
+          {null}
+          {null}
             </>
-          ) : null}
+          )}
         </RibbonStrip>
         {rulerVisible ? (
           <DocumentRuler
@@ -45766,25 +29013,7 @@ function DocumentToolbar({
         ) : null}
 
         {/* Layout > Hyphenation > Hyphenation Options. */}
-        {hyphenationOptionsOpen ? (
-          <DocumentHyphenationOptionsDialog
-            automatic={editor.state.doc.attrs.autoHyphenation === true}
-            options={normalizeHyphenationOptions(editor.state.doc.attrs.hyphenationOptions)}
-            canEdit={!editor.isDestroyed && editor.isEditable}
-            onApply={(automatic, options) => {
-              if (canWriteEditor()) {
-                // One OK, one Undo step.
-                (editor.chain() as OfficeChain)
-                  .setAutoHyphenation(automatic)
-                  .setHyphenationOptions(options)
-                  .run();
-              }
-              setHyphenationOptionsOpen(false);
-            }}
-            onCancel={() => setHyphenationOptionsOpen(false)}
-            returnFocusTarget={commandDialogReturnFocus}
-          />
-        ) : null}
+        {null}
 
         {/* File > Info > Properties > Advanced Properties: Word's
             "<name> Properties" dialog, Summary page. */}
@@ -45890,23 +29119,7 @@ function DocumentToolbar({
           />
         ) : null}
         {null}
-        {customThemeMenu ? (
-          <PointerContextMenu
-            x={customThemeMenu.x}
-            y={customThemeMenu.y}
-            label={customThemes.find((entry) => entry.id === customThemeMenu.id)?.name ?? t("toolbar.designTheme")}
-            entries={[
-              {
-                id: "delete",
-                label: t("toolbar.delete"),
-                testId: "document-toolbar-ribbon-design-theme-custom-delete",
-                onSelect: () => deleteCustomTheme(customThemeMenu.id),
-              },
-            ]}
-            onClose={() => setCustomThemeMenu(null)}
-            testId="document-toolbar-ribbon-design-theme-custom-menu"
-          />
-        ) : null}
+        {null}
         {styleSetSaveName !== null ? (
           // Design > Document Formatting > Save as a New Style Set.
           <OfficeDialogShell
@@ -46364,29 +29577,9 @@ function DocumentToolbar({
           />
         ) : null}
 
-        {pictureCompressionTarget ? (
-          <DocumentPictureCompressionDialog
-            open
-            canEdit={!editor.isDestroyed && editor.isEditable}
-            locale={locale}
-            returnFocusRef={pictureCompressionReturnFocusRef}
-            onSubmit={submitPictureCompression}
-            onClose={closePictureCompression}
-          />
-        ) : null}
+        {null}
 
-        {pictureDrawTarget ? (
-          <DocumentPictureDrawDialog
-            open
-            canEdit={pictureDrawAuthorityValid}
-            source={String(pictureDrawTarget.target.attrs.src ?? "")}
-            mimeType={pictureDrawTarget.mimeType}
-            locale={locale}
-            returnFocusRef={pictureDrawReturnFocusRef}
-            onApply={applyPictureDraw}
-            onClose={closePictureDraw}
-          />
-        ) : null}
+        {null}
 
         {chartQuickHost && chartContextTarget?.valid
           ? createPortal(
@@ -46489,7 +29682,7 @@ function DocumentToolbar({
                 }
               };
               const onDesignTab = (testId: string, how: "click" | "menu") => {
-                setRibbonTab("chartDesign");
+                void 0;
                 activateOfficeControl(testId, how);
               };
               // The chart's place in the document's one floating stack, as
@@ -46778,34 +29971,9 @@ function DocumentToolbar({
         ) : null}
 
 
-        {formulaDialogTarget ? (
-          <DocumentTableFormulaDialog
-            open
-            canEdit={!editor.isDestroyed && editor.isEditable}
-            locale={locale}
-            initialFormula={formulaDialogTarget.initialFormula}
-            initialNumberFormat={formulaDialogTarget.initialNumberFormat}
-            bookmarkNames={formulaDialogTarget.bookmarkNames}
-            returnFocusRef={formulaReturnFocusRef}
-            onSubmit={applyCellFormula}
-            onClear={clearCellFormula}
-            onClose={closeFormulaEditor}
-          />
-        ) : null}
+        {null}
 
-        {tableSortTarget ? (
-          <DocumentTableSortDialog
-            open
-            canEdit={!editor.isDestroyed && editor.isEditable}
-            locale={locale}
-            columnLabels={tableSortTarget.columnLabels}
-            initialColumnIndex={tableSortTarget.initialColumnIndex}
-            initialHasHeader={tableSortTarget.initialHasHeader}
-            returnFocusRef={tableSortReturnFocusRef}
-            onSubmit={submitTableSort}
-            onClose={closeTableSortDialog}
-          />
-        ) : null}
+        {null}
 
         {tablePropertiesTarget ? (
           <DocumentTablePropertiesDialog
@@ -46880,16 +30048,7 @@ function DocumentToolbar({
           />
         ) : null}
 
-        {tableReplaceTextTarget ? (
-          <DocumentTableReplaceTextDialog
-            open
-            canEdit={!editor.isDestroyed && editor.isEditable}
-            locale={locale}
-            returnFocusRef={tableReplaceTextReturnFocusRef}
-            onSubmit={submitTableReplaceTextDialog}
-            onClose={closeTableReplaceTextDialog}
-          />
-        ) : null}
+        {null}
 
         {(documentShapeDrawPreset || documentTextBoxDrawDirection) && !editor.isDestroyed && editor.isEditable ? (
           <DocumentShapeDrawSurface
@@ -46940,67 +30099,7 @@ function DocumentToolbar({
             onCancel={() => setDocumentFreeformTool(null)}
           />
         ) : null}
-        {ribbonTab === "draw" && (inkMode !== null || inkRuler !== null) && inkArmable && !inkWebLayout ? (
-          <DocumentInkSurface
-            view={editor.view}
-            mode={inkMode ?? "draw"}
-            landAtLift={inkLandsAtLift(inkConversionMode)}
-            passive={inkMode === null}
-            onWetChange={setInkWetPending}
-            onLiveInk={liveInkAwareness ? publishLiveInk : undefined}
-            onTap={inkTapeArmed ? (x, y) => flipDocumentInkTapeAt(editor.view, x, y) : inkConversion.correctionTap}
-            ruler={inkRuler}
-            onRulerChange={setInkRuler}
-            rulerLabel={t("toolbar.ruler")}
-            circleSelectLabel={t("toolbar.drawCircleSelect")}
-            eraser={inkEraser}
-            preset={inkTapePreset ?? (handwriting ? rawInkPreset : inkPreset)}
-            penOnPage={handwriting ? penOnHandwritingPage : undefined}
-            holdLanding={inkHeldForRoom}
-            label={t("toolbar.drawSurface", {
-              mode: t(`toolbar.drawMode_${inkMode ?? "draw"}`),
-            })}
-            onStrokes={(strokes, strokePreset, strokeOptions) => {
-              if (strokePreset.tape) {
-                // Strips of tape land as the strips they are: never a shape,
-                // never read as handwriting.
-                insertDocumentInkStrokes(editor.view, strokes, strokePreset, {
-                  ...(inkRecordingRef.current ? { audio: inkRecordingRef.current.stamp() } : {}),
-                });
-                return;
-              }
-              // Drawn and held: each stroke is the clean shape it snapped
-              // to, landing as that shape whatever Ink to Shape says.
-              insertDocumentInkStrokes(
-                editor.view,
-                strokes,
-                strokePreset,
-                strokeOptions?.held ? { ...inkStrokeOptions(), toShape: true, held: true } : inkStrokeOptions(),
-              );
-            }}
-            onErase={(ids, sourceDoc) => {
-              removeDocumentInk(editor.view, ids, sourceDoc);
-            }}
-            onEraseSegments={(hits, sourceDoc) => {
-              eraseDocumentInkSegments(editor.view, hits, sourceDoc);
-            }}
-            onLasso={(ids, sourceDoc, loop) => {
-              // The loop's strokes are picked together (the shapes'
-              // multi-selection) and the Select tool takes over, so they
-              // can be dragged, nudged, deleted or converted at once. They
-              // wear one frame, the loop drawn around them
-              // (DocumentInkLassoSelection).
-              if (editor.isDestroyed || editor.state.doc !== sourceDoc) return;
-              const positions = [...ids].map(Number).filter(Number.isInteger);
-              if (!selectDocumentShapes(editor.view, positions, { lassoLoop: loop })) return;
-              exitInkMode();
-              // The keys (Delete, the arrows) go to the picked strokes. Not
-              // with the Pencil: focusing the text would raise the iPad's
-              // keyboard and hand the next contacts to its handwriting.
-              if (!pencilScribblePossible()) editor.view.focus();
-            }}
-          />
-        ) : null}
+        {null}
         {inkConversion.correctionMenu}
         {!editor.isDestroyed ? (
           <DocumentInkLassoSelection
@@ -47075,25 +30174,9 @@ function DocumentToolbar({
             onShowRibbon={penFirst.showRibbon}
           />
         ) : null}
-        {inkReplay && ribbonTab === "draw" && !editor.isDestroyed ? (
-          <DocumentInkReplay
-            view={editor.view}
-            state={inkReplay}
-            setState={setInkReplay}
-            barHost={editor.view.dom.closest<HTMLElement>(".note-window-scroll")?.parentElement ?? null}
-            labels={{
-              bar: t("toolbar.drawInkReplay"),
-              play: t("spreadsheet.inkReplay.play"),
-              pause: t("spreadsheet.inkReplay.pause"),
-              rewind: t("spreadsheet.inkReplay.rewind"),
-              forward: t("spreadsheet.inkReplay.forward"),
-              position: t("spreadsheet.inkReplay.position"),
-              close: t("spreadsheet.inkReplay.close"),
-            }}
-          />
-        ) : null}
+        {null}
         <DocumentInkTrackpad
-          open={ribbonTab === "draw" && inkTrackpad && inkEditable && !inkWebLayout}
+          open={false}
           preset={inkPreset}
           title={t("toolbar.drawTrackpad")}
           hint={t("toolbar.drawTrackpadHint")}
@@ -47113,27 +30196,7 @@ function DocumentToolbar({
           }}
           onClose={() => setInkTrackpad(false)}
         />
-        {ribbonTab === "draw" && inkMoreColorsPenId ? (
-          <OfficeColorPalettePopover
-            anchorRef={{
-              current: (penFirst.compact ? palettePenRefs : inkPenRefs).current.get(inkMoreColorsPenId) ?? null,
-            }}
-            value={documentInkPresetById(inkMoreColorsPenId, inkPens).color}
-            labels={{
-              themeColors: t("toolbar.themeColors"),
-              standardColors: t("toolbar.standardColors"),
-              recentColors: t("spreadsheet.recentColors"),
-              moreColors: t("toolbar.drawMoreColors"),
-            }}
-            onPick={(color) => {
-              const penId = inkMoreColorsPenId;
-              setInkMoreColorsPenId(null);
-              if (color) updateInkPen(penId, { color: color.toLowerCase() });
-            }}
-            onDismiss={() => setInkMoreColorsPenId(null)}
-            testIdPrefix="document-toolbar-draw-ink-palette"
-          />
-        ) : null}
+        {null}
         {cellMarginsDialogTarget ? (
           <DocumentTableCellMarginsDialog
             open
@@ -47453,8 +30516,8 @@ function DocumentToolbar({
                     <span className="office-dialog__measure">
                     <input
                       type="number"
-                      min={-72}
-                      max={72}
+                      min={-CHAR_SPACING_LIMIT_PT}
+                      max={CHAR_SPACING_LIMIT_PT}
                       step="0.05"
                       className={documentValueInputClassName(
                         "note-editor-office-toolbar__input",
@@ -48443,7 +31506,7 @@ function DocumentToolbar({
           onSaveStyle={saveReferenceStyle}
         />
         <DocumentAlignmentTabDialog
-          open={alignmentTabOpen}
+          open={false}
           onCancel={() => setAlignmentTabOpen(false)}
           onSubmit={(choice) => {
             setAlignmentTabOpen(false);
@@ -48551,25 +31614,7 @@ function DocumentToolbar({
             onCancel={() => settleTocReplacePrompt("cancel")}
           />
         ) : null}
-        {designSetDefaultOpen ? (
-          // Word's Set as Default: the current style set and theme become the
-          // ones every new blank document starts with.
-          <ConfirmDialog
-            open
-            title={t("toolbar.designSetAsDefaultPrompt")}
-            body={t("toolbar.designSetAsDefaultBody")}
-            confirmLabel={t("toolbar.dialogOk")}
-            cancelLabel={t("toolbar.dialogCancel")}
-            autoFocusConfirm
-            onConfirm={() => {
-              setDesignSetDefaultOpen(false);
-              saveDefaultDocumentDesign(
-                normalizeDocumentDesign(editor.state.doc.attrs.documentDesign) ?? DEFAULT_DOCUMENT_DESIGN,
-              );
-            }}
-            onCancel={() => setDesignSetDefaultOpen(false)}
-          />
-        ) : null}
+        {null}
         {noRevisionsNotice ? (
           <ConfirmDialog
             open
@@ -49718,14 +32763,14 @@ function DocumentToolbar({
         {/* Word's Layout dialog (More Layout Options…) on the selected
             floating chart, picture, shape or text box. */}
         <OfficeFloatLayoutDialog
-          open={floatLayoutDialog !== null}
-          anchor={floatLayoutDialog?.anchor ?? null}
-          paint={floatLayoutDialog?.paint ?? null}
-          size={floatLayoutDialog?.size ?? null}
+          open={false}
+          anchor={null?.anchor ?? null}
+          paint={null?.paint ?? null}
+          size={null?.size ?? null}
           labels={floatLayoutLabels}
           onApply={(anchor, size) => {
             const target = liveDocumentFloatLayoutTarget(editor);
-            const opened = floatLayoutDialog?.size ?? null;
+            const opened = null?.size ?? null;
             setFloatLayoutDialog(null);
             if (!target) return;
             target.apply(anchor);
@@ -50071,43 +33116,7 @@ function DocumentToolbar({
           />
         </DocumentDockedPane>
       ) : null}
-      {shapeReorderSession ? (
-        <PresentationReorderObjectsDialog
-          key={shapeReorderSession.key}
-          open
-          layers={shapeReorderSession.layers.map((layer) => ({
-            objectId: layer.objectId,
-            label: layer.label,
-            hidden: false,
-            locked: false,
-            selected: layer.selected,
-            preview: <OfficeReorderLayerPreview box={layer.box} />,
-          }))}
-          labels={{
-            title: t("presentation.arrange.reorderObjects"),
-            description: t("presentation.arrange.reorderDescription"),
-            ok: t("presentation.arrange.ok"),
-            cancel: t("toolbar.cancel"),
-            bringForward: t("presentation.contextMenu.bringForward"),
-            sendBackward: t("presentation.contextMenu.sendBackward"),
-            locked: t("presentation.arrange.locked"),
-            hidden: t("presentation.arrange.hidden"),
-            layer: (position, count, label) =>
-              t("presentation.arrange.layerAria", { position, count, label }),
-          }}
-          returnFocusRef={shapeReorderReturnFocusRef}
-          onApply={(order) => {
-            const session = shapeReorderSession;
-            setShapeReorderSession(null);
-            const positions = order.map((id) => Number(id));
-            if (positions.some((pos) => !Number.isInteger(pos))) return;
-            if (!reorderLiveDocumentStack(editor, session.doc, positions) && editor.state.doc !== session.doc) {
-              toast({ title: t("office.shapeFormat.reorderDocumentChanged") });
-            }
-          }}
-          onCancel={() => setShapeReorderSession(null)}
-        />
-      ) : null}
+      {null}
       {/* Picture Format > Alt Text: Word's Alt Text pane, docked at the right
           with the other panes. It follows the selected picture. */}
       {altPaneOpen ? (
@@ -50381,7 +33390,7 @@ function DocumentToolbar({
           canEdit={!editor.isDestroyed && editor.isEditable}
           draftConflictMessage={t("toolbar.shapeFormatDraftConflict")}
           initialSection={shapeFormatPaneSection}
-          revealSection={shapeFormatPaneSection === "effects" ? shapeFormatPaneReveal : null}
+          revealSection={shapeFormatPaneSection === "effects" ? null : null}
           isChinese={isChineseLocale}
           linkTargets={shapeFormatLinkTargets}
           onClose={() => {
@@ -50680,7 +33689,7 @@ function DocumentToolbar({
                 }
               : undefined,
             onChangeLayout: () => {
-              setRibbonTab("smartArt");
+              void 0;
               openOfficeSmartArtLayoutGallery("document-toolbar");
             },
             onBringToFront: () => {
@@ -51194,15 +34203,7 @@ function DocumentToolbar({
           />
         </DocumentDockedPane>
       ) : null}
-      {accessibilityOpen ? (
-        <DocumentDockedPane docks={taskPaneDocks} pane="accessibility">
-          <DocumentAccessibilityPanel
-            editor={editor}
-            onFixImageAlt={fixAccessibilityImageAlt}
-            onClose={() => setAccessibilityOpen(false)}
-          />
-        </DocumentDockedPane>
-      ) : null}
+      {null}
       <OfficeCommandSearch
         stringPrefix="toolbar.commandSearch"
         testIdPrefix="document-command-search"
@@ -51303,20 +34304,10 @@ function DocumentToolbar({
           onClose={() => setPageNumberFormatDialog(null)}
         />
       ) : null}
-      {unequalColumnsOpen && columnsSectionLayout ? (
-        <UnequalColumnsDialog
-          layout={columnsSectionLayout}
-          canEdit={!editor.isDestroyed && editor.isEditable}
-          sectionCount={resolveSectionAtSelection(editor.state).sectionCount}
-          pointForwardAvailable={sectionApplyToPointForwardAvailable(editor)}
-          onApply={applyUnequalColumnsPatch}
-          onClose={closeUnequalColumns}
-          returnFocusTarget={commandDialogReturnFocus}
-        />
-      ) : null}
+      {null}
       {zoom ? (
         <OfficeZoomDialog
-          open={zoomDialogOpen}
+          open={false}
           title={t("toolbar.zoomDialogTitle")}
           presets={[200, 100, 75]}
           initialPercent={(zoom.level ?? Number.parseFloat(zoom.percent) / 100) * 100}

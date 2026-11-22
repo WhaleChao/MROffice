@@ -5,6 +5,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { onlyofficeAllowsContentControlChange } from "../../../../lib/embed/onlyoffice-frame";
+
 /**
  * Document CONTENT CONTROLS (Word "structured document tags" / `<w:sdt>`) — pure
  * preservation logic.
@@ -321,6 +323,9 @@ const CONTENT_FILL_LOCKED_VALUES: ReadonlySet<string> = new Set([
  * `sdtLocked` lock — and no lock — leave the control fillable. PURE.
  */
 export function isContentControlFillLocked(lock: unknown): boolean {
+  // An embedded editor whose integration locks every content control
+  // (ONLYOFFICE's permissions.modifyContentControl false) fills none.
+  if (!onlyofficeAllowsContentControlChange()) return true;
   return typeof lock === "string" && CONTENT_FILL_LOCKED_VALUES.has(lock);
 }
 
@@ -330,6 +335,7 @@ export function isContentControlFillLocked(lock: unknown): boolean {
  * an edit that removes the whole control is refused (OFL-044). PURE.
  */
 export function isContentControlDeleteLocked(lock: unknown): boolean {
+  if (!onlyofficeAllowsContentControlChange()) return true;
   return lock === "sdtLocked" || lock === "sdtContentLocked";
 }
 

@@ -50,7 +50,7 @@ import {
 } from "@mrnote/core/web/components/ui/dropdown-menu.tsx";
 import { RibbonDropdownMenuContent as DropdownMenuContent } from "@mrnote/core/web/components/office-ribbon/CupertinoRibbonMenu.tsx";
 import { AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart } from "lucide-react";
-import { IconAlignTextMenu, IconBulletStyle, IconNumberStyle, IconTextColumns, IconTextVertical } from "@mrnote/core/web/components/notebook/contents/PresentationRibbonIcons.tsx";
+import { IconAlignTextMenu, IconBulletStyle, IconNumberStyle, IconTextColumns, IconTextVertical } from "@mrnote/slides/web/components/notebook/contents/PresentationRibbonIcons.tsx";
 import { OfficeListGalleryMenuContent, OfficeListGalleryPreview, OfficeListGalleryTile } from "@mrnote/core/web/components/office-ribbon/OfficeListGallery.tsx";
 import { POWERPOINT_BULLET_LIBRARY, powerPointNumberLibrary } from "@mrnote/core/web/lib/presentation-bullet-library.ts";
 import type { PdfTextListStyle } from "../../../../lib/pdf/text-list";

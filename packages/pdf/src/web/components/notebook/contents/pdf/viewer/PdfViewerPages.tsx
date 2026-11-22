@@ -2151,6 +2151,8 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
               }`;
   return (
     <div
+      // PDF pages keep their ltr geometry under an rtl interface.
+      dir="ltr"
       className={`pdf-viewer__pages${
         viewMode === "spread" ? " pdf-viewer__pages--spread" : ""
       }${

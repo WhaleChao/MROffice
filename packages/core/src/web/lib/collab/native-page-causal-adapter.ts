@@ -94,6 +94,15 @@ const IDLE: PageContentSyncController = Object.freeze({
   persistContent: async () => null,
 });
 
+/** Everything that makes a page's checkpoint the one it is: two answers with
+ * the same identity hold the very same bytes at the very same version. */
+export function checkpointIdentity(
+  checkpoint: NonNullable<PageItem["page_causal_checkpoint"]>,
+): string {
+  return [checkpoint.page_id, checkpoint.epoch, checkpoint.revision, checkpoint.content_version,
+    checkpoint.content_sha256, checkpoint.checkpoint?.model, checkpoint.checkpoint?.update_sha256].join(":");
+}
+
 /** One adapter state per buffer, with independent per-view registrations. */
 export function createNativePageCausalAdapter(host: NativePageCausalHost, codec: NativePageCausalModel) {
   const INITIAL = Object.freeze({ kind: `${codec.model}-initial` });
@@ -161,6 +170,10 @@ export function createNativePageCausalAdapter(host: NativePageCausalHost, codec:
   const shown = () => [...registrations.values()].some(sourceCurrent);
   // The model holds a kept copy no server answer has confirmed yet.
   let previewUnconfirmed = false;
+  // That copy's checkpoint, when only the very same checkpoint may confirm
+  // it (`identicalOnly`: a page shown ahead of its commit). Another answer is
+  // never merged into it: its originals may be another seed's.
+  let previewIdentity: string | null = null;
   const writable = () =>
     current() &&
     host.canWrite() &&
@@ -428,6 +441,7 @@ export function createNativePageCausalAdapter(host: NativePageCausalHost, codec:
     >[1],
     canApply?: () => boolean,
     asPreview = false,
+    identicalOnly = false,
   ) {
     const durable = page.page_causal_checkpoint,
       session = host.session(),
@@ -501,6 +515,9 @@ export function createNativePageCausalAdapter(host: NativePageCausalHost, codec:
       failure = null;
       if (asPreview) {
         previewUnconfirmed = true;
+        // In the same step: no answer is ever weighed against this copy
+        // without knowing whether only its very checkpoint confirms it.
+        previewIdentity = identicalOnly ? checkpointIdentity(durable) : null;
         // The kept body was just found to be what these bytes project to:
         // the server's answer that nothing changed is this same object, and
         // its adoption below need not decode and compare it a second time.
@@ -510,6 +527,7 @@ export function createNativePageCausalAdapter(host: NativePageCausalHost, codec:
         // the room delivered meanwhile (the page's source heard none of it)
         // is delivered now; the same checkpoint, nothing beyond it, is not.
         previewUnconfirmed = false;
+        previewIdentity = null;
         if (!saved) nothingArrived = false;
       }
     } finally {
@@ -561,13 +579,21 @@ export function createNativePageCausalAdapter(host: NativePageCausalHost, codec:
     if (!checkpoint && source.page.page_causal_can_activate === false) return;
     if (scopeKey === source.scopeKey && staleSource(source.page)) return;
     const nextEpoch = checkpoint?.epoch ?? null;
+    // A page shown ahead of its commit, answered with another checkpoint
+    // than the one shown: opened afresh from the answer (a new document),
+    // as a first open without that copy would be. Nothing was written to
+    // the copy (a preview is read-only), so nothing is set aside.
+    const identityMismatch = previewIdentity !== null && previewUnconfirmed && !source.preview &&
+      (!checkpoint || checkpointIdentity(checkpoint) !== previewIdentity);
     if (
       active &&
       scopeKey === source.scopeKey &&
       epoch === nextEpoch &&
-      status !== "failed"
+      status !== "failed" &&
+      !identityMismatch
     )
       return;
+    previewIdentity = null;
     active = true;
     status = "preparing";
     saved = false;
@@ -591,6 +617,7 @@ export function createNativePageCausalAdapter(host: NativePageCausalHost, codec:
       return;
     }
     const replace =
+      identityMismatch ||
       host.requiresNativeBinding() ||
       (scopeKey !== null && scopeKey !== source.scopeKey) ||
       (nextEpoch !== null && nextEpoch > 1 && nextEpoch !== epoch) ||
@@ -625,7 +652,8 @@ export function createNativePageCausalAdapter(host: NativePageCausalHost, codec:
         if (!page.page_causal_checkpoint || source.recovered) return;
         try {
           if (await adopt(page, undefined,
-            () => registrations.get(token) === source && sourceCurrent(source), true)) notify();
+            () => registrations.get(token) === source && sourceCurrent(source), true,
+            source.identicalOnly === true)) notify();
         } catch { /* the server's answer prepares the model as before */ }
         return;
       }

@@ -330,3 +330,16 @@
   max-width: 100%;
   max-height: min(360px, 100%);
 }
+
+/* A finger's 44 px hit area (styles/touch-hit-area.css). */
+@media (pointer: coarse) {
+  .trigger {
+    position: relative;
+  }
+  .trigger::before,
+  .dialogClose::before {
+    content: "";
+    position: absolute;
+    inset: min(0px, calc((100% - var(--touch-hit-min, 44px)) / 2));
+  }
+}

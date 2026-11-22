@@ -252,5 +252,18 @@ function lineUnderOpeningPicturesPx(shown: readonly Element[]): number {
   const pitch = Number.parseFloat(style.lineHeight);
   const linePx = Number.isFinite(pitch) && pitch > 0 ? pitch : (Number.parseFloat(style.fontSize) || 16) * 1.3;
   if (!(height > 0) || height > linePx * 1.5) return 0;
-  return height + Math.max(0, Number.parseFloat(style.marginBottom) || 0);
+  const lineCredit = height + Math.max(0, Number.parseFloat(style.marginBottom) || 0);
+  // Pictures taller than the body put the line further past the foot: the
+  // whole of it below the foot is no spill (pc6/probes/fp fp-c, the
+  // ledger's line under a taller-than-the-page picture).
+  const sheet = line.parentElement;
+  if (!sheet || (window as Window & { __docsLineUnderTallPictureOff?: boolean }).__docsLineUnderTallPictureOff === true) {
+    return lineCredit;
+  }
+  const sheetRect = sheet.getBoundingClientRect();
+  const scaleY = sheet.offsetHeight > 0 ? sheetRect.height / sheet.offsetHeight : 1;
+  const footPx = (sheetRect.bottom - sheetRect.top) / (scaleY || 1) -
+    (Number.parseFloat(getComputedStyle(sheet).paddingBottom) || 0);
+  const lineTopPx = (line.getBoundingClientRect().top - sheetRect.top) / (scaleY || 1);
+  return lineTopPx > footPx ? lineCredit + (lineTopPx - footPx) : lineCredit;
 }

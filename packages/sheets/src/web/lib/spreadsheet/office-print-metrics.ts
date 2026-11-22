@@ -295,6 +295,60 @@ export function officePrintAnchorKind(
   return kind;
 }
 
+/** The size a one-cell drawing the file places by two cell markers spans on
+ * the grid the page lays out (`layout*`, hidden lines 0), in that grid's px.
+ * Its extent is the one its markers span on the sheet's own grid (`file*`:
+ * the widths and heights the workbook states, as the import measured
+ * `widthEmu` / `heightEmu`, the API's drawing_rotation_box._axes); Windows
+ * Excel keeps the far marker, a line and an offset in it (never past the
+ * line's end), wherever its own grid puts the lines -- R453-X59's pictures
+ * over default 20 pt rows Windows Excel fits at 21 px printed 7.93 rows tall
+ * (124 pt), where the extent stood on the fitted rows printed 10.1 (157.5 pt).
+ * The near marker is the anchor's own. Null for any other anchor. */
+export function officeMarkedDrawingSize(
+  anchor: {
+    readonly kind?: string;
+    readonly fileMarkers?: unknown;
+    readonly editAs?: unknown;
+    readonly from?: { readonly row?: unknown; readonly column?: unknown; readonly col?: unknown;
+      readonly rowOffset?: unknown; readonly columnOffset?: unknown; readonly colOffset?: unknown };
+    readonly widthEmu?: unknown;
+    readonly heightEmu?: unknown;
+  } | undefined,
+  file: { readonly columnWidth: (column: number) => number; readonly rowHeight: (row: number) => number },
+  layout: { readonly columnWidth: (column: number) => number; readonly rowHeight: (row: number) => number },
+): { width: number; height: number } | null {
+  if (anchor?.kind !== "oneCell" || !(anchor.fileMarkers === true || anchor.editAs === "oneCell") || !anchor.from) return null;
+  const emu = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : Number.NaN;
+  const width = emu(anchor.widthEmu) / 9525, height = emu(anchor.heightEmu) / 9525;
+  const fromRow = emu(anchor.from.row), fromColumn = emu(anchor.from.column ?? anchor.from.col);
+  if (!(width > 0) || !(height > 0) || !(fromRow >= 0) || !(fromColumn >= 0)
+    || !Number.isInteger(fromRow) || !Number.isInteger(fromColumn)) return null;
+  const span = (from: number, offsetEmu: unknown, extent: number, limit: number,
+    fileSize: (line: number) => number, layoutSize: (line: number) => number): number | null => {
+    const offset = Number.isFinite(emu(offsetEmu)) ? emu(offsetEmu) / 9525 : 0;
+    const lineSize = (size: (line: number) => number, line: number) => {
+      const value = size(line);
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    };
+    // The far marker on the sheet's own grid, from the near marker's line.
+    let end = offset + extent, line = from, layoutStart = 0;
+    while (line < limit - 1) {
+      const size = lineSize(fileSize, line);
+      if (end < size) break;
+      end -= size;
+      layoutStart += lineSize(layoutSize, line);
+      line += 1;
+    }
+    const near = Math.min(Math.max(0, offset), lineSize(layoutSize, from));
+    return layoutStart + Math.min(end, lineSize(layoutSize, line)) - near;
+  };
+  const spanWidth = span(fromColumn, anchor.from.columnOffset ?? anchor.from.colOffset, width, 16_384, file.columnWidth, layout.columnWidth);
+  const spanHeight = span(fromRow, anchor.from.rowOffset, height, 1_048_576, file.rowHeight, layout.rowHeight);
+  if (spanWidth === null || spanHeight === null || !(spanWidth > 0) || !(spanHeight > 0)) return null;
+  return { width: spanWidth, height: spanHeight };
+}
+
 /** How far a drawing reaches on the grid before the printer's scale, for the
  * rows and columns the printed range counts: the print scales the grid but a
  * one-cell anchor keeps its extent (and an absolute one its place too), so on
@@ -305,12 +359,33 @@ export function officePrintedDrawingReach(
   frame: readonly [left: number, top: number, width: number, height: number],
   kind: "twoCell" | "oneCell" | "absolute" | undefined,
   scale: OfficePrintScale | undefined,
+  /** Printed px the drawing's line reaches past its frame's right and
+   *  bottom (a chart's area line, half of it outside: R457-X21). */
+  lineReach = 0,
 ): readonly [left: number, top: number, width: number, height: number] {
+  if (lineReach > 0) {
+    const [left, top, width, height] = officePrintedDrawingReach(frame, kind, scale);
+    const x = scale && scale.x > 0 ? scale.x : 1;
+    const y = scale && scale.y > 0 ? scale.y : 1;
+    return [left, top, width + lineReach / x, height + lineReach / y];
+  }
   if (!scale || (kind !== "oneCell" && kind !== "absolute") || !(scale.x > 0) || !(scale.y > 0)
     || (scale.x === 1 && scale.y === 1)) return frame;
   const [left, top, width, height] = frame;
   if (kind === "absolute") return [left / scale.x, top / scale.y, width / scale.x, height / scale.y];
   return [left, top, width / scale.x, height / scale.y];
+}
+
+/** How far past its frame a worksheet shape's outline reaches, px: half its
+ * width, for Windows Excel strokes it on the frame's edge as it does a chart
+ * area's line -- a text box ending on a column's left edge prints that column
+ * for the line's outer half (R468-X41; the API's shape_outline_reach). 0 for
+ * a shape with no outline. */
+export function officeShapeOutlineReachPx(shape: { readonly stroke?: unknown; readonly strokeWidth?: unknown } | undefined): number {
+  const stroke = typeof shape?.stroke === "string" ? shape.stroke.trim().toLowerCase() : "";
+  const width = Number(shape?.strokeWidth);
+  if (!stroke || stroke === "none" || stroke === "transparent" || !Number.isFinite(width) || width <= 0) return 0;
+  return width / 2;
 }
 
 /** A drawing's frame on the printed page, in screen pixels: a two-cell anchor

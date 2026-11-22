@@ -15,7 +15,7 @@
  * slight blur, bevel a light / dark rim and 3-D an offset solid.
  */
 
-import type { OfficeShapeEffect } from "../components/office-ribbon/OfficeShapeFormatTab";
+import type { OfficeShapeEffect } from "@/components/office-ribbon/OfficeShapeFormatTab";
 
 /** The presets a host stores beside its own shadow model. */
 export type OfficeShapeEffectPreset = Exclude<OfficeShapeEffect, "none" | "shadow">;

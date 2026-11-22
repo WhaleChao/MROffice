@@ -5,6 +5,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { onlyofficeInitialZoom } from "@mrnote/core/web/lib/embed/onlyoffice-frame.ts";
 import { registerLiveEditor, type LivePresentationEditor } from "@mrnote/core/web/lib/live-editor-registry.ts";
 import { reloadPage } from "@mrnote/core/web/lib/reload-reason.ts";
 import { listLevelGreyedForSmartArtShape } from "../../../lib/presentation-smartart-shape-selection";
@@ -18,8 +19,8 @@ import {
 import { pxToPtRounded } from "@mrnote/core/web/lib/office-units.ts";
 import { officeCaretFontScale, setOfficeCaretFontScale } from "@mrnote/core/web/lib/office-painted-caret.ts";
 import { POINT_TEXT_UNIT, presentationFontSizeUnit } from "@mrnote/core/web/lib/presentation/text-units-block.ts";
-import { lineWeightDesignPxToPoints, lineWeightPointsToDesignPx, pointsToDesignPx } from "@mrnote/core/web/lib/presentation/text-units.ts";
-import { useInkArmedFocusRelease } from "@mrnote/ink/web/lib/ink-armed-focus.ts";
+import { pointsToDesignPx } from "@mrnote/core/web/lib/presentation/text-units.ts";
+import { useInkArmedFocusRelease } from "@mrnote/core/web/lib/ink-armed-focus.ts";
 import { refuseStrayNativeDrag } from "@mrnote/core/web/lib/native-drag-guard.ts";
 import { InkPresenceSvgLayer } from "@mrnote/core/web/components/notebook/InkPresenceSvgLayer.tsx";
 import {
@@ -213,7 +214,7 @@ import {
   type DocumentInkTool,
 } from "@mrnote/core/web/lib/document-ink.ts";
 import type { DocumentInkEffect } from "@mrnote/core/web/lib/document-shapes.ts";
-import { erasePresentationInkUnder, presentationInkEraserReachPx } from "../../../lib/presentation-ink-erase";
+import { presentationInkEraserReachPx } from "../../../lib/presentation-ink-erase";
 
 import {
   createElement,
@@ -252,86 +253,9 @@ import {
   nextRibbonScrollLeft,
   type RibbonOverflowState,
 } from "@mrnote/core/web/components/console/editor/ribbonOverflow.ts";
-import {
-  AlignHorizontalDistributeCenter,
-  AlignHorizontalJustifyCenter,
-  AlignHorizontalJustifyEnd,
-  AlignHorizontalJustifyStart,
-  AlignJustify,
-  AlignVerticalDistributeCenter,
-  AlignVerticalJustifyCenter,
-  AlignVerticalJustifyEnd,
-  AlignVerticalJustifyStart,
-  Check,
-  ChevronDown,
-  ChevronUp,
-  Circle,
-  Columns3,
-  Download,
-  FlipHorizontal,
-  FlipVertical,
-  Group,
-  MessageSquare,
-  Maximize2,
-  MoreHorizontal,
-  Pause,
-  Pipette,
-  Play,
-  RectangleHorizontal,
-  Type,
-  RotateCcw,
-  RotateCw,
-  Rows3,
-  Search,
-  Settings,
-  SlidersHorizontal,
-  Spline,
-  Square,
-  Trash2,
-  Omega,
-  Sparkles,
-  Ungroup,
-  Wand2,
-  Printer,
-} from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
+import { AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd, AlignHorizontalJustifyStart, AlignJustify, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart, ChevronDown, ChevronUp, Circle, Columns3, Download, FlipHorizontal, FlipVertical, Group, MessageSquare, Maximize2, MoreHorizontal, Pause, Pipette, Play, Type, RotateCcw, RotateCw, Rows3, Search, Settings, SlidersHorizontal, Spline, Square, Trash2, Omega, Sparkles, Ungroup, Wand2, Printer } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import { houseIconStandaloneSvg } from "@mrnote/core/web/components/office-ribbon/icons/houseIconStandaloneSvg.ts";
-import {
-  IconAlignObjects,
-  IconArrangeMenu,
-  IconBringForward,
-  IconBringToFront,
-  IconChangeShape,
-  IconDesignSlideSize,
-  IconMediaCaptions,
-  IconObjectFormatPane,
-  IconObjectHeight,
-  IconObjectWidth,
-  IconResetPicture,
-  IconLockAspect,
-  IconShapeEffects,
-  IconTableAutoFit,
-  IconTableBorders,
-  IconTableDelete,
-  IconTableDistributeColumns,
-  IconTableDistributeRows,
-  IconTableInsertAbove,
-  IconTableInsertBelow,
-  IconTableInsertLeft,
-  IconTableInsertRight,
-  IconTableMergeCells,
-  IconTableSplitCells,
-  IconGroupObjects,
-  IconAnimationMotionPath,
-  IconReviewComment,
-  IconRotateObjects,
-  IconSendBackward,
-  IconSendToBack,
-  IconSlideShowFromCurrent,
-  IconSelectionPane,
-  IconSelectObjects,
-  IconUngroupObjects,
-  IconVideoOutline,
-} from "@mrnote/core/web/components/notebook/contents/PresentationRibbonIcons.tsx";
+import { IconAlignObjects, IconBringForward, IconBringToFront, IconMediaCaptions, IconObjectFormatPane, IconObjectHeight, IconObjectWidth, IconResetPicture, IconLockAspect, IconShapeEffects, IconTableAutoFit, IconTableBorders, IconTableDelete, IconTableDistributeColumns, IconTableDistributeRows, IconTableInsertAbove, IconTableInsertBelow, IconTableInsertLeft, IconTableInsertRight, IconTableMergeCells, IconTableSplitCells, IconGroupObjects, IconAnimationMotionPath, IconReviewComment, IconRotateObjects, IconSendBackward, IconSendToBack, IconSlideShowFromCurrent, IconSelectionPane, IconSelectObjects, IconUngroupObjects } from "./PresentationRibbonIcons";
 import { useLocale, useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import { useMemoizedTranslator } from "@mrnote/core/web/lib/i18n/memoizedTranslator.ts";
 import {
@@ -376,9 +300,6 @@ import "./presentation/PresentationOutlineView";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "./presentation/PresentationMediaPlaybackOptions";
 import {
-  PresentationMediaTrimDialog,
-} from "./presentation/PresentationMediaTrimDialog";
-import {
   presentationDuplicateOffset,
   rememberPresentationDuplicate,
   type PresentationDuplicateMemory,
@@ -386,7 +307,7 @@ import {
 } from "../../../lib/presentation/smart-duplicate";
 import { OfficeZoomDialog } from "@mrnote/core/web/components/office-ribbon/OfficeZoomDialog.tsx";
 import { useOfficeInkConversion } from "@mrnote/core/web/components/office-ribbon/useOfficeInkConversion.tsx";
-import { runInkPressSetup } from "@mrnote/ink/web/lib/ink-press-deferral.ts";
+import { runInkPressSetup } from "@mrnote/core/web/lib/ink-press-deferral.ts";
 import { useInkScribbleGuard } from "@mrnote/core/web/lib/ink-scribble-guard.ts";
 import {
   EQUATION_BOX_FIT_TOLERANCE_EMU,
@@ -406,39 +327,9 @@ import {
 } from "@mrnote/core/web/lib/office-ink-conversion.ts";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "./presentation/PresentationMediaControlBar";
-import {
-  addPresentationMediaBookmark,
-  removePresentationMediaBookmark,
-} from "../../../lib/presentation/media-bookmarks";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "./presentation/PresentationMediaFadeFields";
-import { PresentationSmartArtFormatTab } from "./presentation/PresentationSmartArtFormatTab";
-import {
-  presentationSmartArtBlocksWithNodePatch,
-  presentationSmartArtBlocksWithNodePatches,
-  presentationSmartArtBlocksWithShapeEffect,
-  presentationSmartArtShapeEffects,
-  presentationSmartArtStyleEffects,
-  presentationSmartArtBlocksWithStyle,
-  presentationSmartArtBlocksWithTextFill,
-  presentationSmartArtBlocksWithTextPaint,
-  presentationSmartArtBlocksWithWordArtStyle,
-  presentationSmartArtFormatState,
-  presentationSmartArtFormatTarget,
-  presentationSmartArtSizeFactor,
-  presentationSmartArtTargetLabels,
-  presentationSmartArtTargetNodes,
-  presentationSmartArtSlotPicture,
-  presentationSmartArtBlocksWithSlotPicture,
-  presentationSmartArtPainterSource,
-  presentationSmartArtBlocksWithPaintedFormat,
-  presentationSmartArtTextPaint,
-  smartArtChangeShapePatch,
-  smartArtShapeEffectPatch,
-  smartArtShapeFillPatch,
-  smartArtShapeOutlinePatch,
-  type PresentationSmartArtFormatTarget,
-} from "../../../lib/presentation-smartart-format";
+import { presentationSmartArtBlocksWithNodePatches, presentationSmartArtFormatTarget, presentationSmartArtTargetNodes, presentationSmartArtPainterSource, presentationSmartArtBlocksWithPaintedFormat, type PresentationSmartArtFormatTarget } from "../../../lib/presentation-smartart-format";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "./presentation/PresentationConvertToSmartArtMenu";
 import {
@@ -507,10 +398,6 @@ import {
 import { inkLineWidthScaled } from "@mrnote/core/web/lib/office-ink-line-scale.ts";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "@mrnote/core/web/components/notebook/contents/ribbon/ColorMenu.tsx";
-import {
-  PresentationHomeShapeGallery,
-} from "@mrnote/core/web/components/notebook/contents/ribbon/PresentationHomeShapeGallery.tsx";
-const PresentationChartContextRibbon = lazyNamed(() => import("./presentation/PresentationChartContextRibbon"), "PresentationChartContextRibbon");
 import { PresentationChartHiddenCellsMenu } from "./presentation/PresentationChartHiddenCellsMenu";
 import {
   OfficeChartContextMenu,
@@ -521,7 +408,6 @@ import {
 } from "@mrnote/core/web/components/office-ribbon/OfficeChartContextMenu.tsx";
 import type { DocumentChartAreaStyleKey } from "@mrnote/core/web/components/console/editor/native-document/DocumentChartFormatRibbon.tsx";
 import { OfficePictureEffectsMenu } from "@mrnote/core/web/components/office-ribbon/OfficePictureEffectsMenu.tsx";
-import { OfficeOutlineMenuContent } from "@mrnote/core/web/components/office-ribbon/OfficeOutlineMenuContent.tsx";
 import { OFFICE_GLOW_ACCENTS, OFFICE_GLOW_SIZES_PT, officeGlowVariation } from "@mrnote/core/web/lib/office-picture-effects.ts";
 import { effectPlayDurationMs } from "@mrnote/core/web/lib/presentation-effect-recipes.ts";
 import { readPresentationEmbeddedFontsAnswer } from "../../../lib/presentation-embedded-fonts";
@@ -531,11 +417,7 @@ import type {
   OfficePictureEffectValues,
   OfficePictureEffects,
 } from "@mrnote/core/web/lib/office-picture-effects.ts";
-import {
-  applyPresentationPictureEffect,
-  presentationPictureEffectsBlocker,
-  presentationPictureStyleEffects,
-} from "../../../lib/presentation-picture-effects";
+import { applyPresentationPictureEffect } from "../../../lib/presentation-picture-effects";
 import {
   blocksWithShapeEffect,
   presentationShapeEffects,
@@ -560,7 +442,7 @@ import "@mrnote/core/web/components/office-ribbon/OfficePictureCropAspectRatioMe
 import {
   type OfficeShapeFormatAdapter,
   type OfficeShapeFormatLabels,
-} from "@mrnote/core/web/components/office-ribbon/OfficeShapeFormatTab.tsx";
+} from "@/components/office-ribbon/OfficeShapeFormatTab";
 import {
   OfficeShapeContextMenu,
   useOfficeShapeContextMenuLabels,
@@ -574,11 +456,7 @@ import { type OfficeWordArtRecipe } from "@mrnote/core/web/lib/office-wordart-st
 import "@mrnote/core/web/components/office-ribbon/OfficeWordArtStyleGallery.tsx";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "./presentation/PresentationAnimatedBackground";
-import {
-  presentationWordArtStyleName,
-  presentationWordArtStyleOf,
-  presentationWordArtStyles,
-} from "@mrnote/core/web/lib/presentation-wordart-gallery.ts";
+import { presentationWordArtStyleName, presentationWordArtStyles } from "@mrnote/core/web/lib/presentation-wordart-gallery.ts";
 import {
   presentationBlockWithTextPaint,
   presentationBlockWithWordArtStyle,
@@ -628,20 +506,7 @@ import {
   presentationChartWorkbook,
   seedPresentationChartWorkbook,
 } from "@mrnote/core/web/lib/presentation-chart-desktop.ts";
-import { presentationImportedChartLook } from "@mrnote/core/web/lib/presentation-chart-display.ts";
-import {
-  createPresentationChartV2Leaf,
-  readPresentationChartV2,
-  presentationChartV2CanEdit,
-  presentationChartV2DataWritable,
-  presentationChartV2DataShapeWritable,
-  presentationChartV2BreaksLink,
-  presentationChartV2LockNotice,
-  presentationChartV2PreserveOnly,
-  presentationChartV2TitleWritable,
-  presentationChartV2TypeLock,
-  type PresentationChartTranslate,
-} from "@mrnote/core/web/lib/presentation-chart-v2.ts";
+import { createPresentationChartV2Leaf, readPresentationChartV2, presentationChartV2CanEdit, presentationChartV2DataWritable, presentationChartV2BreaksLink, presentationChartV2LockNotice, presentationChartV2TitleWritable, presentationChartV2TypeLock, type PresentationChartTranslate } from "@mrnote/core/web/lib/presentation-chart-v2.ts";
 import { expandPresentationMedia, presentationMediaRestoredCount } from "@mrnote/core/web/lib/presentation-page-media.ts";
 import {
   DECK_BODY_REFUSAL_CODES,
@@ -723,41 +588,10 @@ import {
 // The SmartArt Design tab's host-neutral logic. Presentation computes nothing
 // of its own here: it reads the diagram, hands it to these, and commits what
 // comes back — the same seam Docs and Spreadsheet mount the tab through.
-import {
-  readSmartArtGroupColorsId,
-  smartArtDiagramColors,
-  readSmartArtGroupDirection,
-  readSmartArtGroupStyleId,
-  smartArtRecolourIsAuthors,
-  smartArtOutlineAfterAdd,
-  smartArtOutlineAfterDelete,
-  smartArtOutlineAfterMerge,
-  smartArtOutlineAfterHierBranch,
-  smartArtOutlineAfterPaste,
-  smartArtOutlineAfterDemote,
-  smartArtOutlineAfterPromote,
-  smartArtOutlineAfterTextEdit,
-  SMARTART_NO_OUTLINE_COMMANDS,
-  SMARTART_SHAPE_SIZE_STEP,
-  smartArtOutlineAfterInsert,
-  smartArtOutlineAfterMove,
-  smartArtOutlineCommandState,
-  smartArtOutlineParagraphs,
-  type SmartArtOutlineInsertPosition,
-  smartArtMembersWithShapeReset,
-  smartArtShapeHasOwnReset,
-  readSmartArtGroupMembers,
-} from "@mrnote/core/web/lib/office-smartart/design-model.ts";
+import { readSmartArtGroupColorsId, smartArtDiagramColors, readSmartArtGroupDirection, readSmartArtGroupStyleId, smartArtRecolourIsAuthors, smartArtOutlineAfterAdd, smartArtOutlineAfterDelete, smartArtOutlineAfterMerge, smartArtOutlineAfterHierBranch, smartArtOutlineAfterPaste, smartArtOutlineAfterDemote, smartArtOutlineAfterPromote, smartArtOutlineAfterTextEdit, SMARTART_NO_OUTLINE_COMMANDS, smartArtOutlineAfterInsert, smartArtOutlineAfterMove, smartArtOutlineCommandState, smartArtOutlineParagraphs, type SmartArtOutlineInsertPosition, smartArtMembersWithShapeReset, smartArtShapeHasOwnReset, readSmartArtGroupMembers } from "@mrnote/core/web/lib/office-smartart/design-model.ts";
 import { smartArtBlockBox, smartArtBlocksAfterBoxEdit } from "@mrnote/core/web/lib/office-smartart/custom-geometry.ts";
 import { smartArtTextFitScale } from "@mrnote/core/web/lib/office-smartart/text-fit.ts";
 import { PresentationValueCombobox } from "@mrnote/core/web/components/notebook/contents/ribbon/PresentationValueCombobox.tsx";
-// Kept for stylesheet order only (its named imports moved out of this file).
-import "@mrnote/core/web/components/notebook/contents/ribbon/PresentationTransitionGallery.tsx";
-// Kept for stylesheet order only (its named imports moved out of this file).
-import "@mrnote/core/web/components/notebook/contents/ribbon/PresentationAnimationRibbonGalleries.tsx";
-import {
-  usePresentationSlideTransitionAdvance,
-} from "@mrnote/core/web/components/notebook/contents/ribbon/PresentationTransitionTiming.tsx";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "@mrnote/core/web/components/notebook/contents/ribbon/PresentationAnimationGallery.tsx";
 import {
@@ -768,16 +602,7 @@ import {
   applyPresentationPictureFrameStyle,
   type PresentationPictureFrameStyle,
 } from "@mrnote/core/web/components/notebook/contents/ribbon/PresentationPictureStyleGallery.tsx";
-import {
-  OfficeHomeCheckbox,
-  OfficeHomeCommand,
-  OfficeHomeCommandRow,
-  OfficeHomeMenuTrigger,
-  OfficeHomeNumberField,
-  OfficeHomeRibbonGroup,
-} from "@mrnote/core/web/components/office-ribbon/OfficeHomeRibbon.tsx";
-// Kept for stylesheet order only (its named imports moved out of this file).
-import "@mrnote/core/web/components/office-ribbon/OfficeInkRibbon.tsx";
+import { OfficeHomeCheckbox, OfficeHomeNumberField } from "@mrnote/core/web/components/office-ribbon/OfficeHomeRibbon.tsx";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "@mrnote/core/web/components/office-ribbon/OfficeShapeCatalogPanel.tsx";
 // Kept for stylesheet order only (its named imports moved out of this file).
@@ -800,13 +625,7 @@ import {
 } from "@mrnote/core/web/components/office-ribbon/officeDialogChrome.tsx";
 
 import { NativeWindowModalDimmer } from "@mrnote/core/web/components/office-ribbon/NativeWindowModalDimmer.tsx";
-import {
-  OfficeColorNamesProvider,
-  OfficeColorPalettePanel,
-  OfficeColorPaletteThemeProvider,
-  type OfficeColorNames,
-  type OfficeColorPaletteTheme,
-} from "@mrnote/core/web/components/office-ribbon/OfficeColorPalettePanel.tsx";
+import { OfficeColorNamesProvider, OfficeColorPaletteThemeProvider, type OfficeColorNames, type OfficeColorPaletteTheme } from "@mrnote/core/web/components/office-ribbon/OfficeColorPalettePanel.tsx";
 import { OFFICE_STANDARD_COLOR_NAME_KEYS } from "@mrnote/core/web/components/office-ribbon/officeColorCatalog.ts";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "@mrnote/core/web/components/office-ribbon/OfficeShapeStyleGallery.tsx";
@@ -891,10 +710,6 @@ import "@mrnote/core/web/components/office-ribbon/OfficeStatusBar.tsx";
 import {
   type OfficeStatusPhase,
 } from "@mrnote/core/web/components/office-ribbon/OfficeStatusBar.tsx";
-import { OfficePictureMenuIcon } from "@mrnote/core/web/components/office-ribbon/icons/OfficePictureMenuIcon.tsx";
-import {
-  OfficeBorderPresetIcon,
-} from "@mrnote/core/web/components/office-ribbon/OfficeBorderPresetIcon.tsx";
 import {
   OfficeSelectionPaneList,
   OfficeSelectionPaneRow,
@@ -942,10 +757,7 @@ import {
 } from "@mrnote/core/web/components/office-ribbon/OfficeColorPalettePopover.tsx";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "@mrnote/core/web/components/office-ribbon/OfficeBordersMenu.tsx";
-import {
-  normalizeHexColor as normalizeOfficeHexColor,
-  pushRecentColor,
-} from "@mrnote/core/web/lib/office-color-palette.ts";
+import { normalizeHexColor as normalizeOfficeHexColor } from "@mrnote/core/web/lib/office-color-palette.ts";
 import { OfficeTableCellAlignmentGlyph } from "@mrnote/core/web/components/office-ribbon/OfficeTableCellAlignmentMenu.tsx";
 import {
   createPresentationImageFileInsertCommandLineage,
@@ -1056,19 +868,7 @@ import {
   textRunSlice,
   type TextEditSelection,
 } from "@mrnote/core/web/lib/presentation-point-runs.ts";
-import {
-  SLIDE_SIZE_PRESETS,
-  SLIDE_SIZE_MENU_PRESET_IDS,
-  type SlideSizeFitStrategy,
-  type SlideSizeEmu,
-  matchPresetId,
-  nativeSlideSizeCanApply,
-  adoptNativeSlideSizeAuthority,
-  type PresentationDesignAuthority,
-  presetSize,
-  sameSlideSize,
-  slideSizeNeedsFitChoice,
-} from "@mrnote/core/web/lib/presentation-slide-size.ts";
+import { type SlideSizeFitStrategy, type SlideSizeEmu, type PresentationDesignAuthority } from "@mrnote/core/web/lib/presentation-slide-size.ts";
 import {
   type FindOptions,
   type PresentationFindMatch,
@@ -1076,11 +876,7 @@ import {
   replaceAllInDeck,
   replaceMatchInDeck,
 } from "../../../lib/presentation-find-replace";
-import {
-  PresentationSpellingDialog,
-  type PresentationSpellingHost,
-} from "./presentation/PresentationSpellingDialog";
-import { PRESENTATION_SPELLING_FIND_OPTIONS } from "../../../lib/presentation-spelling";
+import { type PresentationSpellingHost } from "@/components/notebook/contents/presentation/PresentationSpellingDialog";
 import {
   LETTER_SPACING_PRESETS,
   LINE_SPACING_PRESETS,
@@ -1127,104 +923,16 @@ import {
   preparePresentationReuseSlides,
   type PresentationReuseThemePolicy,
 } from "@mrnote/core/web/lib/presentation-reuse-slides.ts";
-import {
-  BASIC_TRANSITION_DURATION_MS,
-  DEFAULT_SLIDE_TRANSITION,
-  MAX_TRANSITION_DURATION_SECONDS,
-  MIN_TRANSITION_DURATION_SECONDS,
-  TRANSITION_DURATION_STEP_MS,
-  defaultAuthoringTransitionDuration,
-  formatTransitionDurationSeconds,
-  NONE_TRANSITION_DISPLAY_DURATION_MS,
-  isAuthorableSlideTransition,
-  isDirectionalSlideTransition,
-  isSlideTransitionEightDirectionKind,
-  isSlideTransitionP14LeftRightKind,
-  isSlideTransitionP14SideDirectionKind,
-  isSlideTransitionP15LeftRightKind,
-  isSlideTransitionDirectionForKind,
-  isTransitionAdvanceAfterMs,
-  normalizeSlideTransition,
-  normalizeSlideTransitionDirection,
-  slideEntranceTransitionMs,
-  normalizePresentationTransitionSound,
-  packageTransitionSoundUrl,
-  parseTransitionDurationSeconds,
-  resolveMorphSlideTransitionPreview,
-  resolveSlideTransitionPreview,
-  slideTransitionEffectOptions,
-  SLIDE_TRANSITION_PUSH_OPTION_FROM,
-  transitionAdvanceOnClick,
-  type AuthorableSlideTransition,
-  type PresentationTransitionSound,
-  type SlideTransitionDirection,
-} from "@mrnote/core/web/lib/presentation-transitions.ts";
-import {
-  appendStrokePoint,
-  defaultWidthForTool,
-  ERASER_HIT_RADIUS,
-  eraseAt,
-  finalizeStroke,
-  inkShapeOpacityForTool,
-  inkOpacityForTool,
-  inkPathIdsHitByEraser,
-  inkPathIdsInLasso,
-  type AnnotationPoint,
-  type AnnotationTool,
-  type InkStroke,
-  type InkTool,
-  type PersistedInkPath,
-} from "@mrnote/core/web/lib/presentation-annotation.ts";
+import { isTransitionAdvanceAfterMs, normalizeSlideTransition, slideEntranceTransitionMs, parseTransitionDurationSeconds, transitionAdvanceOnClick, type AuthorableSlideTransition, type PresentationTransitionSound, type SlideTransitionDirection } from "@mrnote/core/web/lib/presentation-transitions.ts";
+import { appendStrokePoint, defaultWidthForTool, eraseAt, finalizeStroke, inkShapeOpacityForTool, inkOpacityForTool, type AnnotationPoint, type AnnotationTool, type InkStroke, type InkTool, type PersistedInkPath } from "@mrnote/core/web/lib/presentation-annotation.ts";
 import type { PresentationInkTool } from "@/lib/presentation-ink-presets";
 import {
   convertPresentationInkBlocksToShapes,
   presentationShapeFromInkStroke,
 } from "../../../lib/presentation-ink-to-shape";
-import {
-  officeInkPenById,
-  officeInkPenProfileFromStorage,
-  serializeOfficeInkPenProfile,
-  withOfficeInkPen,
-  withOfficeInkPenAdded,
-  withOfficeInkPenRemoved,
-  type OfficeInkPenProfile,
-} from "@mrnote/ink/web/lib/office-ink-pens.ts";
-import {
-  PRESENTATION_INK_COLOR_NAME_KEYS,
-  PRESENTATION_INK_DEFAULT_PENS,
-  PRESENTATION_INK_PEN_PROFILE_STORAGE_KEY,
-  PRESENTATION_INK_PEN_SPEC,
-  presentationInkStrokePx,
-  presentationInkWidthMm,
-} from "../../../lib/presentation-ink-pens";
-import {
-  accumulate as accumulateTimings,
-  applyRehearsedAdvanceTimings,
-  nextAutoAdvance,
-  normalizePresentationSlideShowSettings,
-  presentationLoops,
-  presentationShowsMediaControls,
-  presentationShowsNarrations,
-  presentationShowsAnimations,
-  presentationShowsScrollBar,
-  presentationSlideShowRange,
-  presentationSlideShowSelection,
-  presentationSlideShowSettingsWithSetup,
-  presentationSlideShowSettingsWithShowMediaControls,
-  presentationSlideShowSettingsWithShowNarration,
-  presentationSlideShowType,
-  presentationSlideShowSettingsWithUseTimings,
-  presentationUsesTimings,
-  totalDuration,
-  DEFAULT_DWELL_MS,
-  type PresentationNativeSlideShowSelection,
-  type PresentationSlideShowRange,
-  type PresentationSlideShowSlides,
-  presentationSlideShowCustomShowId,
-  presentationSlideShowSettingsWithoutCustomShow,
-  type PresentationSlideShowSettings,
-  type PresentationSlideShowType,
-} from "@mrnote/core/web/lib/presentation/rehearse-timings.ts";
+import { officeInkPenById, officeInkPenProfileFromStorage, serializeOfficeInkPenProfile, withOfficeInkPen, withOfficeInkPenRemoved, type OfficeInkPenProfile } from "@mrnote/core/web/lib/office-ink-pens.ts";
+import { PRESENTATION_INK_DEFAULT_PENS, PRESENTATION_INK_PEN_PROFILE_STORAGE_KEY, PRESENTATION_INK_PEN_SPEC, presentationInkStrokePx } from "../../../lib/presentation-ink-pens";
+import { accumulate as accumulateTimings, applyRehearsedAdvanceTimings, nextAutoAdvance, normalizePresentationSlideShowSettings, presentationLoops, presentationShowsMediaControls, presentationShowsNarrations, presentationShowsAnimations, presentationShowsScrollBar, presentationSlideShowRange, presentationSlideShowSettingsWithSetup, presentationSlideShowType, presentationSlideShowSettingsWithUseTimings, presentationUsesTimings, totalDuration, DEFAULT_DWELL_MS, type PresentationNativeSlideShowSelection, type PresentationSlideShowRange, type PresentationSlideShowSlides, presentationSlideShowCustomShowId, presentationSlideShowSettingsWithoutCustomShow, type PresentationSlideShowSettings, type PresentationSlideShowType } from "@mrnote/core/web/lib/presentation/rehearse-timings.ts";
 import {
   rehearsedClickDelaysMs,
   slideGroupBuildsMs,
@@ -1251,10 +959,7 @@ import {
   preparePresentationAudioFile,
   preparePresentationTransitionSoundFile,
 } from "../../../lib/presentation-audio-file";
-import {
-  builtinTransitionSound,
-  type PresentationBuiltinTransitionSoundId,
-} from "@mrnote/core/web/lib/presentation-transition-builtin-sounds.ts";
+import { type PresentationBuiltinTransitionSoundId } from "@/lib/presentation-transition-builtin-sounds";
 import {
   buildSyncSnapshot,
   createPresenterChannel,
@@ -1347,44 +1052,11 @@ import {
   resolveTextBoxFill,
   DEFAULT_TEXTBOX_OUTLINE_COLOR,
 } from "@mrnote/core/web/lib/presentation-text-fill.ts";
-import {
-  applySlideBackgroundToAll,
-  bgGradientCss,
-  importedPictureBackgroundUsesLocalFileOnly,
-  isImportedInheritedSlideGraphic,
-  isReplacedNativeMasterGraphic,
-  officeThemeReplacesNativeMasterGraphics,
-  resolveSlideBackgroundApplyAllCapability,
-  resolveSlideBackgroundFill,
-  resolveSlideBackgroundGraphicsCapability,
-  resolveSlideBackgroundKindCapability,
-  slideBackgroundCss,
-  normalizeBgPicture,
-  normalizeSolidBackgroundTransparency,
-  type SlideBgKind,
-} from "@mrnote/core/web/lib/presentation-slide-bg.ts";
+import { applySlideBackgroundToAll, importedPictureBackgroundUsesLocalFileOnly, isImportedInheritedSlideGraphic, isReplacedNativeMasterGraphic, officeThemeReplacesNativeMasterGraphics, resolveSlideBackgroundApplyAllCapability, resolveSlideBackgroundFill, resolveSlideBackgroundGraphicsCapability, resolveSlideBackgroundKindCapability, slideBackgroundCss, normalizeBgPicture, normalizeSolidBackgroundTransparency, type SlideBgKind } from "@mrnote/core/web/lib/presentation-slide-bg.ts";
 import { isDrawableImageSource, isValidInlineImageSource } from "@mrnote/core/web/lib/inline-image-source.ts";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "./presentation/PresentationBackgroundFillFields";
-import {
-  appendTableColumn,
-  appendTableRow,
-  canMergeSelection,
-  canSplitCell,
-  deleteLastTableColumn,
-  deleteLastTableRow,
-  insertTableColumn,
-  insertTableRow,
-  logicalCellPositions,
-  logicalPositionOfCell,
-  MAX_TABLE_SPLIT_COLUMNS,
-  MAX_TABLE_SPLIT_ROWS,
-  mergeCells,
-  mergeSelectionOfScope,
-  splitCell,
-  splitCellInto,
-  tableLogicalWidth,
-} from "@mrnote/core/web/lib/presentation-table-merge.ts";
+import { appendTableColumn, appendTableRow, canMergeSelection, canSplitCell, deleteLastTableColumn, deleteLastTableRow, insertTableColumn, insertTableRow, logicalCellPositions, logicalPositionOfCell, MAX_TABLE_SPLIT_COLUMNS, MAX_TABLE_SPLIT_ROWS, mergeCells, mergeSelectionOfScope, splitCell, tableLogicalWidth } from "@mrnote/core/web/lib/presentation-table-merge.ts";
 import {
   tableAxisSelectionRange,
   tableCellIntersectsSelection,
@@ -1406,47 +1078,8 @@ import {
   serializeTableClipboardHtml,
   serializeTableClipboardText,
 } from "@mrnote/core/web/lib/presentation-table-clipboard.ts";
-import {
-  MAX_TABLE_AXIS_PX,
-  MAX_TABLE_FRAME_CM,
-  MIN_TABLE_AXIS_PX,
-  MIN_TABLE_FRAME_CM,
-  TABLE_FRAME_EMU_PER_CM,
-  TABLE_FRAME_EMU_PER_CSS_PX,
-  autoFitTableColumnWidths,
-  axisSizeSelectionState,
-  axisSizeFromPointerDrag,
-  axisSizeAt,
-  insertAxisSize,
-  materializedAxisSizeAt,
-  normalizeAxisSizes,
-  resizeTableFrame,
-  setAxisSize,
-  setAxisSizeRange,
-  tableWithAxisSizeRange,
-  splitAxisSize,
-  tableAxisCmToPx,
-  tableAxisPxToCm,
-  tableFrameSizeCm,
-  type TableColumnAutoFitMode,
-  type TableFrameAxis,
-} from "@mrnote/core/web/lib/presentation-table-size.ts";
-import {
-  PRESENTATION_EMU_PER_CM,
-  PRESENTATION_EMU_PER_INCH,
-  PRESENTATION_INCH_MARK,
-  formatPresentationMeasurement,
-  parsePresentationDegrees,
-  parsePresentationMeasurement,
-  parsePresentationMeasurementCm,
-  parsePresentationSignedMeasurement,
-  presentationEmuToUnit,
-  presentationMeasurementCmDraft,
-  presentationMeasurementStep,
-  presentationMeasurementStepEmu,
-  presentationMeasurementUnit,
-  type PresentationMeasurementUnit,
-} from "@mrnote/core/web/lib/presentation-measurement.ts";
+import { MAX_TABLE_FRAME_CM, MIN_TABLE_FRAME_CM, TABLE_FRAME_EMU_PER_CM, TABLE_FRAME_EMU_PER_CSS_PX, axisSizeSelectionState, axisSizeFromPointerDrag, axisSizeAt, insertAxisSize, materializedAxisSizeAt, normalizeAxisSizes, setAxisSize, setAxisSizeRange, tableWithAxisSizeRange, tableAxisPxToCm, tableFrameSizeCm, type TableColumnAutoFitMode, type TableFrameAxis } from "@mrnote/core/web/lib/presentation-table-size.ts";
+import { PRESENTATION_INCH_MARK, formatPresentationMeasurement, parsePresentationDegrees, parsePresentationMeasurement, parsePresentationSignedMeasurement, presentationEmuToUnit, presentationMeasurementStep, presentationMeasurementUnit, type PresentationMeasurementUnit } from "@mrnote/core/web/lib/presentation-measurement.ts";
 import {
   createNativePresentationTableInsert,
   createDrawnPresentationTable,
@@ -1473,13 +1106,6 @@ import {
   type PresentationViewColorMode,
 } from "@mrnote/core/web/lib/presentation/presentation-view-color-mode.ts";
 import {
-  arrangeAllOfficeWindows,
-  cascadeOfficeWindows,
-  officeWindowChoices,
-  openNewOfficeWindow,
-  switchToOfficeWindow,
-} from "@mrnote/core/web/lib/office-window-commands/windowCommands.ts";
-import {
   regroupGroupId,
   regroupRecordFor,
   rememberUngroup,
@@ -1498,8 +1124,6 @@ import type {
 import { OfficeSymbolDialog } from "@mrnote/core/web/components/office-ribbon/OfficeSymbolDialog.tsx";
 import { usePresentationEquations } from "./presentation/usePresentationEquations";
 import { PresentationEquationSlotContext } from "@mrnote/core/web/components/notebook/contents/presentation/presentationEquationSlot.ts";
-// Kept for stylesheet order only (its named imports moved out of this file).
-import "./presentation/PresentationEquationContextRibbon";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "./presentation/PresentationEquationInsertButton";
 import {
@@ -1567,55 +1191,11 @@ import {
   smartArtCameraCss,
   smartArtCameraWithOwnTransform,
 } from "@mrnote/core/web/lib/office-smartart/canvas-3d.ts";
-import {
-  smartArtEditIn2dKey,
-  smartArtEditingIn2d,
-  smartArtGraphicHasScene,
-  smartArtMemberHasScene,
-  toggleSmartArtEditingIn2d,
-  useSmartArtEditIn2dVersion,
-} from "@mrnote/core/web/lib/office-smartart/edit-in-2d.ts";
-import {
-  fetchPictureLayerOriginal,
-  pictureEffectCanReturnToOriginal,
-  pictureLayerOriginalDigest,
-  withPictureOriginal,
-} from "../../../lib/presentation-picture-original";
-import {
-  videoBorderEditable,
-  videoBorderState,
-  resetVideoDesign,
-  videoHasDesign,
-  videoShapeKind,
-  withVideoBorder,
-  withVideoShape,
-  videoAdjustEditable,
-  videoPosterSource,
-  videoStyleOwnsFrame,
-  withVideoCorrections,
-  withVideoPoster,
-  withVideoRecolor,
-  withVideoStyle,
-} from "../../../lib/presentation-video-format";
+import { smartArtEditIn2dKey, smartArtEditingIn2d, smartArtMemberHasScene, useSmartArtEditIn2dVersion } from "@mrnote/core/web/lib/office-smartart/edit-in-2d.ts";
+import { fetchPictureLayerOriginal, pictureEffectCanReturnToOriginal, withPictureOriginal } from "../../../lib/presentation-picture-original";
+import { withVideoPoster } from "../../../lib/presentation-video-format";
 import type { OfficeVideoStyleId } from "@mrnote/core/web/lib/office-video-styles/catalog.ts";
-import {
-  PresentationVideoColorMenu,
-  PresentationVideoCorrectionsMenu,
-  PresentationVideoPosterFrameMenu,
-  PresentationVideoStylesGallery,
-} from "./presentation/PresentationVideoFormatMenus";
-import { capturePresentationVideoFrame, VideoFrameCaptureError } from "../../../lib/presentation-video-poster";
-import {
-  OFFICE_GRAPHIC_OUTLINE_DASHES,
-  officeGraphicOutlineDash,
-  officeGraphicOutlineWeightPt,
-  officeGraphicPaint,
-  withOfficeGraphicOutlineDash,
-  withOfficeGraphicOutlineWeight,
-  withOfficeGraphicPaint,
-  type OfficeGraphicOutlineDash,
-  type OfficeGraphicPaintField,
-} from "@mrnote/core/web/lib/presentation-office-graphic-paint.ts";
+import { type OfficeGraphicOutlineDash, type OfficeGraphicPaintField } from "@mrnote/core/web/lib/presentation-office-graphic-paint.ts";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "@mrnote/core/web/components/notebook/contents/ribbon/PresentationGraphicStyleGallery.tsx";
 import {
@@ -1627,54 +1207,7 @@ import {
   smartArtOutlineFromTextBlock,
   duplicatePresentationSlideAt,
 } from "@mrnote/core/web/lib/presentation-conveniences.ts";
-import {
-  PresentationImageInsertError,
-  PresentationPictureReplaceError,
-  createDuplicateSlideCommandAdapter,
-  createPresentationSlideVisibilityCommandAdapter,
-  createPresentationSlideTransitionCommandAdapter,
-  createPresentationSlideTransitionApplyAllCommandAdapter,
-  createPresentationSlideTransitionDurationCommandAdapter,
-  createPresentationSlideTransitionSoundCommandAdapter,
-  createPresentationAnimationEffectCommandAdapter,
-  presentationAnimationEffectTargetEligible,
-  createPresentationAnimationSequenceCommandAdapter,
-  createPresentationAnimationTimingCommandAdapter,
-  createPresentationImageFileCommandAdapter,
-  createPresentationPictureAltTextCommandAdapter,
-  createPresentationPictureArrangeCommandAdapter,
-  applyPresentationNativeObjectOrder,
-  applyPresentationNativeSelectionPaneOrderStep,
-  createPresentationPictureBorderCommandAdapter,
-  createPresentationPictureColorCommandAdapter,
-  createPresentationPictureCorrectionsCommandAdapter,
-  createPresentationPictureSizeCommandAdapter,
-  presentationPictureExtentsForSide,
-  createPresentationPictureTransparencyCommandAdapter,
-  createPresentationPictureCropCommandAdapter,
-  createPresentationPictureReplaceCommandAdapter,
-  hasResettablePresentationPictureAndSize,
-  resetPresentationPictureAndSize,
-  type PresentationPictureArrangeCommandPayload,
-  type PresentationPictureBorderCommandPayload,
-  type PresentationSlideTransitionDurationCommandPayload,
-  type PresentationSlideTransitionApplyAllCommandPayload,
-  type PresentationSlideTransitionSoundCommandPayload,
-  type PresentationPictureColorCommandPayload,
-  type PresentationPictureCorrectionsCommandPayload,
-  hasEditablePresentationPictureSize,
-  presentationPictureSizeDisplayCm,
-  presentationPictureSizeEmuFromCmDraft,
-  presentationPictureSizeEmuFromInchesDraft,
-  type PresentationPictureSizeAxis,
-  type PresentationPictureSizeCommandPayload,
-  type PresentationPictureResizeGesture,
-  type PresentationPictureTransparencyCommandPayload,
-  type PresentationSlideTransitionCommandPayload,
-  type PresentationAnimationEffectCommandPayload,
-  type PresentationAnimationSequenceCommandPayload,
-  type PresentationAnimationTimingCommandPayload,
-} from "@mrnote/core/web/lib/presentation-command-adapters.ts";
+import { PresentationImageInsertError, PresentationPictureReplaceError, createDuplicateSlideCommandAdapter, createPresentationSlideVisibilityCommandAdapter, createPresentationSlideTransitionCommandAdapter, createPresentationSlideTransitionApplyAllCommandAdapter, createPresentationSlideTransitionDurationCommandAdapter, createPresentationSlideTransitionSoundCommandAdapter, createPresentationAnimationEffectCommandAdapter, createPresentationAnimationSequenceCommandAdapter, createPresentationAnimationTimingCommandAdapter, createPresentationImageFileCommandAdapter, createPresentationPictureAltTextCommandAdapter, createPresentationPictureArrangeCommandAdapter, applyPresentationNativeObjectOrder, applyPresentationNativeSelectionPaneOrderStep, createPresentationPictureBorderCommandAdapter, createPresentationPictureColorCommandAdapter, createPresentationPictureCorrectionsCommandAdapter, createPresentationPictureSizeCommandAdapter, presentationPictureExtentsForSide, createPresentationPictureTransparencyCommandAdapter, createPresentationPictureCropCommandAdapter, createPresentationPictureReplaceCommandAdapter, type PresentationPictureArrangeCommandPayload, type PresentationPictureBorderCommandPayload, type PresentationSlideTransitionDurationCommandPayload, type PresentationSlideTransitionApplyAllCommandPayload, type PresentationSlideTransitionSoundCommandPayload, type PresentationPictureColorCommandPayload, type PresentationPictureCorrectionsCommandPayload, hasEditablePresentationPictureSize, presentationPictureSizeDisplayCm, presentationPictureSizeEmuFromCmDraft, type PresentationPictureSizeAxis, type PresentationPictureSizeCommandPayload, type PresentationPictureResizeGesture, type PresentationPictureTransparencyCommandPayload, type PresentationSlideTransitionCommandPayload, type PresentationAnimationEffectCommandPayload, type PresentationAnimationSequenceCommandPayload, type PresentationAnimationTimingCommandPayload } from "@mrnote/core/web/lib/presentation-command-adapters.ts";
 import { OfficeAltTextPane } from "@mrnote/core/web/components/office-ribbon/OfficeAltTextPane.tsx";
 import {
   OfficeTextSelectionMiniToolbar,
@@ -1733,16 +1266,11 @@ import {
   formatDocumentLimit,
   requireWithinDocumentTotal,
 } from "@mrnote/core/web/lib/document-size-limits.ts";
-import { storedPresentationAudioUrl } from "../../../lib/presentation-stored-audio-playback";
-import { getApiHttpBaseUrl } from "@mrnote/core/web/lib/env.ts";
 import { inlinePackageSounds } from "../../../lib/presentation-package-sounds";
 import { apiDelete, apiFetchRaw, apiGet, apiPost, isApiRequestError, type ApiRequestError } from "@mrnote/core/web/lib/api.ts";
 import { createReplaceFontsPrewarm } from "../../../lib/presentation-replace-font-prewarm";
-import {
-  OfficeThesaurusPane,
-  type OfficeThesaurusEntry,
-} from "@mrnote/core/web/components/office-ribbon/OfficeThesaurusPane.tsx";
-import { canRequestNativeSlideCopy, hasNativePresentationObject, isPresentationNativeCopyUnsupported, presentationCopyAuthoredContentMatches, requestPresentationNativeCopy, requestPresentationNativeSlideCopy } from "@mrnote/core/web/lib/presentation-native-object-copy.ts";
+import { type OfficeThesaurusEntry } from "@mrnote/core/web/components/office-ribbon/OfficeThesaurusPane.tsx";
+import { canRequestNativeSlideCopy, hasNativePresentationObject, isPresentationNativeCopyStale, isPresentationNativeCopyUnsupported, presentationCopyAuthoredContentMatches, requestPresentationNativeCopy, requestPresentationNativeSlideCopy } from "@mrnote/core/web/lib/presentation-native-object-copy.ts";
 import { pageDocumentJsonEquals } from "@mrnote/core/web/lib/page-save-acknowledgement.ts";
 import { presentationNativeSavedContentMatches } from "@mrnote/core/web/lib/presentation-native-save.ts";
 import { presentationGestureSurvivesRemote } from "../../../lib/presentation-gesture-authority";
@@ -1775,7 +1303,7 @@ import {
   type PresentationDesignerThemeChoice,
 } from "../../../lib/presentation/usePresentationDesigner";
 import { setPresentationDesignerPreference } from "../../../lib/presentation-designer-preferences";
-import { pictureObjectDisplaySrc, slideNarrationPlaybackSrc } from "@mrnote/core/web/lib/page-picture-objects.ts";
+import { pictureObjectDisplaySrc } from "@mrnote/core/web/lib/page-picture-objects.ts";
 import { readDesignerPicture } from "../../../lib/presentation-designer-picture";
 import {
   DEFAULT_IMAGE_BORDER_COLOR,
@@ -1791,38 +1319,7 @@ import {
   type ImageBorderStyle,
   type NativeImageRecolorMode,
 } from "@mrnote/core/web/lib/presentation-image-effects.ts";
-import {
-  CELL_ALIGNMENTS,
-  DEFAULT_TABLE_CELL_BORDER_COLOR,
-  DEFAULT_TABLE_CELL_BORDER_WIDTH,
-  MIN_TABLE_CELL_BORDER_WIDTH,
-  MAX_TABLE_CELL_MARGIN,
-  TABLE_BORDER_TARGETS,
-  TABLE_CELL_FONT_FAMILIES,
-  tableCellTypefaceFromChoice,
-  TABLE_CELL_MARGIN_PRESETS,
-  TABLE_CELL_TEXT_DIRECTIONS,
-  TABLE_STYLE_PRESETS,
-  normalizeCellColor,
-  normalizeCellStyle,
-  normalizeTableCellFontSize,
-  tableCellFontSizeFromInput,
-  normalizeTableStyleLook,
-  tableCellFontFamilyCss,
-  tableCellMarginPresetForStyle,
-  tableCellMarginPresetPatch,
-  tableBorderPatchForSelection,
-  type CellStyleInput,
-  type ResolvedCellStyle,
-  type TableBorderSelectionPosition,
-  type TableBorderTarget,
-  type TableCellBorder,
-  type TableCellBorderStyle,
-  type TableStyleLook,
-} from "@mrnote/core/web/lib/presentation-table-style.ts";
-import {
-  isNativeWebTableStyleId,
-} from "@mrnote/core/web/lib/presentation-table-web-gallery.ts";
+import { CELL_ALIGNMENTS, DEFAULT_TABLE_CELL_BORDER_COLOR, DEFAULT_TABLE_CELL_BORDER_WIDTH, MAX_TABLE_CELL_MARGIN, TABLE_CELL_FONT_FAMILIES, tableCellTypefaceFromChoice, TABLE_CELL_MARGIN_PRESETS, TABLE_STYLE_PRESETS, normalizeCellStyle, normalizeTableCellFontSize, tableCellFontFamilyCss, tableBorderPatchForSelection, type CellStyleInput, type ResolvedCellStyle, type TableBorderSelectionPosition, type TableBorderTarget, type TableCellBorder, type TableCellBorderStyle, type TableStyleLook } from "@mrnote/core/web/lib/presentation-table-style.ts";
 import { useOfficeDataSettled, useOfficeDataVersion } from "@mrnote/core/web/lib/office-data/use-office-data.ts";
 import { officeData, type OfficeDataWholeName } from "@mrnote/core/web/lib/office-data/store.ts";
 import {
@@ -1843,43 +1340,16 @@ import {
   type TableBorderPenSplit,
 } from "../../../lib/presentation-table-border-pen";
 import { evenRowSplitTop, splitDrawTable, moveDrawTableBoundary } from "../../../lib/presentation-table-draw-topology";
-import {
-  defaultBackgroundRemovalSpec,
-  normalizeBackgroundRemovalSpec,
-  type BackgroundRemovalSegment,
-  type BackgroundRemovalSpec,
-} from "@mrnote/core/web/lib/office-picture-background-removal.ts";
-import { renderBackgroundRemoval, renderPictureErase } from "@mrnote/core/web/lib/office-picture-edit-render.ts";
-import { presentationPictureEditResult } from "../../../lib/presentation-picture-edit-result";
+import { type BackgroundRemovalSegment, type BackgroundRemovalSpec } from "@mrnote/core/web/lib/office-picture-background-removal.ts";
 import {
   OfficePictureEditOverlay,
   type OfficePictureEditPen,
 } from "@mrnote/core/web/components/office-ribbon/OfficePictureEditOverlay.tsx";
 
-import {
-  DEFAULT_EMBED_KIND,
-  assetBackedPresentationAudioSource,
-  assetBackedPresentationMediaSource,
-  assetBackedPresentationVideoSource,
-  presentationStoredMediaBytes,
-  defaultEmbedGeometry,
-  normalizeEmbedKind,
-  patchPresentationMediaPlaybackSettings,
-  presentationOnlineVideo,
-  resolveEmbed,
-  resolvePresentationMediaPlaybackSettings,
-  type EmbedKind,
-  type PersistedPresentationMediaPlaybackSettings,
-} from "@mrnote/core/web/lib/presentation-embed.ts";
+import { DEFAULT_EMBED_KIND, assetBackedPresentationMediaSource, assetBackedPresentationVideoSource, presentationStoredMediaBytes, defaultEmbedGeometry, normalizeEmbedKind, resolveEmbed, resolvePresentationMediaPlaybackSettings, type EmbedKind, type PersistedPresentationMediaPlaybackSettings } from "@mrnote/core/web/lib/presentation-embed.ts";
 import { parseOnlineVideo } from "@mrnote/core/web/lib/online-video.ts";
 import { OfficeAddressDialog } from "@mrnote/core/web/components/office-ribbon/OfficeAddressDialog.tsx";
-import {
-  PresentationVideoInsertError,
-  createPresentationVideoFileCommandAdapter,
-  nativePresentationAudioAuthority,
-  nativePresentationVideoAuthority,
-  preparePresentationVideoFile,
-} from "@mrnote/core/web/lib/presentation-video-file.ts";
+import { PresentationVideoInsertError, createPresentationVideoFileCommandAdapter, nativePresentationVideoAuthority, preparePresentationVideoFile } from "@mrnote/core/web/lib/presentation-video-file.ts";
 import {
   MAX_PRESENTATION_MEDIA_CAPTION_TRACKS,
   PresentationMediaCaptionFileError,
@@ -2105,20 +1575,7 @@ import {
   presentationChartBlockForInsert,
   presentationFindChartTitleWritable,
 } from "../../../lib/presentation-chart-buttons";
-import {
-  deckAfterSlideSize,
-  presentationPresetChoiceId,
-  presentationThemeSelectionIsWritable,
-  slideBackgroundKind,
-  slidesRestyledForTheme,
-  slidesWithServedTableStyleLooks,
-  slideWithBackgroundKind,
-  slideWithHiddenBackgroundGraphics,
-  slideWithoutBackground,
-  themeAfterPreset,
-  themeAfterColorScheme,
-  themeAfterVariant,
-} from "../../../lib/presentation-design-buttons";
+import { presentationPresetChoiceId, presentationThemeSelectionIsWritable, slideBackgroundKind, slidesRestyledForTheme, slidesWithServedTableStyleLooks, slideWithBackgroundKind, slideWithHiddenBackgroundGraphics, slideWithoutBackground, themeAfterPreset } from "../../../lib/presentation-design-buttons";
 import {
   presentationCommentAuthoringBlock,
   PRESENTATION_COMMENT_AUTHORING_BLOCK_MESSAGE,
@@ -2126,54 +1583,25 @@ import {
   presentationDeckCommentIdentity,
   slideWithComments,
 } from "../../../lib/presentation-review-buttons";
+import {
+  presentationEmbedCommentRequest,
+  type PresentationCommentGesture,
+} from "../../../lib/presentation-mediated-comments";
+import { writeEmbedComment } from "@mrnote/core/web/lib/embed/comment-session.ts";
+import { embedAllowsManagingComment } from "@mrnote/core/web/lib/embed/session-access.ts";
+import { useEmbedAccess } from "@mrnote/core/web/lib/embed/use-embed-access.ts";
 import { cachedSelfCollabIdentity } from "@mrnote/core/web/lib/collab/self-identity.ts";
 import {
   preservesOpaqueCommentStructure,
   reconcileDeletedSlideRunLinks,
   reconcileSlideCommentAuthority,
 } from "@mrnote/core/web/lib/presentation-deck-commit.ts";
-import {
-  MAX_TIMELINE_STEPS,
-  PRESENTATION_INTERACTIVE_TRIGGER_AUTHORING_SUPPORTED,
-  clampDelayMs,
-  clampDurationMs,
-  copyTimelineStep,
-  timelineTextBuildRange,
-  timelineTextSequenceOf,
-  type TimelineTextSequence,
-  createAuthorableTimelineStep,
-  createStep,
-  hasEditableSlideAnimationSource,
-  isPresentationAnimationEffectId,
-  isLocallyAuthoredSlideAnimationSource,
-  normalizeTimelineAnimation,
-  normalizeTimelineTrigger,
-  partitionTimelineSteps,
-  presentationAnimationEffect,
-  resolvePresentationAnimationEffectColor,
-  resolvePresentationAnimationEffectOption,
-  resolveTimelinePreviewFrames,
-  resolveTimelinePreviewFramesFrom,
-  pruneSequence,
-  computeStepStartOffsets,
-  timelineClickCount,
-  timelineAnimationAuthoringCapability,
-  type PresentationAnimationEffectId,
-  type PresentationAnimationEffectOption,
-  type AnimationSequenceEditOperation,
-  type AnimationTimingValue,
-  type TimelineAnimation,
-  type TimelinePreviewFrame,
-  type TimelineStep,
-} from "@mrnote/core/web/lib/presentation-anim-timeline.ts";
+import { copyTimelineStep, timelineTextSequenceOf, type TimelineTextSequence, partitionTimelineSteps, presentationAnimationEffect, resolvePresentationAnimationEffectColor, pruneSequence, computeStepStartOffsets, timelineClickCount, type PresentationAnimationEffectId, type PresentationAnimationEffectOption, type AnimationSequenceEditOperation, type AnimationTimingValue, type TimelineAnimation, type TimelinePreviewFrame, type TimelineStep } from "@mrnote/core/web/lib/presentation-anim-timeline.ts";
 import {
   applyAnimationSteps,
   copyAnimationSteps,
 } from "../../../lib/presentation-anim-painter";
-import {
-  normalizeMotionPath,
-  type MotionPathPreset,
-} from "@mrnote/core/web/lib/presentation-motion-path.ts";
+import { type MotionPathPreset } from "@mrnote/core/web/lib/presentation-motion-path.ts";
 import {
   DEFAULT_MIN_BLOCK_SIZE,
   angleFromPointer,
@@ -2237,106 +1665,36 @@ import {
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "@mrnote/sheets/web/components/notebook/contents/spreadsheet/SpreadsheetThemeAxisGallery.tsx";
 import "@mrnote/sheets/web/components/notebook/contents/spreadsheet/SpreadsheetThemeAxisGallery.module.css";
-import { SpreadsheetThemeEffectGallery } from "@mrnote/sheets/web/components/notebook/contents/spreadsheet/SpreadsheetThemeGallery.tsx";
 import "@mrnote/sheets/web/components/notebook/contents/spreadsheet/SpreadsheetThemeGallery.module.css";
-import { OFFICE_THEMES } from "@mrnote/core/web/lib/office-theme-catalog.ts";
-import { officeThemeFontGalleryEntry } from "@mrnote/core/web/lib/office-theme-fonts.ts";
-import {
-  nextCustomThemeFontsName,
-  OfficeCreateThemeFontsDialog,
-  type OfficeThemeFontsDraft,
-} from "@mrnote/core/web/components/office-ribbon/OfficeCreateThemeFontsDialog.tsx";
-import {
-  DEFAULT_THEME_FONT_FAMILY,
-  MAX_THEME_ACCENT_COLORS,
-  PRESET_THEMES,
-  THEME_FONT_FAMILY_CSS,
-  availableThemeVariants as presentationThemeVariantOptions,
-  deckThemesEqual,
-  defaultPresentationTheme,
-  presentationThemeDefaultShapeStyle,
-  resolveOfficeThemeDesign,
-  normalizeTheme,
-  normalizeThemeFontFamily,
-  customizedThemeFontScheme,
-  themeFontSchemeStart,
-  normalizeThemeFontScheme,
-  resolveCatalogThemeDesign,
-  blockIsTitle,
-  themeFontSchemeFamily,
-  resolveSlideBackground,
-  resolveThemeSelection,
-  resolveThemeAccentColors,
-  resolveTitleTextStyle,
-  presentationHyperlinkStyle,
-  presentationBodyFontStyle,
-  presentationEffectGalleryValue,
-  type DeckTheme,
-  type PresentationThemeVariantId,
-} from "@mrnote/core/web/lib/presentation-theme.ts";
+import { type OfficeThemeFontsDraft } from "@/components/office-ribbon/OfficeCreateThemeFontsDialog";
+import { DEFAULT_THEME_FONT_FAMILY, MAX_THEME_ACCENT_COLORS, THEME_FONT_FAMILY_CSS, deckThemesEqual, defaultPresentationTheme, presentationThemeDefaultShapeStyle, normalizeTheme, normalizeThemeFontFamily, blockIsTitle, themeFontSchemeFamily, resolveSlideBackground, resolveThemeSelection, resolveThemeAccentColors, resolveTitleTextStyle, presentationHyperlinkStyle, presentationBodyFontStyle, type DeckTheme, type PresentationThemeVariantId } from "@mrnote/core/web/lib/presentation-theme.ts";
 import {
   PRESENTATION_OFFICE_THEMES,
   presentationOfficeTheme,
   presentationOfficeThemeLabel,
 } from "@mrnote/core/web/lib/presentation-office-themes.ts";
-import {
-  officeMasterGivenName,
-  themeWithOfficeMasterName,
-  officeMasterStatesBackground,
-  officeMasterViewEntries,
-  slideNumberRanges,
-  themeWithOfficeMasterBackground,
-  themeWithoutOfficeMasterBackground,
-  officeMasterSelection,
-  officeLayoutGalleryDefinition,
-  officeLayoutGalleryGroups,
-  type OfficeMasterTextLevel,
-  type OfficeMasterViewEntry,
-} from "../../../lib/presentation-office-master";
+import { officeMasterGivenName, officeMasterStatesBackground, officeMasterViewEntries, slideNumberRanges, officeMasterSelection, officeLayoutGalleryDefinition, officeLayoutGalleryGroups, type OfficeMasterTextLevel, type OfficeMasterViewEntry } from "../../../lib/presentation-office-master";
 import { officeSlideMasterKey } from "../../../lib/presentation-office-master-routing";
-import {
-  officeAvailableLayoutIds,
-  officeLayoutDeleteBlocker,
-  officeLayoutEditable,
-  officeLayoutHasFooters,
-  type OfficeDeckEdit,
-} from "../../../lib/presentation-office-layout-edit";
+import { officeAvailableLayoutIds, officeLayoutHasFooters, type OfficeDeckEdit } from "../../../lib/presentation-office-layout-edit";
 import {
   OFFICE_PLACEHOLDER_KINDS,
   OFFICE_PRIMARY_MASTER_KEY,
   parseOfficeMasterLayoutRef,
   type OfficePlaceholderKind,
 } from "@mrnote/core/web/lib/presentation-office-master-model.ts";
-import {
-  officeBackgroundStyles,
-  themeWithOfficeBackgroundStyle,
-} from "@mrnote/core/web/lib/presentation-office-background-styles.ts";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "./presentation/PresentationSlideMasterView";
-// Kept for stylesheet order only (its named imports moved out of this file).
-import "./presentation/PresentationSlideMasterRibbon";
 import {
   PresentationReuseSlidesPane,
   REUSE_SLIDES_TEXT_BUTTON_STYLE,
 } from "./presentation/PresentationReuseSlidesPane";
-import {
-  blocksWithBlackWhiteMode,
-  normalizePresentationBlackWhiteMode,
-  PRESENTATION_BLACK_WHITE_MODES,
-  withPresentationBlackWhiteStyle,
-  type PresentationBlackWhiteMode,
-} from "@mrnote/core/web/lib/presentation/presentation-black-white-mode.ts";
+import { withPresentationBlackWhiteStyle, type PresentationBlackWhiteMode } from "@mrnote/core/web/lib/presentation/presentation-black-white-mode.ts";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "./presentation/PresentationOfficeMasterTextStyleBar";
 const PresentationMasterBackgroundPane = lazyNamed(() => import("./presentation/PresentationMasterBackgroundPane"), "PresentationMasterBackgroundPane");
 const PresentationMasterRenameDialog = lazyNamed(() => import("./presentation/PresentationMasterRenameDialog"), "PresentationMasterRenameDialog");
 const PresentationMasterLayoutDialog = lazyNamed(() => import("./presentation/PresentationMasterLayoutDialog"), "PresentationMasterLayoutDialog");
-import {
-  officeLayoutHidesBackgroundGraphics,
-  officeMasterPlaceholdersOff,
-  themeWithOfficeMasterPlaceholder,
-  officeSlideMasterDeleteBlocker,
-} from "../../../lib/presentation-office-master-structure";
+import { officeLayoutHidesBackgroundGraphics } from "../../../lib/presentation-office-master-structure";
 const PresentationOutlineImportDialog = lazyNamed(() => import("./presentation/PresentationOutlineImportDialog"), "PresentationOutlineImportDialog");
 import {
   materializePlaceholderListRows,
@@ -2440,35 +1798,17 @@ import {
   inkPredictedSamples,
   inkSamplePressure,
 } from "@mrnote/core/web/lib/ink-pointer-policy.ts";
-import { InkLiveCanvas } from "@mrnote/ink/web/lib/office-ink-live.ts";
+import { InkLiveCanvas } from "@mrnote/core/web/lib/office-ink-live.ts";
 import { inkLandsAtLift, WetInkBatcher } from "@mrnote/core/web/lib/office-wet-ink.ts";
-import { useWetInkLayer } from "@mrnote/ink/web/lib/office-wet-ink-layer.ts";
+import { useWetInkLayer } from "@mrnote/core/web/lib/office-wet-ink-layer.ts";
 import { inkRulerGuideFor, type InkRulerState } from "@mrnote/core/web/lib/office-ink-ruler.ts";
-import { useInkTouchShield } from "@mrnote/ink/web/lib/ink-touch-shield.ts";
-import { useInkPenHover } from "@mrnote/ink/web/lib/office-ink-hover.ts";
-import { inkTiltShadeFactor } from "@mrnote/ink/web/lib/office-ink-tilt.ts";
+import { useInkTouchShield } from "@mrnote/core/web/lib/ink-touch-shield.ts";
+import { useInkPenHover } from "@mrnote/core/web/lib/office-ink-hover.ts";
+import { inkTiltShadeFactor } from "@mrnote/core/web/lib/office-ink-tilt.ts";
 import { inkPathIdsUnderScratchOut, inkScratchOutEnabled, inkScratchOutTakes, inkToolScratchesOut, isInkScratchOut } from "@mrnote/core/web/lib/office-ink-scratch-out.ts";
-import { useInkFingerTaps } from "@mrnote/ink/web/lib/ink-finger-taps.ts";
-import {
-  INK_HOLD_SHAPE_MIN_LENGTH_PX,
-  INK_HOLD_SHAPE_STILL_PX,
-  type InkHoldRestWait,
-  waitForInkHoldRest,
-  inkHeldShape,
-  inkHeldShapeAtLift,
-  inkHeldShapeFollow,
-  type InkHeldShape,
-  inkHoldShapeFit,
-  inkHoldShapeOutline,
-  inkPathLength,
-} from "@mrnote/core/web/lib/office-ink-hold-shape.ts";
-import {
-  INK_CAPTURE_MAX_POINTS,
-  inkCornerDegreesForTool,
-  inkLandedSampleIndexes,
-  inkSteadyPressureWidthFactor,
-  thinInkSamples,
-} from "@mrnote/core/web/lib/office-ink-smooth.ts";
+import { useInkFingerTaps } from "@mrnote/core/web/lib/ink-finger-taps.ts";
+import { INK_HOLD_SHAPE_MIN_LENGTH_PX, INK_HOLD_SHAPE_STILL_PX, type InkHoldRestWait, waitForInkHoldRest, inkHeldShape, inkHeldShapeFollow, type InkHeldShape, inkHoldShapeFit, inkHoldShapeOutline, inkPathLength } from "@mrnote/core/web/lib/office-ink-hold-shape.ts";
+import { INK_CAPTURE_MAX_POINTS, inkCornerDegreesForTool, inkLandedSampleIndexes, thinInkSamples } from "@mrnote/core/web/lib/office-ink-smooth.ts";
 import { yieldTouchHold } from "@mrnote/core/web/lib/touch-hold.ts";
 import { startInkHoldToErase, usePenFirstDraw } from "@mrnote/core/web/lib/pen-first-draw.ts";
 import { OfficePenPalette } from "@mrnote/core/web/components/office-ribbon/OfficePenPalette.tsx";
@@ -2476,37 +1816,10 @@ import { isCompatMouseFromTouch, isTouchLikePointer } from "@mrnote/core/web/lib
 import { officePressIntoTextHost } from "@mrnote/core/web/lib/office-off-line-text-press.ts";
 import { OfficeTouchCommandBar } from "@mrnote/core/web/components/office-ribbon/OfficeTouchCommandBar.tsx";
 import { OfficeInkLassoSelection } from "@mrnote/core/web/components/office-ribbon/OfficeInkLassoSelection.tsx";
-import {
-  INK_LASSO_MEMBER_ATTRIBUTE,
-  anchorInkLassoLoop,
-  inkLassoUnionBox,
-  isInkCircleGesture,
-  isInkLassoOverlayTarget,
-  placeInkLassoLoop,
-  sameInkLassoIds,
-  type InkLassoAnchoredLoop,
-} from "@mrnote/core/web/lib/office-ink-lasso-selection.ts";
+import { INK_LASSO_MEMBER_ATTRIBUTE, inkLassoUnionBox, isInkLassoOverlayTarget, placeInkLassoLoop, sameInkLassoIds, type InkLassoAnchoredLoop } from "@mrnote/core/web/lib/office-ink-lasso-selection.ts";
 import { OfficeSoftKeyboardLayer } from "@mrnote/core/web/components/office-ribbon/OfficeSoftKeyboardLayer.tsx";
-import {
-  INK_CIRCLE_OFFER_MS,
-  OfficeInkCircleSelect,
-  inkCircleOfferAt,
-  type OfficeInkCircleOffer,
-} from "@mrnote/core/web/components/office-ribbon/OfficeInkCircleSelect.tsx";
-import {
-  DEFAULT_SNAP_THRESHOLD,
-  alignBlocks,
-  autoFixBlocks,
-  canAutoFixBlocks,
-  alignBlocksToBounds,
-  computeSnapGuides,
-  snapMovingSelection,
-  snapResizePointer,
-  type AlignEdge,
-  type SpacingGuide,
-  type DistributeAxis,
-  type SnapGuide,
-} from "@mrnote/core/web/lib/presentation-align.ts";
+import { type OfficeInkCircleOffer } from "@mrnote/core/web/components/office-ribbon/OfficeInkCircleSelect.tsx";
+import { DEFAULT_SNAP_THRESHOLD, alignBlocks, alignBlocksToBounds, computeSnapGuides, snapMovingSelection, snapResizePointer, type AlignEdge, type SpacingGuide, type DistributeAxis, type SnapGuide } from "@mrnote/core/web/lib/presentation-align.ts";
 import {
   MAX_SHAPE_TEXT_LENGTH,
   TEXT_ALIGN_OPTIONS,
@@ -2610,23 +1923,11 @@ import { PACKAGE_WRITE_NOTICE_AFTER_MS, slidesAwaitingPackageWrite } from "../..
 import {
   changedDeckTexts, deckTextAt, deckTextFormatted, deckTextIndex, deckTextKey, placeDeckText, placedTextEdit, withDeckText, type PlacedDeckText,
 } from "@mrnote/core/web/__cut__/mcf9e47dacc.ts";
-import {
-  DropdownMenu,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@mrnote/core/web/components/ui/dropdown-menu.tsx";
+import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@mrnote/core/web/components/ui/dropdown-menu.tsx";
 // Every menu in the deck wears the one Office menu chrome
 // (`docs-cupertino-menu`, and `--submenu` on submenus): the plain shadcn
 // content is aliased away so a new menu cannot pick the old skin by default.
-import {
-  RibbonDropdownMenuContent,
-  RibbonDropdownMenuSubContent,
-  RibbonDropdownMenuContent as DropdownMenuContent,
-} from "@mrnote/core/web/components/office-ribbon/CupertinoRibbonMenu.tsx";
+import { RibbonDropdownMenuContent as DropdownMenuContent } from "@mrnote/core/web/components/office-ribbon/CupertinoRibbonMenu.tsx";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "@mrnote/core/web/components/office-ribbon/OfficeStyleGallery.tsx";
 // Kept for stylesheet order only (its named imports moved out of this file).
@@ -2863,30 +2164,10 @@ import { reconcilePresentationCopilotFormat } from "@mrnote/core/web/__cut__/mbc
 export {
   reconcilePresentationCopilotFormat,
 } from "@mrnote/core/web/__cut__/mbc527c9e11.ts";
-import {
-  uniformTableCellSelectionValue,
-  TABLE_BORDER_TARGET_PRESET_ICON,
-  EMPTY_TABLE_CELL_MARGIN_DRAFTS,
-  EMPTY_TABLE_AXIS_SIZE_DRAFTS,
-  TABLE_BORDER_TARGET_LABEL_KEYS,
-  TABLE_CELL_BORDER_KEYS,
-  TABLE_BORDER_STATE_PROBE,
-  type TableCellMarginMenuValue,
-  type TableCellMarginMenuLabels,
-  type TableCellSelectionValue,
-  type TableCellChoiceOption,
-  type ContextualTableAxis,
-} from "./presentation/PresentationTableCellMenus";
+import { uniformTableCellSelectionValue, EMPTY_TABLE_CELL_MARGIN_DRAFTS, EMPTY_TABLE_AXIS_SIZE_DRAFTS, TABLE_CELL_BORDER_KEYS, TABLE_BORDER_STATE_PROBE, type TableCellMarginMenuValue, type TableCellMarginMenuLabels, type TableCellSelectionValue, type TableCellChoiceOption, type ContextualTableAxis } from "./presentation/PresentationTableCellMenus";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "./presentation/PresentationTableEffectsMenu";
-import {
-  PresentationCameoShapeGallery,
-  createPresentationCameoBlock,
-  canResetPresentationSlideToCameo,
-  presentationMediaInputDevices,
-  PresentationMicrophoneDeviceMenu,
-  type PresentationMediaInputDevice,
-} from "./presentation/PresentationCameo";
+import { createPresentationCameoBlock, presentationMediaInputDevices, PresentationMicrophoneDeviceMenu, type PresentationMediaInputDevice } from "./presentation/PresentationCameo";
 import {
   PRESENTATION_VIEW_ZOOM_BOUNDS,
   PRESENTATION_ZOOM_DIALOG_PRESETS,
@@ -2929,10 +2210,7 @@ import {
   ANNOTATION_COLORS,
   type RecordStudioInkGesture,
 } from "../../../lib/presentation/ink-annotation";
-import {
-  slidesWithoutInk,
-  type InkDeleteScope,
-} from "../../../lib/presentation/ink-delete";
+import { type InkDeleteScope } from "@/lib/presentation/ink-delete";
 import {
   ONLINE_PICTURE_FETCH_TIMEOUT_MS,
   parseOnlinePictureUrl,
@@ -2982,10 +2260,6 @@ import {
   isEmptyContentPlaceholder,
 } from "../../../lib/presentation/text-editing-host";
 import { eyeDropperSupported, sampleEyeDropperColor } from "../../../lib/presentation/native-eyedropper";
-import {
-  ANIMATION_PANE_DEFAULT_WIDTH,
-  clampAnimationPaneWidth,
-} from "./presentation/PresentationAnimationPane";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "./presentation/PresentationParagraphList";
 // Kept for stylesheet order only (its named imports moved out of this file).
@@ -3016,12 +2290,7 @@ import {
   PresentationMediaMetadataContext,
   type PresentationMediaMetadataReporter,
 } from "./presentation/PresentationMediaContent";
-import {
-  SlideSizeDialog,
-  formatRehearsalTotal,
-  SlideSizeFitChoiceDialog,
-  PresentationPrintSettingsDialog,
-} from "./presentation/PresentationSlideSizeDialogs";
+import { formatRehearsalTotal, PresentationPrintSettingsDialog } from "./presentation/PresentationSlideSizeDialogs";
 import {
   DEFAULT_PRESENTATION_PDF_OPTIONS,
   PresentationPdfOptionsDialog,
@@ -3059,32 +2328,7 @@ import {
 export {
   SlideMiniThumbnail,
 } from "./presentation/PresentationSlideThumbnails";
-import {
-  PRESENTATION_AI_BLOCK_SELECTOR,
-  CHART_WORKBOOK_RESULTS_COMMIT,
-  EQUATION_BOX_FIT_COMMIT,
-  PAGE_MEDIA_REPAIR_COMMIT,
-  TEXT_LAYER_REPAIR_COMMIT,
-  TABLE_FRAME_FIT_COMMIT,
-  FIT_QUIET_MS,
-  FIT_QUIET_POLL_MS,
-  TEXT_BOX_FIT_COMMIT,
-  PRESENTATION_SELECTION_CHROME_LAYER,
-  PICTURE_ERASE_RADIUS,
-  PRESENTATION_COPILOT_V1_ENABLED,
-  MAX_PRESENTATION_HISTORY,
-  SNAP_THRESHOLD_PX,
-  MARQUEE_DRAG_THRESHOLD_PX,
-  PRESENTATION_RECORD_HELP_URL,
-  TELEPROMPTER_FONT_SIZE_DEFAULT,
-  PRESENTATION_ANIMATION_PREVIEW_BACKDROP_Z_INDEX,
-  PRESENTATION_ANIMATION_PREVIEW_LAYER_Z_INDEX,
-  PLACEHOLDER_PICTURE_COMMIT,
-  DESIGNER_IDEA_COMMIT,
-  LAYOUT_GRAPHICS_COMMIT,
-  DESIGNER_TITLE_THEMES,
-  PRESENTATION_ALT_TEXT_MAX_LENGTH,
-} from "../../../lib/presentation/window-constants";
+import { PRESENTATION_AI_BLOCK_SELECTOR, CHART_WORKBOOK_RESULTS_COMMIT, EQUATION_BOX_FIT_COMMIT, PAGE_MEDIA_REPAIR_COMMIT, TEXT_LAYER_REPAIR_COMMIT, TABLE_FRAME_FIT_COMMIT, FIT_QUIET_MS, FIT_QUIET_POLL_MS, TEXT_BOX_FIT_COMMIT, PRESENTATION_SELECTION_CHROME_LAYER, PICTURE_ERASE_RADIUS, PRESENTATION_COPILOT_V1_ENABLED, MAX_PRESENTATION_HISTORY, SNAP_THRESHOLD_PX, MARQUEE_DRAG_THRESHOLD_PX, PRESENTATION_ANIMATION_PREVIEW_BACKDROP_Z_INDEX, PRESENTATION_ANIMATION_PREVIEW_LAYER_Z_INDEX, PLACEHOLDER_PICTURE_COMMIT, DESIGNER_IDEA_COMMIT, LAYOUT_GRAPHICS_COMMIT, DESIGNER_TITLE_THEMES, PRESENTATION_ALT_TEXT_MAX_LENGTH } from "../../../lib/presentation/window-constants";
 import {
   presentationEditFailureMessage,
   uniformPresentationSelectionValue,
@@ -3100,19 +2344,7 @@ import {
   type PresentationFrameAxis,
   type PresentationCustomShowDraft,
 } from "../../../lib/presentation/window-helpers";
-const PresentationReviewRibbonTab = lazyNamed(() => import("./presentation/PresentationReviewRibbonTab"), "PresentationReviewRibbonTab");
-const PresentationSlideShowRibbonTab = lazyNamed(() => import("./presentation/PresentationSlideShowRibbonTab"), "PresentationSlideShowRibbonTab");
-const PresentationAnimationsRibbonTab = lazyNamed(() => import("./presentation/PresentationAnimationsRibbonTab"), "PresentationAnimationsRibbonTab");
-const PresentationTransitionsRibbonTab = lazyNamed(() => import("./presentation/PresentationTransitionsRibbonTab"), "PresentationTransitionsRibbonTab");
-const PresentationViewRibbonTab = lazyNamed(() => import("./presentation/PresentationViewRibbonTab"), "PresentationViewRibbonTab");
-const PresentationDesignRibbonTab = lazyNamed(() => import("./presentation/PresentationDesignRibbonTab"), "PresentationDesignRibbonTab");
-const PresentationRecordRibbonTab = lazyNamed(() => import("./presentation/PresentationRecordRibbonTab"), "PresentationRecordRibbonTab");
-const PresentationSlideMasterRibbonTab = lazyNamed(() => import("./presentation/PresentationSlideMasterRibbonTab"), "PresentationSlideMasterRibbonTab");
-const PresentationDrawRibbonTab = lazyNamed(() => import("./presentation/PresentationDrawRibbonTab"), "PresentationDrawRibbonTab");
 const PresentationInsertRibbonTab = lazyNamed(() => import("./presentation/PresentationInsertRibbonTab"), "PresentationInsertRibbonTab");
-const PresentationTableLayoutRibbonTab = lazyNamed(() => import("./presentation/PresentationTableLayoutRibbonTab"), "PresentationTableLayoutRibbonTab");
-const PresentationEquationRibbonTab = lazyNamed(() => import("./presentation/PresentationEquationRibbonTab"), "PresentationEquationRibbonTab");
-const PresentationTableDesignRibbonTab = lazyNamed(() => import("./presentation/PresentationTableDesignRibbonTab"), "PresentationTableDesignRibbonTab");
 import {
   PRESENTATION_WEB_RIBBON_TABS,
   PRESENTATION_CONTEXTUAL_RIBBON_TABS,
@@ -3127,23 +2359,13 @@ import {
   type PresentationRibbonTab,
 } from "../../../lib/presentation/ribbon-tabs";
 import { PresentationRibbonStrip } from "./presentation/PresentationRibbonStrip";
-const PresentationSmartArtDesignRibbonTab = lazyNamed(() => import("./presentation/PresentationSmartArtDesignRibbonTab"), "PresentationSmartArtDesignRibbonTab");
-const PresentationMediaPlaybackRibbonTab = lazyNamed(() => import("./presentation/PresentationMediaPlaybackRibbonTab"), "PresentationMediaPlaybackRibbonTab");
-const PresentationMediaFormatRibbonTab = lazyNamed(() => import("./presentation/PresentationMediaFormatRibbonTab"), "PresentationMediaFormatRibbonTab");
-const PresentationCameraFormatRibbonTab = lazyNamed(() => import("./presentation/PresentationCameraFormatRibbonTab"), "PresentationCameraFormatRibbonTab");
 import { PresentationHomeRibbonTab } from "./presentation/PresentationHomeRibbonTab";
-const PresentationPictureFormatRibbonTab = lazyNamed(() => import("./presentation/PresentationPictureFormatRibbonTab"), "PresentationPictureFormatRibbonTab");
-import { PresentationPictureEditSessionRibbonGroup } from "./presentation/PresentationPictureEditSessionRibbonGroup";
-const PresentationGraphicFormatRibbonTab = lazyNamed(() => import("./presentation/PresentationGraphicFormatRibbonTab"), "PresentationGraphicFormatRibbonTab");
-const PresentationShapeFormatRibbonTab = lazyNamed(() => import("./presentation/PresentationShapeFormatRibbonTab"), "PresentationShapeFormatRibbonTab");
 const PresentationCommentsPane = lazyNamed(() => import("./presentation/PresentationCommentsPane"), "PresentationCommentsPane");
 const PresentationSmartArtTextPane = lazyNamed(() => import("./presentation/PresentationSmartArtTextPane"), "PresentationSmartArtTextPane");
 const PresentationTeleprompterPane = lazyNamed(() => import("./presentation/PresentationTeleprompterPane"), "PresentationTeleprompterPane");
-const PresentationRecordStudioPane = lazyNamed(() => import("./presentation/PresentationRecordStudioPane"), "PresentationRecordStudioPane");
 const PresentationSlideMasterPane = lazyNamed(() => import("./presentation/PresentationSlideMasterPane"), "PresentationSlideMasterPane");
 const PresentationBackgroundPane = lazyNamed(() => import("./presentation/PresentationBackgroundPane"), "PresentationBackgroundPane");
 import { PresentationStatusBar } from "./presentation/PresentationStatusBar";
-import { PresentationAnimationTaskPane } from "./presentation/PresentationAnimationTaskPane";
 import { PresentationBlockInspector } from "./presentation/PresentationBlockInspector";
 import { PresentationSmartArtObjectContextMenu } from "./presentation/PresentationSmartArtObjectContextMenu";
 import { PresentationSlideRailMenuContent } from "./presentation/PresentationSlideRailMenuContent";
@@ -3190,9 +2412,9 @@ import {
 import { PresentationSmartArtGroupFrame } from "./presentation/PresentationSmartArtGroupFrame";
 import { attachRibbonKeysReturn } from "@mrnote/core/web/components/office-ribbon/ribbonKeysReturn.ts";
 import { smartArtMemberDeletedItemId } from "@mrnote/core/web/lib/office-smartart/model.ts";
-import { presentationBlocksWithSmartArtBackground, presentationSmartArtBackgroundsAfterReset, presentationSmartArtBackgroundsCarried } from "../../../lib/presentation/smartart-background";
+import { presentationSmartArtBackgroundsAfterReset, presentationSmartArtBackgroundsCarried } from "../../../lib/presentation/smartart-background";
 import { isSmartArtGraphicPlate, withNativeSmartArtGraphicPlates } from "../../../lib/presentation/smartart-graphic-plate";
-import { readSmartArtGraphicEffect, readSmartArtGraphicFormat, sheetSmartArtBackgroundStyle, smartArtGraphicEffects, type SmartArtGraphicFormatChange } from "@mrnote/core/web/lib/spreadsheet/smartart-background.ts";
+import { readSmartArtGraphicFormat, sheetSmartArtBackgroundStyle, type SmartArtGraphicFormatChange } from "@mrnote/core/web/lib/spreadsheet/smartart-background.ts";
 import { PresentationSmartArtGraphicHitLayer, presentationShapeGeometryHitClassName, presentationShapeIsNativeTextBox } from "./presentation/PresentationSmartArtGraphicHitArea";
 import {
   PresentationLiveBlockFrame,
@@ -3201,91 +2423,20 @@ import {
   presentationLiveTransformSurface,
   presentationSettledTransformObjects,
 } from "./presentation/PresentationLiveBlockFrame";
-import { PresentationAnimationTagLayer } from "./presentation/PresentationAnimationTagLayer";
 import { PresentationGuidesOverlay } from "./presentation/PresentationGuidesOverlay";
 import { PresentationFreeformDrawLayer } from "./presentation/PresentationFreeformDrawLayer";
-import {
-  paintPresentationWetStroke,
-  PresentationDrawToolSurface,
-  type PresentationWetStroke,
-} from "./presentation/PresentationDrawToolSurface";
+import { paintPresentationWetStroke, type PresentationWetStroke } from "./presentation/PresentationDrawToolSurface";
 const PresentationReadingViewLayer = lazyNamed(() => import("./presentation/PresentationReadingViewLayer"), "PresentationReadingViewLayer");
 const PresentationMasterViewLayer = lazyNamed(() => import("./presentation/PresentationMasterViewLayer"), "PresentationMasterViewLayer");
 /** The split-out parts, in the order they are loaded while idle: what a
  * selection opens first, then the tabs, then the panes and dialogs. */
-const PRESENTATION_DEFERRED_PARTS = [
-  PresentationShapeFormatRibbonTab,
-  PresentationInsertRibbonTab,
-  PresentationTableDesignRibbonTab,
-  PresentationTableLayoutRibbonTab,
-  PresentationChartContextRibbon,
-  PresentationPictureFormatRibbonTab,
-  PresentationGraphicFormatRibbonTab,
-  PresentationDesignRibbonTab,
-  PresentationTransitionsRibbonTab,
-  PresentationAnimationsRibbonTab,
-  PresentationSlideShowRibbonTab,
-  PresentationReviewRibbonTab,
-  PresentationViewRibbonTab,
-  PresentationDrawRibbonTab,
-  PresentationSmartArtDesignRibbonTab,
-  PresentationMediaFormatRibbonTab,
-  PresentationMediaPlaybackRibbonTab,
-  PresentationCameraFormatRibbonTab,
-  PresentationEquationRibbonTab,
-  PresentationRecordRibbonTab,
-  PresentationSlideMasterRibbonTab,
-  PresentationCommentsPane,
-  PresentationBackgroundPane,
-  PresentationLinkDialog,
-  PresentationSmartArtTextPane,
-  PresentationColumnsDialog,
-  PresentationReadingViewLayer,
-  PresentationMasterViewLayer,
-  PresentationSlideMasterPane,
-  PresentationMasterBackgroundPane,
-  PresentationMasterLayoutDialog,
-  PresentationMasterRenameDialog,
-  PresentationTeleprompterPane,
-  PresentationRecordStudioPane,
-  PresentationOutlineImportDialog,
-  PresentationVideoExportDialog,
-  PresentationSelectionCopilot,
-  DocumentChartWorkbookWindow,
-  DocumentChartWorkbookEditor,
-  DocumentImmersiveReader,
-] as const;
+const PRESENTATION_DEFERRED_PARTS = [PresentationInsertRibbonTab, PresentationCommentsPane, PresentationBackgroundPane, PresentationLinkDialog, PresentationSmartArtTextPane, PresentationColumnsDialog, PresentationReadingViewLayer, PresentationMasterViewLayer, PresentationSlideMasterPane, PresentationMasterBackgroundPane, PresentationMasterLayoutDialog, PresentationMasterRenameDialog, PresentationTeleprompterPane, PresentationOutlineImportDialog, PresentationVideoExportDialog, PresentationSelectionCopilot, DocumentChartWorkbookWindow, DocumentChartWorkbookEditor, DocumentImmersiveReader] as const;
 /** A Ribbon tab's part, by the tab's key (a pointer on the tab loads it). */
-const PRESENTATION_RIBBON_TAB_PARTS: Readonly<Record<string, { preload(): Promise<void> }>> = {
-  insert: PresentationInsertRibbonTab,
-  draw: PresentationDrawRibbonTab,
-  design: PresentationDesignRibbonTab,
-  transitions: PresentationTransitionsRibbonTab,
-  animations: PresentationAnimationsRibbonTab,
-  slideshow: PresentationSlideShowRibbonTab,
-  record: PresentationRecordRibbonTab,
-  review: PresentationReviewRibbonTab,
-  view: PresentationViewRibbonTab,
-  "slide-master": PresentationSlideMasterRibbonTab,
-  "shape-format": PresentationShapeFormatRibbonTab,
-  "smartart-format": PresentationShapeFormatRibbonTab,
-  "image-format": PresentationPictureFormatRibbonTab,
-  "graphic-format": PresentationGraphicFormatRibbonTab,
-  "chart-design": PresentationChartContextRibbon,
-  "chart-format": PresentationChartContextRibbon,
-  "table-design": PresentationTableDesignRibbonTab,
-  "table-layout": PresentationTableLayoutRibbonTab,
-  "smartart-design": PresentationSmartArtDesignRibbonTab,
-  "media-format": PresentationMediaFormatRibbonTab,
-  "media-playback": PresentationMediaPlaybackRibbonTab,
-  "camera-format": PresentationCameraFormatRibbonTab,
-  equation: PresentationEquationRibbonTab,
-};
+const PRESENTATION_RIBBON_TAB_PARTS: Readonly<Record<string, { preload(): Promise<void> }>> = { insert: PresentationInsertRibbonTab };
 import { buildObjectContextMenuEntries } from "./presentation/buildObjectContextMenuEntries";
 import { buildCanvasContextMenuEntries } from "./presentation/buildCanvasContextMenuEntries";
 import { buildRibbonExportMenu } from "./presentation/buildRibbonExportMenu";
 import { buildPresentationShapeFormatAdapter } from "./presentation/buildPresentationShapeFormatAdapter";
-import { buildPictureArrangeGroup } from "./presentation/buildPictureArrangeGroup";
 import { buildPictureFormatPane } from "./presentation/buildPictureFormatPane";
 import { buildTextBoxFormatPane } from "./presentation/buildTextBoxFormatPane";
 import { buildShapeFormatPane, type BuildShapeFormatPaneCtl } from "./presentation/buildShapeFormatPane";
@@ -4010,11 +3161,13 @@ export default function PresentationWindow({
   );
   const windowManagerActions = useWindowManagerActionsOptional();
   // ── ZOOM (status-bar ± buttons + Ctrl/Cmd+scroll) ─────────────────────────
-  const [slideZoom, setSlideZoomState] = useState<number>(EDITOR_ZOOM_DEFAULT);
-  const slideZoomRef = useRef(EDITOR_ZOOM_DEFAULT);
+  // An embedded editor's integration may name the zoom it opens at (lib/embed/onlyoffice-frame).
+  const [embedZoom] = useState(onlyofficeInitialZoom);
+  const [slideZoom, setSlideZoomState] = useState<number>(embedZoom ?? EDITOR_ZOOM_DEFAULT);
+  const slideZoomRef = useRef(embedZoom ?? EDITOR_ZOOM_DEFAULT);
   const [slideZoomMode, setSlideZoomModeState] =
-    useState<PresentationViewportZoomMode>("fit");
-  const slideZoomModeRef = useRef<PresentationViewportZoomMode>("fit");
+    useState<PresentationViewportZoomMode>(embedZoom !== null ? "percent" : "fit");
+  const slideZoomModeRef = useRef<PresentationViewportZoomMode>(embedZoom !== null ? "percent" : "fit");
   const [slideFitZoomCeiling, setSlideFitZoomCeiling] =
     useState(EDITOR_ZOOM_DEFAULT);
   // The fit is re-measured after most commits and on every observed resize;
@@ -4082,8 +3235,6 @@ export default function PresentationWindow({
   // in an effect that committed the whole editor a second time.
   if (ribbonTab !== webRibbonTab) setRibbonTab(webRibbonTab);
   const rehearsalReturnFocusRef = useRef<HTMLElement | null>(null);
-  const slideShowMoreTriggerRef = useRef<HTMLButtonElement>(null);
-  const slideShowSetupTriggerRef = useRef<HTMLButtonElement>(null);
   const slideShowSetupReturnFocusRef = useRef<HTMLElement | null>(null);
   const [slideShowSetupOpen, setSlideShowSetupOpen] = useState(false);
   const [slideShowSetupUseTimings, setSlideShowSetupUseTimings] =
@@ -4112,7 +3263,6 @@ export default function PresentationWindow({
     showSlides: false,
     showType: false,
   });
-  const customShowTriggerRef = useRef<HTMLButtonElement | null>(null);
   const customShowDialogReturnFocusRef = useRef<HTMLElement | null>(null);
   const customShowDialogGenerationRef = useRef<number | null>(null);
   const [customShowDialogOpen, setCustomShowDialogOpen] = useState(false);
@@ -4126,13 +3276,8 @@ export default function PresentationWindow({
   // PowerPoint's Animation Pane is independent view state: closed on mount and
   // toggleable even when the active slide has no object/effect selection.
   const [animationPaneOpen, setAnimationPaneOpen] = useState(false);
-  const [animationPaneWidth, setAnimationPaneWidth] = useState(
-    ANIMATION_PANE_DEFAULT_WIDTH,
-  );
   const animationPaneToggleRef = useRef<HTMLButtonElement>(null);
   const animationPaneTabRef = useRef<HTMLButtonElement>(null);
-  const animationPaneRef = useRef<HTMLElement | null>(null);
-  const animationPaneResizePointerRef = useRef<number | null>(null);
   const [selectedAnimationIndex, setSelectedAnimationIndex] = useChangedState<
     number | null
   >(null);
@@ -4142,11 +3287,11 @@ export default function PresentationWindow({
     selectedAnimationIndexRef.current = selectedAnimationIndex;
   }, [selectedAnimationIndex]);
   useEffect(() => {
-    if (!animationPaneOpen) return;
+    return;
     queueMicrotask(() =>
       animationPaneTabRef.current?.focus({ preventScroll: true }),
     );
-  }, [animationPaneOpen]);
+  }, [false]);
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const imageFileReturnFocusRef = useRef<HTMLElement | null>(null);
   const audioFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -4157,7 +3302,6 @@ export default function PresentationWindow({
   const videoFileReturnFocusRef = useRef<HTMLElement | null>(null);
   const captionFileInputRef = useRef<HTMLInputElement | null>(null);
   const captionFileReturnFocusRef = useRef<HTMLElement | null>(null);
-  const captionMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const captionFileTargetRef = useRef<{
     slideId: string;
     blockId: string;
@@ -4234,15 +3378,6 @@ export default function PresentationWindow({
   const [mediaDurationMsByBlockId, setMediaDurationMsByBlockId] = useState<
     Record<string, number>
   >({});
-  const [mediaTrimDialog, setMediaTrimDialog] = useState<{
-    slideId: string;
-    blockId: string;
-    kind: "video" | "audio";
-    src: string | null;
-    durationMs: number;
-    trimStartMs: number;
-    trimEndMs: number;
-  } | null>(null);
   const reportMediaMetadata = useCallback<PresentationMediaMetadataReporter>(
     (blockId, durationMs) => {
       setMediaDurationMsByBlockId((current) => {
@@ -4260,14 +3395,10 @@ export default function PresentationWindow({
   );
   const pictureReplaceInputRef = useRef<HTMLInputElement | null>(null);
   const pictureReplaceReturnFocusRef = useRef<HTMLElement | null>(null);
-  const pictureReplaceMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const pictureReplacePickerOpenRef = useRef(false);
   const pictureReplaceBusyRef = useRef(false);
   const [pictureReplaceBusy, setPictureReplaceBusy] = useState(false);
   const pictureCropReturnFocusRef = useRef<HTMLElement | null>(null);
-  const pictureCropTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const pictureCropMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const pictureBorderMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const pictureBorderPendingRef =
     useRef<PresentationPictureBorderCommandPayload | null>(null);
   const pictureArrangePendingRef =
@@ -4292,7 +3423,6 @@ export default function PresentationWindow({
     useRef<PresentationAnimationSequenceCommandPayload | null>(null);
   const animationTimingPendingRef =
     useRef<PresentationAnimationTimingCommandPayload | null>(null);
-  const transitionPreviewTokenRef = useRef(0);
   const transitionPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -4302,7 +3432,6 @@ export default function PresentationWindow({
   const transitionSoundPreviewRef = useRef<HTMLAudioElement | null>(null);
   const [transitionPreview, setTransitionPreview] =
     useState<EditorTransitionPreviewPlayback | null>(null);
-  const animationPreviewTokenRef = useRef(0);
   const animationPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -4318,7 +3447,6 @@ export default function PresentationWindow({
     readonly frames: readonly TimelinePreviewFrame[];
     readonly frameIndex: number;
   } | null>(null);
-  const transitionDurationSkipBlurRef = useRef(false);
   const transitionDurationDraftRef = useRef<{
     slideModelId: string;
     value: string;
@@ -4379,11 +3507,7 @@ export default function PresentationWindow({
     width: DEFAULT_IMAGE_BORDER_WIDTH,
     style: "solid",
   });
-  const [pictureBorderRecentColors, setPictureBorderRecentColors] = useState<
-    string[]
-  >([]);
   const pictureCompressionReturnFocusRef = useRef<HTMLElement | null>(null);
-  const pictureCompressionTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [pictureCompressionTarget, setPictureCompressionTarget] = useState<{
     readonly blockId: string;
     readonly source: string;
@@ -4397,9 +3521,7 @@ export default function PresentationWindow({
   const taskPaneDockRef = useRef<PresentationTaskPaneDock | null>(null);
   /** The pane in front when Designer opened by itself: it stays in front. */
   const designerAutoShowBehindRef = useRef<PresentationTaskPaneId | null>(null);
-  const selectionPaneImageTriggerRef = useRef<HTMLButtonElement | null>(null);
   const selectionPaneChartTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const selectionPaneMediaTriggerRef = useRef<HTMLButtonElement | null>(null);
   const reviewAccessibilityTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [accessibilityPanelOpen, setAccessibilityPanelOpen] = useState(false);
   const statusAccessibilityTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -4784,8 +3906,6 @@ export default function PresentationWindow({
     "footer" | "date" | "number"
   >("footer");
   const headerFooterRibbonTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const slideShowSetupButtonRef = useRef<HTMLButtonElement | null>(null);
-  const slideShowRehearseButtonRef = useRef<HTMLButtonElement | null>(null);
   const dateTimeRibbonTriggerRef = useRef<HTMLButtonElement | null>(null);
   const slideNumberRibbonTriggerRef = useRef<HTMLButtonElement | null>(null);
   const insertActionRibbonTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -4934,35 +4054,10 @@ export default function PresentationWindow({
   // What the Copilot opens picked: the object the mini toolbar's AI was
   // pressed over, or the objects selected together when the rail's AI opens.
   const [aiInitialTarget, setAiInitialTarget] = useState<Element | readonly Element[] | null>(null);
-  // SLIDE SIZE dialog (PowerPoint "Slide Size") — preset (4:3 / 16:9 / on-screen)
-  // or a custom width/height in inches, applied deck-wide to every slide's
-  // widthEmu/heightEmu. Closed by default.
-  const [slideSizeOpen, setSlideSizeOpen] = useState(false);
-  const [designSizeAuthority, setDesignSizeAuthority] = useState<PresentationDesignAuthority | null>(null);
-  const [designSizeLoading, setDesignSizeLoading] = useState(false);
-  const [designSizeError, setDesignSizeError] = useState<string | null>(null);
   const designSizeRequestRef = useRef<AbortController | null>(null);
-  const [pendingSlideSize, setPendingSlideSize] = useState<{
-    readonly size: SlideSizeEmu;
-    readonly firstSlideNumber: number;
-    readonly notesSize: PresentationNotesSize;
-  } | null>(null);
-  const slideSizeTriggerRef = useRef<HTMLButtonElement | null>(null);
   // Replace Fonts dialog (PowerPoint Home ▸ Replace ▸ Replace Fonts).
   const [replaceFontsOpen, setReplaceFontsOpen] = useState(false);
   const replaceFontsTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const closeSlideSizeDialog = useCallback(() => {
-    setSlideSizeOpen(false);
-    requestAnimationFrame(() =>
-      slideSizeTriggerRef.current?.focus({ preventScroll: true }),
-    );
-  }, []);
-  const closeSlideSizeFitDialog = useCallback(() => {
-    setPendingSlideSize(null);
-    requestAnimationFrame(() =>
-      slideSizeTriggerRef.current?.focus({ preventScroll: true }),
-    );
-  }, []);
   const closeReplaceFontsDialog = useCallback(() => {
     setReplaceFontsOpen(false);
     requestAnimationFrame(() =>
@@ -5084,15 +4179,11 @@ export default function PresentationWindow({
   const [homeTextColorRecents, setHomeTextColorRecents] = useState<string[]>([]);
   const [animationEffectOptionsMenuOpen, setAnimationEffectOptionsMenuOpen] =
     useState(false);
-  const [animationEffectRecentColors, setAnimationEffectRecentColors] =
-    useState<string[]>([]);
   // Home > Shape Fill / Shape Outline: the open menu, so a swatch press in
   // the shared palette closes it as a menu item would.
   const [homeShapeColorMenu, setHomeShapeColorMenu] = useState<
     "fill" | "stroke" | null
   >(null);
-  /** Graphics Format > Graphics Fill / Outline: the one palette open, closed by a pick as PowerPoint's is. */
-  const [officeGraphicPaintMenu, setOfficeGraphicPaintMenu] = useState<OfficeGraphicPaintField | null>(null);
   const homeShapeFillMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const homeShapeOutlineMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [shapeArrowsDialogOpen, setShapeArrowsDialogOpen] = useState(false);
@@ -5108,9 +4199,6 @@ export default function PresentationWindow({
   const [tableCellPaletteTarget, setTableCellPaletteTarget] = useChangedState<
     "fill" | "tableBackground" | "color" | "highlight" | "border" | null
   >(null);
-  const [tableCellRecentColors, setTableCellRecentColors] = useState<string[]>(
-    [],
-  );
   const pendingHomeLayoutRef = useRef<string | null>(null);
   const pendingHomeShapeRef =
     useRef<PresentationShapeCatalogSelection | null>(null);
@@ -5198,15 +4286,9 @@ export default function PresentationWindow({
   const [tableSelectionScope, setTableSelectionScope] =
     useState<TableSelectionScope>("cells");
   const [tableCellFontSizeDraft, setTableCellFontSizeDraft] = useState("");
-  const [tableCellFontSizeFocused, setTableCellFontSizeFocused] =
-    useState(false);
-  const [tableCellFontSizeDirty, setTableCellFontSizeDirty] = useState(false);
   const [tableCellMarginDrafts, setTableCellMarginDrafts] = useState<
     Record<TableCellMarginField, string>
   >(EMPTY_TABLE_CELL_MARGIN_DRAFTS);
-  const [tableCellMarginFocused, setTableCellMarginFocused] =
-    useState<TableCellMarginField | null>(null);
-  const [tableCellMarginDirty, setTableCellMarginDirty] = useState(false);
   const [tableCellMarginsDialogOpen, setTableCellMarginsDialogOpen] =
     useChangedState(false);
   const tableCellMarginsTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -5214,41 +4296,14 @@ export default function PresentationWindow({
     Record<ContextualTableAxis, string>
   >(EMPTY_TABLE_AXIS_SIZE_DRAFTS);
   const [tableBorderWidthDraft, setTableBorderWidthDraft] = useState("");
-  const [tableBorderWidthFocused, setTableBorderWidthFocused] =
-    useState(false);
-  const [tableBorderWidthDirty, setTableBorderWidthDirty] = useState(false);
   // Table Tools → Split Cells uses the shared Office dialog contract. The
   // draft stays editor-only until Apply, so opening, cancelling, or correcting
   // a value never dirties the slide.
   const [tableSplitPanelOpen, setTableSplitPanelOpen] = useChangedState(false);
   const [tableSplitRowsDraft, setTableSplitRowsDraft] = useState("1");
   const [tableSplitColumnsDraft, setTableSplitColumnsDraft] = useState("2");
-  const tableSplitTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const tableSplitRowsInputRef = useRef<HTMLInputElement | null>(null);
-  // PowerPoint/WPS Layout → Lock aspect ratio is an editor-session command
-  // preference, not PPTX table data: real PowerPoint retains the checkbox
-  // across files but does not serialize it into the table's DrawingML. Keep it
-  // local while routing each locked resize through one undoable block edit.
-  const [tableFrameAspectLocked, setTableFrameAspectLocked] = useState(false);
-  // WPS 表格工具 → 查看网格线: faint editing gridlines so a borderless table's
-  // structure stays visible while editing. An editor aid, never exported — like
-  // the aspect-ratio checkbox, PowerPoint keeps it out of the table's DrawingML.
-  const [tableGridlinesVisible, setTableGridlinesVisible] = useState(false);
   const [tableScopeFocusRequest, setTableScopeFocusRequest] = useState(0);
-  /**
-   * Table Layout > Select > Select Cell: the focused cell's whole text is the
-   * selection, so Backspace/Delete empty it and Copy takes all of it. It used
-   * to leave the caret where it was and Backspace deleted one letter
-   * (PPT-B123).
-   */
-  const selectWholeTableCellRef = useRef(false);
   const handledTableScopeFocusRequestRef = useRef(0);
-  // Set when a scope was chosen from the Table Layout > Select MENU, so the
-  // menu's own close-auto-focus stands aside for the caret restore the command
-  // schedules. Without it Radix hands focus back to the Select trigger after
-  // the restore has run, and Ctrl+C / Ctrl+V — whose handlers live on the cell
-  // editor — do nothing on the range the user just selected.
-  const tableScopeChosenFromMenuRef = useRef(false);
   const tableCellInputRefs = useRef(new Map<string, PresentationCellTextElement>());
   const [tableCharacterSelectionVersion, setTableCharacterSelectionVersion] = useState(0);
   // Layout → Select Cell/Row/Column/Table lives in the ribbon, so activating it
@@ -5464,10 +4519,6 @@ export default function PresentationWindow({
   const [narrationRecorderError, setNarrationRecorderError] = useState<
     string | null
   >(null);
-  const [recordStudioOpen, setRecordStudioOpen] = useState(false);
-  const [recordStudioEntry, setRecordStudioEntry] = useState<
-    "beginning" | "current" | null
-  >(null);
   const [recordStudioLayout, setRecordStudioLayout] = useState<
     "teleprompter" | "presenter" | "slide"
   >("teleprompter");
@@ -5480,9 +4531,6 @@ export default function PresentationWindow({
   const recordStudioTotalElapsedRef = useRef(0);
   const recordStudioTotalRunBaseRef = useRef(0);
   const recordStudioTotalRunStartedAtRef = useRef<number | null>(null);
-  const recordStudioTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const recordStudioCurrentTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const recordStudioReturnFocusRef = useRef<HTMLButtonElement | null>(null);
   const recordStudioPanelRef = useRef<HTMLElement | null>(null);
   const recordStudioStageRef = useRef<HTMLDivElement | null>(null);
   const recordStudioTeleprompterScrollRef = useRef<HTMLDivElement | null>(null);
@@ -5490,8 +4538,6 @@ export default function PresentationWindow({
     useChangedState(false);
   const [recordStudioAnnotationTool, setRecordStudioAnnotationTool] =
     useChangedState<AnnotationTool | null>(null);
-  const [recordStudioAnnotationColor, setRecordStudioAnnotationColor] =
-    useState(ANNOTATION_DEFAULT_COLOR);
   const recordStudioInkGestureRef = useRef<RecordStudioInkGesture | null>(null);
   const [recordStudioInkDraft, setRecordStudioInkDraft] = useChangedState<{
     readonly slideId: string;
@@ -5580,26 +4626,6 @@ export default function PresentationWindow({
     setNarrationPreviewPlaying(false);
     if (resetTime) setNarrationPreviewCurrentSeconds(0);
   }, []);
-  const toggleNarrationPreview = useCallback(() => {
-    const player = narrationPreviewAudioRef.current;
-    if (!player) return;
-    if (!player.paused && !player.ended) {
-      player.pause();
-      return;
-    }
-    if (player.ended) player.currentTime = 0;
-    void player.play().catch(() => setNarrationPreviewPlaying(false));
-  }, []);
-  const seekNarrationPreview = useCallback((seconds: number) => {
-    const player = narrationPreviewAudioRef.current;
-    if (!player || !Number.isFinite(seconds)) return;
-    const duration = Number.isFinite(player.duration)
-      ? Math.max(0, player.duration)
-      : 0;
-    const next = Math.min(duration, Math.max(0, seconds));
-    player.currentTime = next;
-    setNarrationPreviewCurrentSeconds(next);
-  }, []);
   const useRecordedSlideTimings = presentationUsesTimings(slideShowSettings);
   const configuredSlideShowType = presentationSlideShowType(slideShowSettings);
   const loopSlideShowAtEnd =
@@ -5609,13 +4635,6 @@ export default function PresentationWindow({
     presentationShowsMediaControls(slideShowSettings);
   const playSlideShowNarrations =
     presentationShowsNarrations(slideShowSettings);
-  const canPersistSlideShowMediaControls =
-    !slideShowSettings?.source ||
-    (slideShowSettings.source.presentationPart === "ppt/presentation.xml" &&
-      typeof slideShowSettings.source.presentationFingerprint === "string" &&
-      typeof slideShowSettings.source.originalShowMediaControlsPresent ===
-        "boolean" &&
-      typeof slideShowSettings.source.originalShowMediaControls === "boolean");
   const showSlideShowScrollbar = presentationShowsScrollBar(slideShowSettings);
   const configuredSlideShowRange =
     presentationSlideShowRange(slideShowSettings);
@@ -6040,12 +5059,6 @@ export default function PresentationWindow({
     blockId: string;
     style: PresentationPictureFrameStyle;
   } | null>(null);
-  // Video Styles' live preview (PPT-A155): the hovered style drawn on the
-  // selected video only; nothing is saved until a click commits it.
-  const [videoStylePreview, setVideoStylePreview] = useState<{
-    blockId: string;
-    styleId: OfficeVideoStyleId;
-  } | null>(null);
   const tableAxisGestureRef = useRef<{
     blockId: string;
     slideId: string;
@@ -6186,7 +5199,7 @@ export default function PresentationWindow({
     | ((
         targets: PresentationBlock[],
         offset: PresentationDuplicateOffset,
-        options?: { readonly asPaste?: boolean; readonly fromSlideId?: string; readonly onUnsupported?: () => void },
+        options?: { readonly asPaste?: boolean; readonly fromSlideId?: string; readonly onUnsupported?: () => void; readonly staleRetries?: number },
       ) => Promise<void>)
     | null
   >(null);
@@ -7424,6 +6437,10 @@ export default function PresentationWindow({
     // A body the server refused (a Remove Background or Cameo the validator
     // rejects) resumes saving once an edit such as Undo leaves it.
     resumeRefusedSaveOnEdit: true,
+    
+    // moment is ridden out and a race read again and carried over, by the
+    // hook itself (`saveGuarantee`).
+    saveGuarantee: true,
     // Native packages can require a full deck reimport before their Save reply.
     // Keep the request alive through that work; CAS and native receipts still
     // determine success, including when the connection is actually lost.
@@ -7559,11 +6576,6 @@ export default function PresentationWindow({
     },
     [markDeckRead],
   );
-  const markAllChangesRead = useCallback(() => {
-    setDeckChanges(null);
-    setShowChanges(false);
-    markDeckRead();
-  }, [markDeckRead]);
   const changedSlideIds = useMemo<ReadonlySet<string>>(
     () => (showChanges && deckChanges ? new Set(deckChanges.slides.keys()) : new Set()),
     [deckChanges, showChanges],
@@ -7856,9 +6868,9 @@ export default function PresentationWindow({
     recordStudioInkGestureRef.current = null;
     setRecordStudioInkDraft(null);
     setRecordStudioAnnotationTool(null);
-  }, [activeSlide.id, recordStudioOpen]);
+  }, [activeSlide.id, false]);
   useLayoutEffect(() => {
-    if (!recordStudioOpen) {
+    {
       setRecordStudioInkSurfaceRect(null);
       return;
     }
@@ -7899,7 +6911,7 @@ export default function PresentationWindow({
     observer.observe(stage);
     observer.observe(canvas);
     return () => observer.disconnect();
-  }, [activeSlide.id, recordStudioOpen]);
+  }, [activeSlide.id, false]);
   const importedDeckHasNativePptxSource = useMemo(
     () => presentationDeckHasNativePptxSource(slides),
     [slides],
@@ -7997,18 +7009,6 @@ export default function PresentationWindow({
   const normalizedActiveTransition = normalizeSlideTransition(
     activeSlide.transition,
   );
-  const activeAuthorableTransition = isAuthorableSlideTransition(
-    normalizedActiveTransition,
-  )
-    ? normalizedActiveTransition
-    : null;
-  const activeTransitionPreview =
-    resolveMorphSlideTransitionPreview(slides, activeIndex) ??
-    resolveSlideTransitionPreview(activeSlide, () => 0);
-  const transitionPreviewDisabledReason =
-    activeTransitionPreview === null
-      ? t("document.capability.unavailable")
-      : undefined;
   useEffect(() => {
     if (
       handledTableScopeFocusRequestRef.current === tableScopeFocusRequest ||
@@ -8402,43 +7402,12 @@ export default function PresentationWindow({
       ).guides.filter((guide) => guide.kind === "slide-center"),
     [activeSlideBounds],
   );
-  // Current EXPLICIT deck slide size (the active slide's widthEmu/heightEmu when
-  // set; else the resolved bounds default). Drives the Slide Size dialog's
-  // selected preset + the custom-inch inputs' starting values.
-  const currentSlideSize = useMemo<SlideSizeEmu>(() => {
-    const w = slideDimension(activeSlide, "widthEmu");
-    const h = slideDimension(activeSlide, "heightEmu");
-    return w && h
-      ? { widthEmu: w, heightEmu: h }
-      : {
-          widthEmu: activeSlideBounds.width,
-          heightEmu: activeSlideBounds.height,
-        };
-  }, [activeSlide, activeSlideBounds.height, activeSlideBounds.width]);
   useLayoutEffect(() => {
     backgroundMutationAllowedRef.current = !autosave.readOnly;
     return () => { backgroundMutationAllowedRef.current = false; };
   }, [autosave.readOnly]);
-  const designSizeAuthorityRef = useRef(designSizeAuthority);
-  designSizeAuthorityRef.current = designSizeAuthority;
-  const sizeAuthorizedSlides = useMemo(() => {
-    if (!designSizeAuthority || designSizeAuthority.binding.pageId !== pageId ||
-        designSizeAuthority.binding.contentVersion !== autosave.page?.content_version) return slides;
-    return adoptNativeSlideSizeAuthority(slides, designSizeAuthority) ?? slides;
-  }, [slides, designSizeAuthority, pageId, autosave.page?.content_version]);
-  const sizeNeedsCurrentBinding = useMemo(
-    () => slides.some(slide => (slide.source as Record<string, unknown> | undefined)?.designAuthorityBinding),
-    [slides],
-  );
-  const sizeBindingCurrent = designSizeAuthority?.binding.pageId === pageId &&
-    designSizeAuthority?.binding.contentVersion === autosave.page?.content_version;
-  // Every slide's size custody, read once per deck state: a slide change or
-  // a selection re-read the whole deck (a long deck's every render).
-  const sizeAuthorizedSlidesCanApply = useMemo(
-    () => nativeSlideSizeCanApply(sizeAuthorizedSlides),
-    [sizeAuthorizedSlides],
-  );
-  const slideSizeSelectionIsWritable = !autosave.readOnly && (!sizeNeedsCurrentBinding || sizeBindingCurrent) && sizeAuthorizedSlidesCanApply;
+  const designSizeAuthorityRef = useRef(null);
+  designSizeAuthorityRef.current = null;
   useEffect(() => () => { designSizeRequestRef.current?.abort(); }, [pageId]);
   // Live, deterministic match order for Find Next / Replace current. The
   // event handlers enumerate again from `slidesRef` before executing; this
@@ -8522,12 +7491,6 @@ export default function PresentationWindow({
   useEffect(() => {
     if (!hasPersistedReviewInk) setReviewInkHidden(false);
   }, [hasPersistedReviewInk]);
-  // Review > Hide Ink > Delete All Ink on Slide / in Presentation (PPT-A102).
-  const deleteReviewInk = (scope: InkDeleteScope) => {
-    if (autosave.readOnly) return;
-    const next = slidesWithoutInk(slidesRef.current, scope);
-    if (next) commitSlides(next);
-  };
   const activeSlideVisibleBlocks = useMemo(
     () => {
       const shownBlocks = activeSlide.hideBackgroundGraphics
@@ -8540,7 +7503,7 @@ export default function PresentationWindow({
       const visibleBlocks = officeThemeReplacesNativeMasterGraphics(theme)
         ? shownBlocks.filter((block) => !isReplacedNativeMasterGraphic(block, theme))
         : shownBlocks;
-      return reviewInkHidden || inkReplayActive
+      return inkReplayActive
         ? visibleBlocks.filter(
             (block) => persistedInkPathSignature(block) === null,
           )
@@ -8550,7 +7513,7 @@ export default function PresentationWindow({
     [
       activeSlide.blocks,
       activeSlide.hideBackgroundGraphics,
-      reviewInkHidden,
+      false,
       inkReplayActive,
       theme,
     ],
@@ -8567,7 +7530,7 @@ export default function PresentationWindow({
   const { timeline: inkReplayTimelineValue, frame: inkReplayFrameValue } =
     usePresentationInkReplay(inkReplayStrokes, inkReplay, setInkReplay);
   // A replay belongs to the slide and the Draw tab it started on.
-  const inkReplayOnDrawTab = ribbonTab === "draw";
+  const inkReplayOnDrawTab = false;
   useEffect(() => {
     setInkReplay(null);
   }, [activeSlide.id, inkReplayOnDrawTab]);
@@ -8672,9 +7635,6 @@ export default function PresentationWindow({
       ? presentationOfficeTheme(identity.themeId)
       : undefined;
   }, [theme]);
-  const activeThemeVariantId = useMemo<string | null>(() => {
-    return resolveThemeSelection(theme)?.variantId ?? (theme ? null : "base");
-  }, [theme]);
   const importedDeckHasNativeThemeTarget = importedDeckHasNativePptxSource;
   const importedThemeSourceMissing =
     importedDeckHasNativeThemeTarget && !theme?.identity?.source;
@@ -8685,68 +7645,6 @@ export default function PresentationWindow({
       ? t("presentation.editTargetNotFound")
       : t("presentation.theme.multipleNativeUnsupported")
     : null;
-  // An Office theme's own variants (4; Integral 8) or the four computed
-  // variants of an MRAI selection (a themeless deck counts as Classic).
-  const availableThemeVariants = useMemo(
-    () =>
-      presentationThemeVariantOptions(theme).map((variant) => ({
-        ...variant,
-        label:
-          variant.officeIndex !== undefined
-            ? // PowerPoint's own name: "Office 主题 变型 1" (PPT-A072).
-              t("presentation.theme.variant.office", {
-                theme: (() => {
-                  const office = presentationOfficeTheme(theme?.identity?.themeId);
-                  return office ? presentationOfficeThemeLabel(office, locale) : "";
-                })(),
-                index: variant.officeIndex,
-              }).trim()
-            : t(variant.labelKey ?? "presentation.theme.variant.base"),
-      })),
-    [locale, t, theme],
-  );
-  // Design > Themes > Office: the catalog's themes in gallery order, each
-  // drawn from its base variant.
-  const officeThemeTiles = useMemo(
-    () =>
-      PRESENTATION_OFFICE_THEMES.flatMap((office) => {
-        const design = resolveOfficeThemeDesign(office.id, "v1");
-        return design
-          ? [
-              {
-                id: office.id,
-                design,
-                label: presentationOfficeThemeLabel(office, locale),
-              },
-            ]
-          : [];
-      }),
-    [locale],
-  );
-  // Design > Themes > This Presentation: the deck's own current theme.
-  const currentThemeTile = useMemo(() => {
-    const selection = resolveThemeSelection(theme);
-    const preset =
-      selection?.selectionKind === "catalog"
-        ? PRESET_THEMES.find((entry) => entry.id === selection.themeId)
-        : undefined;
-    const label = activeOfficeTheme
-      ? presentationOfficeThemeLabel(activeOfficeTheme, locale)
-      : preset
-        ? t(
-            `presentation.theme.preset.${preset.labelKey}` as "presentation.theme.preset.classic",
-          )
-        : theme?.identity?.selectionKind === "native" &&
-            theme.identity.source?.name
-          ? theme.identity.source.name
-          : theme
-            ? t("presentation.theme.preset.custom")
-            : t("presentation.theme.preset.classic");
-    return {
-      label,
-      design: theme ?? resolveCatalogThemeDesign("classic", "base") ?? {},
-    };
-  }, [activeOfficeTheme, locale, t, theme]);
   // Theme-derived style for the standalone slide-title input(s). `{}` when no
   // theme so the title keeps its built-in styling, exactly as before.
   const editorTitleStyle = useMemo<CSSProperties>(() => {
@@ -9105,12 +8003,6 @@ export default function PresentationWindow({
       ? contextualShapeBlock
       : null;
   const contextualCameoBlockId = contextualCameoBlock?.id ?? null;
-  const contextualCameoAltTextWritable = Boolean(
-    contextualCameoBlock &&
-      contextualShapeSelectionIsWritable &&
-      (contextualCameoBlock.source as Record<string, unknown> | undefined)
-        ?.cameoAltTextDisposition !== "preserve-only",
-  );
   useEffect(() => {
     if (contextualCameoBlockId) setFormatPaneOpen(false);
   }, [contextualCameoBlockId]);
@@ -9294,9 +8186,6 @@ export default function PresentationWindow({
         : [],
     [selectionAuthority],
   );
-  const contextualImageSelectionIsWritable =
-    contextualImageBlocks.length > 0 &&
-    contextualImageBlocks.every(canEditBlockContent);
   const contextualOfficeGraphicBlocks = useMemo<
     readonly PresentationImageBlock[]
   >(
@@ -9326,19 +8215,7 @@ export default function PresentationWindow({
   const contextualPictureSourceReason = contextualPictureSourcePreserveOnly
     ? t("presentation.image.sourcePreserveOnly")
     : undefined;
-  const contextualOfficeGraphicBlock = isPresentationOfficeGraphic(
-    contextualImageBlock,
-  )
-    ? contextualImageBlock
-    : null;
   const contextualImageBlockId = contextualImageBlock?.id ?? null;
-  const contextualImageCanResetAndSize =
-    contextualImageBlock !== null &&
-    !contextualPictureSourcePreserveOnly &&
-    hasResettablePresentationPictureAndSize(
-      contextualImageBlock,
-      slideBounds(activeSlide),
-    );
   useEffect(() => {
     if (contextualImageBlockId) return;
     cropGestureCleanupRef.current?.();
@@ -9860,80 +8737,6 @@ export default function PresentationWindow({
   const contextualMediaPlaybackIsImported = Boolean(
     contextualMediaBlock && isImportedPptxBlock(contextualMediaBlock),
   );
-  const contextualMediaNativeVideoAuthority =
-    contextualMediaKind === "video" &&
-    contextualMediaBlock
-      ? nativePresentationVideoAuthority(
-        contextualMediaBlock as unknown as Record<string, unknown>,
-        )
-      : null;
-  const contextualMediaPlaybackHasNativeVideoAuthority = Boolean(
-    contextualMediaNativeVideoAuthority,
-  );
-  const contextualMediaNativeAudioAuthority =
-    contextualMediaKind === "audio" && contextualMediaBlock
-      ? nativePresentationAudioAuthority(
-        contextualMediaBlock as unknown as Record<string, unknown>,
-        )
-      : null;
-  const contextualMediaPlaybackHasNativeAudioAuthority = Boolean(
-    contextualMediaNativeAudioAuthority,
-  );
-  // An online video (YouTube, Vimeo) plays under its provider's controls:
-  // PowerPoint's Trim, Fade and Bookmarks do not apply to it, and Preview
-  // plays it from its own Play button on the canvas.
-  const contextualMediaIsOnlineVideo = Boolean(
-    contextualMediaBlock && presentationOnlineVideo(contextualMediaBlock),
-  );
-  const contextualMediaPlaybackIsWritable =
-    contextualMediaSelectionIsWritable &&
-    contextualMediaKind !== "iframe" &&
-    !contextualMediaIsOnlineVideo &&
-    (!contextualMediaPlaybackIsImported ||
-      contextualMediaPlaybackHasNativeVideoAuthority ||
-      contextualMediaPlaybackHasNativeAudioAuthority);
-  const contextualMediaDurationMs = contextualMediaBlock
-    ? mediaDurationMsByBlockId[contextualMediaBlock.id]
-    : undefined;
-  const contextualMediaTrimAssetVideo = contextualMediaBlock
-    ? assetBackedPresentationVideoSource(
-        contextualMediaBlock as unknown as Record<string, unknown>,
-      )
-    : null;
-  const contextualMediaTrimInlineAudio = Boolean(
-    contextualMediaKind === "audio" &&
-      contextualMediaBlock &&
-      (resolveEmbed({
-        kind: contextualMediaBlock.kind,
-        url: contextualMediaBlock.url,
-      }).url?.startsWith("data:audio/") ||
-        assetBackedPresentationAudioSource(
-          contextualMediaBlock as unknown as Record<string, unknown>,
-        )),
-  );
-  const contextualMediaNativeDurationMs =
-    contextualMediaNativeVideoAuthority?.mediaDurationMs ??
-    contextualMediaNativeAudioAuthority?.mediaDurationMs;
-  const contextualMediaTrimHasNativeDuration = Boolean(
-    contextualMediaNativeDurationMs !== undefined &&
-      (contextualMediaDurationMs === undefined ||
-        Math.abs(
-          contextualMediaNativeDurationMs - contextualMediaDurationMs,
-        ) <= 250),
-  );
-  const contextualMediaTrimDurationMs =
-    contextualMediaDurationMs ?? contextualMediaNativeDurationMs;
-  const contextualMediaTrimIsWritable = Boolean(
-    contextualMediaPlaybackIsWritable &&
-      contextualMediaTrimDurationMs !== undefined &&
-      contextualMediaTrimDurationMs >= 100 &&
-      ((contextualMediaKind === "video" &&
-        (contextualMediaTrimAssetVideo ||
-          contextualMediaTrimHasNativeDuration)) ||
-        (contextualMediaKind === "audio" &&
-          (contextualMediaTrimInlineAudio ||
-            contextualMediaTrimHasNativeDuration))),
-  );
   const contextualMediaCaptionAuthority = contextualMediaBlock
     ? nativePresentationCaptionAuthority(
         contextualMediaBlock as unknown as Record<string, unknown>,
@@ -9964,105 +8767,12 @@ export default function PresentationWindow({
     contextualMediaCaptionHasSource &&
     (!contextualMediaPlaybackIsImported ||
       contextualMediaCaptionAuthority !== null);
-  const contextualMediaPlaybackUnavailableReason =
-    contextualMediaPlaybackIsImported &&
-    !contextualMediaPlaybackHasNativeVideoAuthority &&
-    !contextualMediaPlaybackHasNativeAudioAuthority
-      ? t("presentation.media.importedPlaybackUnavailable")
-      : t("presentation.media.playbackSettingsUnavailable");
-  const mediaPlaybackCommandLabel = (label: string): string =>
-    contextualMediaPlaybackIsWritable
-      ? label
-      : `${label} — ${contextualMediaPlaybackUnavailableReason}`;
-  const closeMediaTrimDialog = () => {
-    setMediaTrimDialog(null);
-    requestAnimationFrame(() =>
-      rootRef.current
-        ?.querySelector<HTMLElement>(
-          '[data-testid="presentation-ribbon-media-trim"]',
-        )
-        ?.focus({ preventScroll: true }),
-    );
-  };
-  const applyContextualMediaTrim = (startMs: number, endMs: number) => {
-    const dialog = mediaTrimDialog;
-    const liveSlide = slidesRef.current[activeIndexRef.current];
-    const liveDuration = dialog
-      ? (mediaDurationMsByBlockId[dialog.blockId] ??
-        contextualMediaNativeDurationMs)
-      : undefined;
-    if (
-      !dialog ||
-      !liveSlide ||
-      liveSlide.id !== dialog.slideId ||
-      contextualMediaBlock?.id !== dialog.blockId ||
-      liveDuration !== dialog.durationMs ||
-      !contextualMediaPlaybackIsWritable ||
-      !Number.isInteger(startMs) ||
-      !Number.isInteger(endMs) ||
-      startMs < 0 ||
-      endMs <= startMs ||
-      endMs > dialog.durationMs
-    ) {
-      closeMediaTrimDialog();
-      return;
-    }
-    updateMediaPlaybackSettings(dialog.blockId, {
-      trimStartMs: startMs,
-      trimEndMs: endMs === dialog.durationMs ? null : endMs,
-    });
-    closeMediaTrimDialog();
-  };
-  const contextualMediaBackgroundActive = Boolean(
-    contextualMediaKind === "audio" &&
-      contextualMediaPlaybackSettings?.start === "automatic" &&
-      contextualMediaPlaybackSettings.playAcrossSlides &&
-      contextualMediaPlaybackSettings.loop &&
-      contextualMediaPlaybackSettings.hideDuringShow,
-  );
-  // Any of the background preset's settings still on: No Style is pressed
-  // only when none is, and clears them whenever one is. Judged on the whole
-  // preset, a Start changed to On Click left Play Across Slides and Hide
-  // During Show behind, No Style could not clear them, and Start set back
-  // to Automatically re-armed the preset and hid the player (PPT-B346).
-  const contextualMediaBackgroundResidue = Boolean(
-    contextualMediaKind === "audio" &&
-      (contextualMediaPlaybackSettings?.playAcrossSlides ||
-        contextualMediaPlaybackSettings?.loop ||
-        contextualMediaPlaybackSettings?.hideDuringShow),
-  );
-  const mediaPlaybackStartLabels = {
-    click: t("presentation.media.startWhenClicked"),
-    automatic: t("presentation.media.startAutomatically"),
-    sequence: t("presentation.media.startInClickSequence"),
-  };
-  const mediaPlayInBackgroundLabel = t("presentation.media.playInBackground");
-  const mediaAudioStylesLabel = t("presentation.media.audioStyles");
-  const mediaNoAudioStyleLabel = t("presentation.media.noAudioStyle");
-  const contextualMediaAssetVideo = contextualMediaBlock
-    ? assetBackedPresentationMediaSource(
-        contextualMediaBlock as Record<string, unknown>,
-      )
-    : null;
-  const contextualMediaCanPreview = Boolean(
-    contextualMediaBlock &&
-      !contextualMediaIsOnlineVideo &&
-      (contextualMediaAssetVideo ||
-        resolveEmbed({
-          kind: contextualMediaBlock.kind,
-          url: contextualMediaBlock.url,
-        }).url),
-  );
   const contextualTableBlock =
     exclusivelySelectedBlock?.type === "table"
       ? exclusivelySelectedBlock
       : null;
   const contextualTableSelectionIsWritable =
     contextualTableBlock !== null && canEditBlockContent(contextualTableBlock);
-  // Lock fixes the table's frame: rows and columns added or deleted, and
-  // the table's or its cells' sizes, are its frame; its cells are not.
-  const contextualTableFrameIsWritable =
-    contextualTableSelectionIsWritable && canManipulateBlock(contextualTableBlock);
   useEffect(() => {
     if (!autosave.readOnly && (contextualTableSelectionIsWritable || tableBorderPenMode === "draw")) return;
     disarmTableBorderPen();
@@ -10080,9 +8790,6 @@ export default function PresentationWindow({
           contextualTableFocus.col
         ] ?? null)
       : null;
-  const contextualTableCellStyle = contextualTableCell
-    ? normalizeCellStyle(contextualTableCell)
-    : null;
   // A table selected by its frame: Table Design and Layout format every
   // cell, as PowerPoint applies them to the whole table; their controls read
   // the first cell. The caret, the cell highlight and Copy stay the cell
@@ -10100,12 +8807,6 @@ export default function PresentationWindow({
         : null),
     [contextualTableFocus, contextualTableFrameBlockId],
   );
-  const contextualTableCommandCell =
-    contextualTableCell ??
-    (contextualTableFrameSelected ? contextualTableBlock?.rows[0]?.[0] ?? null : null);
-  const contextualTableCommandCellStyle = contextualTableCommandCell
-    ? normalizeCellStyle(contextualTableCommandCell)
-    : null;
   const tableFormattingSelection = useMemo(() => {
     const focus = tableCellFocus;
     const anchor = tableSelectionAnchor;
@@ -10228,32 +8929,6 @@ export default function PresentationWindow({
     () => contextualTableSelectedCells.flatMap((cell) => cell.characterStyles.length ? cell.characterStyles : [cell.style]),
     [contextualTableSelectedCells],
   );
-  const contextualTableCellMarginState = useMemo(() => {
-    const firstStyle = contextualTableSelectedCellStyles[0];
-    if (!firstStyle) return null;
-    const signatureFor = (style: ResolvedCellStyle) => {
-      const preset = tableCellMarginPresetForStyle(style);
-      return {
-        preset,
-        signature:
-          preset === "custom"
-            ? `custom:${JSON.stringify([
-                style.marginLeft,
-                style.marginRight,
-                style.marginTop,
-                style.marginBottom,
-              ])}`
-            : `preset:${preset}`,
-      };
-    };
-    const first = signatureFor(firstStyle);
-    const mixed = contextualTableSelectedCellStyles
-      .slice(1)
-      .some((style) => signatureFor(style).signature !== first.signature);
-    return mixed
-      ? { mixed: true as const, preset: null }
-      : { mixed: false as const, preset: first.preset };
-  }, [contextualTableSelectedCellStyles]);
   const tableCellFormatState = useMemo(
     () => ({
       fill: uniformTableCellSelectionValue(
@@ -10387,48 +9062,12 @@ export default function PresentationWindow({
       width: resolve((border) => border.width),
     };
   }, [contextualTableSelectedCells, tableBorderTarget]);
-  const contextualTableBorderSelectionBounds =
-    contextualTableSelectedCells[0] ?? null;
-  const contextualTableBorderTargetOptions = TABLE_BORDER_TARGETS.map(
-    (target): TableCellChoiceOption<TableBorderTarget> => ({
-      value: target,
-      // PowerPoint's Table Design ▸ Borders menu draws each preset as a
-      // small table with the affected edges in ink; the glyph is the one
-      // Docs' Borders menu already uses.
-      icon: (
-        <OfficeBorderPresetIcon
-          preset={TABLE_BORDER_TARGET_PRESET_ICON[target]}
-          size={18}
-        />
-      ),
-      label: t(
-        TABLE_BORDER_TARGET_LABEL_KEYS[target] as "presentation.tableRibbon.borderTarget.all",
-      ),
-      disabled:
-        target === "inside-horizontal"
-          ? !contextualTableBorderSelectionBounds ||
-            contextualTableBorderSelectionBounds.row1 ===
-              contextualTableBorderSelectionBounds.row2
-          : target === "inside-vertical"
-            ? !contextualTableBorderSelectionBounds ||
-              contextualTableBorderSelectionBounds.col1 ===
-                contextualTableBorderSelectionBounds.col2
-            : target === "inside"
-              ? !contextualTableBorderSelectionBounds ||
-                (contextualTableBorderSelectionBounds.row1 ===
-                  contextualTableBorderSelectionBounds.row2 &&
-                  contextualTableBorderSelectionBounds.col1 ===
-                    contextualTableBorderSelectionBounds.col2)
-              : false,
-    }),
-  );
   useDerivedOnChange([
     contextualTableBorderState?.width,
     tableBorderPen.width,
     tableBorderPenMode,
-    tableBorderWidthFocused,
+    false,
   ], () => {
-    if (tableBorderWidthFocused) return;
     const state = contextualTableBorderState?.width;
     const nextValue = tableBorderPenMode
       ? String(tableBorderPen.width)
@@ -10441,9 +9080,8 @@ export default function PresentationWindow({
   });
   useDerivedOnChange([
     contextualTableCellFormatState.fontSize,
-    tableCellFontSizeFocused,
+    false,
   ], () => {
-    if (tableCellFontSizeFocused) return;
     const state = contextualTableCellFormatState.fontSize;
     const nextValue =
       state && !state.mixed && state.value !== null
@@ -10453,12 +9091,12 @@ export default function PresentationWindow({
       current === nextValue ? current : nextValue,
     );
   });
-  useDerivedOnChange([contextualTableCellFormatState, tableCellMarginFocused], () => {
+  useDerivedOnChange([contextualTableCellFormatState, null], () => {
     setTableCellMarginDrafts((current) => {
       let changed = false;
       const next = { ...current };
       for (const field of TABLE_CELL_MARGIN_FIELDS) {
-        if (field === tableCellMarginFocused) continue;
+        if (field === null) continue;
         const state = contextualTableCellFormatState[field];
         const nextValue =
           state && !state.mixed && state.value !== null
@@ -10471,19 +9109,6 @@ export default function PresentationWindow({
       return changed ? next : current;
     });
   });
-  const contextualTableCellFontFamilyValue =
-    contextualTableCellFormatState.fontFamily?.mixed
-      ? null
-      : (contextualTableCellFormatState.fontFamily?.value ?? null);
-  const contextualTableCellFontFamilyLabel =
-    contextualTableCellFormatState.fontFamily?.mixed
-      ? t("toolbar.fontPickerMixed")
-      : contextualTableCellFontFamilyValue
-        ? (TABLE_CELL_FONT_FAMILIES.find(
-            (option) =>
-              option.typeface === contextualTableCellFontFamilyValue,
-          )?.label ?? contextualTableCellFontFamilyValue)
-        : t("presentation.master.fontInherit");
   const contextualTableCellFontSections = [
     {
       id: "presentation-table-cell-fonts",
@@ -10511,39 +9136,6 @@ export default function PresentationWindow({
       ],
     },
   ];
-  const contextualTableCellMarginMenuValue: TableCellMarginMenuValue =
-    contextualTableCellMarginState?.mixed
-      ? "mixed"
-      : (contextualTableCellMarginState?.preset ??
-        tableCellMarginPresetForStyle(contextualTableCellStyle));
-  // PowerPoint's Cell Margins menu states each preset's four margins in the
-  // system unit: "Normal  Top: 0.13 cm  Bottom: 0.13 cm  Left: 0.25 cm ...".
-  const tableCellMarginPresetLabel = (
-    name: string,
-    preset: (typeof TABLE_CELL_MARGIN_PRESETS)[number],
-  ) => {
-    const patch = tableCellMarginPresetPatch(preset);
-    const side = (label: string, px: unknown) =>
-      `${label}: ${tableAxisDisplay(typeof px === "number" ? px : 0)}${
-        sizeUnit === "in" ? PRESENTATION_INCH_MARK : ` ${sizeUnitLabel}`
-      }`;
-    return [
-      name,
-      side(t("spreadsheet.borderEdge.top"), patch.marginTop),
-      side(t("spreadsheet.borderEdge.bottom"), patch.marginBottom),
-      side(t("spreadsheet.borderEdge.left"), patch.marginLeft),
-      side(t("spreadsheet.borderEdge.right"), patch.marginRight),
-    ].join("  ");
-  };
-  const tableCellMarginMenuLabels: TableCellMarginMenuLabels = {
-    title: t("toolbar.cellMargin"),
-    normal: tableCellMarginPresetLabel(t("toolbar.pageMargins_normal"), "normal"),
-    none: tableCellMarginPresetLabel(t("presentation.transition.none"), "none"),
-    narrow: tableCellMarginPresetLabel(t("toolbar.pageMargins_narrow"), "narrow"),
-    wide: tableCellMarginPresetLabel(t("toolbar.pageMargins_wide"), "wide"),
-    custom: t("toolbar.pageMargins_custom"),
-    mixed: t("pages.mixed"),
-  };
   const tableCellMarginsDialogSelection = Object.fromEntries(
     TABLE_CELL_MARGIN_FIELDS.map((field) => {
       const state = contextualTableCellFormatState[field];
@@ -10572,12 +9164,6 @@ export default function PresentationWindow({
       marginTop: t("spreadsheet.borderEdge.top"),
       marginBottom: t("spreadsheet.borderEdge.bottom"),
     },
-  };
-  const tableCellColorPaletteLabels: OfficeColorPalettePopoverLabels = {
-    themeColors: t("spreadsheet.themeColors"),
-    standardColors: t("spreadsheet.standardColors"),
-    recentColors: t("spreadsheet.recentColors"),
-    moreColors: t("spreadsheet.moreColors"),
   };
   const contextualTableRowStructureRange =
     contextualTableBlock && contextualTableLogicalFocus
@@ -10814,24 +9400,14 @@ export default function PresentationWindow({
   // narration is being captured (a Cameo's Record Current Slide runs without
   // the studio, and its Stop must stay on the Ribbon until it ends).
   const recordContextActive =
-    recordStudioOpen || narrationRecorderStatus !== "idle";
+    narrationRecorderStatus !== "idle";
   // Which tabs, in which order, and where a new selection lands: the
   // desktop structure in `presentation-ribbon-structure`.
   const contextualRibbonTabs = useMemo(
-    () =>
-      presentationContextualRibbonTabs(
-        contextualRibbonSelectionType,
-        equationContextActive,
-        recordContextActive,
-      ),
-    [contextualRibbonSelectionType, equationContextActive, recordContextActive],
+    () => [] as PresentationContextualRibbonTab[],
+    [],
   );
-  const contextualRibbonDefaultTab: PresentationContextualRibbonTab | null =
-    presentationContextualRibbonDefaultTab(
-      contextualRibbonSelectionType,
-      contextualMediaKind,
-      equationContextActive,
-    );
+  const contextualRibbonDefaultTab: PresentationContextualRibbonTab | null = null;
   const contextualRibbonSelectionKey = `${activeSlide.id}:${
     contextualRibbonSelectionIdentity ?? "none"
   }:${contextualRibbonSelectionType ?? "none"}${
@@ -11061,9 +9637,7 @@ export default function PresentationWindow({
     [customShowRegistry, selectedCustomShowId],
   );
   const customShowDialogStale =
-    customShowDialogOpen &&
-    customShowDialogGenerationRef.current !== null &&
-    customShowDialogGenerationRef.current !== deckContentGenerationRef.current;
+    false;
   const customShowDraftValid = Boolean(
     customShowDraft &&
       customShowDraft.name.trim().length > 0 &&
@@ -11940,147 +10514,6 @@ export default function PresentationWindow({
     [applyDeckTheme],
   );
 
-  const applyThemeVariant = useCallback(
-    (variantId: PresentationThemeVariantId) => {
-      if (
-        !presentationThemeSelectionIsWritable(
-          slidesRef.current,
-          themeRef.current,
-        )
-      ) {
-        return;
-      }
-      const next = themeAfterVariant(themeRef.current, variantId);
-      if (next) applyDeckTheme(next.theme);
-    },
-    [applyDeckTheme],
-  );
-
-  /**
-   * Design > Variants > Colors (Microsoft Support, "Change the color scheme
-   * of a theme", PPT-A073): one Colors-gallery entry replaces the theme's
-   * twelve colours; everything bound to a theme colour follows it.
-   */
-  const applyThemeColorScheme = useCallback(
-    (schemeId: string) => {
-      if (
-        !presentationThemeSelectionIsWritable(
-          slidesRef.current,
-          themeRef.current,
-        )
-      ) {
-        return;
-      }
-      const next = themeAfterColorScheme(themeRef.current, schemeId);
-      if (next) applyDeckTheme(next.theme);
-    },
-    [applyDeckTheme],
-  );
-
-  /**
-   * Design > Variants > Effects (Microsoft Support, "Change theme effects";
-   * PPT-A073): one Effects-gallery entry becomes the theme's format scheme,
-   * which shapes, SmartArt, tables and charts drawn with the theme's styles
-   * take. It writes only `theme.effectSchemeId`; nothing on the slides moves.
-   */
-  const applyThemeEffectScheme = useCallback(
-    (effectSchemeId: string) => {
-      if (!presentationThemeSelectionIsWritable(slidesRef.current, themeRef.current)) return;
-      const current = themeRef.current;
-      if (!current || current.effectSchemeId === effectSchemeId) return;
-      applyDeckTheme({ ...current, effectSchemeId });
-    },
-    [applyDeckTheme],
-  );
-
-  /**
-   * Design > Variants > Fonts (Microsoft Support, "Change the fonts in a
-   * presentation"): one Fonts-gallery entry replaces the theme's heading and
-   * body fonts. It is the theme's font scheme -- nothing on the slides is
-   * rewritten -- and it is the only command that writes `theme.fontSchemeId`
-   * (SHAPE-IMPORT-AUDIT.md §75.1), so the save knows exactly this happened.
-   */
-  const applyThemeFontScheme = useCallback(
-    (fontSchemeId: string) => {
-      if (
-        !presentationThemeSelectionIsWritable(
-          slidesRef.current,
-          themeRef.current,
-        ) ||
-        !officeThemeFontGalleryEntry(fontSchemeId)
-      ) {
-        return;
-      }
-      // A Fonts pick replaces the theme's own font scheme (an Office theme's).
-      const next: DeckTheme = { ...(themeRef.current ?? {}), fontSchemeId };
-      delete next.fontScheme;
-      applyDeckTheme(next);
-    },
-    [applyDeckTheme],
-  );
-
-  /**
-   * Design > Variants > Fonts > Customize Fonts... (Create New Theme Fonts):
-   * the theme's own font scheme, its heading and body faces for Latin and
-   * Asian text under the name it was saved as. The deck's own named scheme
-   * is the Fonts gallery's Custom entry (`custom:deck`). Like a Fonts pick
-   * it is the theme's scheme -- nothing on the slides is rewritten -- and it
-   * replaces a pick, so the save writes the faces (488dca0508) and the name.
-   */
-  const [themeFontsDialogOpen, setThemeFontsDialogOpen] = useState(false);
-  const themeFontsGallery = useMemo(() => {
-    const scheme = normalizeThemeFontScheme(theme?.fontScheme);
-    return {
-      customFonts: scheme?.name
-        ? [
-            {
-              id: "deck",
-              name: scheme.name,
-              headingLatin: scheme.majorLatin,
-              bodyLatin: scheme.minorLatin,
-              ...(scheme.majorHans ? { headingEastAsia: scheme.majorHans } : {}),
-              ...(scheme.minorHans ? { bodyEastAsia: scheme.minorHans } : {}),
-            },
-          ]
-        : [],
-      value: theme?.fontSchemeId ?? (scheme?.name ? "custom:deck" : ""),
-      openCustomize: () => setThemeFontsDialogOpen(true),
-    };
-  }, [theme?.fontScheme, theme?.fontSchemeId]);
-  const themeFontsDialogInitial = useMemo<OfficeThemeFontsDraft>(() => {
-    const own = normalizeThemeFontScheme(theme?.fontScheme);
-    // The theme's current faces: its own scheme, the gallery entry it wears,
-    // or an imported deck's own (`themeFontSchemeStart`).
-    const start = themeFontSchemeStart(theme);
-    return {
-      headingLatin: start.majorLatin,
-      bodyLatin: start.minorLatin,
-      ...(start.majorHans ? { headingEastAsian: start.majorHans } : {}),
-      ...(start.minorHans ? { bodyEastAsian: start.minorHans } : {}),
-      name: nextCustomThemeFontsName(t("officeThemeFonts.customPrefix"), [own?.name]),
-    };
-  }, [theme, t]);
-  const applyCustomThemeFonts = useCallback(
-    (draft: OfficeThemeFontsDraft) => {
-      const current = themeRef.current;
-      if (!presentationThemeSelectionIsWritable(slidesRef.current, current)) return;
-      const fontScheme = customizedThemeFontScheme(current, {
-        heading: draft.headingLatin,
-        body: draft.bodyLatin,
-        headingEastAsian: draft.headingEastAsian,
-        bodyEastAsian: draft.bodyEastAsian,
-        name: draft.name,
-      });
-      if (!fontScheme) return;
-      const next: DeckTheme = { ...(current ?? {}), fontScheme };
-      // The theme's own scheme now, not the Fonts-gallery entry it started from.
-      delete next.fontSchemeId;
-      setThemeFontsDialogOpen(false);
-      applyDeckTheme(next);
-    },
-    [applyDeckTheme],
-  );
-
   /**
    * Patch a single deck-theme field, merging onto the current theme. A
    * `null`/empty value clears that one field (the others survive); if the merge
@@ -12883,50 +11316,6 @@ export default function PresentationWindow({
     setNarrationMicrophones(microphones);
     return microphones;
   }, [t]);
-  const requestNarrationMicrophoneAccess = useCallback(async () => {
-    if (
-      autosave.readOnly ||
-      narrationRecorderStatus !== "idle" ||
-      narrationMicrophonePermissionStatus === "requesting"
-    ) {
-      return;
-    }
-    if (
-      typeof navigator === "undefined" ||
-      !navigator.mediaDevices?.getUserMedia
-    ) {
-      setNarrationMicrophonePermissionStatus("error");
-      setNarrationRecorderError(
-        t("presentation.record.compatibleFormatUnavailable"),
-      );
-      return;
-    }
-    setNarrationMicrophonePermissionStatus("requesting");
-    setNarrationRecorderError(null);
-    let stream: MediaStream | null = null;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: selectedNarrationMicrophoneId
-          ? { deviceId: { exact: selectedNarrationMicrophoneId } }
-          : true,
-        video: false,
-      });
-      await refreshNarrationMicrophoneDevices();
-      setNarrationMicrophonePermissionStatus("ready");
-    } catch {
-      setNarrationMicrophonePermissionStatus("error");
-      setNarrationRecorderError(t("presentation.record.microphoneDenied"));
-    } finally {
-      for (const track of stream?.getTracks() ?? []) track.stop();
-    }
-  }, [
-    autosave.readOnly,
-    narrationMicrophonePermissionStatus,
-    narrationRecorderStatus,
-    refreshNarrationMicrophoneDevices,
-    selectedNarrationMicrophoneId,
-    t,
-  ]);
   const startNarrationRecording = useCallback(
     async (target: "narration" | "audio-clip" = "narration") => {
     if (
@@ -13120,7 +11509,6 @@ export default function PresentationWindow({
         { once: true },
       );
       recorder.start(500);
-      if (recordStudioOpen) beginRecordStudioElapsedSegment();
       setNarrationRecorderStatus("recording");
     } catch {
       narrationRecorderAuthorityRef.current = null;
@@ -13137,7 +11525,7 @@ export default function PresentationWindow({
       commitSlides,
       narrationRecorderStatus,
       pageId,
-      recordStudioOpen,
+      false,
       refreshNarrationMicrophoneDevices,
       releaseNarrationRecorderStream,
       resetNarrationPreview,
@@ -13169,148 +11557,14 @@ export default function PresentationWindow({
       typeof recorder.resume === "function"
     ) {
       recorder.resume();
-      if (recordStudioOpen) beginRecordStudioElapsedSegment();
       setNarrationRecorderStatus("recording");
     }
   }, [
     bankRecordStudioElapsed,
     beginRecordStudioElapsedSegment,
     narrationRecorderStatus,
-    recordStudioOpen,
+    false,
   ]);
-  const clearActiveSlideNarration = useCallback(() => {
-    if (autosave.readOnly || narrationRecorderStatus !== "idle") return;
-    const liveSlides = slidesRef.current;
-    const liveIndex = activeIndexRef.current;
-    const liveSlide = liveSlides[liveIndex];
-    if (!liveSlide || typeof liveSlide.narration !== "string") return;
-    const cleared = { ...liveSlide } as SlideModel & Record<string, unknown>;
-    delete cleared.narration;
-    commitSlides(
-      liveSlides.map((slide, index) =>
-        index === liveIndex ? (cleared as SlideModel) : slide,
-      ),
-    );
-  }, [autosave.readOnly, commitSlides, narrationRecorderStatus]);
-  const clearAllSlideNarrations = useCallback(() => {
-    if (autosave.readOnly || narrationRecorderStatus !== "idle") return;
-    const liveSlides = slidesRef.current;
-    let changed = false;
-    const nextSlides = liveSlides.map((slide) => {
-      if (typeof slide.narration !== "string") return slide;
-      changed = true;
-      const cleared = { ...slide } as SlideModel & Record<string, unknown>;
-      delete cleared.narration;
-      return cleared as SlideModel;
-    });
-    if (changed) commitSlides(nextSlides);
-  }, [autosave.readOnly, commitSlides, narrationRecorderStatus]);
-  const clearRecordedSlideTimings = useCallback(
-    (scope: "current" | "all") => {
-      if (autosave.readOnly || narrationRecorderStatus !== "idle") return;
-      const liveSlides = slidesRef.current;
-      const active = activeIndexRef.current;
-      let changed = false;
-      const nextSlides = liveSlides.map((slide, index) => {
-        if (
-          (scope === "current" && index !== active) ||
-          typeof slide.transitionAdvanceAfterMs !== "number"
-        ) {
-          return slide;
-        }
-        changed = true;
-        const cleared = { ...slide } as SlideModel & Record<string, unknown>;
-        delete cleared.transitionAdvanceAfterMs;
-        return cleared as SlideModel;
-      });
-      if (changed) commitSlides(nextSlides);
-    },
-    [autosave.readOnly, commitSlides, narrationRecorderStatus],
-  );
-  const previewActiveSlideNarration = useCallback(() => {
-    const player = narrationPreviewAudioRef.current;
-    if (!player) return;
-    player.currentTime = 0;
-    void player.play().catch(() => undefined);
-  }, []);
-  const commitUseRecordedSlideTimings = useCallback(
-    (useTimings: boolean) => {
-      if (presentationUsesTimings(slideShowSettingsRef.current) === useTimings) {
-        return;
-      }
-      commitDeck(
-        slidesRef.current,
-        mastersRef.current,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        presentationSlideShowSettingsWithUseTimings(
-          slideShowSettingsRef.current,
-          useTimings,
-        ),
-      );
-    },
-    [commitDeck],
-  );
-  const commitPlaySlideShowNarrations = useCallback(
-    (showNarration: boolean) => {
-      if (
-        presentationShowsNarrations(slideShowSettingsRef.current) ===
-        showNarration
-      ) {
-        return;
-      }
-      commitDeck(
-        slidesRef.current,
-        mastersRef.current,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        presentationSlideShowSettingsWithShowNarration(
-          slideShowSettingsRef.current,
-          showNarration,
-        ),
-      );
-    },
-    [commitDeck],
-  );
-  const commitShowSlideShowMediaControls = useCallback(
-    (showMediaControls: boolean) => {
-      if (
-        !canPersistSlideShowMediaControls ||
-        presentationShowsMediaControls(slideShowSettingsRef.current) ===
-          showMediaControls
-      ) {
-        return;
-      }
-      commitDeck(
-        slidesRef.current,
-        mastersRef.current,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        presentationSlideShowSettingsWithShowMediaControls(
-          slideShowSettingsRef.current,
-          showMediaControls,
-        ),
-      );
-    },
-    [canPersistSlideShowMediaControls, commitDeck],
-  );
-  const openCustomShowManager = useCallback(() => {
-    const registry = normalizePresentationCustomShows(
-      customSlideShowsRef.current,
-      slidesRef.current.map((slide) => slide.id),
-    );
-    customShowDialogReturnFocusRef.current = customShowTriggerRef.current;
-    customShowDialogGenerationRef.current = deckContentGenerationRef.current;
-    setSelectedCustomShowId(registry.shows[0]?.id ?? null);
-    setCustomShowDraft(null);
-    setCustomShowDialogOpen(true);
-  }, []);
   const closeCustomShowManager = useCallback(() => {
     setCustomShowDialogOpen(false);
     setCustomShowDraft(null);
@@ -13516,42 +11770,6 @@ export default function PresentationWindow({
     customShowDialogGenerationRef.current = deckContentGenerationRef.current;
     setSelectedCustomShowId(copied.id);
   }, [commitDeck, selectedCustomShowId, t]);
-  const openSlideShowSetup = useCallback(() => {
-    slideShowSetupReturnFocusRef.current = slideShowSetupTriggerRef.current;
-    const current = slideShowSettingsRef.current;
-    const showType = presentationSlideShowType(current);
-    const showSlides = presentationSlideShowSelection(current);
-    const slideCount = Math.max(1, slidesRef.current.length);
-    setSlideShowSetupUseTimings(presentationUsesTimings(current));
-    setSlideShowSetupLoop(showType === "kiosk" || presentationLoops(current));
-    setSlideShowSetupWithoutAnimation(!presentationShowsAnimations(current));
-    setSlideShowSetupShowNarration(presentationShowsNarrations(current));
-    setSlideShowSetupShowType(showType);
-    setSlideShowSetupShowScrollbar(presentationShowsScrollBar(current));
-    setSlideShowSetupShowSlidesKind(showSlides.kind);
-    setSlideShowSetupCustomShowId(
-      showSlides.kind === "custom" && "id" in showSlides
-        ? showSlides.id
-        : (customSlideShowsRef.current.shows[0]?.id ?? null),
-    );
-    setSlideShowSetupRangeStart(
-      showSlides.kind === "range" ? Math.min(showSlides.start, slideCount) : 1,
-    );
-    setSlideShowSetupRangeEnd(
-      showSlides.kind === "range"
-        ? Math.min(Math.max(showSlides.end, showSlides.start), slideCount)
-        : slideCount,
-    );
-    setSlideShowSetupExplicit({
-      loop: false,
-      showAnimation: false,
-      showNarration: false,
-      showScrollbar: false,
-      showSlides: false,
-      showType: false,
-    });
-    setSlideShowSetupOpen(true);
-  }, []);
   const cancelSlideShowSetup = useCallback(() => {
     setSlideShowSetupOpen(false);
   }, []);
@@ -17001,9 +15219,6 @@ export default function PresentationWindow({
   const [officeMasterTextTarget, setOfficeMasterTextTarget] =
     useState<OfficeMasterTextLevel>({ style: "title", level: "1" });
   const [masterBackgroundPaneOpen, setMasterBackgroundPaneOpen] = useState(false);
-  const [masterRenameOpen, setMasterRenameOpen] = useState(false);
-  // Slide Master view ▸ Master Layout's dialog (PPT-B030).
-  const [masterLayoutDialogOpen, setMasterLayoutDialogOpen] = useState(false);
   useEffect(() => {
     if (viewMode !== "master") setMasterBackgroundPaneOpen(false);
   }, [viewMode]);
@@ -17039,7 +15254,6 @@ export default function PresentationWindow({
     useState<PresentationViewColorMode>("color");
   const viewColorFilter = presentationViewColorFilter(viewColorMode);
   const immersiveReaderTriggerRef = useRef<HTMLButtonElement>(null);
-  const ribbonReadingViewTriggerRef = useRef<HTMLButtonElement>(null);
   const statusReadingViewTriggerRef = useRef<HTMLButtonElement>(null);
   const readingViewReturnFocusRef = useRef<HTMLElement | null>(null);
   const viewFocusFrameRef = useRef<number | null>(null);
@@ -17482,39 +15696,16 @@ export default function PresentationWindow({
   // The slide a notes draft was typed on: it is committed there, whatever
   // slide is active by the time it is (PPT-B303).
   const notesDraftSlideIdRef = useRef<string | null>(null);
-  // Record -> Teleprompter is a session-only reading surface over the active
-  // slide's already-persisted speaker notes. Opening, scrolling, changing the
-  // speed, and closing it never create a deck transaction. The Record Studio
-  // recorder remains a separate capability boundary.
-  const [teleprompterOpen, setTeleprompterOpen] = useState(false);
   const [teleprompterRunning, setTeleprompterRunning] = useChangedState(false);
   const [teleprompterSpeed, setTeleprompterSpeed] = useState(2);
-  const [teleprompterFontSize, setTeleprompterFontSize] = useState(
-    TELEPROMPTER_FONT_SIZE_DEFAULT,
-  );
-  const teleprompterTriggerRef = useRef<HTMLButtonElement | null>(null);
   const teleprompterPanelRef = useRef<HTMLElement | null>(null);
   const teleprompterScrollRef = useRef<HTMLDivElement | null>(null);
-  const activeTeleprompterNotes =
-    notesDraft ??
-    (typeof activeSlide.notes === "string" ? activeSlide.notes : "");
-  const closeTeleprompter = useCallback(() => {
-    setTeleprompterOpen(false);
-    setTeleprompterRunning(false);
-    queueMicrotask(() =>
-      teleprompterTriggerRef.current?.focus({ preventScroll: true }),
-    );
-  }, []);
-  const openTeleprompter = useCallback(() => {
-    setTeleprompterOpen(true);
-    setTeleprompterRunning(false);
-  }, []);
   useEffect(() => {
-    if (!teleprompterOpen) return;
+    return;
     queueMicrotask(() =>
       teleprompterPanelRef.current?.focus({ preventScroll: true }),
     );
-  }, [teleprompterOpen]);
+  }, [false]);
   useEffect(() => {
     setTeleprompterRunning(false);
     if (teleprompterScrollRef.current) {
@@ -17522,7 +15713,7 @@ export default function PresentationWindow({
     }
   }, [activeSlide.id]);
   useEffect(() => {
-    if (!teleprompterOpen || !teleprompterRunning) return;
+    return;
     const timer = window.setInterval(() => {
       const scroller = teleprompterScrollRef.current;
       if (!scroller) return;
@@ -17537,7 +15728,7 @@ export default function PresentationWindow({
       );
     }, 50);
     return () => window.clearInterval(timer);
-  }, [teleprompterOpen, teleprompterRunning, teleprompterSpeed]);
+  }, [false, teleprompterRunning, teleprompterSpeed]);
   useEffect(() => {
     setRecordStudioTeleprompterRunning(false);
     queueMicrotask(() => {
@@ -17545,13 +15736,9 @@ export default function PresentationWindow({
         recordStudioTeleprompterScrollRef.current.scrollTop = 0;
       }
     });
-  }, [activeSlide.id, recordStudioLayout, recordStudioOpen]);
+  }, [activeSlide.id, recordStudioLayout, false]);
   useEffect(() => {
-    if (
-      !recordStudioOpen ||
-      recordStudioLayout !== "teleprompter" ||
-      !recordStudioTeleprompterRunning
-    ) {
+    {
       return;
     }
     const timer = window.setInterval(() => {
@@ -17570,7 +15757,7 @@ export default function PresentationWindow({
     return () => window.clearInterval(timer);
   }, [
     recordStudioLayout,
-    recordStudioOpen,
+    false,
     recordStudioTeleprompterRunning,
     teleprompterSpeed,
   ]);
@@ -17774,112 +15961,14 @@ export default function PresentationWindow({
     setNarrationRecorderError(null);
     resetRecordStudioSessionElapsed();
   }, [releaseNarrationRecorderStream, resetRecordStudioSessionElapsed]);
-  const openRecordStudioAt = useCallback(
-    (
-      index: number,
-      entry: "beginning" | "current",
-      returnFocus: HTMLButtonElement | null,
-    ) => {
-      if (autosave.readOnly || narrationRecorderStatus !== "idle") return;
-      const targetIndex = Math.min(
-        slidesRef.current.length - 1,
-        Math.max(0, index),
-      );
-      commitNotesDraft();
-      activeIndexRef.current = targetIndex;
-      setActiveIndex(targetIndex);
-      recordStudioReturnFocusRef.current = returnFocus;
-      setRecordStudioEntry(entry);
-      setRecordStudioLayout("teleprompter");
-      resetRecordStudioSessionElapsed();
-      setRecordStudioOpen(true);
-    },
-    [
-      autosave.readOnly,
-      commitNotesDraft,
-      narrationRecorderStatus,
-      resetRecordStudioSessionElapsed,
-    ],
-  );
-  const openRecordStudioFromBeginning = useCallback(
-    () =>
-      openRecordStudioAt(
-        0,
-        "beginning",
-        recordStudioTriggerRef.current,
-      ),
-    [openRecordStudioAt],
-  );
-  const openRecordStudioFromCurrent = useCallback(
-    () =>
-      openRecordStudioAt(
-        activeIndexRef.current,
-        "current",
-        recordStudioCurrentTriggerRef.current,
-      ),
-    [openRecordStudioAt],
-  );
-  const openPresentationRecordingHelp = useCallback(() => {
-    window.open(
-      PRESENTATION_RECORD_HELP_URL,
-      "_blank",
-      "noopener,noreferrer",
-    );
-  }, []);
-  const closeRecordStudio = useCallback(() => {
-    if (narrationRecorderStatus === "processing") return;
-    if (narrationRecorderStatus !== "idle") cancelNarrationRecording();
-    resetNarrationPreview();
-    setRecordStudioTeleprompterRunning(false);
-    recordStudioInkGestureRef.current = null;
-    setRecordStudioInkDraft(null);
-    setRecordStudioAnnotationTool(null);
-    setRecordStudioOpen(false);
-    setRecordStudioEntry(null);
-    setRecordStudioLayout("teleprompter");
-    resetRecordStudioSessionElapsed();
-    const returnFocus = recordStudioReturnFocusRef.current;
-    recordStudioReturnFocusRef.current = null;
-    queueMicrotask(() => {
-      // A Record-tab trigger leaves with the contextual tab (B395); focus
-      // then goes back to Slide Show ▸ Record, where the studio was entered.
-      const slideShowRecordTrigger = slideShowMoreTriggerRef.current;
-      const target = returnFocus?.isConnected
-        ? returnFocus
-        : slideShowRecordTrigger?.isConnected
-          ? slideShowRecordTrigger
-          : slideCanvasRef.current;
-      target?.focus({ preventScroll: true });
-    });
-  }, [
-    cancelNarrationRecording,
-    narrationRecorderStatus,
-    resetNarrationPreview,
-    resetRecordStudioSessionElapsed,
-  ]);
-  const moveRecordStudioSlide = useCallback(
-    (direction: -1 | 1) => {
-      if (narrationRecorderStatus !== "idle") return;
-      const nextIndex = Math.min(
-        slidesRef.current.length - 1,
-        Math.max(0, activeIndexRef.current + direction),
-      );
-      if (nextIndex === activeIndexRef.current) return;
-      commitNotesDraft();
-      activeIndexRef.current = nextIndex;
-      setActiveIndex(nextIndex);
-      resetRecordStudioElapsed();
-    },
-    [commitNotesDraft, narrationRecorderStatus, resetRecordStudioElapsed],
-  );
   useEffect(() => {
-    if (!recordStudioOpen) return;
+    return;
     queueMicrotask(() =>
       recordStudioPanelRef.current?.focus({ preventScroll: true }),
     );
-  }, [recordStudioOpen]);
+  }, [false]);
   useEffect(() => {
-    if (!recordStudioOpen || narrationRecorderStatus !== "recording") return;
+    return;
     if (recordStudioRunStartedAtRef.current === null) {
       beginRecordStudioElapsedSegment();
     }
@@ -17901,11 +15990,10 @@ export default function PresentationWindow({
   }, [
     beginRecordStudioElapsedSegment,
     narrationRecorderStatus,
-    recordStudioOpen,
+    false,
   ]);
   useEffect(() => {
-    if (recordStudioOpen) resetRecordStudioElapsed();
-  }, [activeSlide.id, recordStudioOpen, resetRecordStudioElapsed]);
+  }, [activeSlide.id, false, resetRecordStudioElapsed]);
 
   // ── Persistent review comments (PowerPoint / WPS "Review → Comments") ───────
   // The active slide's comment thread (normalized → always an array). Distinct
@@ -17931,10 +16019,6 @@ export default function PresentationWindow({
     [commentsDock.style, normalViewPanes.style],
   );
   const [showProofingErrors, setShowProofingErrors] = useState(true);
-  // Review ▸ Spelling (PPT-A098): the slide the check starts from, or null.
-  const [spellingStartIndex, setSpellingStartIndex] = useState<number | null>(
-    null,
-  );
   const [showReviewMarkup, setShowReviewMarkup] = useState(true);
   const [showAdvancedReviewMarkup, setShowAdvancedReviewMarkup] = useState(false);
   useEffect(() => {
@@ -18121,15 +16205,6 @@ export default function PresentationWindow({
   const commentAuthoringBlockedReason = t(
     PRESENTATION_COMMENT_AUTHORING_BLOCK_MESSAGE[commentAuthoringBlock ?? "identity-unavailable"],
   );
-  // Review's New Comment OPENS the pane and the composer; it is the entry
-  // that starts the identity lookup (the lookup runs while the pane is open),
-  // so it cannot wait for the lookup's answer. It asks only whether this deck
-  // takes a new modern comment and whether this visitor could ever sign one;
-  // the composer then shows the lookup running or why it failed, and posting
-  // stays behind the confirmed identity (`canAuthorReviewComment`). PPT-B350.
-  const canOpenReviewCommentComposer =
-    (!guestMode || Boolean(guestCommentActor)) &&
-    presentationCommentModeIsAuthorable(deckCommentIdentity.mode);
 
   const commentAuthorOptions = useCallback(() => {
     if (!currentCommentActor) return {};
@@ -18138,6 +16213,55 @@ export default function PresentationWindow({
       authorId: currentCommentActor.id,
     };
   }, [currentCommentActor]);
+
+  // An embed comment session (lib/embed/session-access): this account only
+  // reads the page, so a page save would be refused. Each comment gesture
+  // goes to the session's comment route instead, which writes that one change
+  // and answers with the thread as the page now holds it; the window then
+  // reads the page again (nothing of its own is left unsaved). The slides
+  // themselves stay as read only as the page is.
+  const embedAccess = useEmbedAccess();
+  const commentsMediated =
+    embedAccess !== null && embedAccess.mediated && embedAccess.effectiveMode === "comment";
+  const writeMediatedComment = useCallback(
+    async (gesture: PresentationCommentGesture) => {
+      // The same confirmed identity and comment mode as a saved comment.
+      if (!canAuthorReviewComment) return null;
+      const answer = await writeEmbedComment<SlideComment>(
+        presentationEmbedCommentRequest(gesture),
+      );
+      if (!answer.ok) {
+        // The server's own words: another person's comment, a resolved
+        // thread, a deck whose comments are the older kind.
+        toast({ title: answer.message || answer.code, variant: "destructive" });
+        return null;
+      }
+      // The deck is shown again as the page now holds it (the thread, and
+      // whatever the others commented meanwhile), as a version restore shows
+      // its page. Laying the thread over the slides here instead counted as
+      // this window's own unsaved edit -- one this account may not save, so
+      // the session's save waited for it until embed_flush_timeout.
+      // (Written either way: a failed read shows it on the next open.)
+      await autosave.reload().catch(() => null);
+      return answer.result;
+    },
+    [autosave, canAuthorReviewComment],
+  );
+  // Whether this person may resolve or delete a comment: outside a session
+  // as before (anyone resolves, the author deletes); in one whose
+  // `manageComments` is off, only their own (as the comment route holds it).
+  const canManageReviewComment = useCallback(
+    (comment: { author?: string; authorId?: string }) =>
+      embedAllowsManagingComment(comment.author, currentCommentActor?.displayName) ||
+      (Boolean(comment.authorId) && canModifyCommentAuthor(comment.authorId, currentCommentActorId)),
+    [currentCommentActor, currentCommentActorId],
+  );
+  const canDeleteReviewComment = useCallback(
+    (comment: { author?: string; authorId?: string }) =>
+      canModifyCommentAuthor(comment.authorId, currentCommentActorId) ||
+      (commentsMediated && embedAccess?.permissions.manageComments === true),
+    [commentsMediated, currentCommentActorId, embedAccess],
+  );
 
   // Apply a transform to the active slide's comments and persist byte-clean: a
   // non-empty result writes `comments`; an empty result DELETES the key (so a
@@ -18154,7 +16278,9 @@ export default function PresentationWindow({
       transform: (current: SlideComment[]) => SlideComment[],
       slideIndex: number = activeIndex,
     ) => {
-      if (!canAuthorReviewComment || !slides[slideIndex]) return;
+      // A comment session's gestures are the comment route's to write: none
+      // reaches the page's own save.
+      if (commentsMediated || !canAuthorReviewComment || !slides[slideIndex]) return;
       const stored = slides[slideIndex]?.comments;
       const current = Array.isArray(stored) ? stored : [];
       const next = transform(current);
@@ -18164,7 +16290,7 @@ export default function PresentationWindow({
       );
       commitSlides(nextSlides);
     },
-    [activeIndex, canAuthorReviewComment, commitSlides, slides],
+    [activeIndex, canAuthorReviewComment, commentsMediated, commitSlides, slides],
   );
   /** The slide that owns a comment thread, or -1. */
   const commentOwnerIndex = useCallback(
@@ -18222,6 +16348,21 @@ export default function PresentationWindow({
     const targetIndex = target ? slides.findIndex((slide) => slide.id === target.slideId) : -1;
     const slideIndex = targetIndex >= 0 ? targetIndex : activeIndex;
     const blockId = targetIndex >= 0 && targetIndex !== activeIndex ? target?.blockId : selectedCommentBlockId;
+    if (commentsMediated) {
+      const slideId = slides[slideIndex]?.id;
+      if (!slideId) return;
+      // The draft stays in the composer until the route has taken it: a
+      // refusal leaves the words where they were typed.
+      void writeMediatedComment({ kind: "add", slideId, blockId, text: body }).then((result) => {
+        const postedId = result?.thread ?? result?.comment?.id;
+        if (!postedId) return;
+        commentMentions?.notifyPosted({ threadRef: postedId, messageRef: postedId, text: body });
+        setCommentDraft("");
+        setCommentComposerOpen(false);
+        setSelectedReviewCommentId(postedId);
+      });
+      return;
+    }
     mutateActiveComments(
       (current) =>
         addComment(current, body, {
@@ -18245,9 +16386,11 @@ export default function PresentationWindow({
     commentAuthorOptions,
     commentDraft,
     commentMentions,
+    commentsMediated,
     mutateActiveComments,
     selectedCommentBlockId,
     slides,
+    writeMediatedComment,
   ]);
 
   // Post a reply to one comment from its per-comment draft; clears that draft.
@@ -18257,24 +16400,35 @@ export default function PresentationWindow({
       if (!body || !canAuthorReviewComment) return;
       const owner = commentOwnerIndex(commentId);
       if (owner < 0) return;
+      const clearDraft = () => setReplyDrafts((drafts) => {
+        const next = { ...drafts };
+        delete next[commentId];
+        return next;
+      });
+      if (commentsMediated) {
+        void writeMediatedComment({ kind: "reply", commentId, text: body }).then((result) => {
+          if (!result) return;
+          commentMentions?.notifyPosted({ threadRef: commentId, text: body });
+          clearDraft();
+        });
+        return;
+      }
       mutateActiveComments(
         (current) => addReply(current, commentId, body, commentAuthorOptions()),
         owner,
       );
       commentMentions?.notifyPosted({ threadRef: commentId, text: body });
-      setReplyDrafts((drafts) => {
-        const next = { ...drafts };
-        delete next[commentId];
-        return next;
-      });
+      clearDraft();
     },
     [
       canAuthorReviewComment,
       commentAuthorOptions,
       commentMentions,
       commentOwnerIndex,
+      commentsMediated,
       mutateActiveComments,
       replyDrafts,
+      writeMediatedComment,
     ],
   );
 
@@ -18286,27 +16440,40 @@ export default function PresentationWindow({
       const before = normalizeComments(slides[owner]?.comments).find(
         (entry) => entry.id === commentId,
       )?.body;
+      const settle = () => {
+        commentMentions?.notifyPosted({
+          threadRef: commentId,
+          messageRef: commentId,
+          text: body,
+          previousText: before ?? "",
+        });
+        setEditingCommentId(null);
+        setCommentEditDraft("");
+      };
+      if (commentsMediated) {
+        if (owner < 0) return;
+        // The edit stays open on a refusal, its words still there.
+        void writeMediatedComment({ kind: "edit", commentId, text: body }).then((result) => {
+          if (result) settle();
+        });
+        return;
+      }
       mutateActiveComments(
         (current) =>
           updateCommentBody(current, commentId, body, currentCommentActorId),
         owner,
       );
-      commentMentions?.notifyPosted({
-        threadRef: commentId,
-        messageRef: commentId,
-        text: body,
-        previousText: before ?? "",
-      });
-      setEditingCommentId(null);
-      setCommentEditDraft("");
+      settle();
     },
     [
       commentEditDraft,
       commentMentions,
       commentOwnerIndex,
+      commentsMediated,
       currentCommentActorId,
       mutateActiveComments,
       slides,
+      writeMediatedComment,
     ],
   );
 
@@ -18318,33 +16485,46 @@ export default function PresentationWindow({
     const before = normalizeComments(slides[owner]?.comments)
       .find((entry) => entry.id === editingReply.commentId)
       ?.replies?.find((reply) => reply.id === editingReply.replyId)?.body;
+    const { commentId, replyId } = editingReply;
+    const settle = () => {
+      commentMentions?.notifyPosted({
+        threadRef: commentId,
+        messageRef: replyId,
+        text: body,
+        previousText: before ?? "",
+      });
+      setEditingReply(null);
+      setReplyEditDraft("");
+    };
+    if (commentsMediated) {
+      if (owner < 0) return;
+      void writeMediatedComment({ kind: "edit", commentId, replyId, text: body }).then((result) => {
+        if (result) settle();
+      });
+      return;
+    }
     mutateActiveComments(
       (current) =>
         updateReplyBody(
           current,
-          editingReply.commentId,
-          editingReply.replyId,
+          commentId,
+          replyId,
           body,
           currentCommentActorId,
         ),
       owner,
     );
-    commentMentions?.notifyPosted({
-      threadRef: editingReply.commentId,
-      messageRef: editingReply.replyId,
-      text: body,
-      previousText: before ?? "",
-    });
-    setEditingReply(null);
-    setReplyEditDraft("");
+    settle();
   }, [
     commentMentions,
     commentOwnerIndex,
+    commentsMediated,
     currentCommentActorId,
     editingReply,
     mutateActiveComments,
     replyEditDraft,
     slides,
+    writeMediatedComment,
   ]);
 
   // Resolve closes the thread's open editor (PPT-B417): its unsaved words wait
@@ -18368,6 +16548,10 @@ export default function PresentationWindow({
           setReplyEditDraft("");
         }
       }
+      if (commentsMediated) {
+        void writeMediatedComment({ kind: "resolve", commentId, resolved });
+        return;
+      }
       mutateActiveComments(
         (current) =>
           resolved
@@ -18379,26 +16563,36 @@ export default function PresentationWindow({
     [
       commentEditDraft,
       commentOwnerIndex,
+      commentsMediated,
       editingCommentId,
       editingReply,
       mutateActiveComments,
       replyEditDraft,
+      writeMediatedComment,
     ],
   );
 
   const removeComment = useCallback(
     (commentId: string) => {
+      if (commentsMediated) {
+        void writeMediatedComment({ kind: "delete", commentId });
+        return;
+      }
       mutateActiveComments(
         (current) =>
           deleteCommentForActor(current, commentId, currentCommentActorId),
         commentOwnerIndex(commentId),
       );
     },
-    [commentOwnerIndex, currentCommentActorId, mutateActiveComments],
+    [commentOwnerIndex, commentsMediated, currentCommentActorId, mutateActiveComments, writeMediatedComment],
   );
 
   const removeReply = useCallback(
     (commentId: string, replyId: string) => {
+      if (commentsMediated) {
+        void writeMediatedComment({ kind: "delete", commentId, replyId });
+        return;
+      }
       mutateActiveComments(
         (current) =>
           deleteReplyForActor(
@@ -18410,7 +16604,7 @@ export default function PresentationWindow({
         commentOwnerIndex(commentId),
       );
     },
-    [commentOwnerIndex, currentCommentActorId, mutateActiveComments],
+    [commentOwnerIndex, commentsMediated, currentCommentActorId, mutateActiveComments, writeMediatedComment],
   );
 
   // A slide change closes an open edit; the unsent reply drafts are keyed
@@ -18647,41 +16841,6 @@ export default function PresentationWindow({
     ],
   );
 
-  const deleteSelectedReviewComment = useCallback(() => {
-    if (
-      !selectedReviewCommentEntry ||
-      selectedReviewCommentEntry.slideIndex !== activeIndex ||
-      !canAuthorReviewComment ||
-      !canModifyCommentAuthor(
-        selectedReviewCommentEntry.comment.authorId,
-        currentCommentActorId,
-      )
-    ) {
-      return;
-    }
-    removeComment(selectedReviewCommentEntry.commentId);
-    setSelectedReviewCommentId(null);
-  }, [
-    activeIndex,
-    canAuthorReviewComment,
-    currentCommentActorId,
-    removeComment,
-    selectedReviewCommentEntry,
-  ]);
-
-  const canDeleteAllReviewCommentsOnSlide =
-    canAuthorReviewComment &&
-    activeComments.length > 0 &&
-    activeComments.every((comment) =>
-      canModifyCommentAuthor(comment.authorId, currentCommentActorId),
-    );
-
-  const deleteAllReviewCommentsOnSlide = useCallback(() => {
-    if (!canDeleteAllReviewCommentsOnSlide) return;
-    mutateActiveComments(() => []);
-    setSelectedReviewCommentId(null);
-  }, [canDeleteAllReviewCommentsOnSlide, mutateActiveComments]);
-
   const selectReviewCommentEntry = useCallback(
     (entry: ReviewCommentEntry) => {
       activeIndexRef.current = entry.slideIndex;
@@ -18783,6 +16942,9 @@ export default function PresentationWindow({
             )
           : null;
     const editDraft = editingIndex === 0 ? commentEditDraft : replyEditDraft;
+    // Resolve and Reopen: anyone who may comment, unless an embed session
+    // keeps them to the person's own comments (`manageComments`).
+    const canResolveThread = canAuthorReviewComment && canManageReviewComment(comment);
     const anchorAvailable = Boolean(
       comment.blockId &&
         slides[entry.slideIndex]?.blocks.some(
@@ -18817,7 +16979,7 @@ export default function PresentationWindow({
         }}
       >
         <OfficeCommentThread
-          canMutateThread={canAuthorReviewComment}
+          canMutateThread={canResolveThread}
           canPost={canAuthorReviewComment}
           cellLabel={presentationCommentPaneAdapter.getLocationLabel(entry)}
           disabledReason={commentAuthoringBlockedReason}
@@ -18873,6 +17035,10 @@ export default function PresentationWindow({
                 message.authorId,
                 currentCommentActorId,
               );
+            // Delete follows Edit (the author's own), except that an embed
+            // comment session with `manageComments` deletes anyone's.
+            const canDeleteMessage =
+              canAuthorReviewComment && canDeleteReviewComment(message);
             return (
               <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
@@ -18963,7 +17129,7 @@ export default function PresentationWindow({
                   ) : null}
                   {message.kind === "comment" ? (
                     <DropdownMenuItem
-                      disabled={!canAuthorReviewComment}
+                      disabled={!canResolveThread}
                       onSelect={() =>
                         toggleCommentResolved(
                           comment.id,
@@ -18979,9 +17145,9 @@ export default function PresentationWindow({
                   ) : null}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    disabled={!canModifyMessage}
+                    disabled={!canDeleteMessage}
                     title={
-                      canModifyMessage
+                      canDeleteMessage
                         ? undefined
                         : t("presentation.comments.onlyAuthorCanEdit")
                     }
@@ -19910,8 +18076,19 @@ export default function PresentationWindow({
     };
   }, [animationTimingCommandLineage]);
 
-  const imageFileCommand = useMemo(
-    () =>
+  // Built ONCE: the adapter holds the slide its picker was opened for until the
+  // file arrives, and a window re-renders while the picker is open (a table's
+  // fit looked at again, a collaborator's delivery). Re-made on a
+  // `commitSlides` identity change, it forgot that slide and the chosen file
+  // was refused as "no-target" -- the late file after the window regains focus
+  // (acceptance finding 4) was silently not inserted again from 9ccd08e5ab5,
+  // whose fit retry re-renders the window during the wait. What changes is
+  // read through refs at the call.
+  const imageFileCommitSlidesRef = useRef(commitSlides);
+  imageFileCommitSlidesRef.current = commitSlides;
+  const imageFileNotebookIdRef = useRef(autosave.page?.notebook_id);
+  imageFileNotebookIdRef.current = autosave.page?.notebook_id;
+  const [imageFileCommand] = useState(() =>
       createPresentationImageFileCommandAdapter<SlideModel>({
         getSlides: () => slidesRef.current,
         getActiveIndex: () => activeIndexRef.current,
@@ -19920,7 +18097,7 @@ export default function PresentationWindow({
           const input = imageFileInputRef.current;
           if (
             !input ||
-            !(autosave.page?.notebook_id || guestModeProp) ||
+            !(imageFileNotebookIdRef.current || guestModeProp) ||
             imageInsertBusyRef.current
           ) {
             return false;
@@ -19934,7 +18111,7 @@ export default function PresentationWindow({
             ? preparePresentationOfficeGraphicFile(file)
             : preparePresentationImageFile(file),
         uploadFile: async (file) => {
-          const notebookId = autosave.page?.notebook_id;
+          const notebookId = imageFileNotebookIdRef.current;
           if (!notebookId) return (await import("@mrnote/core/host/local-files.ts")).localAssetId();
           return uploadNotebookFile(notebookId, file);
         },
@@ -19942,7 +18119,7 @@ export default function PresentationWindow({
           if (assetId.startsWith("local-")) return;
           await apiDelete(`/api/v1/data-items/${encodeURIComponent(assetId)}`);
         },
-        commitSlides,
+        commitSlides: (...args: Parameters<typeof commitSlides>) => imageFileCommitSlidesRef.current(...args),
         selectInsertedImage: (blockId, slideIndex) => {
           activeIndexRef.current = slideIndex;
           setActiveIndex(slideIndex);
@@ -19953,7 +18130,6 @@ export default function PresentationWindow({
         nextId: () => crypto.randomUUID(),
         maxBlocksPerSlide: MAX_PRESENTATION_BLOCKS_PER_SLIDE,
       }),
-    [autosave.page?.notebook_id, commitSlides],
   );
   const imageFileCommandIsEnabled = useCallback(() => {
     const active = slidesRef.current[activeIndexRef.current];
@@ -19976,10 +18152,10 @@ export default function PresentationWindow({
   // render it never commits. The already-rendered Pictures button would then
   // hold the revoked registry and answer `execute` with "blocked" for good,
   // while `isEnabled` — a raw callback with no generation check — kept it
-  // enabled. Both deps here really do change (`imageFileCommand` on every
-  // `commitSlides`/`notebook_id` identity change, `imageFileCommandIsEnabled`
-  // on `notebook_id`), so this was the same live failure shape, not a
-  // theoretical one.
+  // enabled. Both deps here really did change (`imageFileCommand` on every
+  // `commitSlides`/`notebook_id` identity change until it was built once,
+  // `imageFileCommandIsEnabled` on `notebook_id`), so this was the same live
+  // failure shape, not a theoretical one.
   const imageFileCommandExecuteRef = useRef(imageFileCommand.execute);
   useEffect(() => {
     imageFileCommandExecuteRef.current = imageFileCommand.execute;
@@ -21988,7 +20164,8 @@ export default function PresentationWindow({
     () => pageGapState(pageId),
     () => "none" as const,
   );
-  const deckSaveStatusPlain = autosave.saveStatus !== "saved" ? autosave.saveStatus
+  const deckSaveStatusPlain = autosave.saveStatus === "unsaved" && autosave.guaranteedRetrying ? "saving"
+    : autosave.saveStatus !== "saved" ? autosave.saveStatus
     : deckPartsView.structureRefused() ? "unsaved"
       // The server's write of the room into the page has not come (or failed).
       : deckRoomsAwaitingServer || autosave.roomFoldBehind === true ? "saving" : autosave.saveStatus;
@@ -22263,21 +20440,6 @@ export default function PresentationWindow({
   // presentation page, then execute the same authenticated graph-copy planner
   // used by AI proposals. The source page/package is read-only throughout.
   const [reuseSlidesOpen, setReuseSlidesOpen] = useState(false);
-  // Review > Thesaurus (E045): the word the pane was opened on and where it
-  // sits, so Insert replaces exactly that word; `seed` restarts the lookup.
-  const [thesaurusOpen, setThesaurusOpen] = useState(false);
-  const [thesaurusSeed, setThesaurusSeed] = useState<{ word: string; nonce: number }>({
-    word: "",
-    nonce: 0,
-  });
-  const thesaurusTargetRef = useRef<{
-    word: string;
-    slideId: string;
-    blockId: string;
-    from: number;
-    context: string;
-  } | null>(null);
-  const [thesaurusTargetBlockId, setThesaurusTargetBlockId] = useState<string | null>(null);
   const [reuseSlidesPages, setReuseSlidesPages] = useState<PageItem[]>([]);
   const [reuseSlidesSourcePage, setReuseSlidesSourcePage] =
     useState<PageItem | null>(null);
@@ -22732,9 +20894,6 @@ export default function PresentationWindow({
     },
   });
   const designIdeasOpen = designer.open;
-  const designerDisabledReason = designer.blocked
-    ? t(`presentation.designIdeas.blocked.${designer.blocked}` as "presentation.designIdeas.blocked.read-only")
-    : null;
   const designerToggle = designer.toggle;
   const toggleDesignIdeas = useCallback(() => {
     // Open behind another docked pane: Designer comes to the front instead
@@ -22881,20 +21040,20 @@ export default function PresentationWindow({
       format: formatPaneOpen,
       background: backgroundPaneOpen,
       selection: selectionPaneOpen,
-      animation: animationPaneOpen,
+      animation: false,
       accessibility: accessibilityPanelOpen,
       altText: altTextPaneOpen,
       find: findReplaceOpen,
       designer: designIdeasOpen,
       reuse: reuseSlidesOpen,
       versionHistory: versionHistoryOpen,
-      thesaurus: thesaurusOpen,
+      thesaurus: false,
     },
     {
       format: formatPaneShowing,
       background: backgroundPaneOpen,
       selection: selectionPaneOpen,
-      animation: animationPaneOpen,
+      animation: false,
       accessibility: accessibilityPanelOpen,
       // With nothing it can describe selected the pane still shows (it says
       // what to select), as PowerPoint's does.
@@ -22903,7 +21062,7 @@ export default function PresentationWindow({
       designer: designIdeasOpen,
       reuse: reuseSlidesOpen,
       versionHistory: versionHistoryOpen,
-      thesaurus: thesaurusOpen,
+      thesaurus: false,
     },
     {
       // Office names the pane for what it formats: Format Shape (a shape, a
@@ -22984,14 +21143,6 @@ export default function PresentationWindow({
       id: page,
       serial: (current?.serial ?? 0) + 1,
       ...(section ? { section } : {}),
-    }));
-    openFormatPane();
-  };
-  // Picture Corrections Options... opens Format Picture at its Picture page.
-  const openFormatPaneAtPicture = () => {
-    setFormatPaneRequestedTab((current) => ({
-      id: "picture",
-      serial: (current?.serial ?? 0) + 1,
     }));
     openFormatPane();
   };
@@ -24812,128 +22963,6 @@ export default function PresentationWindow({
     },
     [activeSlide, replaceBlock],
   );
-
-  /**
-   * Apply a deck-wide slide size and PowerPoint's chosen content-fit strategy
-   * as ONE undoable transaction. Slide, master and imported child-layout boxes
-   * share the same uniform projection, so inherited placeholders cannot drift
-   * away from their slide overrides after an aspect-ratio change.
-   */
-  const applySlideSize = useCallback(
-    (
-      size: SlideSizeEmu,
-      strategy: SlideSizeFitStrategy,
-      requestedFirstSlideNumber: number,
-      requestedNotesSize: PresentationNotesSize,
-    ) => {
-      if (designerSaveStateRef.current.readOnly) return;
-      const hydrated = designSizeAuthorityRef.current;
-      if (slidesRef.current.some(slide => (slide.source as Record<string, unknown> | undefined)?.designAuthorityBinding) &&
-          (!hydrated || hydrated.binding.pageId !== pageId || hydrated.binding.contentVersion !== designerSaveStateRef.current.page?.content_version)) return;
-      const liveSlides = hydrated && hydrated.binding.pageId === pageId &&
-        hydrated.binding.contentVersion === designerSaveStateRef.current.page?.content_version
-        ? adoptNativeSlideSizeAuthority(slidesRef.current, hydrated) ?? slidesRef.current
-        : slidesRef.current;
-      if (!nativeSlideSizeCanApply(liveSlides)) {
-        setPendingSlideSize(null);
-        closeSlideSizeDialog();
-        return;
-      }
-      const resized = deckAfterSlideSize({
-        slides: liveSlides,
-        masters: mastersRef.current,
-        theme: themeRef.current,
-        headerFooter: headerFooterRef.current,
-        activeIndex: activeIndexRef.current,
-        fallbackSize: currentSlideSize,
-        size,
-        strategy,
-        firstSlideNumber: requestedFirstSlideNumber,
-        notesSize: requestedNotesSize,
-      });
-      if (resized && resized !== "unchanged") {
-        commitDeck(
-          resized.slides,
-          resized.masters,
-          undefined,
-          undefined,
-          undefined,
-          resized.headerFooter ?? null,
-        );
-      }
-      setPendingSlideSize(null);
-      closeSlideSizeDialog();
-    },
-    [closeSlideSizeDialog, commitDeck, currentSlideSize, pageId],
-  );
-
-  const requestSlideSizeChange = useCallback(
-    (
-      size: SlideSizeEmu,
-      firstSlideNumber: number,
-      notesSize: PresentationNotesSize,
-    ) => {
-      if (designerSaveStateRef.current.readOnly) return;
-      const hydrated = designSizeAuthorityRef.current;
-      const authorized = hydrated && hydrated.binding.pageId === pageId &&
-        hydrated.binding.contentVersion === designerSaveStateRef.current.page?.content_version
-        ? adoptNativeSlideSizeAuthority(slidesRef.current, hydrated) ?? slidesRef.current : slidesRef.current;
-      if (!nativeSlideSizeCanApply(authorized)) {
-        setPendingSlideSize(null);
-        if (slideSizeOpen) closeSlideSizeDialog();
-        return;
-      }
-      if (sameSlideSize(currentSlideSize, size)) {
-        applySlideSize(size, "ensure-fit", firstSlideNumber, notesSize);
-        return;
-      }
-      if (slideSizeNeedsFitChoice(currentSlideSize, size)) {
-        // Transition from the custom-size form or Ribbon menu into the focused
-        // choice dialog without briefly returning focus behind the modal.
-        setSlideSizeOpen(false);
-        setPendingSlideSize({ size, firstSlideNumber, notesSize });
-        return;
-      }
-      // Same-aspect changes have identical Maximize / Ensure Fit geometry.
-      applySlideSize(size, "ensure-fit", firstSlideNumber, notesSize);
-    },
-    [
-      applySlideSize,
-      closeSlideSizeDialog,
-      currentSlideSize,
-      slideSizeOpen,
-      pageId,
-    ],
-  );
-
-  const prepareSlideSizeAuthority = useCallback(async () => {
-    if (guestMode || designerSaveStateRef.current.readOnly || designSizeRequestRef.current) return;
-    if (nativeSlideSizeCanApply(slidesRef.current) && !slidesRef.current.some(slide =>
-      (slide.source as Record<string, unknown> | undefined)?.designAuthorityBinding)) return;
-    const livePage = designerSaveStateRef.current.page;
-    if (livePage?.id !== pageId || !livePage.content_version ||
-        !slidesRef.current.some(slide => (slide.source as Record<string, unknown> | undefined)?.slideId)) return;
-    const generation = deckContentGenerationRef.current;
-    const controller = new AbortController();
-    designSizeRequestRef.current = controller;
-    setDesignSizeLoading(true); setDesignSizeError(null);
-    try {
-      const receipt = await apiGet<PresentationDesignAuthority>(`/api/v1/pages/${encodeURIComponent(pageId)}/presentation-design-authority`, { signal: controller.signal });
-      if (controller.signal.aborted || deckContentGenerationRef.current !== generation ||
-          designerSaveStateRef.current.page?.id !== pageId ||
-          designerSaveStateRef.current.page?.content_version !== receipt.binding.contentVersion ||
-          receipt.binding.pageId !== pageId || receipt.binding.contentDigest !== livePage.content_sha256) {
-        if (!controller.signal.aborted) setDesignSizeError(t("presentation.slideSize.stale"));
-        return;
-      }
-      if (!adoptNativeSlideSizeAuthority(slidesRef.current, receipt)) throw new Error("Slide size cannot be verified for this file.");
-      setDesignSizeAuthority(receipt);
-    } catch {
-      if (!controller.signal.aborted) setDesignSizeError(t("presentation.slideSize.unverified"));
-    } finally {
-      if (designSizeRequestRef.current === controller) { designSizeRequestRef.current = null; setDesignSizeLoading(false); }
-    }
-  }, [guestMode, pageId, t]);
 
   /**
    * Replace EVERY match of the find query across the whole deck (titles + every
@@ -29322,7 +27351,7 @@ export default function PresentationWindow({
     useChangedState<EditInkInteractionMode | null>(null);
   // While a Draw tool is armed no text box on the slide holds the text focus
   // or a caret: the browser scrolled it back into view as ink landed.
-  useInkArmedFocusRelease(ribbonTab === "draw" && inkInteractionMode !== null, () => slideCanvasRef.current);
+  useInkArmedFocusRelease(false, () => slideCanvasRef.current);
   const inkInteractionModeRef = useRef<EditInkInteractionMode | null>(null);
   // Eraser ▸ Stroke / Small / Medium Eraser, as PowerPoint offers them (the
   // shared menu Word and Excel use). Session only.
@@ -29350,59 +27379,6 @@ export default function PresentationWindow({
     inkTrackpadEnabledRef.current = next;
     setInkTrackpadEnabled(next);
   }, []);
-  /** A stroke written in the trackpad frame (client pixels) lands on the slide under it. */
-  const placePresentationTrackpadStroke = (
-    points: readonly { x: number; y: number }[],
-  ) => {
-    const canvas = slideCanvasRef.current;
-    const liveSlide = slidesRef.current[activeIndexRef.current];
-    if (!canvas || !liveSlide || ribbonTabRef.current !== "draw") return;
-    const rect = canvas.getBoundingClientRect();
-    const bounds = slideBounds(liveSlide);
-    if (rect.width <= 0 || rect.height <= 0 || bounds.width <= 0 || bounds.height <= 0) return;
-    // At most the authoring density of samples, as every slide stroke keeps
-    // (`inkStrokeToShape` thins them evenly).
-    const stroke = inkStrokeToShape(
-      points.map((point) => ({
-        x: Math.min(Math.max(point.x - rect.left, 0), rect.width) * (bounds.width / rect.width),
-        y: Math.min(Math.max(point.y - rect.top, 0), rect.height) * (bounds.height / rect.height),
-      })),
-    );
-    if (!stroke) return;
-    const tool = inkToolRef.current ?? "pen";
-    const fitted = inkToShapeRef.current
-      ? presentationShapeFromInkStroke(
-          points.map((point) => ({
-            x: Math.min(Math.max(point.x - rect.left, 0), rect.width) * (bounds.width / rect.width),
-            y: Math.min(Math.max(point.y - rect.top, 0), rect.height) * (bounds.height / rect.height),
-          })),
-          { color: inkColor, strokePx: inkStrokePx, tool: tool === "highlighter" ? "highlighter" : "pen" },
-        )
-      : null;
-    const inkOpacity = inkShapeOpacityForTool(tool);
-    const inkBlock = fitted
-      ? ({ id: crypto.randomUUID(), ...fitted } as unknown as PresentationBlock)
-      : {
-      id: crypto.randomUUID(),
-      type: "shape",
-      shape: "ink",
-      points: stroke.points,
-      stroke: inkColor,
-      strokeWidth: inkStrokePx,
-      inkTool: tool,
-      ...(tool === "pen" && inkEffectRef.current ? { inkEffect: inkEffectRef.current } : {}),
-      ...(inkOpacity !== undefined ? { opacity: inkOpacity } : {}),
-      left: stroke.left,
-      top: stroke.top,
-      width: stroke.width,
-      height: stroke.height,
-    } as unknown as PresentationBlock;
-    const committed = commitLiveActiveBlocks((blocks) =>
-      blocks.length < MAX_PRESENTATION_BLOCKS_PER_SLIDE ? [...blocks, inkBlock] : null,
-    );
-    // Ink to Math / Ink to Text: the stroke joins the writing being read.
-    if (committed && !fitted) presentationInkStrokeLanded({ slideId: liveSlide.id, blockId: inkBlock.id });
-  };
   // Draw ▸ Ink to Shape (PPT-A069), Ink to Math and Ink to Text: session
   // modes, one at a time, as in Office (lib/office-ink-conversion). Under
   // Ink to Math / Ink to Text the strokes written before the pen pauses
@@ -29814,15 +27790,6 @@ export default function PresentationWindow({
     },
     [pickInkInteractionMode, writeInkTool],
   );
-  /** Add Pen: a Pen or a Highlighter at the end of the gallery, picked. */
-  const addInkPen = useCallback(
-    (tool: DocumentInkTool) => {
-      const { profile, id } = withOfficeInkPenAdded(inkPens, tool, PRESENTATION_INK_PEN_SPEC);
-      persistInkPens(profile);
-      selectInkPreset(officeInkPenById(profile, id));
-    },
-    [inkPens, persistInkPens, selectInkPreset],
-  );
   /** A pen's menu: its thickness or colour changes and it is picked. */
   const updateInkPen = useCallback(
     (id: string, patch: Parameters<typeof withOfficeInkPen>[2]) => {
@@ -29893,17 +27860,6 @@ export default function PresentationWindow({
   const runPresentationInkToMath = () => runPresentationInkConvert("math");
   const runPresentationInkToText = () => runPresentationInkConvert("text");
   const runPresentationInkToShape = () => runPresentationInkConvert("shape");
-  /** "Pen: Black, 0.5 mm", as PowerPoint names a pen in its gallery. */
-  const presentationInkPenLabel = (pen: DocumentInkPreset): string => {
-    const colorKey = PRESENTATION_INK_COLOR_NAME_KEYS[pen.color];
-    return t("presentation.draw.penLabel", {
-      tool: t(`toolbar.drawTool_${pen.tool}` as "toolbar.drawTool_pen"),
-      color: colorKey
-        ? t(`spreadsheet.colorName.${colorKey}` as "spreadsheet.colorName.red")
-        : pen.color,
-      width: presentationInkWidthMm(pen.widthPt),
-    });
-  };
   useEffect(() => {
     let serialized: string | null = null;
     try {
@@ -31839,133 +29795,6 @@ export default function PresentationWindow({
     [findReplaceOpen, handleFindNext],
   );
 
-  const spellingHost = useMemo<PresentationSpellingHost>(
-    () => ({
-      slides: () => slidesRef.current as unknown as Record<string, unknown>[],
-      replaceOne: (match, word, replacement) => {
-        const result = replaceMatchInDeck(
-          slidesRef.current as unknown as Record<string, unknown>[],
-          match,
-          word,
-          replacement,
-          {
-            ...PRESENTATION_SPELLING_FIND_OPTIONS,
-            canReplaceChartTitle: presentationFindChartTitleWritable,
-          },
-        );
-        if (!result.replaced) return false;
-        commitSlides(result.slides as unknown as SlideModel[]);
-        return true;
-      },
-      replaceAll: (word, replacement) => {
-        const result = replaceAllInDeck(
-          slidesRef.current as unknown as Record<string, unknown>[],
-          word,
-          replacement,
-          {
-            ...PRESENTATION_SPELLING_FIND_OPTIONS,
-            canReplaceChartTitle: presentationFindChartTitleWritable,
-          },
-        );
-        if (result.replaced > 0) {
-          commitSlides(result.slides as unknown as SlideModel[]);
-        }
-        return result.replaced;
-      },
-      reveal: (match) => {
-        revealFindMatch(match);
-      },
-    }),
-    [commitSlides, revealFindMatch],
-  );
-
-  /**
-   * Review > Thesaurus (E045, Microsoft Support "Look up words in the
-   * thesaurus"): the pane opens on the selected word, or the word the caret
-   * is in; with no text selected it opens on its search box.
-   */
-  const openThesaurus = useCallback(() => {
-    const selection = textSelectionRef.current;
-    const slide = slidesRef.current[activeIndexRef.current];
-    const block = selection
-      ? slide?.blocks.find((candidate) => candidate.id === selection.blockId)
-      : undefined;
-    let target: NonNullable<typeof thesaurusTargetRef.current> | null = null;
-    if (slide && block && block.type === "text") {
-      const text = presentationEditableText(block as PresentationTextBlock);
-      const [from, to] = selectedTextRange(block.id, text, selection);
-      const raw = text.slice(from, to);
-      const word = raw.trim();
-      if (word && word.length <= 80 && !word.includes("\n")) {
-        const start = from + (raw.length - raw.trimStart().length);
-        const lineStart = text.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
-        const lineEnd = text.indexOf("\n", start + word.length);
-        target = {
-          word,
-          slideId: slide.id,
-          blockId: block.id,
-          from: start,
-          context: text.slice(
-            Math.max(lineStart, start - 300),
-            lineEnd < 0 ? Math.min(text.length, start + word.length + 300) : lineEnd,
-          ),
-        };
-      }
-    }
-    thesaurusTargetRef.current = target;
-    setThesaurusTargetBlockId(target?.blockId ?? null);
-    setThesaurusSeed((seed) => ({ word: target?.word ?? "", nonce: seed.nonce + 1 }));
-    setThesaurusOpen(true);
-    taskPaneDockRef.current?.bringForward("thesaurus");
-  }, []);
-  const lookupThesaurus = useCallback(
-    (word: string): Promise<OfficeThesaurusEntry> => {
-      const target = thesaurusTargetRef.current;
-      return apiPost<OfficeThesaurusEntry>("/api/v1/ai/notebook/thesaurus", {
-        page_id: pageId,
-        word,
-        context: target && target.word === word ? target.context : null,
-      });
-    },
-    [pageId],
-  );
-  /** Insert: the synonym in place of the word the pane was opened on, one Undo step. */
-  const insertThesaurusWord = useCallback(
-    (synonym: string) => {
-      const target = thesaurusTargetRef.current;
-      if (!target) return;
-      const deck = slidesRef.current as unknown as Record<string, unknown>[];
-      const match = findMatchesInDeck(deck, target.word, { matchCase: true, wholeWord: false }).find(
-        (candidate) =>
-          candidate.slideId === target.slideId &&
-          candidate.blockId === target.blockId &&
-          (candidate.textStart ?? candidate.start) === target.from,
-      );
-      const result = match
-        ? replaceMatchInDeck(deck, match, target.word, synonym, {
-            matchCase: true,
-            canReplaceChartTitle: presentationFindChartTitleWritable,
-          })
-        : null;
-      if (!result?.replaced) {
-        toast({
-          title: t("presentation.review.thesaurusInsertFailed"),
-          variant: "destructive",
-        });
-        return;
-      }
-      commitSlides(result.slides as unknown as SlideModel[]);
-      // The inserted word is what a second Insert replaces.
-      thesaurusTargetRef.current = { ...target, word: synonym };
-      textSelectionRef.current = {
-        blockId: target.blockId,
-        start: target.from,
-        end: target.from + synonym.length,
-      };
-    },
-    [commitSlides, t, toast],
-  );
-
   const handleReplaceCurrent = useCallback(() => {
     const liveMatches = resolveLiveFindMatches();
     const currentIndex = liveMatches.findIndex(
@@ -33149,6 +30978,12 @@ export default function PresentationWindow({
   useEffect(() => {
     const canvas = slideCanvasRef.current;
     if (!canvas || dragPreview || tableAxisPreview || autosave.readOnly) return;
+    // A slide with no table has nothing to fit, and nothing to wait for: the
+    // wait's retry re-renders the window every FIT_QUIET_POLL_MS after a change.
+    if (!activeSlide.blocks.some((block) => block.type === "table" && hasLayoutGeometry(block))) {
+      tableFitFromHistoryRef.current = false;
+      return;
+    }
     if (fitMustWait()) return;
     const grown = new Map<string, { height: number; rowHeights?: Array<number | null> }>();
     const fromHistory = tableFitFromHistoryRef.current;
@@ -33361,241 +31196,6 @@ export default function PresentationWindow({
     // them), but its frame only (`commitLiveBlockFits`).
     commitLiveBlockFits(fitted, TEXT_BOX_FIT_COMMIT);
   }, [activeSlide, autosave.readOnly, commitLiveBlockFits, dragPreview]);
-
-  const recordStudioInkMutationReady =
-    recordStudioOpen &&
-    !autosave.readOnly &&
-    narrationRecorderStatus !== "requesting" &&
-    narrationRecorderStatus !== "processing";
-  const recordStudioPersistedInkEntries = useMemo(() => {
-    const pathById = new Map(
-      persistedInkPaths(activeSlide.blocks).map((path) => [path.id, path]),
-    );
-    return activeSlide.blocks.flatMap((block, index) => {
-      const path = pathById.get(block.id);
-      const pathSignature = persistedInkPathSignature(block);
-      return path && pathSignature && !isBlockNotDrawn(block)
-        ? [{ block, id: block.id, index, path, pathSignature }]
-        : [];
-    });
-  }, [activeSlide.blocks]);
-  const recordStudioHasEditableInk =
-    recordStudioPersistedInkEntries.length > 0 &&
-    new Set(activeSlide.blocks.map((block) => block.id)).size ===
-      activeSlide.blocks.length &&
-    recordStudioPersistedInkEntries.every((entry) =>
-      canEditBlockContent(entry.block),
-    );
-  const recordStudioCanDrawInk =
-    recordStudioInkMutationReady &&
-    activeSlide.blocks.length < MAX_PRESENTATION_BLOCKS_PER_SLIDE;
-  const recordStudioCanEraseInk =
-    recordStudioInkMutationReady && recordStudioHasEditableInk;
-  const recordStudioActiveAnnotationTool =
-    recordStudioAnnotationTool === "laser"
-      ? "laser"
-      : recordStudioAnnotationTool === "eraser"
-        ? recordStudioCanEraseInk
-          ? "eraser"
-          : null
-        : recordStudioAnnotationTool && recordStudioCanDrawInk
-          ? recordStudioAnnotationTool
-          : null;
-  const recordStudioDraftStrokes = useMemo<readonly InkStroke[]>(() => {
-    if (!recordStudioInkDraft || recordStudioInkDraft.points.length === 0) {
-      return EMPTY_INK_STROKES;
-    }
-    return [
-      {
-        id: "record-studio-ink-draft",
-        tool: recordStudioInkDraft.tool,
-        color: recordStudioInkDraft.color,
-        width: defaultWidthForTool(recordStudioInkDraft.tool),
-        points: recordStudioInkDraft.points,
-      },
-    ];
-  }, [recordStudioInkDraft]);
-  const selectRecordStudioAnnotationTool = useCallback(
-    (tool: AnnotationTool) => {
-      recordStudioInkGestureRef.current = null;
-      setRecordStudioInkDraft(null);
-      setRecordStudioAnnotationTool((current) =>
-        current === tool ? null : tool,
-      );
-    },
-    [],
-  );
-  const startRecordStudioInkStroke = useCallback(
-    (point: AnnotationPoint) => {
-      const tool = recordStudioAnnotationTool;
-      const liveSlides = slidesRef.current;
-      const slideIndex = activeIndexRef.current;
-      const slide = liveSlides[slideIndex];
-      if (
-        !recordStudioCanDrawInk ||
-        (tool !== "pen" && tool !== "highlighter") ||
-        !slide ||
-        slide.blocks.length >= MAX_PRESENTATION_BLOCKS_PER_SLIDE
-      ) {
-        return;
-      }
-      const gesture: RecordStudioInkGesture = {
-        mode: "draw",
-        deckGeneration: deckContentGenerationRef.current,
-        slideIndex,
-        slideId: slide.id,
-        slide,
-        blocks: slide.blocks,
-        tool,
-        color: recordStudioAnnotationColor,
-        points: [point],
-      };
-      recordStudioInkGestureRef.current = gesture;
-      setRecordStudioInkDraft({
-        slideId: slide.id,
-        tool,
-        color: gesture.color,
-        points: gesture.points,
-      });
-    },
-    [
-      recordStudioAnnotationColor,
-      recordStudioAnnotationTool,
-      recordStudioCanDrawInk,
-    ],
-  );
-  const appendRecordStudioInkStroke = useCallback(
-    (point: AnnotationPoint) => {
-      const gesture = recordStudioInkGestureRef.current;
-      if (!gesture || gesture.mode !== "draw") return;
-      const points = appendStrokePoint(gesture.points, point.x, point.y);
-      if (points === gesture.points) return;
-      gesture.points = points;
-      setRecordStudioInkDraft({
-        slideId: gesture.slideId,
-        tool: gesture.tool as "pen" | "highlighter",
-        color: gesture.color,
-        points,
-      });
-    },
-    [],
-  );
-  const finishRecordStudioInkStroke = useCallback(() => {
-    const gesture = recordStudioInkGestureRef.current;
-    recordStudioInkGestureRef.current = null;
-    setRecordStudioInkDraft(null);
-    if (
-      !gesture ||
-      gesture.mode !== "draw" ||
-      (gesture.tool !== "pen" && gesture.tool !== "highlighter")
-    ) {
-      return;
-    }
-    const liveSlide = slidesRef.current[gesture.slideIndex];
-    if (
-      deckContentGenerationRef.current !== gesture.deckGeneration ||
-      activeIndexRef.current !== gesture.slideIndex ||
-      liveSlide !== gesture.slide ||
-      liveSlide?.id !== gesture.slideId ||
-      liveSlide.blocks !== gesture.blocks ||
-      slidesRef.current.filter((slide) => slide.id === gesture.slideId)
-        .length !== 1
-    ) {
-      return;
-    }
-    const bounds = slideBounds(gesture.slide);
-    const minimumDimension = Math.min(bounds.width, bounds.height);
-    // The width the studio drew (a fraction of the slide's smaller side), in
-    // the unit every slide ink stores: the slide's design pixels, as the
-    // Draw tab writes it. It was stored in EMU, 9525 times too wide, which
-    // the canvas clamped to the thickest outline and the file wrote as is.
-    const strokeWidth = Math.min(
-      MAX_STROKE_WIDTH,
-      Math.max(
-        1,
-        Math.round(
-          ((defaultWidthForTool(gesture.tool) * minimumDimension) / AUTOFIT_EMU_PER_PX) * 100,
-        ) / 100,
-      ),
-    );
-    const stroke = inkStrokeToShape(
-      gesture.points.map((point) => ({
-        x: point.x * bounds.width,
-        y: point.y * bounds.height,
-      })),
-      strokeWidth * AUTOFIT_EMU_PER_PX,
-    );
-    if (!stroke) return;
-    const opacity = inkShapeOpacityForTool(gesture.tool);
-    const inkBlock = {
-      id: crypto.randomUUID(),
-      type: "shape",
-      shape: "ink",
-      points: stroke.points,
-      stroke: gesture.color,
-      strokeWidth,
-      inkTool: gesture.tool,
-      ...(opacity !== undefined ? { opacity } : {}),
-      left: stroke.left,
-      top: stroke.top,
-      width: stroke.width,
-      height: stroke.height,
-    } as unknown as PresentationBlock;
-    commitLiveActiveBlocks((blocks, slide) =>
-      slide === gesture.slide &&
-      blocks === gesture.blocks &&
-      blocks.length < MAX_PRESENTATION_BLOCKS_PER_SLIDE
-        ? [...blocks, inkBlock]
-        : null,
-    );
-  }, [commitLiveActiveBlocks]);
-  const eraseRecordStudioInkAt = useCallback(
-    (point: AnnotationPoint) => {
-      if (!recordStudioCanEraseInk) return;
-      const current = recordStudioInkGestureRef.current;
-      if (current?.mode === "eraser") {
-        const points = appendStrokePoint(current.points, point.x, point.y);
-        if (points !== current.points) current.points = points;
-        return;
-      }
-      const liveSlides = slidesRef.current;
-      const slideIndex = activeIndexRef.current;
-      const slide = liveSlides[slideIndex];
-      if (!slide) return;
-      const pathById = new Map(
-        persistedInkPaths(slide.blocks).map((path) => [path.id, path]),
-      );
-      const entries = slide.blocks.flatMap((block, index) => {
-        const path = pathById.get(block.id);
-        const pathSignature = persistedInkPathSignature(block);
-        // A stroke the Selection Pane hides is not on the canvas to be erased
-        // (PPT-B388).
-        return path && pathSignature && canEditBlockContent(block) && !isBlockNotDrawn(block)
-          ? [{ block, id: block.id, index, path, pathSignature }]
-          : [];
-      });
-      if (
-        entries.length === 0 ||
-        new Set(slide.blocks.map((block) => block.id)).size !==
-          slide.blocks.length
-      ) {
-        return;
-      }
-      recordStudioInkGestureRef.current = {
-        mode: "eraser",
-        deckGeneration: deckContentGenerationRef.current,
-        slideIndex,
-        slideId: slide.id,
-        slide,
-        blocks: slide.blocks,
-        tool: "eraser",
-        color: recordStudioAnnotationColor,
-        points: [point],
-        inkAuthority: entries,
-      };
-    },
-    [recordStudioAnnotationColor, recordStudioCanEraseInk],
-  );
   const clearDeletedInkSelection = useCallback((deletedIds: Set<string>) => {
     const nextSelection = new Set(
       [...selectedBlockIdsRef.current].filter((id) => !deletedIds.has(id)),
@@ -33606,97 +31206,6 @@ export default function PresentationWindow({
     setSelectedBlockIds(nextSelection);
     setSelectedBlockId(nextPrimary);
   }, []);
-  const finishRecordStudioInkErase = useCallback(() => {
-    const gesture = recordStudioInkGestureRef.current;
-    recordStudioInkGestureRef.current = null;
-    if (
-      !gesture ||
-      gesture.mode !== "eraser" ||
-      !gesture.inkAuthority ||
-      gesture.points.length === 0
-    ) {
-      return;
-    }
-    const liveSlide = slidesRef.current[gesture.slideIndex];
-    if (
-      deckContentGenerationRef.current !== gesture.deckGeneration ||
-      activeIndexRef.current !== gesture.slideIndex ||
-      liveSlide !== gesture.slide ||
-      liveSlide?.id !== gesture.slideId ||
-      liveSlide.blocks !== gesture.blocks ||
-      slidesRef.current.filter((slide) => slide.id === gesture.slideId)
-        .length !== 1
-    ) {
-      return;
-    }
-    const bounds = slideBounds(gesture.slide);
-    const hitIds = inkPathIdsHitByEraser(
-      gesture.inkAuthority.map((entry) => entry.path),
-      gesture.points.map((point) => ({
-        x: point.x * bounds.width,
-        y: point.y * bounds.height,
-      })),
-      ERASER_HIT_RADIUS * Math.min(bounds.width, bounds.height),
-    );
-    if (hitIds.size === 0) return;
-    const committed = commitLiveActiveBlocks((blocks, slide) => {
-      if (slide !== gesture.slide || blocks !== gesture.blocks) return null;
-      for (const id of hitIds) {
-        const entry = gesture.inkAuthority?.find(
-          (candidate) => candidate.id === id,
-        );
-        const block = entry ? blocks[entry.index] : undefined;
-        if (
-          !entry ||
-          block !== entry.block ||
-          block.id !== entry.id ||
-          !canEditBlockContent(block) ||
-          persistedInkPathSignature(block) !== entry.pathSignature
-        ) {
-          return null;
-        }
-      }
-      return blocks.filter((block) => !hitIds.has(block.id));
-    });
-    if (committed) clearDeletedInkSelection(hitIds);
-  }, [clearDeletedInkSelection, commitLiveActiveBlocks]);
-  const clearRecordStudioInk = useCallback(() => {
-    if (!recordStudioCanEraseInk) return;
-    const liveSlide = slidesRef.current[activeIndexRef.current];
-    if (!liveSlide) return;
-    const entries = liveSlide.blocks.flatMap((block, index) => {
-      const pathSignature = persistedInkPathSignature(block);
-      return pathSignature && canManipulateBlock(block) && !isBlockNotDrawn(block)
-        ? [{ block, id: block.id, index, pathSignature }]
-        : [];
-    });
-    if (
-      entries.length === 0 ||
-      new Set(liveSlide.blocks.map((block) => block.id)).size !==
-        liveSlide.blocks.length
-    ) {
-      return;
-    }
-    const deletedIds = new Set(entries.map((entry) => entry.id));
-    const committed = commitLiveActiveBlocks((blocks, slide) => {
-      if (slide !== liveSlide || blocks !== liveSlide.blocks) return null;
-      for (const entry of entries) {
-        const block = blocks[entry.index];
-        if (
-          block !== entry.block ||
-          persistedInkPathSignature(block) !== entry.pathSignature
-        ) {
-          return null;
-        }
-      }
-      return blocks.filter((block) => !deletedIds.has(block.id));
-    });
-    if (committed) clearDeletedInkSelection(deletedIds);
-  }, [
-    clearDeletedInkSelection,
-    commitLiveActiveBlocks,
-    recordStudioCanEraseInk,
-  ]);
 
   /**
    * Shape → Size. Re-authenticate the shapes and free text boxes at dispatch.
@@ -33872,7 +31381,7 @@ export default function PresentationWindow({
       // Draw with Touch off, or a pen about: the pen alone inks and a finger
       // pans the slide (lib/draw-with-touch). Nothing inks unless a Draw
       // tool is picked.
-      const inkArmed = inkInteractionModeRef.current !== null && ribbonTabRef.current === "draw";
+      const inkArmed = false;
       if (!inkAcceptsPointer(event, inkArmed)) {
         // With a Draw tool picked a finger pans the slide (the shield does
         // it) and nothing else: it does not start a marquee, or pick up and
@@ -33904,13 +31413,7 @@ export default function PresentationWindow({
       const liveIndex = activeIndexRef.current;
       const liveSlide = liveSlides[liveIndex];
       const rawPointerType = event.pointerType || "mouse";
-      if (
-        !mode ||
-        ribbonTabRef.current !== "draw" ||
-        !["mouse", "pen", "touch"].includes(rawPointerType) ||
-        !canvas ||
-        !liveSlide
-      ) return;
+      return;
       const pointerType = rawPointerType as "mouse" | "pen" | "touch";
       const target = event.currentTarget;
       const down = event.nativeEvent;
@@ -33981,53 +31484,6 @@ export default function PresentationWindow({
               : [];
           }),
         };
-      };
-      // Draw ▸ Lasso Select's loop (or a pen circle's, Circle to Lasso)
-      // around the slide's ink: the strokes inside are the selection.
-      const selectInkInLoop = (
-        authority: NonNullable<ReturnType<typeof inkPathAuthorityOf>>,
-        slideId: string,
-        loop: readonly Point[],
-      ) => {
-        const selectedIds = inkPathIdsInLasso(
-          authority.entries.map((entry) => entry.path),
-          loop,
-        );
-        const primaryId =
-          authority.entries.find((entry) => selectedIds.has(entry.id))
-            ?.id ?? null;
-        // The strokes wear one frame and the loop stays drawn around
-        // them, closed, kept relative to that frame so it follows a
-        // move or a scale (OfficeInkLassoSelection).
-        const lassoBox = inkLassoUnionBox(
-          authority.entries
-            .filter((entry) => selectedIds.has(entry.id))
-            .map((entry) => ({
-              left: geometryNumber(entry.block, "left") ?? 0,
-              top: geometryNumber(entry.block, "top") ?? 0,
-              width: geometryNumber(entry.block, "width") ?? 0,
-              height: geometryNumber(entry.block, "height") ?? 0,
-            })),
-        );
-        setInkLassoSelection(
-          lassoBox && selectedIds.size > 0
-            ? {
-                slideId: slideId,
-                ids: selectedIds,
-                loop: anchorInkLassoLoop(loop, lassoBox),
-              }
-            : null,
-        );
-        selectedBlockIdsRef.current = selectedIds;
-        selectedBlockIdRef.current = primaryId;
-        setSelectedBlockIds(selectedIds);
-        setSelectedBlockId(primaryId);
-        // The keyboard comes to the slide with the selection, as a
-        // click on a stroke takes it there: Delete then removes what
-        // the lasso took (the slide's own Delete), wherever the focus
-        // was before -- a Draw tab pen button kept it, and Delete did
-        
-        if (primaryId) slideCanvasRef.current?.focus({ preventScroll: true });
       };
       const inkPathAuthority =
         mode === "eraser" || mode === "lasso" ? inkPathAuthorityOf(liveSlide) : null;
@@ -34378,7 +31834,7 @@ export default function PresentationWindow({
             !held &&
             inkToolScratchesOut(gesture.tool) &&
             inkInteractionModeRef.current === "draw" &&
-            ribbonTabRef.current === "draw" &&
+            false &&
             deckContentGenerationRef.current === gesture.deckGeneration &&
             inkScratchOutEnabled() &&
             isInkScratchOut(client)
@@ -34412,156 +31868,7 @@ export default function PresentationWindow({
               return;
             }
           }
-          // The stroke stays wet on the surface and lands with the next
-          // pause of the hand (landWetInk); a deck replaced since drops it.
-          if (
-            inkInteractionModeRef.current === "draw" &&
-            ribbonTabRef.current === "draw" &&
-            deckContentGenerationRef.current === gesture.deckGeneration &&
-            gesture.points.length > 0
-          ) {
-            // As it stood just before the lift: the pen's slide off the glass is not the shape's.
-            if (held) inkHeldShapeAtLift(held);
-            const wetStroke: PresentationWetStroke = held ? {
-              // Drawn and held: the clean shape lands, as a shape, at the pen's width.
-              slideId: gesture.slideId,
-              deckGeneration: gesture.deckGeneration,
-              points: heldOutlineEmu(),
-              color: gesture.color,
-              width: gesture.width,
-              tool: gesture.tool,
-              effect: gesture.effect,
-              toShape: true,
-              held: true,
-            } : {
-              slideId: gesture.slideId,
-              deckGeneration: gesture.deckGeneration,
-              points: gesture.points,
-              color: gesture.color,
-              // A steady pressure is drawn at its width, as the running
-              // stroke was (it landed at the stated width and thinned).
-              width:
-                gesture.tool === "highlighter"
-                  ? gesture.width
-                  : gesture.width * inkSteadyPressureWidthFactor(gesture.points.map((point) => (point as { p?: number }).p)),
-              tool: gesture.tool,
-              effect: gesture.effect,
-              toShape: inkToShapeRef.current,
-            };
-            // Circled ink with the pen: the circle waits for its Select chip.
-            const nowSlide = slidesRef.current[activeIndexRef.current];
-            const circleAuthority =
-              !held && gesture.tool === "pen" && inkPenGestures().circleLasso && isInkCircleGesture(client) &&
-              nowSlide && nowSlide.id === gesture.slideId
-                ? inkPathAuthorityOf(nowSlide)
-                : null;
-            const circles = circleAuthority !== null && (
-              inkPathIdsInLasso(circleAuthority.entries.map((entry) => entry.path), gesture.points).size > 0 ||
-              (inkWetRef.current?.pending ?? []).some(
-                (stroke) =>
-                  stroke.slideId === gesture.slideId &&
-                  inkPathIdsInLasso([{ id: "wet", points: stroke.points }], gesture.points).size > 0,
-              )
-            );
-            inkWetRef.current?.add(wetStroke, circles ? { waits: true } : undefined);
-            if (circles) {
-              const slideId = gesture.slideId;
-              const loop = gesture.points;
-              endInkCircleOffer(false);
-              inkCircleOfferRef.current = {
-                stroke: wetStroke,
-                timer: setTimeout(() => endInkCircleOffer(true), INK_CIRCLE_OFFER_MS),
-                select: () => {
-                  // Already landed (the deck took the batch): it is ink now.
-                  if (!inkWetRef.current?.remove((stroke) => stroke === wetStroke)) return;
-                  // The writing just before the circle lands first, and is
-                  // selected once the deck holds it.
-                  inkWetRef.current?.flush();
-                  requestAnimationFrame(() => {
-                    const slide = slidesRef.current[activeIndexRef.current];
-                    const authority = slide && slide.id === slideId ? inkPathAuthorityOf(slide) : null;
-                    if (authority) selectInkInLoop(authority, slideId, loop);
-                  });
-                },
-              };
-              const emuPerPx = Math.max(gesture.emuPerPxX, gesture.emuPerPxY);
-              setInkCircleOffer({ ...inkCircleOfferAt(loop, 48 * emuPerPx, 8 * emuPerPx), slideId });
-            }
-          }
-        } else         if (
-          gesture &&
-          (inkInteractionModeRef.current === gesture.mode ||
-            (gesture.heldToErase && inkInteractionModeRef.current === "draw")) &&
-          ribbonTabRef.current === "draw" &&
-          deckContentGenerationRef.current === gesture.deckGeneration &&
-          activeIndexRef.current === gesture.slideIndex &&
-          slidesRef.current[gesture.slideIndex] === gesture.slide &&
-          gesture.slide.blocks === gesture.blocks &&
-          slidesRef.current.filter((slide) => slide.id === gesture.slideId)
-            .length === 1
-        ) {
-          {
-            if (gesture.mode === "eraser") {
-              const authority = gesture.inkPathAuthority;
-              if (!authority) {
-                detach();
-                return;
-              }
-              const emuPerPx = Math.max(gesture.emuPerPxX, gesture.emuPerPxY);
-              if (gesture.eraser !== "stroke") {
-                // Small / Medium Eraser: the ink under the pointer goes, and
-                // each stroke it touched becomes the pieces it left, cut flat
-                // where the eraser's edge was. One save, one Undo step; a
-                // touched stroke changed since the press fails it closed.
-                const erased: { ids: Set<string> | null } = { ids: null };
-                const committed = commitLiveActiveBlocks((blocks, slide) => {
-                  if (
-                    slide.id !== gesture.slideId ||
-                    new Set(blocks.map((block) => block.id)).size !== blocks.length
-                  ) return null;
-                  const result = erasePresentationInkUnder(
-                    blocks,
-                    authority.entries,
-                    gesture.points,
-                    presentationInkEraserReachPx(gesture.eraser) * emuPerPx,
-                    emuPerPx,
-                    () => crypto.randomUUID(),
-                  );
-                  if (!result || result.blocks.length > MAX_PRESENTATION_BLOCKS_PER_SLIDE) return null;
-                  for (const id of result.erasedIds) {
-                    const entry = authority.entries.find((candidate) => candidate.id === id);
-                    const block = entry ? blocks[entry.index] : undefined;
-                    if (
-                      !entry ||
-                      block !== entry.block ||
-                      !canEditBlockContent(block) ||
-                      presentationInkEntrySignature(block, entry) !== entry.pathSignature
-                    ) return null;
-                  }
-                  erased.ids = result.erasedIds;
-                  return result.blocks;
-                });
-                if (committed && erased.ids) clearDeletedInkSelection(erased.ids);
-                detach();
-                return;
-              }
-              const radius = emuPerPx * presentationInkEraserReachPx("stroke");
-              const hitIds = inkPathIdsHitByEraser(
-                authority.entries.map((entry) => entry.path),
-                gesture.points,
-                radius,
-              );
-              if (hitIds.size > 0) eraseInkStrokes(authority, hitIds, gesture.slideId);
-            } else if (gesture.mode === "lasso") {
-              const authority = gesture.inkPathAuthority;
-              if (!authority) {
-                detach();
-                return;
-              }
-              selectInkInLoop(authority, gesture.slideId, gesture.points);
-            }
-          }
-        }
+        } else         {}
         detach();
       };
       const handleCancel = (cancelEvent: PointerEvent) => {
@@ -34603,7 +31910,7 @@ export default function PresentationWindow({
     if (event.detail === 0 && event.type === "click") return false;
     // A tap in a menu portalled out of the slide is that menu's.
     if (!isPressInside(event)) return false;
-    const armed = inkInteractionModeRef.current !== null && ribbonTabRef.current === "draw";
+    const armed = false;
     // With a Draw tool picked a finger or a resting hand only pans: the
     // mouse events its taps leave (a double tap went into a text box and
     // selected the word under the hand) are not the slide's, as a hand on
@@ -34731,49 +32038,6 @@ export default function PresentationWindow({
     },
     [applyGroupGeometry],
   );
-
-  // Arrange ▸ Auto Fix (PowerPoint): align, uniformly size and distribute two
-  // or more elements that do not overlap, in one undoable step; connectors
-  // anchored to them are re-snapped by the shared geometry commit.
-  const autoFixSelectedBlocks = useCallback(
-    () => applyGroupGeometry((rects) => autoFixBlocks(rects), 2),
-    [applyGroupGeometry],
-  );
-
-  // Toggle a mirror flag (flipH / flipV) on the exact live positioned selection
-  // in ONE undoable step. PURE STYLE: only the boolean changes — geometry
-  // (left/top/width/height), text, groupId and anchors are untouched, so the
-  // render transform is the sole visible effect (see buildBlockTransform). A
-  // toggle to `false` DELETES the field so a never-flipped / un-flipped block
-  // serializes byte-for-byte unchanged (additive schema). No-op when nothing
-  // positioned is selected (the toolbar buttons are disabled then).
-  // ONE shape of a SmartArt graphic selected (not the graphic): the shape
-  // Rotate and Flip act on. Its whole graphic rides in the selection (the
-  // frame is drawn), so the plain paths turned and flipped every member and
-  // the graphic went round with it. PowerPoint turns the selected shape
-  // (Microsoft Support, "Keyboard shortcuts for SmartArt graphics": rotate
-  // the selected shape), as its rotation handle and Alt+arrows already do.
-  // The whole SmartArt graphic is the live selection: every member of one
-  // graphic selected with the graphic, not one of its shapes, in scope.
-  /**
-   * Shape Fill / Outline / Effects with the WHOLE graphic selected: the
-   * graphic's own formatting (`dgm:bg` fill and effects, `dgm:whole` line),
-   * every shape inside untouched. One undo step.
-   */
-  const commitLiveSmartArtGraphicFormat = useCallback(
-    (change: SmartArtGraphicFormatChange) =>
-      commitLiveActiveBlocks((blocks) => {
-        const primary = blocks.find((block) => block.id === selectedBlockIdRef.current);
-        const group = primary ? presentationSmartArtGroup(blocks, primary) : null;
-        if (!group || !group.members.every(canEditBlockContent)) return null;
-        return presentationBlocksWithSmartArtBackground(
-          blocks,
-          new Set(group.members.map((member) => member.id)),
-          change,
-        );
-      }),
-    [commitLiveActiveBlocks],
-  );
   const liveSmartArtGraphicSelected = useCallback((): boolean => {
     if (!smartArtGraphicOnlyRef.current) return false;
     const liveSlide = slidesRef.current[activeIndexRef.current];
@@ -34804,31 +32068,6 @@ export default function PresentationWindow({
       });
     },
     [commitLiveActiveBlocks, liveSmartArtGraphicSelected, liveSmartArtTurnShape, resolveLiveGeometryTargets],
-  );
-
-  // Whether the exact live selection is complete and targetable by Drawing
-  // geometry commands. A primary id outside that set is never authoritative.
-  // Auto Fix leaves grouped elements and SmartArt alone, and every element
-  // must stand clear of the others (Microsoft Support, "Align your content
-  // quickly and easily with Auto Fix").
-  const canAutoFixSelection = useMemo(
-    () =>
-      selectedGeometryBlocks.length >= 2 &&
-      selectedGeometryBlocks.length === selectedBlockIds.size &&
-      selectedGeometryBlocks.every(
-        (block) =>
-          canManipulateBlock(block) &&
-          typeof (block as { groupId?: unknown }).groupId !== "string",
-      ) &&
-      canAutoFixBlocks(
-        selectedGeometryBlocks.map((block) => ({
-          left: geometryNumber(block, "left") ?? 0,
-          top: geometryNumber(block, "top") ?? 0,
-          width: geometryNumber(block, "width") ?? 0,
-          height: geometryNumber(block, "height") ?? 0,
-        })),
-      ),
-    [selectedBlockIds, selectedGeometryBlocks],
   );
   // The WHOLE SmartArt graphic selected (its frame, a frame handle or Esc):
   // PowerPoint turns and flips no whole graphic -- its Shape refuses any
@@ -35065,10 +32304,6 @@ export default function PresentationWindow({
     selectionIsGeometryObjects &&
     selectedShapeBlocks.length === selectedBlockIds.size &&
     selectedShapeBlocks.every((block) => !isPresentationCameoBlock(block));
-  const drawingImageSelectionIsEligible =
-    contextualImageSelectionIsWritable &&
-    selectionIsGeometryObjects &&
-    contextualImageBlocks.length === selectedBlockIds.size;
   const drawingShapeBlock = drawingShapeSelectionIsEligible
     ? contextualShapeBlock
     : null;
@@ -35135,21 +32370,6 @@ export default function PresentationWindow({
     !selectedShapeObjectsAlreadyGrouped;
   const canUngroupSelectedShapes =
     shapeObjectGroupSelectionIsEligible && selectedHasGroupedBlock;
-  const selectedImageGroupId = blockGroupId(contextualImageBlocks[0]);
-  const selectedImagesAlreadyGrouped =
-    contextualImageBlocks.length >= 2 &&
-    Boolean(selectedImageGroupId) &&
-    contextualImageBlocks.every(
-      (block) => blockGroupId(block) === selectedImageGroupId,
-    );
-  const selectedImagesGroupRefusal = presentationGroupRefusal(contextualImageBlocks, activeSlide.blocks);
-  const canGroupSelectedImages =
-    drawingImageSelectionIsEligible &&
-    contextualImageBlocks.length >= 2 &&
-    selectedImagesGroupRefusal === null &&
-    !selectedImagesAlreadyGrouped;
-  const canUngroupSelectedImages =
-    drawingImageSelectionIsEligible && selectedHasGroupedBlock;
   const contextualShapeLayerCapability = useMemo(() => {
     return presentationSelectionLayerCapability(
       activeSlide.blocks,
@@ -35187,14 +32407,6 @@ export default function PresentationWindow({
     contextualShapeObjectSelectionIsWritable,
     t,
   ]);
-  const contextualImageLayerCapability = useMemo(
-    () =>
-      presentationSelectionLayerCapability(
-        activeSlide.blocks,
-        contextualImageBlocks,
-      ),
-    [activeSlide.blocks, contextualImageBlocks],
-  );
   // The live selection's own answer, for the commands that act on it (Home ▸
   // Arrange, the right-click menus, the chart's Arrange): PowerPoint greys
   // Bring Forward / Bring to Front when nothing can come forward, and Send
@@ -35225,49 +32437,6 @@ export default function PresentationWindow({
       ),
     [activeSlide.blocks, contextualChartBlock],
   );
-  const contextualMediaLayerCapability = useMemo(
-    () =>
-      presentationSelectionLayerCapability(
-        activeSlide.blocks,
-        contextualMediaBlock ? [contextualMediaBlock] : [],
-      ),
-    [activeSlide.blocks, contextualMediaBlock],
-  );
-  // Layout > Arrange > Group on a table: PowerPoint never groups a table, so
-  // only Ungroup can act, on a table already in a group (PPT-A148).
-  const contextualTableCanUngroup =
-    contextualTableBlock !== null &&
-    selectedBlockIds.size === 1 &&
-    selectedHasGroupedBlock &&
-    canManipulateBlock(contextualTableBlock);
-  const contextualTableLayerCapability = useMemo(
-    () =>
-      presentationSelectionLayerCapability(
-        activeSlide.blocks,
-        contextualTableBlock ? [contextualTableBlock] : [],
-      ),
-    [activeSlide.blocks, contextualTableBlock],
-  );
-  const contextualImageSelectionHasImportedBlock = contextualImageBlocks.some(
-    isImportedPptxBlock,
-  );
-  const contextualImageUsesNativeStepAuthority =
-    contextualImageBlock !== null &&
-    contextualImageSelectionHasImportedBlock;
-  // An imported picture comes forward and goes back as any object does, as
-  // Home ▸ Arrange moves it: on the picture's own native step where that can
-  
-  // on the picture step alone greyed all four commands on a picture of a
-  // slide that also holds an object the author added, of a group, or after
-  // 32 steps, and Bring to Front / Send to Back on every imported picture.
-  const contextualImageCanMoveForward =
-    drawingImageSelectionIsEligible &&
-    contextualImageLayerCapability.canMoveForward;
-  const contextualImageCanMoveBackward =
-    drawingImageSelectionIsEligible &&
-    contextualImageLayerCapability.canMoveBackward;
-  const contextualImageCanMoveToFront = contextualImageCanMoveForward;
-  const contextualImageCanMoveToBack = contextualImageCanMoveBackward;
   // Two shapes are selected, but at least one has no fillable outline (a line /
   // arrow / ink stroke / curved custom geometry): Merge Shapes is refused up
   // front rather than after the inputs are gone.
@@ -36902,6 +34071,8 @@ export default function PresentationWindow({
       readonly fromSlideId?: string;
       /** The server cannot copy them to another slide: Paste's redrawn copy. */
       readonly onUnsupported?: () => void;
+      /** Copies already asked again after the deck moved on under them. */
+      readonly staleRetries?: number;
     } = {},
   ): Promise<void> => {
     const context = nativeCopyContextRef.current;
@@ -36968,6 +34139,23 @@ export default function PresentationWindow({
         nativeCopyBusyRef.current = false;
         options.onUnsupported();
         return;
+      }
+      // Another save moved the deck on between this copy's save and its plan
+      // (`native_copy_stale_page`): the copy is asked again on the deck as it
+      // is now, twice at most, then made as Paste's redrawn copy where there
+      // is one. It is the copy's own refusal, never the deck's save: it was
+      // said as "the edit could not be saved" (SAVE-GUARANTEE S1).
+      if (isPresentationNativeCopyStale(error) &&
+        nativeCopyContextRef.current.active && nativeCopyContextRef.current.pageId === context.pageId) {
+        nativeCopyBusyRef.current = false;
+        if ((options.staleRetries ?? 0) < 2) {
+          await duplicateNativeBlocksRef.current?.(targets, offset, { ...options, staleRetries: (options.staleRetries ?? 0) + 1 });
+          return;
+        }
+        if (options.onUnsupported) {
+          options.onUnsupported();
+          return;
+        }
       }
       if (nativeCopyContextRef.current.active && nativeCopyContextRef.current.pageId === context.pageId) {
         toast({ title: t("presentation.editSaveFailed"), variant: "destructive" });
@@ -37186,6 +34374,18 @@ export default function PresentationWindow({
     },
     [readDeckSlides, commitDeck, commitSlides, readPresentationCopilotSource, retireBlockSelection, saveCurrentDraftForServerExport],
   );
+  // The copy a Duplicate (or a Ctrl+drag) of objects of the file falls back
+  // to when the file's own copy cannot be made (the deck kept moving on under
+  // it, SAVE-GUARANTEE S1): Paste's redrawn copy, without the originals'
+  // custody of the file, as Paste makes it. The download writes it from the
+  // page.
+  const redrawnCopiesOf = useCallback(
+    (targets: ReadonlyArray<PresentationBlock>, offset: PresentationDuplicateOffset) => () => {
+      const prepared = preparePresentationPasteBlocks(targets, "keep-source");
+      if (prepared) appendBlockClonesAndSelect(prepared, offset);
+    },
+    [appendBlockClonesAndSelect],
+  );
   // Ctrl+drag / Option+drag drop: copies of the dragged objects at the drop,
   // through Duplicate's own copy path (native objects copied by the server,
   // the copies selected), the originals untouched.
@@ -37198,12 +34398,12 @@ export default function PresentationWindow({
       if (targets.length === 0 || targets.some((block) => !canEditBlockContent(block))) return false;
       duplicateMemoryRef.current = null;
       if (targets.some(hasNativePresentationObject)) {
-        void duplicateNativeBlocks(targets, offset);
+        void duplicateNativeBlocks(targets, offset, { onUnsupported: redrawnCopiesOf(targets, offset) });
         return true;
       }
       return appendBlockClonesAndSelect(targets, offset);
     },
-    [appendBlockClonesAndSelect, duplicateNativeBlocks],
+    [appendBlockClonesAndSelect, duplicateNativeBlocks, redrawnCopiesOf],
   );
   dropDragCopiesRef.current = dropDragCopies;
   const duplicateBlocks = useCallback(
@@ -37225,7 +34425,7 @@ export default function PresentationWindow({
       );
       duplicateMemoryRef.current = null;
       if (targets.some(hasNativePresentationObject)) {
-        void duplicateNativeBlocks(targets, offset);
+        void duplicateNativeBlocks(targets, offset, { onUnsupported: redrawnCopiesOf(targets, offset) });
         return;
       }
       if (!appendBlockClonesAndSelect(targets, offset)) return;
@@ -37240,7 +34440,7 @@ export default function PresentationWindow({
           )
         : null;
     },
-    [appendBlockClonesAndSelect, duplicateNativeBlocks],
+    [appendBlockClonesAndSelect, duplicateNativeBlocks, redrawnCopiesOf],
   );
   // SELECT ALL (Cmd/Ctrl+A) — select every positioned block on the active slide.
   // The multi-select set only holds geometry-bearing blocks (align/distribute/
@@ -37722,62 +34922,6 @@ export default function PresentationWindow({
     });
     return true;
   }, [autosave.readOnly, commitLiveActiveBlocks]);
-
-  const resetRecordedSlidesToCameo = useCallback(
-    (scope: "current" | "all") => {
-      if (autosave.readOnly || narrationRecorderStatus !== "idle") return false;
-      const liveSlides = slidesRef.current;
-      const liveIndex = activeIndexRef.current;
-      const targetIndexes = liveSlides.flatMap((slide, index) =>
-        (scope === "all" || index === liveIndex) &&
-        typeof slide.narration === "string"
-          ? [index]
-          : [],
-      );
-      if (
-        targetIndexes.length === 0 ||
-        targetIndexes.some(
-          (index) => !canResetPresentationSlideToCameo(liveSlides[index]),
-        )
-      ) {
-        return false;
-      }
-      const targetSet = new Set(targetIndexes);
-      const cameoIds = new Map<number, string>();
-      const nextSlides = liveSlides.map((slide, index) => {
-        if (!targetSet.has(index)) return slide;
-        const existingCameo = slide.blocks.find(isPresentationCameoBlock);
-        const cameoId = existingCameo?.id ?? crypto.randomUUID();
-        cameoIds.set(index, cameoId);
-        const reset = {
-          ...slide,
-          blocks: existingCameo
-            ? slide.blocks
-            : [
-                ...slide.blocks,
-                createPresentationCameoBlock(cameoId, slide, slide.blocks),
-              ],
-        } as SlideModel & Record<string, unknown>;
-        delete reset.narration;
-        return reset as SlideModel;
-      });
-      commitSlides(nextSlides);
-      const activeCameoId = cameoIds.get(liveIndex);
-      if (activeCameoId) {
-        const nextSelection = new Set([activeCameoId]);
-        selectedBlockIdsRef.current = nextSelection;
-        selectedBlockIdRef.current = activeCameoId;
-        setSelectedBlockIds(nextSelection);
-        setSelectedBlockId(activeCameoId);
-      }
-      return true;
-    },
-    [autosave.readOnly, commitSlides, narrationRecorderStatus],
-  );
-  const resetActiveSlideRecordingToCameo = useCallback(
-    () => resetRecordedSlidesToCameo("current"),
-    [resetRecordedSlidesToCameo],
-  );
 
   /* --------------------------------------------------------------------- *
    * Curve / Freeform / Scribble are transient authoring tools. The committed
@@ -40660,21 +37804,6 @@ export default function PresentationWindow({
     relayoutSmartArtItemResizeRef.current = (itemId, factor, primary) =>
       relayoutSmartArtItemResize(itemId, factor, (blocks) => blocks.find((block) => block.id === primary.id) ?? null);
   }, [relayoutSmartArtItemResize]);
-  const resizeContextualSmartArtShape = useCallback(
-    // Larger / Smaller, or SmartArt Format's Height / Width as a per-axis scale.
-    (direction: "larger" | "smaller" | { x: number; y: number }): boolean =>
-      relayoutSmartArtItemResize(
-        smartArtOutlineSelectionIdRef.current,
-        typeof direction === "object"
-          ? direction
-          : direction === "larger"
-            ? SMARTART_SHAPE_SIZE_STEP
-            : 1 / SMARTART_SHAPE_SIZE_STEP,
-        (blocks) =>
-          resolvePresentationSelectionAuthority(blocks, selectedBlockIdRef.current, selectedBlockIdsRef.current).primary,
-      ),
-    [relayoutSmartArtItemResize],
-  );
 
   /**
    * Reset Shape (the shape menu): the pressed item loses its own fill, line,
@@ -41396,40 +38525,6 @@ export default function PresentationWindow({
     [canManipulateBlock, getSingleSelectedPictureId, replaceBlock, restorePictureOriginal],
   );
 
-  const resetSelectedImageAndSize = useCallback(
-    (blockId: string): boolean => {
-      if (getSingleSelectedPictureId() !== blockId) return false;
-      const liveSlides = slidesRef.current;
-      const liveIndex = activeIndexRef.current;
-      const liveSlide = liveSlides[liveIndex];
-      const liveBlock = liveSlide?.blocks.find(
-        (item): item is PresentationImageBlock =>
-          item.id === blockId && item.type === "image",
-      );
-      if (!liveSlide || !liveBlock) return false;
-      const replacement = resetPresentationPictureAndSize(
-        liveBlock,
-        slideBounds(liveSlide),
-      );
-      if (!replacement) return false;
-      setCropEditingId((current) => (current === blockId ? null : current));
-      commitSlides(
-        liveSlides.map((slide, index) =>
-          index === liveIndex
-            ? {
-                ...slide,
-                blocks: slide.blocks.map((block) =>
-                  block === liveBlock ? replacement : block,
-                ),
-              }
-            : slide,
-        ),
-      );
-      return true;
-    },
-    [commitSlides, getSingleSelectedPictureId],
-  );
-
   // Both Picture Format and inspector entries cross the same exact leaf-bound
   // command authority. The adapter captures the live selected block, then the
   // picker/upload path may only commit if that exact immutable block is still
@@ -41948,28 +39043,6 @@ export default function PresentationWindow({
     [activeSlide.blocks, updateActiveSlide],
   );
 
-  const updateMediaPlaybackSettings = useCallback(
-    (
-      blockId: string,
-      patch: PersistedPresentationMediaPlaybackSettings,
-    ) => {
-      const liveBlock = activeSlide.blocks.find(
-        (block): block is PresentationEmbedBlock =>
-          block.id === blockId && block.type === "embed",
-      );
-      if (!liveBlock || !canEditBlockContent(liveBlock)) return;
-      const kind = normalizeEmbedKind(liveBlock.kind);
-      if (kind === "iframe") return;
-      const playback = patchPresentationMediaPlaybackSettings(
-        liveBlock.playback,
-        patch,
-        kind,
-      );
-      updateEmbedBlock(blockId, { playback: playback ?? undefined });
-    },
-    [activeSlide.blocks, updateEmbedBlock],
-  );
-
   // Playback > Bookmarks (PPT-A157): the bookmark the clip's control bar
   // selected, which Remove Bookmark removes.
   const [selectedMediaBookmark, setSelectedMediaBookmark] = useState<{
@@ -41986,56 +39059,6 @@ export default function PresentationWindow({
       );
     },
     [],
-  );
-  const addMediaBookmark = useCallback(
-    (blockId: string) => {
-      const block = activeSlide.blocks.find(
-        (candidate): candidate is PresentationEmbedBlock =>
-          candidate.id === blockId && candidate.type === "embed",
-      );
-      if (!block) return;
-      const kind = normalizeEmbedKind(block.kind);
-      if (kind === "iframe") return;
-      const media = canvasMediaElement(blockId);
-      const result = addPresentationMediaBookmark(
-        resolvePresentationMediaPlaybackSettings(block.playback, kind).bookmarks,
-        (media?.currentTime ?? 0) * 1_000,
-        t("presentation.media.bookmarkName"),
-      );
-      if (!result.ok) {
-        toast({
-          title: t("presentation.media.bookmarkCannotAdd"),
-          description:
-            result.reason === "exists"
-              ? t("presentation.media.bookmarkExists")
-              : undefined,
-        });
-        return;
-      }
-      updateMediaPlaybackSettings(blockId, { bookmarks: result.bookmarks });
-      setSelectedMediaBookmark({ blockId, name: result.name });
-    },
-    [activeSlide.blocks, canvasMediaElement, t, updateMediaPlaybackSettings],
-  );
-  const removeMediaBookmark = useCallback(
-    (blockId: string) => {
-      const block = activeSlide.blocks.find(
-        (candidate): candidate is PresentationEmbedBlock =>
-          candidate.id === blockId && candidate.type === "embed",
-      );
-      if (!block || selectedMediaBookmark?.blockId !== blockId) return;
-      const kind = normalizeEmbedKind(block.kind);
-      if (kind === "iframe") return;
-      updateMediaPlaybackSettings(blockId, {
-        bookmarks: removePresentationMediaBookmark(
-          resolvePresentationMediaPlaybackSettings(block.playback, kind)
-            .bookmarks,
-          selectedMediaBookmark.name,
-        ),
-      });
-      setSelectedMediaBookmark(null);
-    },
-    [activeSlide.blocks, selectedMediaBookmark, updateMediaPlaybackSettings],
   );
 
   const beginMediaCaptionInsert = useCallback(
@@ -42576,7 +39599,7 @@ export default function PresentationWindow({
       // Review command that launched the accessibility journey, not strand
       // keyboard focus on the slide canvas after that button was unmounted.
       lastBaseRibbonTabRef.current = "review";
-      setRibbonTab("review");
+      void 0;
       requestAnimationFrame(() => {
         window.setTimeout(() => {
           const trigger = reviewAccessibilityTriggerRef.current;
@@ -42621,225 +39644,6 @@ export default function PresentationWindow({
       slideCanvasRef.current?.focus({ preventScroll: true });
     });
   }, []);
-  const invokePictureArrangeStep = useCallback(
-    (direction: "forward" | "backward") => {
-      const blockId = getSingleSelectedPictureId();
-      if (!blockId) return;
-      const featureId = pictureArrangeCommand.featureIds[direction];
-      const payload = { blockId, direction } as const;
-      pictureArrangePendingRef.current = payload;
-      const authority = pictureArrangeCommandAuthorityRef.current;
-      if (!authority) {
-        pictureArrangePendingRef.current = null;
-        return;
-      }
-      void authority
-        .invoke(
-          featureId,
-          {
-            editable: true,
-            hasSelection: true,
-            hasTextSelection: false,
-            hasShapeSelection: false,
-            hasClipboard: false,
-            online: typeof navigator === "undefined" ? true : navigator.onLine,
-          },
-          {},
-        )
-        .finally(() => {
-          if (pictureArrangePendingRef.current === payload) {
-            pictureArrangePendingRef.current = null;
-          }
-        });
-    },
-    [getSingleSelectedPictureId, pictureArrangeCommand.featureIds],
-  );
-
-  // The split primary and its duplicate menu leaf are physical aliases of the
-  // same one-layer command. Imported pictures must stay on the native
-  // patchback authority; from-scratch pictures use the live block writer.
-  const invokeContextualImageArrangeStep = useCallback(
-    (direction: "forward" | "backward") => {
-      const canExecute =
-        direction === "forward"
-          ? contextualImageCanMoveForward
-          : contextualImageCanMoveBackward;
-      if (!canExecute) return;
-      if (
-        contextualImageUsesNativeStepAuthority &&
-        pictureArrangeCommand.canExecute(direction)
-      ) {
-        invokePictureArrangeStep(direction);
-        return;
-      }
-      if (direction === "forward") {
-        bringBlockForward();
-      } else {
-        sendBlockBackward();
-      }
-    },
-    [
-      bringBlockForward,
-      contextualImageCanMoveBackward,
-      contextualImageCanMoveForward,
-      contextualImageUsesNativeStepAuthority,
-      invokePictureArrangeStep,
-      pictureArrangeCommand,
-      sendBlockBackward,
-    ],
-  );
-
-  const invokePictureSize = useCallback(
-    (payload: PresentationPictureSizeCommandPayload): Promise<boolean> => {
-      if (
-        pictureSizePendingRef.current !== null ||
-        getSingleSelectedPictureId() !== payload.blockId
-      ) {
-        return Promise.resolve(false);
-      }
-      const authority = pictureSizeCommandAuthorityRef.current;
-      if (!authority) return Promise.resolve(false);
-      pictureSizePendingRef.current = payload;
-      const featureId = pictureSizeCommand.featureIds[payload.axis];
-      return authority
-        .invoke(
-          featureId,
-          {
-            editable: true,
-            hasSelection: true,
-            hasTextSelection: false,
-            hasShapeSelection: false,
-            hasClipboard: false,
-            online: typeof navigator === "undefined" ? true : navigator.onLine,
-          },
-          {},
-        )
-        .finally(() => {
-          if (pictureSizePendingRef.current === payload) {
-            pictureSizePendingRef.current = null;
-          }
-        });
-    },
-    [getSingleSelectedPictureId, pictureSizeCommand.featureIds],
-  );
-
-  const resetPictureSizeDraftFromLive = useCallback(
-    (editing: PresentationPictureSizeAxis | null = null) => {
-      const blockId = getSingleSelectedPictureId();
-      const slide = slidesRef.current[activeIndexRef.current];
-      const block = slide?.blocks.find(
-        (candidate): candidate is PresentationImageBlock =>
-          candidate.id === blockId && candidate.type === "image",
-      );
-      if (!block || !hasEditablePresentationPictureSize(block)) {
-        setPictureSizeDraft(null);
-        return;
-      }
-      setPictureSizeDraft({
-        blockId: block.id,
-        width: sizeDisplayFromEmu(
-          block.width,
-          presentationPictureSizeDisplayCm(block.width),
-        ),
-        height: sizeDisplayFromEmu(
-          block.height,
-          presentationPictureSizeDisplayCm(block.height),
-        ),
-        editing,
-      });
-    },
-    [getSingleSelectedPictureId, sizeDisplayFromEmu],
-  );
-
-  const commitPictureSizeDraft = useCallback(
-    (
-      axis: PresentationPictureSizeAxis,
-      rawOverride?: string,
-      displayUnit: PresentationMeasurementUnit = "cm",
-    ) => {
-      const blockId = getSingleSelectedPictureId();
-      const slide = slidesRef.current[activeIndexRef.current];
-      const block = slide?.blocks.find(
-        (candidate): candidate is PresentationImageBlock =>
-          candidate.id === blockId && candidate.type === "image",
-      );
-      if (!block || !hasEditablePresentationPictureSize(block)) {
-        setPictureSizeDraft(null);
-        return;
-      }
-      const currentDisplay =
-        displayUnit === "in"
-          ? formatPresentationMeasurement(block[axis] as number, "in")
-          : presentationPictureSizeDisplayCm(block[axis]);
-      const raw =
-        rawOverride ??
-        (displayUnit === "cm" && pictureSizeDraft?.blockId === block.id
-          ? pictureSizeDraft[axis]
-          : currentDisplay);
-      // A typed value may name its own unit ("2in", "5 cm"); either way it
-      // lands on the field's two-decimal grid before it becomes exact EMU.
-      const typedEmu = parsePresentationMeasurement(raw, displayUnit);
-      const targetEmu =
-        typedEmu === null
-          ? null
-          : displayUnit === "in"
-            ? presentationPictureSizeEmuFromInchesDraft(
-                (typedEmu / PRESENTATION_EMU_PER_INCH).toFixed(2),
-              )
-            : presentationPictureSizeEmuFromCmDraft(
-                (typedEmu / PRESENTATION_EMU_PER_CM).toFixed(2),
-              );
-      if (raw.trim() === currentDisplay || targetEmu === null) {
-        resetPictureSizeDraftFromLive(null);
-        return;
-      }
-      setPictureSizeDraft((current) =>
-        current?.blockId === block.id ? { ...current, editing: null } : current,
-      );
-      void invokePictureSize({
-        blockId: block.id,
-        axis,
-        kind: "absolute",
-        targetEmu,
-      }).then((executed) => {
-        if (!executed) resetPictureSizeDraftFromLive(null);
-      });
-    },
-    [
-      getSingleSelectedPictureId,
-      invokePictureSize,
-      pictureSizeDraft,
-      resetPictureSizeDraftFromLive,
-    ],
-  );
-
-  const stepPictureSize = useCallback(
-    (
-      axis: PresentationPictureSizeAxis,
-      direction: "increment" | "decrement",
-    ) => {
-      const blockId = getSingleSelectedPictureId();
-      if (!blockId) return;
-      setPictureSizeDraft((current) =>
-        current?.blockId === blockId ? { ...current, editing: null } : current,
-      );
-      void invokePictureSize({
-        blockId,
-        axis,
-        kind: "step",
-        direction,
-        stepEmu: presentationMeasurementStepEmu(sizeUnit),
-      }).then((executed) => {
-        if (!executed) resetPictureSizeDraftFromLive(null);
-      });
-    },
-    [
-      getSingleSelectedPictureId,
-      invokePictureSize,
-      resetPictureSizeDraftFromLive,
-      sizeUnit,
-    ],
-  );
 
   const invokePictureBorder = useCallback(
     (payload: Omit<PresentationPictureBorderCommandPayload, "blockId">) => {
@@ -42873,66 +39677,6 @@ export default function PresentationWindow({
         });
     },
     [getSingleSelectedPictureId, pictureBorderCommandAuthority],
-  );
-
-  const previewPictureStyle = useCallback(
-    (blockId: string, style: PresentationPictureFrameStyle | null) => {
-      if (!style) {
-        setPictureStylePreview((current) =>
-          current?.blockId === blockId ? null : current,
-        );
-        return;
-      }
-      const block = activeSlide.blocks.find(
-        (item): item is PresentationImageBlock =>
-          item.id === blockId && item.type === "image",
-      );
-      if (
-        !block ||
-        !canEditBlockContent(block) ||
-        !canApplyNativePictureStyle(block) ||
-        pictureStyleAuthorityRef.current !== pictureStyleAuthority ||
-        slidesRef.current[activeIndexRef.current]?.blocks.find(
-          (item) => item.id === blockId,
-        ) !== block ||
-        selectedBlockIdsRef.current.size !== 1 ||
-        !selectedBlockIdsRef.current.has(blockId)
-      ) {
-        setPictureStylePreview(null);
-        return;
-      }
-      setPictureStylePreview({ blockId, style });
-    },
-    [activeSlide.blocks, canManipulateBlock, pictureStyleAuthority],
-  );
-
-  const commitPictureStyle = useCallback(
-    (blockId: string, style: PresentationPictureFrameStyle) => {
-      // Re-resolve the live picture at commit time. Hover preview is transient,
-      // so a stale gallery event cannot overwrite a concurrent picture edit.
-      const block = activeSlide.blocks.find(
-        (item): item is PresentationImageBlock =>
-          item.id === blockId && item.type === "image",
-      );
-      setPictureStylePreview(null);
-      if (
-        !block ||
-        !canEditBlockContent(block) ||
-        !canApplyNativePictureStyle(block) ||
-        pictureStyleAuthorityRef.current !== pictureStyleAuthority ||
-        slidesRef.current[activeIndexRef.current]?.blocks.find(
-          (item) => item.id === blockId,
-        ) !== block ||
-        selectedBlockIdsRef.current.size !== 1 ||
-        !selectedBlockIdsRef.current.has(blockId)
-      ) {
-        return;
-      }
-      const nextBlock = applyPresentationPictureFrameStyle(block, style);
-      if (nextBlock === block) return;
-      replaceBlock(blockId, nextBlock);
-    },
-    [activeSlide.blocks, canManipulateBlock, replaceBlock, pictureStyleAuthority],
   );
 
   // Picture Format > Picture Effects (PPT-A127): one pick replaces one
@@ -43103,70 +39847,6 @@ export default function PresentationWindow({
       cropEditingId,
       getSingleSelectedPictureId,
       pictureCropCommand.featureIds,
-      restorePictureCropTriggerFocus,
-      t,
-    ],
-  );
-
-  const invokePictureCropAspectRatio = useCallback(
-    (
-      blockId: string,
-      ratioId: PictureCropAspectRatioId,
-      trigger: HTMLElement | null = null,
-    ) => {
-      if (
-        pictureCropAspectRatioPendingRef.current ||
-        getSingleSelectedPictureId() !== blockId ||
-        !pictureCropCommand.canApplyAspectRatio()
-      ) {
-        return;
-      }
-      const pending = Object.freeze({ blockId, ratioId });
-      pictureCropAspectRatioPendingRef.current = pending;
-      pictureCropReturnFocusRef.current = trigger;
-      const authority = pictureCropCommandAuthorityRef.current;
-      if (!authority) {
-        pictureCropAspectRatioPendingRef.current = null;
-        restorePictureCropTriggerFocus();
-        return;
-      }
-      void authority
-        .invoke(
-          pictureCropCommand.featureIds.crop,
-          {
-            editable: true,
-            hasSelection: true,
-            hasTextSelection: false,
-            hasShapeSelection: false,
-            hasClipboard: false,
-            online:
-              typeof navigator === "undefined" ? true : navigator.onLine,
-          },
-          {},
-        )
-        .then((executed) => {
-          if (!executed) restorePictureCropTriggerFocus();
-        })
-        .catch((error) => {
-          restorePictureCropTriggerFocus();
-          toast({
-            title: t("presentation.image.cropFailed"),
-            description:
-              error instanceof Error
-                ? error.message
-                : t("presentation.image.cropCommandFailed"),
-            variant: "destructive",
-          });
-        })
-        .finally(() => {
-          if (pictureCropAspectRatioPendingRef.current === pending) {
-            pictureCropAspectRatioPendingRef.current = null;
-          }
-        });
-    },
-    [
-      getSingleSelectedPictureId,
-      pictureCropCommand,
       restorePictureCropTriggerFocus,
       t,
     ],
@@ -43663,31 +40343,12 @@ export default function PresentationWindow({
     () => activeSlide.animationSequence ?? [],
     [activeSlide.animationSequence],
   );
-  const timelinePreviewFrames = useMemo(
-    () => resolveTimelinePreviewFrames(timelineSequence),
-    [timelineSequence],
-  );
-  const timelineSequenceEditingEnabled =
-    timelineSequence.length > 0 &&
-    hasEditableSlideAnimationSource(activeSlide.source);
-  const timelineRowEditingEnabled =
-    isLocallyAuthoredSlideAnimationSource(activeSlide.source);
-  const animationPanePreserveOnly =
-    (activeSlide.source as Record<string, unknown> | undefined)
-      ?.slideAnimationDisposition === "preserve-only";
-  const timelineTimingEditingEnabled = animationTimingCommand.canExecute();
   const selectedAnimationTimingStep =
     selectedAnimationIndex === null
       ? null
       : (timelineSequence[selectedAnimationIndex] ?? null);
   const selectedAnimationEffect = selectedAnimationTimingStep
     ? presentationAnimationEffect(selectedAnimationTimingStep.animation)
-    : null;
-  const selectedAnimationEffectOption = selectedAnimationTimingStep
-    ? resolvePresentationAnimationEffectOption(
-        selectedAnimationTimingStep.animation,
-        selectedAnimationTimingStep.effectOption,
-      )?.selectedOption ?? null
     : null;
   const selectedAnimationEffectColorResolution = selectedAnimationTimingStep
     ? resolvePresentationAnimationEffectColor(
@@ -43755,51 +40416,11 @@ export default function PresentationWindow({
     animationDirectionalEffectOptionsEditable ||
     animationColorEffectOptionsEditable ||
     animationTextSequenceEditable;
-  const animationObjectTriggerTargets = selectedAnimationTimingStep
-    ? activeSlide.blocks.filter(
-        (block) => block.id !== selectedAnimationTimingStep.blockId,
-      )
-    : [];
-  const animationObjectTriggerEditable =
-    selectedAnimationIndex !== null &&
-    selectedAnimationTimingStep !== null &&
-    (selectedAnimationTimingStep.triggerBlockId !== undefined ||
-      animationObjectTriggerTargets.some((block) =>
-        animationEffectCommand.canExecute({
-          operation: "set-object-trigger",
-          slideModelId: activeSlide.id,
-          index: selectedAnimationIndex,
-          expectedStep: copyTimelineStep(selectedAnimationTimingStep),
-          triggerBlockId: block.id,
-        }),
-      ));
   useEffect(() => {
     if (!animationEffectOptionsEditable) {
       setAnimationEffectOptionsMenuOpen(false);
     }
   }, [animationEffectOptionsEditable]);
-  const selectedAnimationBlock = exclusivelySelectedBlock;
-  const canAuthorTimelineMenuEffect = useCallback(
-    (animation: TimelineAnimation, motionPathPreset?: MotionPathPreset) =>
-      selectedAnimationBlock !== null &&
-      canEditBlockContent(selectedAnimationBlock) &&
-      presentationAnimationEffectTargetEligible(
-        animation,
-        selectedAnimationBlock,
-      ) &&
-      timelineSequence.length < MAX_TIMELINE_STEPS &&
-      timelineAnimationAuthoringCapability({
-        slideSource: activeSlide.source,
-        blockSource: selectedAnimationBlock.source,
-        animation,
-        ...(motionPathPreset !== undefined ? { motionPathPreset } : {}),
-      }).enabled,
-    [
-      activeSlide.source,
-      selectedAnimationBlock,
-      timelineSequence.length,
-    ],
-  );
   useEffect(() => {
     selectedAnimationIndexRef.current = null;
     selectedAnimationSlideIdRef.current = null;
@@ -43833,190 +40454,6 @@ export default function PresentationWindow({
       setSelectedAnimationIndex(null);
     }
   }, [selectedAnimationIndex, timelineSequence.length]);
-
-  const commitTimeline = useCallback(
-    (next: readonly TimelineStep[]) => {
-      // Map the active slide directly (not via updateActiveSlide's spread) so an
-      // EMPTY sequence DELETES the key entirely — a slide that never authored (or
-      // had its last step removed from) a timeline stays byte-clean, exactly like
-      // the master / transition / background clears elsewhere.
-      const nextSlides = slides.map((slide, index) => {
-        if (index !== activeIndex) return slide;
-        if (next.length > 0) {
-          return { ...slide, animationSequence: [...next] };
-        }
-        if (slide.animationSequence === undefined) return slide;
-        const cleared = { ...slide };
-        delete cleared.animationSequence;
-        return cleared;
-      });
-      commitSlides(nextSlides);
-    },
-    [activeIndex, commitSlides, slides],
-  );
-
-  // Append a fresh step for a block to the end of the sequence (capped). The
-  // pane's Add list NAMES its target, so the step goes to that object whatever
-  // the canvas has selected (PPT-B028); only an object no longer on the live
-  // slide is refused.
-  const addTimelineStep = useCallback(
-    (blockId: string) => {
-      const liveSlide = slidesRef.current[activeIndexRef.current];
-      if (
-        !liveSlide ||
-        liveSlide.id !== activeSlide.id ||
-        !liveSlide.blocks.some((item) => item.id === blockId) ||
-        timelineSequence.length >= MAX_TIMELINE_STEPS
-      ) {
-        return;
-      }
-      // Seed the step's animation from the block's own entrance fx when set, so
-      // adding a block to the timeline mirrors what the author already chose.
-      const block = activeSlide.blocks.find((item) => item.id === blockId);
-      const seed = normalizeBlockAnimation(
-        (block as Record<string, unknown> | undefined)?.animation,
-      );
-      const seedAnimation = timelineAnimationAuthoringCapability({
-        slideSource: activeSlide.source,
-        blockSource: (block as { source?: unknown } | undefined)?.source,
-        animation: seed,
-      }).enabled
-        ? seed
-        : "fade";
-      commitTimeline([
-        ...timelineSequence,
-        createStep(blockId, seedAnimation),
-      ]);
-    },
-    [
-      activeSlide.blocks,
-      activeSlide.id,
-      activeSlide.source,
-      commitTimeline,
-      timelineSequence,
-    ],
-  );
-
-  // Patch a single field of one step (animation / trigger / delay / duration),
-  // re-normalizing the changed value at the editor edge so an out-of-range or
-  // stale value can never be persisted.
-  const updateTimelineStep = useCallback(
-    (index: number, patch: Partial<TimelineStep>) => {
-      if (index < 0 || index >= timelineSequence.length) return;
-      const next = timelineSequence.map((step, i) => {
-        if (i !== index) return step;
-        const merged: TimelineStep = { ...step };
-        if (patch.animation !== undefined) {
-          const animation = normalizeTimelineAnimation(patch.animation);
-          const block = activeSlide.blocks.find(
-            (candidate) => candidate.id === step.blockId,
-          );
-          // The same object rule every entrance applies: a picture has no
-          // font, fill or line colour to animate, so the step keeps its
-          // effect (PPT-B033).
-          if (
-            animation !== "none" &&
-            (!block || !presentationAnimationEffectTargetEligible(animation, block))
-          ) {
-            return step;
-          }
-          const capability = timelineAnimationAuthoringCapability({
-            slideSource: activeSlide.source,
-            blockSource: (block as { source?: unknown } | undefined)?.source,
-            animation,
-            ...(merged.motionPath
-              ? { motionPathPreset: merged.motionPath.preset }
-              : {}),
-          });
-          if (capability.enabled) {
-            merged.animation = animation;
-            const option = resolvePresentationAnimationEffectOption(
-              animation,
-              merged.effectOption,
-            );
-            if (option?.effectOption === undefined) {
-              delete merged.effectOption;
-            } else {
-              merged.effectOption = option.effectOption;
-            }
-            const color = resolvePresentationAnimationEffectColor(
-              animation,
-              merged.effectColor,
-            );
-            if (color?.effectColor === undefined) {
-              delete merged.effectColor;
-            } else {
-              merged.effectColor = color.effectColor;
-            }
-          }
-        }
-        if (patch.trigger !== undefined) {
-          merged.trigger = normalizeTimelineTrigger(patch.trigger);
-        }
-        if (patch.delayMs !== undefined) {
-          merged.delayMs = clampDelayMs(patch.delayMs);
-        }
-        if (patch.durationMs !== undefined) {
-          merged.durationMs = clampDurationMs(patch.durationMs);
-        }
-        // Motion path: a normalized path REPLACES it; `null`/`undefined`
-        // (selecting "no path") CLEARS it so the step stays byte-clean. The value
-        // is re-normalized at the editor edge so a stale/oversized path can never
-        // be persisted (mirrors the render-time normalizer).
-        if ("motionPath" in patch) {
-          const normalized = normalizeMotionPath(patch.motionPath);
-          if (normalized) {
-            const block = activeSlide.blocks.find(
-              (candidate) => candidate.id === step.blockId,
-            );
-            const capability = timelineAnimationAuthoringCapability({
-              slideSource: activeSlide.source,
-              blockSource: (block as { source?: unknown } | undefined)?.source,
-              animation: merged.animation,
-              motionPathPreset: normalized.preset,
-            });
-            if (capability.enabled) merged.motionPath = normalized;
-          } else {
-            delete merged.motionPath;
-          }
-        }
-        // Interactive trigger ("start on click of"): a valid OTHER-block id SETS
-        // it; selecting "None" (undefined) CLEARS it so the step stays byte-clean.
-        // Validated at the editor edge against the live block ids — a self-
-        // reference or a missing block can never be persisted (mirrors
-        // validateStep). The active slide's block ids are the existence set.
-        if (
-          PRESENTATION_INTERACTIVE_TRIGGER_AUTHORING_SUPPORTED &&
-          "triggerBlockId" in patch
-        ) {
-          const candidate =
-            typeof patch.triggerBlockId === "string"
-              ? patch.triggerBlockId.trim()
-              : "";
-          const blockIds = new Set(activeSlide.blocks.map((b) => b.id));
-          if (
-            candidate &&
-            candidate !== step.blockId &&
-            blockIds.has(candidate)
-          ) {
-            merged.triggerBlockId = candidate;
-          } else {
-            delete merged.triggerBlockId;
-          }
-        }
-        return merged;
-      });
-      // A refused change leaves every step as it was: no empty undo step.
-      if (next.every((step, i) => step === timelineSequence[i])) return;
-      commitTimeline(next);
-    },
-    [
-      activeSlide.blocks,
-      activeSlide.source,
-      commitTimeline,
-      timelineSequence,
-    ],
-  );
 
   const updateTableCell = useCallback(
     (blockId: string, rowIndex: number, cellIndex: number, text: string, runs?: TextRun[], caretAfter?: number,
@@ -44623,18 +41060,6 @@ export default function PresentationWindow({
     ],
   );
 
-  const deleteTableAtFocus = useCallback(
-    (blockId: string) => {
-      const block = activeSlide.blocks.find(
-        (item): item is PresentationTableBlock =>
-          item.id === blockId && item.type === "table",
-      );
-      if (!block || !canEditBlockContent(block)) return;
-      deleteBlock(blockId);
-    },
-    [activeSlide.blocks, canManipulateBlock, deleteBlock],
-  );
-
   const selectTableScope = useCallback(
     (
       blockId: string,
@@ -44762,101 +41187,6 @@ export default function PresentationWindow({
   }, [activeSlide.blocks, canManipulateBlock, replaceBlock, tableCellFocus]);
 
   /**
-   * Apply WPS/PowerPoint's ordinary-cell split. DrawingML has one shared table
-   * grid, so the pure helper inserts the requested row/column lines and spans
-   * neighbouring cells across them. Explicit axis sizes are subdivided so the
-   * native table frame keeps the same visual width/height.
-   */
-  const splitTableCellIntoParts = useCallback(
-    (rowParts: number, columnParts: number) => {
-      const focus = tableCellFocus;
-      if (!focus) return;
-      const block = activeSlide.blocks.find(
-        (item): item is PresentationTableBlock =>
-          item.id === focus.blockId && item.type === "table",
-      );
-      if (!block || !canEditBlockContent(block)) return;
-      const pos = logicalPositionOfCell(block.rows, focus.row, focus.col);
-      if (!pos) return;
-      const nextRows = splitCellInto(
-        block.rows,
-        pos.row,
-        pos.col,
-        rowParts,
-        columnParts,
-      );
-      if (nextRows === block.rows) return;
-      const nextBlock: PresentationTableBlock = {
-        ...block,
-        rows: nextRows as PresentationTableCell[][],
-      };
-      const columnCount = tableLogicalWidth(block.rows);
-      // An axis the table leaves automatic is spread over the frame by the
-      // browser, so splitting "nothing" re-spread every column across the new
-      // grid and narrowed the untouched neighbours. The split subdivides what
-      // the canvas draws instead: the measured grid (the pencil's own source)
-      // for each axis being split, so only the target slot is divided.
-      const automatic = (sizes: unknown, count: number) =>
-        Array.from({ length: count }, (_, index) => axisSizeAt(sizes, index)).every(
-          (size) => size === null,
-        );
-      const measureRows = rowParts > 1 && automatic(block.rowHeights, block.rows.length);
-      const measureColumns = columnParts > 1 && automatic(block.colWidths, columnCount);
-      let measured: ReturnType<typeof drawTableGrid> | null = null;
-      if (measureRows || measureColumns) {
-        const root = slideCanvasRef.current?.querySelector<HTMLElement>(
-          `[data-block-id="${CSS.escape(block.id)}"]`,
-        );
-        const boxes: TableBorderCellBox[] = root
-          ? Array.from(
-              // A header row's cells are <th> (PPT-B361); the pen and the eraser
-              
-              root.querySelectorAll<HTMLElement>("td[data-table-cell-row], th[data-table-cell-row]"),
-            ).map((cell) => {
-              const box = cell.getBoundingClientRect();
-              return {
-                row: Number(cell.dataset.tableCellRow),
-                col: Number(cell.dataset.tableCellCol),
-                left: box.left,
-                top: box.top,
-                width: box.width,
-                height: box.height,
-              };
-            })
-          : [];
-        measured = boxes.length > 0 ? drawTableGrid(block, boxes) : null;
-      }
-      const drawn = (sizes: number[] | undefined, count: number) =>
-        sizes && sizes.length === count && sizes.every((size) => size > 0)
-          ? sizes
-          : undefined;
-      const nextRowHeights = splitAxisSize(
-        (measureRows ? drawn(measured?.rowHeights, block.rows.length) : undefined) ??
-          block.rowHeights,
-        block.rows.length,
-        pos.row,
-        rowParts,
-      );
-      const nextColumnWidths = splitAxisSize(
-        (measureColumns ? drawn(measured?.colWidths, columnCount) : undefined) ??
-          block.colWidths,
-        columnCount,
-        pos.col,
-        columnParts,
-      );
-      if (nextRowHeights) nextBlock.rowHeights = nextRowHeights;
-      else delete nextBlock.rowHeights;
-      if (nextColumnWidths) nextBlock.colWidths = nextColumnWidths;
-      else delete nextBlock.colWidths;
-      replaceBlock(focus.blockId, nextBlock);
-      setTableSelectionAnchor(null);
-      setTableSelectionScope("cells");
-      setTableSplitPanelOpen(false);
-    },
-    [activeSlide.blocks, canManipulateBlock, replaceBlock, tableCellFocus],
-  );
-
-  /**
    * Whether the current focus + anchor form a mergeable selection (drives the
    * "Merge" button disabled state). Re-maps both corners to logical positions.
    */
@@ -44900,27 +41230,6 @@ export default function PresentationWindow({
     if (!pos) return false;
     return canSplitCell(block.rows, pos.row, pos.col);
   }, [activeSlide.blocks, canManipulateBlock, tableCellFocus]);
-
-  /** Whether Table Tools can restore a merge or subdivide an ordinary cell. */
-  const tableFocusCanUseSplitCommand = useMemo<boolean>(() => {
-    const focus = tableCellFocus;
-    if (!focus) return false;
-    const block = activeSlide.blocks.find(
-      (item): item is PresentationTableBlock =>
-        item.id === focus.blockId && item.type === "table",
-    );
-    if (!block || !canEditBlockContent(block)) return false;
-    if (tableFocusCanSplit) return true;
-    return (
-      block.rows.length < MAX_TABLE_SPLIT_ROWS ||
-      tableLogicalWidth(block.rows) < MAX_TABLE_SPLIT_COLUMNS
-    );
-  }, [
-    activeSlide.blocks,
-    canManipulateBlock,
-    tableCellFocus,
-    tableFocusCanSplit,
-  ]);
 
   /**
    * Existing merged cells restore immediately (the historical command).
@@ -45055,57 +41364,6 @@ export default function PresentationWindow({
       contextualTableSelectionIsWritable,
       updateTableCellStyle,
     ],
-  );
-  // Table Design > WordArt Styles (PPT-A138): each selected cell's words take
-  // the shared WordArt paint, from the one the cell wears now (or its plain
-  // colour), so Text Fill keeps a cell's effects and Text Effects its fill.
-  const writeContextualTableTextPaint = (
-    write: (paint: OfficeTextPaint, style: ResolvedCellStyle) => Partial<CellStyleInput>,
-  ) => {
-    if (!contextualTableBlock || !contextualTableCommandFocus || !contextualTableSelectionIsWritable) return;
-    // Characters highlighted in the cell being typed in take the WordArt,
-    // each run's own paint edited, as PowerPoint formats "the text in the
-    // table that you want to format" (Microsoft Support, "Add WordArt to
-    // text in a table"). A cell with only its caret, or cells selected as
-    // such, take it whole, as before.
-    const typed =
-      tableSelectionScope === "cells" && !tableSelectionAnchor
-        ? tableCellInputRefs.current.get(
-            `${contextualTableBlock.id}:${contextualTableCommandFocus.row}:${contextualTableCommandFocus.col}`,
-          )
-        : undefined;
-    const cellStyle = contextualTableSelectedCells[0]?.style;
-    if (
-      typed &&
-      cellStyle &&
-      typeof typed.formatCharacterPaint === "function" &&
-      typed.selectionStart < typed.selectionEnd
-    ) {
-      const plain = (color: string | undefined): OfficeTextPaint =>
-        cellStyle.textPaint ?? { fill: color ?? cellStyle.color ?? "#000000", outline: "none", outlineWidthPt: 0 };
-      // A gallery style's bold goes on the same characters in the same edit
-      // (a second edit would start from the runs before the paint).
-      const bold = write(plain(undefined), cellStyle).bold === true;
-      const painted = typed.formatCharacterPaint(
-        (paint, style) =>
-          ((write(paint ?? plain(style?.color), cellStyle).textPaint as OfficeTextPaint | undefined) ?? null),
-        bold ? { bold: true } : undefined,
-      );
-      if (painted) requestAnimationFrame(() => setTableCharacterSelectionVersion((value) => value + 1));
-      return;
-    }
-    updateTableCellStyle(
-      contextualTableBlock.id,
-      contextualTableCommandFocus.row,
-      contextualTableCommandFocus.col,
-      (_position, style) =>
-        write(style.textPaint ?? { fill: style.color ?? "#000000", outline: "none", outlineWidthPt: 0 }, style),
-    );
-  };
-  const contextualTableTextPaints = contextualTableSelectedCells.map((cell) => cell.style.textPaint);
-  const contextualTableTextPaint = contextualTableTextPaints[0] ?? null;
-  const contextualTableTextPaintMixed = contextualTableTextPaints.some(
-    (paint) => JSON.stringify(paint) !== JSON.stringify(contextualTableTextPaint),
   );
 
   const ribbonTableCellWritable = Boolean(
@@ -45495,232 +41753,6 @@ export default function PresentationWindow({
       setTableCellMarginsDialogOpen(false);
     },
     [updateContextualTableCellStyle],
-  );
-
-  const pickContextualTableCellColor = useCallback(
-    (field: "fill" | "color" | "highlight", color: string | null) => {
-      const normalized =
-        color === null ? undefined : normalizeCellColor(color, undefined);
-      // No Fill clears the cell over the table style's shading too, as
-      // PowerPoint's Shading > No Fill does (PPT-B068); removing the colour
-      // alone showed the style's header blue again.
-      updateContextualTableCellStyle({
-        [field]: field === "fill" && color === null ? "none" : normalized,
-      });
-      if (normalized) {
-        setTableCellRecentColors((current) =>
-          [normalized, ...current.filter((entry) => entry !== normalized)].slice(
-            0,
-            8,
-          ),
-        );
-      }
-      setTableCellPaletteTarget(null);
-    },
-    [updateContextualTableCellStyle],
-  );
-
-  const selectContextualTableCellFontFamily = useCallback(
-    (fontFamily: string | null) => {
-      const face = fontFamily === null ? null : tableCellTypefaceFromChoice(fontFamily);
-      if (fontFamily !== null && face === null) return;
-      updateContextualTableCellStyle({ fontFamily: face ?? undefined });
-    },
-    [updateContextualTableCellStyle],
-  );
-
-  const commitContextualTableCellFontSize = useCallback(
-    (
-      rawValue: string,
-      options: { allowClear: boolean; restoreFocus: boolean },
-    ) => {
-      const trimmed = rawValue.trim();
-      if (trimmed.length === 0) {
-        if (
-          contextualTableCellFormatState.fontSize?.mixed &&
-          !tableCellFontSizeDirty
-        ) {
-          return true;
-        }
-        if (!options.allowClear) return false;
-        updateContextualTableCellStyle({ fontSize: undefined });
-        setTableCellFontSizeDraft("");
-        setTableCellFontSizeDirty(false);
-        return true;
-      }
-      const fontSize = tableCellFontSizeFromInput(Number(trimmed));
-      if (fontSize === null) return false;
-      updateContextualTableCellStyle({ fontSize });
-      setTableCellFontSizeDraft(String(fontSize));
-      setTableCellFontSizeDirty(false);
-      return true;
-    },
-    [
-      contextualTableCellFormatState.fontSize?.mixed,
-      tableCellFontSizeDirty,
-      updateContextualTableCellStyle,
-    ],
-  );
-
-  const commitContextualTableCellMargin = useCallback(
-    (
-      field: TableCellMarginField,
-      rawValue: string,
-      options: { allowClear: boolean; restoreFocus: boolean },
-    ) => {
-      const trimmed = rawValue.trim();
-      const current = contextualTableCellFormatState[field];
-      if (trimmed.length === 0) {
-        // A mixed or inherited selection renders as an empty field. Merely
-        // focusing and leaving it must not flatten the selection to defaults.
-        if (!tableCellMarginDirty) return true;
-        if (!options.allowClear) return false;
-        const patch: Partial<CellStyleInput> = { [field]: undefined };
-        updateContextualTableCellStyle(patch);
-        setTableCellMarginDrafts((drafts) => ({
-          ...drafts,
-          [field]: "",
-        }));
-        setTableCellMarginDirty(false);
-        return true;
-      }
-      const parsed = Number(trimmed);
-      if (
-        !Number.isFinite(parsed) ||
-        parsed < 0 ||
-        parsed > MAX_TABLE_CELL_MARGIN
-      ) {
-        return false;
-      }
-      const margin = Math.round(parsed * 10) / 10;
-      if (current && !current.mixed && Object.is(current.value, margin)) {
-        setTableCellMarginDrafts((drafts) => ({
-          ...drafts,
-          [field]: String(margin),
-        }));
-        setTableCellMarginDirty(false);
-        return true;
-      }
-      const patch: Partial<CellStyleInput> = { [field]: margin };
-      updateContextualTableCellStyle(patch);
-      setTableCellMarginDrafts((drafts) => ({
-        ...drafts,
-        [field]: String(margin),
-      }));
-      setTableCellMarginDirty(false);
-      return true;
-    },
-    [
-      contextualTableCellFormatState,
-      tableCellMarginDirty,
-      updateContextualTableCellStyle,
-    ],
-  );
-
-  const updateFocusedTableBorders = useCallback(
-    (
-      style: TableCellBorderStyle,
-      color: string,
-      width: number,
-      target: TableBorderTarget = tableBorderTarget,
-    ) => {
-      const focus = tableCellFocus ?? contextualTableCommandFocus;
-      if (!focus) return;
-      const border = normalizeCellStyle({
-        borderLeft: { style, color, width },
-      }).borderLeft;
-      if (!border) return;
-      updateTableCellStyle(focus.blockId, focus.row, focus.col, (position) =>
-        tableBorderPatchForSelection(target, border, position),
-      );
-    },
-    [tableBorderTarget, tableCellFocus, contextualTableCommandFocus, updateTableCellStyle],
-  );
-
-  const updateFocusedTableBorderAttributes = useCallback(
-    (
-      attributes: Partial<TableCellBorder>,
-      target: TableBorderTarget = tableBorderTarget,
-    ) => {
-      const focus = tableCellFocus ?? contextualTableCommandFocus;
-      if (!focus) return;
-      const effectiveTarget = target === "none" ? "all" : target;
-      updateTableCellStyle(
-        focus.blockId,
-        focus.row,
-        focus.col,
-        (position, cellStyle) => {
-          const targeted = tableBorderPatchForSelection(
-            effectiveTarget,
-            TABLE_BORDER_STATE_PROBE,
-            position,
-          );
-          const patch: Partial<CellStyleInput> = {};
-          for (const key of TABLE_CELL_BORDER_KEYS) {
-            if (!(key in targeted)) continue;
-            const current = cellStyle[key] ?? {
-              style: "none" as const,
-              color: DEFAULT_TABLE_CELL_BORDER_COLOR,
-              width: DEFAULT_TABLE_CELL_BORDER_WIDTH,
-            };
-            const normalized = normalizeCellStyle({
-              borderLeft: {
-                ...current,
-                // Choosing pen color/weight must paint a visible rule even
-                // when the cell previously inherited or explicitly had none.
-                style: current.style === "none" ? "solid" : current.style,
-                ...attributes,
-              },
-            }).borderLeft;
-            if (normalized) patch[key] = normalized;
-          }
-          return patch;
-        },
-      );
-    },
-    [tableBorderTarget, tableCellFocus, contextualTableCommandFocus, updateTableCellStyle],
-  );
-
-  const commitContextualTableBorderWidth = useCallback(
-    (rawValue: string) => {
-      const trimmed = rawValue.trim();
-      if (trimmed.length === 0) {
-        if (
-          !tableBorderPenMode &&
-          contextualTableBorderState?.width.mixed &&
-          !tableBorderWidthDirty
-        ) {
-          return true;
-        }
-        return false;
-      }
-      const parsed = Number(trimmed);
-      if (!Number.isFinite(parsed) || parsed < MIN_TABLE_CELL_BORDER_WIDTH || parsed > 12) return false;
-      const width = parsed;
-      setTableBorderPen((pen) => ({ ...pen, width }));
-      if (!tableBorderPenMode) {
-        updateFocusedTableBorderAttributes({ width });
-      }
-      setTableBorderWidthDraft(String(width));
-      setTableBorderWidthDirty(false);
-      return true;
-    },
-    [
-      contextualTableBorderState?.width.mixed,
-      tableBorderPenMode,
-      tableBorderWidthDirty,
-      updateFocusedTableBorderAttributes,
-    ],
-  );
-
-  const selectContextualTableBorderStyle = useCallback(
-    (style: TableCellBorderStyle) => {
-      setTableBorderPen((pen) => ({ ...pen, style }));
-      if (!tableBorderPenMode) {
-        updateFocusedTableBorderAttributes({ style });
-      }
-    },
-    [tableBorderPenMode, updateFocusedTableBorderAttributes],
   );
 
   /* --------------------------------------------------------------------- *
@@ -46364,36 +42396,6 @@ export default function PresentationWindow({
     return () => tableDrawCleanupRef.current?.();
   }, [activeSlide.id, pageId, presentMode, viewMode, disarmTableBorderPen]);
 
-  const updateDrawingPen = useCallback((patch: Partial<TableCellBorder>) => {
-    if (tableDrawAuthorityRef.current.readOnly) return;
-    setTableBorderPen(
-      (current) =>
-        normalizeCellStyle({ borderTop: { ...current, ...patch } }).borderTop ??
-        current,
-    );
-  }, []);
-
-  // PowerPoint: choosing Pen Style, Pen Weight or Pen Color turns the pointer
-  // into the Draw Table pencil, so the next click on a border draws with it.
-  const armDrawingPen = useCallback(() => {
-    if (tableDrawAuthorityRef.current.readOnly) return;
-    if (tableBorderPenModeRef.current !== "draw") toggleTableBorderPen("draw");
-  }, [toggleTableBorderPen]);
-
-  const applyDrawingPenToBorders = useCallback(
-    (target: TableBorderTarget) => {
-      if (tableDrawAuthorityRef.current.readOnly) return;
-      updateFocusedTableBorders(
-        target === "none" ? "none" : tableBorderPen.style,
-        tableBorderPen.color,
-        tableBorderPen.width,
-        target,
-      );
-      setTableBorderTarget(target === "none" ? "all" : target);
-    },
-    [tableBorderPen, updateFocusedTableBorders],
-  );
-
   // Toggle a table-level flag (thin cell `borders` or `headerRow` emphasis),
   // dropping the key when turned back off so an un-styled table stays byte-clean.
   const updateTableFlags = useCallback(
@@ -46420,63 +42422,6 @@ export default function PresentationWindow({
       replaceBlock(blockId, tableWithFlags(block, patch));
     },
     [activeSlide.blocks, canManipulateBlock, replaceBlock],
-  );
-
-  // Table Design > Effects > Shadow / Reflection and Shading > Table
-  // Background: one change to the whole table (PPT-A137).
-  const updateTableFrame = useCallback(
-    (
-      blockId: string,
-      change: (block: PresentationTableBlock) => PresentationTableBlock,
-    ) => {
-      const block = activeSlide.blocks.find(
-        (item): item is PresentationTableBlock =>
-          item.id === blockId && item.type === "table",
-      );
-      if (!block || !canManipulateBlock(block)) return;
-      const next = change(block);
-      if (next !== block) replaceBlock(blockId, next);
-    },
-    [activeSlide.blocks, canManipulateBlock, replaceBlock],
-  );
-
-  const previewTableStyle = useCallback(
-    (blockId: string, selection: PresentationTableStyleSelection | null) => {
-      if (!selection) {
-        setTableStylePreview((current) =>
-          current?.blockId === blockId ? null : current,
-        );
-        return;
-      }
-      const block = activeSlide.blocks.find(
-        (item): item is PresentationTableBlock =>
-          item.id === blockId && item.type === "table",
-      );
-      if (!block || !canEditBlockContent(block)) {
-        setTableStylePreview(null);
-        return;
-      }
-      setTableStylePreview({ blockId, selection });
-    },
-    [activeSlide.blocks, canManipulateBlock],
-  );
-
-  const commitTableStyle = useCallback(
-    (blockId: string, selection: PresentationTableStyleSelection) => {
-      // The commit re-resolves the LIVE table rather than trusting the hover
-      // model. A stale gallery event cannot overwrite a concurrent table edit.
-      const block = activeSlide.blocks.find(
-        (item): item is PresentationTableBlock =>
-          item.id === blockId && item.type === "table",
-      );
-      setTableStylePreview(null);
-      if (!block || !canEditBlockContent(block)) return;
-      const next = applyPresentationTableStyleSelection(block, selection);
-      if (next === block) return;
-      replaceBlock(blockId, next);
-      publishLive(t("presentation.ui.table.appliedStyle"));
-    },
-    [activeSlide.blocks, canManipulateBlock, publishLive, replaceBlock, t],
   );
 
   /**
@@ -46645,41 +42590,12 @@ export default function PresentationWindow({
   // Slide Master view's structural commands on the selected card (PPT-B030).
   const officeMasterSelectedEntry =
     officeMasterEntries.find((entry) => entry.key === officeMasterKey) ?? officeMasterEntries[0];
-  const officeMasterSelectedLayoutId =
-    officeMasterSelectedEntry?.kind === "layout" &&
-    officeLayoutEditable(theme, officeMasterSelectedEntry.layoutId)
-      ? officeMasterSelectedEntry.layoutId
-      : null;
   const officeMasterLayoutWritable =
     officeMasterEntries.length > 0 && !autosave.readOnly && !themeSelectionDisabled &&
     !officeMasterReusedSelected;
   // The master the selected card belongs to (PPT-B030): master one, or one
   // Insert Slide Master added, whose theme is Office's default.
   const officeMasterSelectedMasterKey = officeMasterSelectedEntry?.masterKey ?? OFFICE_PRIMARY_MASTER_KEY;
-  const officeMasterSelectedIsInserted = officeMasterSelectedMasterKey !== OFFICE_PRIMARY_MASTER_KEY;
-  const slideMasterThemeDisabled =
-    themeSelectionDisabled || officeMasterSelectedIsInserted || officeMasterReusedSelected;
-  const slideMasterThemeReason = officeMasterSelectedIsInserted
-    ? t("presentation.slideMaster.insertedMasterThemeUnavailable")
-    : undefined;
-  const officeMasterDeleteBlocker =
-    officeMasterSelectedEntry?.kind === "layout"
-      ? officeLayoutDeleteBlocker(theme, slides, officeMasterSelectedEntry.layoutId)
-      : officeMasterSelectedEntry
-        ? officeSlideMasterDeleteBlocker(theme, slides, officeMasterSelectedEntry.masterKey)
-        : "unavailable";
-  const officeMasterDeleteReason =
-    officeMasterDeleteBlocker === null
-      ? undefined
-      : officeMasterDeleteBlocker === "in-use"
-        ? officeMasterSelectedEntry?.kind === "master"
-          ? t("presentation.slideMaster.deleteMasterInUse")
-          : t("presentation.slideMaster.deleteLayoutInUse")
-        : officeMasterDeleteBlocker === "last"
-          ? t("presentation.slideMaster.deleteLastLayout")
-          : officeMasterDeleteBlocker === "only"
-            ? t("presentation.slideMaster.deleteMasterUnavailable")
-            : t("presentation.slideMaster.structureUnavailable");
   const officePlaceholderKindLabels = Object.fromEntries(
     OFFICE_PLACEHOLDER_KINDS.map((kind) => [
       kind,
@@ -46760,70 +42676,6 @@ export default function PresentationWindow({
             ),
     }));
   }, [theme, deckLayoutDefinitions, nativeLayoutGallery]);
-  /**
-   * The heading of the New Slide and Layout galleries: PowerPoint names the
-   * master the layouts belong to ("Office 主题", PPT-A032).
-   */
-  /**
-   * View > Grayscale / Pure Black and White > Change Selected Object
-   * (PPT-A109): the selected objects' mode -- shapes, text boxes and
-   * pictures, the objects PowerPoint keeps it on (`p:spPr@bwMode`).
-   */
-  const blackWhiteTargets = activeSlide.blocks.filter(
-    (block) =>
-      selectedBlockIds.has(block.id) &&
-      (block.type === "shape" || block.type === "text" || block.type === "image"),
-  );
-  const blackWhiteModes = new Set<PresentationBlackWhiteMode>(
-    blackWhiteTargets.map(
-      (block) =>
-        normalizePresentationBlackWhiteMode((block as { blackWhiteMode?: unknown }).blackWhiteMode) ?? "auto",
-    ),
-  );
-  const presentationBlackWhiteObject = {
-    label: t("presentation.view.changeSelectedObject"),
-    modeLabels: Object.fromEntries(
-      PRESENTATION_BLACK_WHITE_MODES.map((mode) => [
-        mode,
-        t(`presentation.view.blackWhiteMode.${mode}` as "presentation.view.blackWhiteMode.auto"),
-      ]),
-    ) as Record<PresentationBlackWhiteMode, string>,
-    mode: blackWhiteModes.size === 1 ? [...blackWhiteModes][0] : null,
-    ...(autosave.readOnly
-      ? { disabledReason: t("ai.readOnlyLock") }
-      : blackWhiteTargets.length === 0
-        ? { disabledReason: t("presentation.view.blackWhiteSelectObject") }
-        : {}),
-    onChange: (mode: PresentationBlackWhiteMode) => {
-      const selected = new Set(selectedBlockIdsRef.current);
-      commitLiveActiveBlocks((blocks) =>
-        blocksWithBlackWhiteMode(
-          blocks as Array<PresentationBlock & { blackWhiteMode?: unknown }>,
-          selected,
-          mode,
-        ),
-      );
-    },
-  };
-  /**
-   * The Effects gallery of Design > Variants and the Slide Master tab
-   * (PPT-A073): the tiles draw in the deck's colours, and the theme's own
-   * scheme is checked until a pick replaces it.
-   */
-  const presentationEffectGallery = (host: "design" | "slide-master") => (
-    <SpreadsheetThemeEffectGallery
-      disabled={themeSelectionDisabled}
-      locale={locale}
-      paletteId={theme?.colorSchemeId ?? "office"}
-      value={presentationEffectGalleryValue(
-        theme,
-        (themeId) => OFFICE_THEMES.find((entry) => entry.id === themeId)?.effects,
-      )}
-      onValueChange={applyThemeEffectScheme}
-      testId={`presentation-${host}-effect-gallery`}
-      itemTestIdPrefix={`presentation-${host}-effect-`}
-    />
-  );
   const layoutGalleryHeading =
     (officeMasterSelection(theme)
       ? (officeMasterGivenName(theme, "master") ??
@@ -46938,44 +42790,6 @@ export default function PresentationWindow({
           });
         })();
 
-  /**
-   * The native styles THIS DECK already defines, gathered from every table that
-   * carries a resolved look. An imported deck brings its own gallery with it —
-   * A style already used in the package is both resolvable and
-   * safe to reuse: its definition travels inside `ppt/tableStyles.xml`, so
-   * applying it to another table needs nothing more than the identity.
-   * Native definitions also override built-in previews with the same GUID.
-   */
-  const deckTableStyleLooks = useMemo(() => {
-    const found = new Map<string, TableStyleLook>();
-    for (const slide of slides) {
-      for (const block of slide.blocks ?? []) {
-        if (block.type !== "table") continue;
-        const table = block as PresentationTableBlock;
-        // A table made here with a BUILT-IN style carries a snapshot of that
-        // recipe, not a definition of the deck's own: letting it stand for
-        // the recipe froze the style at the old theme's accent for every new
-        // table (PPT-B274). A style the deck defines, and an imported
-        // package's own reading of a built-in GUID, still count.
-        if (
-          !(table as { source?: unknown }).source &&
-          isNativeWebTableStyleId(table.tableStyleId)
-        ) {
-          continue;
-        }
-        const look = normalizeTableStyleLook(
-          table.tableStyleLook,
-          table.tableStyleId,
-        );
-        if (!look || found.has(look.styleId)) {
-          continue;
-        }
-        found.set(look.styleId, look);
-      }
-    }
-    return [...found.values()];
-  }, [slides]);
-
   // Set one column/row or the complete active selection to a native size (px).
   // PowerPoint/WPS apply the Layout size box to every selected axis slot. The
   // selection-aware path stays one undoable replaceBlock commit and preserves
@@ -47022,102 +42836,6 @@ export default function PresentationWindow({
       replaceBlock(blockId, next as unknown as PresentationTableBlock);
     },
     [activeSlide.blocks, canManipulateBlock, replaceBlock],
-  );
-
-  const commitContextualTableAxisSize = useCallback(
-    (
-      axis: ContextualTableAxis,
-      rawValue: string,
-      options: {
-        allowClear: boolean;
-        restoreFocus: boolean;
-      },
-    ) => {
-      if (
-        !contextualTableBlock ||
-        !contextualTableLogicalFocus ||
-        !contextualTableSelectionIsWritable
-      ) {
-        return false;
-      }
-      const state =
-        axis === "col"
-          ? contextualTableColumnSizeState
-          : contextualTableRowSizeState;
-      const selectionRange =
-        axis === "col"
-          ? contextualTableColumnSpanRange
-          : contextualTableRowSpanRange;
-      const index =
-        axis === "col"
-          ? contextualTableLogicalFocus.col
-          : contextualTableLogicalFocus.row;
-      const trimmed = rawValue.trim();
-      if (trimmed.length === 0) {
-        if (!options.allowClear) return false;
-        if (!state?.mixed && state?.value === null) {
-          return true;
-        }
-        updateTableAxisSize(
-          contextualTableBlock.id,
-          axis,
-          index,
-          null,
-          selectionRange,
-        );
-        setTableAxisSizeDrafts((current) => ({
-          ...current,
-          [axis]: "",
-        }));
-        return true;
-      }
-      // The field reads PowerPoint's unit (cm, or inches for en); the model keeps px.
-      const centimetres = parsePresentationMeasurementCm(trimmed, sizeUnit);
-      if (centimetres === null) return false;
-      if (
-        state &&
-        !state.mixed &&
-        state.value !== null &&
-        tableAxisDisplay(state.value) === trimmed
-      ) {
-        return true;
-      }
-      const size = tableAxisCmToPx(centimetres);
-      if (size < MIN_TABLE_AXIS_PX || size > MAX_TABLE_AXIS_PX) {
-        return false;
-      }
-      if (state && !state.mixed && Object.is(state.value, size)) {
-        setTableAxisSizeDrafts((current) => ({
-          ...current,
-          [axis]: tableAxisDisplay(size),
-        }));
-        return true;
-      }
-      updateTableAxisSize(
-        contextualTableBlock.id,
-        axis,
-        index,
-        size,
-        selectionRange,
-      );
-      setTableAxisSizeDrafts((current) => ({
-        ...current,
-        [axis]: tableAxisDisplay(size),
-      }));
-      return true;
-    },
-    [
-      contextualTableBlock,
-      contextualTableColumnSizeState,
-      contextualTableColumnSpanRange,
-      contextualTableLogicalFocus,
-      contextualTableRowSizeState,
-      contextualTableRowSpanRange,
-      contextualTableSelectionIsWritable,
-      sizeUnit,
-      tableAxisDisplay,
-      updateTableAxisSize,
-    ],
   );
 
   // Commit one direct-manipulation boundary drag against the live slide ref.
@@ -47392,59 +43110,6 @@ export default function PresentationWindow({
     ],
   );
 
-  // PowerPoint/WPS Layout → Table Size. A total-width/height edit keeps the
-  // table's top-left fixed and proportionally scales the complete matching
-  // native grid axis in the SAME undo step, avoiding an OOXML frame/grid
-  // mismatch after export.
-  const updateTableFrameSize = useCallback(
-    (blockId: string, axis: TableFrameAxis, centimetres: number) => {
-      const block = activeSlide.blocks.find(
-        (item): item is PresentationTableBlock =>
-          item.id === blockId && item.type === "table",
-      );
-      if (!block || !canManipulateBlock(block)) return;
-      const next = resizeTableFrame(block, axis, centimetres, {
-        lockAspectRatio: tableFrameAspectLocked,
-      });
-      if (next === block) return;
-      replaceBlock(blockId, next as PresentationTableBlock);
-    },
-    [
-      activeSlide.blocks,
-      canManipulateBlock,
-      replaceBlock,
-      tableFrameAspectLocked,
-    ],
-  );
-
-  const commitContextualTableFrameSize = useCallback(
-    (axis: TableFrameAxis, rawValue: string) => {
-      if (!contextualTableBlock || !contextualTableSelectionIsWritable) {
-        return false;
-      }
-      const currentSize = tableFrameSizeCm(contextualTableBlock[axis]);
-      const trimmed = rawValue.trim();
-      if (trimmed.length === 0) return true;
-      const parsed = Number(trimmed);
-      if (
-        !Number.isFinite(parsed) ||
-        parsed < MIN_TABLE_FRAME_CM ||
-        parsed > MAX_TABLE_FRAME_CM
-      ) {
-        return false;
-      }
-      const centimetres = Math.round(parsed * 100) / 100;
-      if (Object.is(currentSize, centimetres)) return true;
-      updateTableFrameSize(contextualTableBlock.id, axis, centimetres);
-      return true;
-    },
-    [
-      contextualTableBlock,
-      contextualTableSelectionIsWritable,
-      updateTableFrameSize,
-    ],
-  );
-
   // DISTRIBUTE rows/columns equally. The contextual ribbon follows the active
   // cell rectangle and preserves every unselected slot; the legacy inspector
   // intentionally retains its whole-axis command.
@@ -47479,35 +43144,6 @@ export default function PresentationWindow({
       );
       if (!next) return;
       replaceBlock(blockId, next);
-    },
-    [activeSlide.blocks, canManipulateBlock, replaceBlock],
-  );
-
-  // PowerPoint/WPS "AutoFit" column commands. Each mode materializes native
-  // `colWidths`: content-fit derives width demand from the logical cells,
-  // window-fit divides the current table geometry, and fixed keeps explicit
-  // widths while freezing any remaining auto slots. No raster fallback.
-  const autoFitTableColumns = useCallback(
-    (blockId: string, mode: TableColumnAutoFitMode) => {
-      const block = activeSlide.blocks.find(
-        (item): item is PresentationTableBlock =>
-          item.id === blockId && item.type === "table",
-      );
-      if (!block || !canManipulateBlock(block)) return;
-      const tableWidthPx =
-        typeof block.width === "number" && Number.isFinite(block.width)
-          ? block.width / AUTOFIT_EMU_PER_PX
-          : Number.NaN;
-      const nextSizes = autoFitTableColumnWidths(
-        block.rows,
-        mode,
-        tableWidthPx,
-        block.colWidths,
-      );
-      const next = { ...block } as Record<string, unknown>;
-      if (nextSizes) next.colWidths = nextSizes;
-      else delete next.colWidths;
-      replaceBlock(blockId, next as unknown as PresentationTableBlock);
     },
     [activeSlide.blocks, canManipulateBlock, replaceBlock],
   );
@@ -47855,7 +43491,7 @@ export default function PresentationWindow({
         ? chartLockNotice(block)
         : t("presentation.ui.chart.cannotEditHere");
     const onDesignTab = (testId: string, how: "click" | "menu") => {
-      selectPresentationRibbonTab("chart-design");
+      void 0;
       activateOfficeControl(testId, how);
     };
     const threeDimensional = Boolean(attrs?.chartSubtype.endsWith("3d"));
@@ -47884,7 +43520,7 @@ export default function PresentationWindow({
       // Templates folder), on the Chart Design tab's ribbon that writes it.
       changeChartType: {
         run: () => {
-          selectPresentationRibbonTab("chart-design");
+          void 0;
           chartDialogTokenRef.current += 1;
           setChartDialogRequest({ kind: "allCharts", token: chartDialogTokenRef.current });
         },
@@ -47893,7 +43529,7 @@ export default function PresentationWindow({
       // Save as Template…: into the user's Templates folder.
       saveAsTemplate: {
         run: () => {
-          selectPresentationRibbonTab("chart-design");
+          void 0;
           chartDialogTokenRef.current += 1;
           setChartDialogRequest({ kind: "saveTemplate", token: chartDialogTokenRef.current });
         },
@@ -47931,7 +43567,7 @@ export default function PresentationWindow({
                 });
                 // The focus request opens the pane (DocumentChartFormatRibbon);
                 // clicking its toggle as well closed it again.
-                selectPresentationRibbonTab("chart-format");
+                void 0;
               },
               disabledReason: refused,
             },
@@ -47973,7 +43609,7 @@ export default function PresentationWindow({
             area: "chartAreaStyle",
             token: chartFormatFocusTokenRef.current,
           });
-          selectPresentationRibbonTab("chart-format");
+          void 0;
         },
         disabledReason: refused,
       },
@@ -47997,7 +43633,7 @@ export default function PresentationWindow({
       openFormat: (area) => {
         chartFormatFocusTokenRef.current += 1;
         setChartFormatFocus({ area, token: chartFormatFocusTokenRef.current });
-        selectPresentationRibbonTab("chart-format");
+        void 0;
       },
       openFont: (text) => openChartFontDialog(block, text),
     });
@@ -48026,7 +43662,7 @@ export default function PresentationWindow({
     setChartElementHit(null);
     chartFormatFocusTokenRef.current += 1;
     setChartFormatFocus({ area: "chartAreaStyle", token: chartFormatFocusTokenRef.current });
-    selectPresentationRibbonTab("chart-format");
+    void 0;
   };
   const openChartWorkbook = (block: PresentationChartBlock) => {
     if (autosave.readOnly || !presentationChartV2CanEdit(block) || !presentationChartV2DataWritable(block) || !presentationChartWorkbook(block)) return;
@@ -48160,78 +43796,6 @@ export default function PresentationWindow({
     [commitSlides],
   );
 
-  const commitContextualMediaFrameSize = useCallback(
-    (axis: PresentationFrameAxis, rawValue: string) => {
-      const liveSlide = slidesRef.current[activeIndexRef.current];
-      const liveSelection = liveSlide
-        ? resolvePresentationSelectionAuthority(
-            liveSlide.blocks,
-            selectedBlockIdRef.current,
-            selectedBlockIdsRef.current,
-          )
-        : null;
-      const liveMedia =
-        liveSelection?.disposition === "single" &&
-        liveSelection.primary?.type === "embed"
-          ? (liveSelection.primary as PresentationEmbedBlock)
-          : null;
-      if (
-        !liveSlide ||
-        !liveMedia ||
-        !canManipulateBlock(liveMedia) ||
-        !hasLayoutGeometry(liveMedia)
-      ) {
-        return false;
-      }
-      const currentSize = tableFrameSizeCm(liveMedia[axis]);
-      const trimmed = rawValue.trim();
-      if (trimmed.length === 0) {
-        setMediaFrameSizeDrafts((current) => ({
-          ...current,
-          [axis]: currentSize === null ? "" : String(currentSize),
-        }));
-        return true;
-      }
-      const parsed = Number(trimmed);
-      if (
-        !Number.isFinite(parsed) ||
-        parsed < MIN_TABLE_FRAME_CM ||
-        parsed > MAX_TABLE_FRAME_CM
-      ) {
-        return false;
-      }
-      const centimetres = Math.round(parsed * 100) / 100;
-      setMediaFrameSizeDrafts((current) => ({
-        ...current,
-        [axis]: String(centimetres),
-      }));
-      if (Object.is(currentSize, centimetres)) return true;
-      const nextEmu = clampNumber(
-        Math.round(centimetres * TABLE_FRAME_EMU_PER_CM),
-        1,
-        MAX_PRESENTATION_GEOMETRY_EMU,
-      );
-      const nextBlocks = liveSlide.blocks.map((block) =>
-        block === liveMedia ? { ...block, [axis]: nextEmu } : block,
-      );
-      commitSlides(
-        slidesRef.current.map((slide, index) =>
-          index === activeIndexRef.current
-            ? {
-                ...slide,
-                blocks: recomputeConnectors(
-                  nextBlocks,
-                  new Set([liveMedia.id]),
-                ),
-              }
-            : slide,
-        ),
-      );
-      return true;
-    },
-    [canManipulateBlock, commitSlides],
-  );
-
   // Patch an image block's visual effects (shadow / frame / corner radius) and
   // re-derive the persisted effect fields via `persistedImageEffects` so only
   // meaningful (non-default) values stay on the block. This keeps an image with
@@ -48322,197 +43886,6 @@ export default function PresentationWindow({
     },
     [commitSlides],
   );
-
-  // Picture Effects / Graphics Effects (PPT-A127, PPT-A161): the shared menu on
-  // a picture or an SVG graphic, one renderer for both tabs.
-  // Video Format > Video Styles > Video Border (PPT-A155): the picture
-  // border's menu on the movie's own line (lib/presentation-video-format).
-  const commitVideoBorder = (blockId: string, payload: Parameters<typeof withVideoBorder>[1]) => {
-    commitLiveActiveBlocks((blocks) => {
-      const target = blocks.find((candidate) => candidate.id === blockId);
-      if (!target || target.type !== "embed" || !canEditBlockContent(target)) return null;
-      const next = withVideoBorder(target as PresentationEmbedBlock, payload);
-      return next ? blocks.map((candidate) => (candidate === target ? next : candidate)) : null;
-    });
-  };
-  // Video Format > Video Styles > Video Shape (PPT-A155): the deck's shape
-  // gallery, as Crop to Shape offers a picture's.
-  // Video Styles' three commands stand in one column beside the gallery
-  // (Video Shape / Video Border / Video Effects), as PowerPoint stacks them.
-  const renderVideoShapeMenu = (block: PresentationEmbedBlock) => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <OfficeHomeMenuTrigger
-          variant="compact"
-          hasMenuIndicator
-          icon={<IconChangeShape home size={16} />}
-          label={t("presentation.media.videoShape")}
-          disabled={!canEditBlockContent(block) || videoStyleOwnsFrame(block)}
-          disabledReason={videoStyleOwnsFrame(block) ? t("presentation.media.videoStyleOwnsFrame") : undefined}
-          data-control-id="PPTCTL.CONTEXT.VIDEO.STYLE.SHAPE"
-          testId="presentation-ribbon-media-video-shape"
-        />
-      </DropdownMenuTrigger>
-      <RibbonDropdownMenuContent
-        align="start"
-        data-testid="presentation-ribbon-media-video-shape-menu"
-        style={{ maxHeight: "min(560px, var(--radix-dropdown-menu-content-available-height, calc(100vh - 24px)))", overflowY: "auto" }}
-      >
-        <PresentationCameoShapeGallery
-          current={videoShapeKind(block)}
-          labelFor={(kind) => t(presentationShapeKindMessageKey(kind))}
-          onSelect={(kind) => {
-            commitLiveActiveBlocks((blocks) => {
-              const target = blocks.find((candidate) => candidate.id === block.id);
-              if (!target || target.type !== "embed" || !canEditBlockContent(target)) return null;
-              const next = withVideoShape(target as PresentationEmbedBlock, kind);
-              return next ? blocks.map((candidate) => (candidate === target ? next : candidate)) : null;
-            });
-          }}
-          testPrefix="presentation-ribbon-media-video-shape"
-          t={t}
-        />
-      </RibbonDropdownMenuContent>
-    </DropdownMenu>
-  );
-  // Graphics Format > Graphics Fill / Graphics Outline (PPT-A161): one colour
-  // over the whole SVG graphic (lib/presentation-office-graphic-paint); a
-  // theme swatch keeps its reference through the commit's theme reconcile.
-  const commitOfficeGraphic = (
-    blockId: string,
-    edit: (block: PresentationImageBlock) => PresentationImageBlock | null,
-  ) => {
-    commitLiveActiveBlocks((blocks) => {
-      const target = blocks.find((candidate) => candidate.id === blockId);
-      if (!target || target.type !== "image" || !canEditBlockContent(target)) return null;
-      const next = edit(target);
-      return next ? blocks.map((candidate) => (candidate === target ? next : candidate)) : null;
-    });
-  };
-  const commitOfficeGraphicPaint = (
-    blockId: string,
-    field: OfficeGraphicPaintField,
-    pick: string | null,
-  ) => {
-    commitOfficeGraphic(blockId, (block) => withOfficeGraphicPaint(block, field, pick));
-    if (pick) {
-      setPictureBorderRecentColors((current) =>
-        [pick, ...current.filter((candidate) => candidate !== pick)].slice(0, 8),
-      );
-    }
-    // A pick closes the palette, as PowerPoint's does (acceptance step 35:
-    // the menu stayed open and its check did not move).
-    setOfficeGraphicPaintMenu(null);
-  };
-  const renderOfficeGraphicPaintMenu = (
-    block: PresentationImageBlock,
-    field: OfficeGraphicPaintField,
-  ) => {
-    const fill = field === "graphicFill";
-    const id = fill ? "fill" : "outline";
-    const paint = officeGraphicPaint(block, field);
-    const color = paint && paint !== "none" ? paint : undefined;
-    const label = t(fill ? "presentation.officeGraphic.fill" : "presentation.officeGraphic.outline");
-    const disabled = !canEditBlockContent(block);
-    const palette = {
-      value: color,
-      recents: pictureBorderRecentColors,
-      allowNoFill: true,
-      noFillSelected: paint === "none",
-      labels: {
-        themeColors: t("spreadsheet.themeColors"),
-        standardColors: t("spreadsheet.standardColors"),
-        recentColors: t("spreadsheet.recentColors"),
-        moreColors: fill ? t("spreadsheet.moreColors") : t("presentation.cameo.otherBorderColors"),
-        noFill: fill ? t("presentation.home.noFill") : t("presentation.home.noOutline"),
-      },
-      onPick: (next: string | null) => commitOfficeGraphicPaint(block.id, field, next),
-      testIdPrefix: `presentation-graphic-${id}`,
-    };
-    const eyedropper = eyeDropperAvailable
-      ? {
-          label: t("presentation.ui.eyedropper"),
-          testId: `presentation-graphic-${id}-eyedropper`,
-          onPick: () => {
-            void sampleEyeDropperColor().then((hex) => {
-              if (hex) commitOfficeGraphicPaint(block.id, field, hex);
-            });
-          },
-        }
-      : undefined;
-    // Weight and Dashes: a graphic with no outline takes Text 1, as
-    // PowerPoint adds it (PPT-A161 sample); the weight is points at the
-    // picture's size, kept as the SVG's own stroke width.
-    const defaultOutline = { color: deckThemeGridColors.tx1 };
-    return (
-      <DropdownMenu
-        key={id}
-        open={officeGraphicPaintMenu === field}
-        onOpenChange={(open) => setOfficeGraphicPaintMenu(open ? field : null)}
-      >
-        <DropdownMenuTrigger asChild>
-          <OfficeHomeMenuTrigger
-            variant="compact"
-            hasMenuIndicator
-            icon={
-              <span className="note-editor-office-toolbar__color-glyph">
-                <OfficeSemanticIcon semanticId={fill ? "shape.fill" : "shape.outline"} size={16} />
-                <span
-                  className="note-editor-office-toolbar__color-underline"
-                  style={{ background: color ?? "transparent" }}
-                />
-              </span>
-            }
-            label={label}
-            disabled={disabled}
-            data-control-id={`PPTCTL.CONTEXT.GRAPHIC.STYLE.${fill ? "FILL" : "OUTLINE"}`}
-            testId={`presentation-ribbon-graphic-${id}`}
-          />
-        </DropdownMenuTrigger>
-        <RibbonDropdownMenuContent align="start" data-testid={`presentation-ribbon-graphic-${id}-menu`}>
-          {fill ? (
-            <>
-              <OfficeColorPalettePanel {...palette} />
-              {eyedropper ? (
-                <DropdownMenuItem data-testid={eyedropper.testId} onSelect={eyedropper.onPick}>
-                  {eyedropper.label}
-                </DropdownMenuItem>
-              ) : null}
-            </>
-          ) : (
-            <OfficeOutlineMenuContent
-              palette={palette}
-              eyedropper={eyedropper}
-              weight={{
-                label: t("presentation.home.lineWeight"),
-                testId: "presentation-graphic-outline-width",
-                valuePt: officeGraphicOutlineWeightPt(block),
-                onPick: (points) =>
-                  commitOfficeGraphic(block.id, (target) =>
-                    withOfficeGraphicOutlineWeight(target, points, defaultOutline),
-                  ),
-              }}
-              dashes={{
-                label: t("presentation.home.dashes"),
-                testId: "presentation-graphic-outline-style",
-                value: officeGraphicOutlineDash(block),
-                options: OFFICE_GRAPHIC_OUTLINE_DASHES,
-                optionLabel: (style: OfficeGraphicOutlineDash) =>
-                  t(`presentation.officeGraphic.dash.${style}` as "presentation.officeGraphic.dash.solid"),
-                optionIcon: (style: OfficeGraphicOutlineDash) => (
-                  <OfficePictureMenuIcon icon={{ kind: "line-dash", dash: style }} />
-                ),
-                onPick: (style: OfficeGraphicOutlineDash) =>
-                  commitOfficeGraphic(block.id, (target) =>
-                    withOfficeGraphicOutlineDash(target, style, defaultOutline),
-                  ),
-              }}
-            />
-          )}
-        </RibbonDropdownMenuContent>
-      </DropdownMenu>
-    );
-  };
   // Video Format > Adjust and Video Styles (PPT-A155): the commits behind
   // Corrections, Color, Poster Frame, Reset and the Video Styles gallery
   // (lib/presentation-video-format; the menus are PresentationVideoFormatMenus).
@@ -48526,37 +43899,6 @@ export default function PresentationWindow({
       const next = change(target as PresentationEmbedBlock);
       return next ? blocks.map((candidate) => (candidate === target ? next : candidate)) : null;
     });
-  };
-  const openFormatPaneAtVideo = (section: "corrections" | "color") => {
-    openFormatPane();
-    requestAnimationFrame(() => {
-      document
-        .querySelector(`[data-testid="presentation-video-format-${section}"]`)
-        ?.scrollIntoView({ block: "nearest" });
-    });
-  };
-  const captureVideoPosterFrame = async (blockId: string) => {
-    const media = canvasMediaElement(blockId);
-    if (!(media instanceof HTMLVideoElement)) {
-      toast({ title: t("presentation.media.posterFrameNotReady"), variant: "destructive" });
-      return;
-    }
-    try {
-      const poster = await capturePresentationVideoFrame(media);
-      commitVideoFormat(blockId, (block) => withVideoPoster(block, poster));
-    } catch (error) {
-      const code = error instanceof VideoFrameCaptureError ? error.code : "not-ready";
-      toast({
-        title: t(
-          code === "cross-origin"
-            ? "presentation.media.posterFrameCrossOrigin"
-            : code === "too-large"
-              ? "presentation.media.posterFrameTooLarge"
-              : "presentation.media.posterFrameNotReady",
-        ),
-        variant: "destructive",
-      });
-    }
   };
   const onVideoPosterFile = async (event: ReactChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -48572,222 +43914,6 @@ export default function PresentationWindow({
       toast({ title: t("presentation.media.posterFrameFileFailed"), variant: "destructive" });
     }
   };
-  const renderVideoStylesGallery = (block: PresentationEmbedBlock) => (
-    <PresentationVideoStylesGallery
-      block={block}
-      className={presentationChrome.mediaVideoStylesGallery}
-      disabled={!canEditBlockContent(block)}
-      onPreviewChange={(id) =>
-        setVideoStylePreview(
-          id && canEditBlockContent(block) && selectedBlockIdsRef.current.size === 1 &&
-            selectedBlockIdsRef.current.has(block.id)
-            ? { blockId: block.id, styleId: id }
-            : null,
-        )
-      }
-      onCommit={(id) => {
-        setVideoStylePreview(null);
-        commitVideoFormat(block.id, (target) => withVideoStyle(target, id));
-      }}
-    />
-  );
-  const renderVideoAdjustGroup = (block: PresentationEmbedBlock) => {
-    const writable = canEditBlockContent(block);
-    const adjustReason = videoAdjustEditable(block) ? undefined : t("presentation.media.videoAdjustPreserved");
-    const playable = canvasMediaElement(block.id) instanceof HTMLVideoElement;
-    return (
-      <OfficeHomeRibbonGroup
-        className={presentationChrome.mediaVideoOrderAdjust}
-        label={t("presentation.image.adjustGroup")}
-        size="wide"
-        testId="presentation-ribbon-media-adjust-group"
-      >
-        <OfficeHomeCommandRow>
-          <PresentationVideoCorrectionsMenu
-            block={block}
-            theme={deckThemeGridColors}
-            disabled={!writable || !videoAdjustEditable(block)}
-            disabledReason={adjustReason}
-            onOptions={() => openFormatPaneAtVideo("corrections")}
-            onCommit={(brightness, contrast) =>
-              commitVideoFormat(block.id, (target) => withVideoCorrections(target, brightness, contrast))
-            }
-            trigger={
-              <OfficeHomeMenuTrigger
-                className={presentationChrome.pictureVerticalMenu}
-                variant="large"
-                hasMenuIndicator
-                icon={<OfficeSemanticIcon semanticId="image.corrections" size={24} />}
-                label={t("presentation.pictureRibbon.correctionsMenu")}
-                data-control-id="PPTCTL.CONTEXT.VIDEO.ADJUST.CORRECTIONS"
-                testId="presentation-ribbon-media-corrections"
-              />
-            }
-          />
-          <PresentationVideoColorMenu
-            block={block}
-            theme={deckThemeGridColors}
-            disabled={!writable || !videoAdjustEditable(block)}
-            disabledReason={adjustReason}
-            onOptions={() => openFormatPaneAtVideo("color")}
-            onCommit={(preset) => commitVideoFormat(block.id, (target) => withVideoRecolor(target, preset))}
-            trigger={
-              <OfficeHomeMenuTrigger
-                className={presentationChrome.pictureVerticalMenu}
-                variant="large"
-                hasMenuIndicator
-                icon={<OfficeSemanticIcon semanticId="image.color" size={24} />}
-                label={t("toolbar.color")}
-                data-control-id="PPTCTL.CONTEXT.VIDEO.ADJUST.COLOR"
-                testId="presentation-ribbon-media-color"
-              />
-            }
-          />
-          <PresentationVideoPosterFrameMenu
-            disabled={!writable}
-            currentFrameDisabledReason={playable ? null : t("presentation.media.posterFrameNoPlayer")}
-            canReset={videoPosterSource(block) !== null}
-            onCurrentFrame={() => void captureVideoPosterFrame(block.id)}
-            onImageFromFile={() => {
-              videoPosterFileTargetRef.current = block.id;
-              videoPosterFileInputRef.current?.click();
-            }}
-            onReset={() => commitVideoFormat(block.id, (target) => withVideoPoster(target, null))}
-            trigger={
-              <OfficeHomeMenuTrigger
-                className={presentationChrome.pictureVerticalMenu}
-                variant="large"
-                hasMenuIndicator
-                icon={<OfficeSemanticIcon semanticId="image.change" size={24} />}
-                label={t("presentation.media.posterFrame")}
-                disabled={!writable}
-                data-control-id="PPTCTL.CONTEXT.VIDEO.ADJUST.POSTERFRAME"
-                testId="presentation-ribbon-media-poster-frame"
-              />
-            }
-          />
-          {/* Video Format > Adjust > Reset (PPT-A155): the video's design --
-              border, effects, shape, style, corrections, color and the
-              poster it was given -- goes; its media and playback stay. */}
-          <OfficeHomeCommand
-            variant="large"
-            icon={<OfficeSemanticIcon semanticId="image.reset" size={24} />}
-            label={t("presentation.media.resetDesign")}
-            disabled={!writable || !videoHasDesign(block)}
-            onClick={() => commitVideoFormat(block.id, resetVideoDesign)}
-            testId="presentation-ribbon-media-reset-design"
-          />
-        </OfficeHomeCommandRow>
-      </OfficeHomeRibbonGroup>
-    );
-  };
-  const renderVideoBorderMenu = (block: PresentationEmbedBlock) => {
-    const state = videoBorderState(block);
-    const disabled = !videoBorderEditable(block) || !canEditBlockContent(block);
-    const label = t("presentation.media.videoOutline");
-    return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <OfficeHomeMenuTrigger
-            variant="compact"
-            hasMenuIndicator
-            icon={
-              <span className="note-editor-office-toolbar__color-glyph">
-                <IconVideoOutline home size={16} />
-                <span
-                  className="note-editor-office-toolbar__color-underline"
-                  style={{ background: state.visible ? state.color : "transparent" }}
-                />
-              </span>
-            }
-            label={label}
-            disabled={disabled}
-            data-control-id="PPTCTL.CONTEXT.VIDEO.STYLE.BORDER"
-            testId="presentation-ribbon-media-video-outline"
-          />
-        </DropdownMenuTrigger>
-        <RibbonDropdownMenuContent align="start" data-testid="presentation-ribbon-media-video-outline-menu">
-          <OfficeOutlineMenuContent
-            palette={{
-              value: state.visible ? state.color : undefined,
-              recents: pictureBorderRecentColors,
-              allowNoFill: true,
-              noFillSelected: !state.visible,
-              labels: {
-                themeColors: t("spreadsheet.themeColors"),
-                standardColors: t("spreadsheet.standardColors"),
-                recentColors: t("spreadsheet.recentColors"),
-                moreColors: t("presentation.cameo.otherBorderColors"),
-                noFill: t("presentation.home.noOutline"),
-              },
-              onPick: (color) =>
-                commitVideoBorder(
-                  block.id,
-                  color ? { style: state.style, color, width: state.width } : { style: "none" },
-                ),
-              testIdPrefix: "presentation-video-border",
-            }}
-            weight={{
-              label: t("presentation.home.lineWeight"),
-              testId: "presentation-video-border-width",
-              valuePt: state.visible ? lineWeightDesignPxToPoints(state.width) : null,
-              onPick: (points) =>
-                commitVideoBorder(block.id, { style: state.style, color: state.color, width: lineWeightPointsToDesignPx(points) }),
-            }}
-            sketched={{
-              label: t("office.outline.sketched"),
-              testId: "presentation-video-border-sketched",
-              disabledReason: t("office.outline.sketchedUnavailable"),
-            }}
-            dashes={{
-              label: t("presentation.home.dashes"),
-              testId: "presentation-video-border-style",
-              value: state.visible ? state.style : null,
-              optionLabel: (style) =>
-                t(`presentation.shapeOutlineStyle.${style}` as "presentation.shapeOutlineStyle.solid"),
-              onPick: (style) =>
-                commitVideoBorder(block.id, { style, color: state.color, width: state.width }),
-            }}
-          />
-        </RibbonDropdownMenuContent>
-      </DropdownMenu>
-    );
-  };
-  // Picture Format and Graphics Format share PowerPoint's Arrange group:
-  // Bring Forward, Send Backward, Selection Pane, Align, Group and Rotate
-  // over the same picture selection (an SVG graphic is a picture block).
-  const renderPictureArrangeGroup = (kind: "image" | "graphic") =>
-    buildPictureArrangeGroup({
-      t,
-      selectionPaneReturnFocusRef,
-      selectionPaneImageTriggerRef,
-      alignToSlide,
-      writeAlignToSlide,
-      contextualImageBlocks,
-      selectionPaneOpen,
-      alignSelectedBlocks,
-      distributeSelectedBlocks,
-      flipSelectedBlocks,
-      quarterTurnSelectedBlocks,
-      groupSelectedBlocks,
-      ungroupSelectedBlocks,
-      drawingImageSelectionIsEligible,
-      canGroupSelectedImages,
-      pictureGroupRefusalReason:
-        contextualImageBlocks.length >= 2
-          ? groupRefusalReason(selectedImagesGroupRefusal)
-          : undefined,
-      canUngroupSelectedImages,
-      contextualImageCanMoveForward,
-      contextualImageCanMoveBackward,
-      contextualImageCanMoveToFront,
-      contextualImageCanMoveToBack,
-      bringBlockToFront,
-      sendBlockToBack,
-      invokeContextualImageArrangeStep,
-      featureDecision,
-      executePresentationFeature,
-    })(kind);
   // Office's Effects cascade (Preset, Shadow, Reflection, Glow, Soft
   // Edges, Bevel, 3-D Rotation) over one object's effects: Picture Effects,
   // Video Effects and Shape Effects are the same menu in PowerPoint.
@@ -48842,25 +43968,6 @@ export default function PresentationWindow({
       />
     );
   };
-  const renderPictureEffectsMenu = (
-    block: PresentationImageBlock | PresentationEmbedBlock,
-    options: { label: string; testId: string; controlId: string },
-  ) => {
-    const image = block.type === "image" ? block : null;
-    const blocker = presentationPictureEffectsBlocker(block);
-    return renderOfficeEffectsMenu({
-      effects: block.pictureEffects,
-      shadow: image?.shadow === true,
-      styleEffects: presentationPictureStyleEffects(block) as ReadonlySet<OfficePictureEffectKind>,
-      disabled: !canEditBlockContent(block) || blocker !== null,
-      disabledReason: blocker === "preserved" ? t("presentation.shapeEffectsUnavailable") : undefined,
-      ...options,
-      // Format Picture's Effects page, or Format Video's Effects (a video
-      // opens the block pane with its Effects in view).
-      effectsPage: image || (block.type === "embed" && block.kind === "video") ? "effects" : undefined,
-      onPick: (kind, value) => commitPictureEffect(block.id, kind, value),
-    });
-  };
   // Shape Format > Shape Effects over the selected shapes (each keeps what it
   // already wears; the first shape's effects show as checked).
   const renderShapeEffectsMenu = (trigger: { label: string; displayLabel?: string; testId: string; controlId?: string }) => {
@@ -48877,18 +43984,6 @@ export default function PresentationWindow({
       onPick: (kind, value) => commitLiveSelectedShapeEffect(kind, value),
     });
   };
-
-  // Provider-free one-click correction. It stays local and enters the same
-  // one-save/one-Undo image-effect transaction as manual Corrections.
-  const autoEnhanceSelectedPicture = useCallback(() => {
-    const blockId = getSingleSelectedPictureId();
-    if (!blockId || !selectedPictureCorrectionsEditable) return;
-    updateImageEffects(blockId, { brightness: 108, contrast: 112 });
-  }, [
-    getSingleSelectedPictureId,
-    selectedPictureCorrectionsEditable,
-    updateImageEffects,
-  ]);
 
   // ---- Picture Format ▸ Remove Background / Erase: one on-picture session
   // (`OfficePictureEditOverlay`); the image tab shows its own commands while
@@ -48908,54 +44003,6 @@ export default function PresentationWindow({
     eraseSegments: BackgroundRemovalSegment[];
     busy: boolean;
   } | null>(null);
-  // A plain boolean: the guard narrows to an image block, so negating it
-  // in the chain would narrow the picture itself away.
-  const contextualImageIsOfficeGraphic: boolean =
-    isPresentationOfficeGraphic(contextualImageBlock);
-  const pictureEditTarget =
-    contextualImageBlock !== null &&
-    !contextualImageIsOfficeGraphic &&
-    !contextualPictureSourcePreserveOnly &&
-    canEditBlockContent(contextualImageBlock) &&
-    typeof contextualImageBlock.src === "string" &&
-    contextualImageBlock.src.length > 0
-      ? contextualImageBlock
-      : null;
-  const startPictureEdit = useCallback(
-    async (mode: "removal" | "erase") => {
-      const block = pictureEditTarget;
-      if (!block) return;
-      const stored = normalizeBackgroundRemovalSpec(block.backgroundRemoval);
-      let original =
-        typeof block.backgroundRemovalOriginalSrc === "string" &&
-        block.backgroundRemovalOriginalSrc
-          ? block.backgroundRemovalOriginalSrc
-          : null;
-      // An imported picture already removed (in PowerPoint or here) starts
-      // again from the original its package keeps (`a14:imgLayer`).
-      let fetchedOriginal: string | null = null;
-      if (mode === "removal" && stored && !original && pictureLayerOriginalDigest(block)) {
-        fetchedOriginal = await fetchPictureLayerOriginal(pageId, block.id);
-        original = fetchedOriginal;
-      }
-      setPictureEditSession({
-        blockId: block.id,
-        slideId: activeSlide.id,
-        mode,
-        baseSrc: mode === "removal" ? (original ?? block.src) : block.src,
-        originalSrc: fetchedOriginal,
-        spec: stored ?? defaultBackgroundRemovalSpec(),
-        pen: null,
-        eraseSegments: [],
-        busy: false,
-      });
-      if (mode === "removal" && stored && !original) {
-        publishLive(t("presentation.image.backgroundRemovalNoOriginal"));
-      }
-    },
-    [activeSlide.id, pageId, pictureEditTarget, publishLive, t],
-  );
-  const discardPictureEdit = useCallback(() => setPictureEditSession(null), []);
   // The session belongs to one picture on one slide: selecting anything else
   // ends it without a change, as clicking away from the picture does in Office.
   useEffect(() => {
@@ -48967,36 +44014,6 @@ export default function PresentationWindow({
       setPictureEditSession(null);
     }
   }, [activeSlide.id, contextualImageBlock?.id, pictureEditSession]);
-  const keepPictureEdit = useCallback(async () => {
-    const session = pictureEditSession;
-    if (!session || session.busy) return;
-    setPictureEditSession({ ...session, busy: true });
-    try {
-      const src =
-        session.mode === "removal"
-          ? await renderBackgroundRemoval(session.baseSrc, session.spec)
-          : await renderPictureErase(
-              session.baseSrc,
-              session.eraseSegments,
-              PICTURE_ERASE_RADIUS,
-            );
-      commitLiveActiveBlocks((blocks) => {
-        const target = blocks.find((candidate) => candidate.id === session.blockId);
-        if (!target || target.type !== "image" || !canEditBlockContent(target)) return null;
-        const next = presentationPictureEditResult(
-          target as PresentationImageBlock,
-          session.mode === "removal"
-            ? { mode: "removal", src, spec: session.spec, originalSrc: session.originalSrc }
-            : { mode: "erase", src },
-        );
-        return blocks.map((candidate) => (candidate === target ? next : candidate));
-      });
-      setPictureEditSession(null);
-    } catch {
-      publishLive(t("presentation.image.editFailed"));
-      setPictureEditSession((current) => (current ? { ...current, busy: false } : current));
-    }
-  }, [commitLiveActiveBlocks, pictureEditSession, publishLive, t]);
   const pictureEditAnchor = useCallback(() => {
     const id = pictureEditSession?.blockId;
     if (!id) return null;
@@ -49031,31 +44048,6 @@ export default function PresentationWindow({
       flipV,
     };
   }, [pictureEditSession?.blockId, pictureEditSession?.slideId]);
-
-  const openPictureCompression = useCallback(() => {
-    if (
-      !contextualImageBlock ||
-      !selectedPictureCompressionEditable ||
-      !selectedPictureCompressionSource
-    ) {
-      return;
-    }
-    const width = geometryNumber(contextualImageBlock, "width");
-    const height = geometryNumber(contextualImageBlock, "height");
-    if (width === null || height === null) return;
-    pictureCompressionReturnFocusRef.current =
-      pictureCompressionTriggerRef.current;
-    setPictureCompressionTarget({
-      blockId: contextualImageBlock.id,
-      source: selectedPictureCompressionSource,
-      displayWidth: Math.max(1, width / AUTOFIT_EMU_PER_PX),
-      displayHeight: Math.max(1, height / AUTOFIT_EMU_PER_PX),
-    });
-  }, [
-    contextualImageBlock,
-    selectedPictureCompressionEditable,
-    selectedPictureCompressionSource,
-  ]);
   const closePictureCompression = useCallback(
     () => setPictureCompressionTarget(null),
     [],
@@ -49065,7 +44057,7 @@ export default function PresentationWindow({
       presetId: DocumentPictureCompressionPresetId,
       signal: AbortSignal,
     ): Promise<"compressed" | "unchanged" | "rejected"> => {
-      const frozen = pictureCompressionTarget;
+      const frozen = null;
       if (!frozen || signal.aborted) return "rejected";
       try {
         const result = await compressDocumentPictureDataUrl({
@@ -49102,7 +44094,7 @@ export default function PresentationWindow({
         return "rejected";
       }
     },
-    [canManipulateBlock, commitLiveActiveBlocks, pictureCompressionTarget],
+    [canManipulateBlock, commitLiveActiveBlocks, null],
   );
 
   // The deck's words as this window gave them to the AI, by read (the last
@@ -49448,6 +44440,8 @@ export default function PresentationWindow({
       ) as Record<string, unknown>,
     writable: () => !previewMode && !autosave.readOnly && !autosave.loading,
     activeSlideIndex: () => activeIndexRef.current,
+    selectedShapeIds: () => [...selectedBlockIdsRef.current],
+    generation: () => deckContentGenerationRef.current,
     withNewSlide: (layout, afterIndex) => {
       const inserted = slidesWithNewSlideFromLayout(
         slidesRef.current,
@@ -49498,6 +44492,8 @@ export default function PresentationWindow({
       withNewSlide: (layout, afterIndex) => liveAutomationRef.current.withNewSlide(layout, afterIndex),
       goToSlide: (index) => liveAutomationRef.current.goToSlide(index),
       commit: (next, changedSlideIds) => liveAutomationRef.current.commit(next, changedSlideIds),
+      selectedShapeIds: () => liveAutomationRef.current.selectedShapeIds?.() ?? [],
+      generation: () => liveAutomationRef.current.generation?.() ?? 0,
     });
   }, [guestMode, liveDeckIn, pageId]);
 
@@ -49830,20 +44826,6 @@ export default function PresentationWindow({
       ],
     );
   const presentationFeatureRuntime = useMemo(() => ({}), []);
-  const slideTransitionAdvanceAccessors = useMemo(
-    () => ({
-      getSlides: () => slidesRef.current,
-      getActiveIndex: () => activeIndexRef.current,
-      commitSlides,
-    }),
-    [commitSlides],
-  );
-  const slideTransitionAdvance = usePresentationSlideTransitionAdvance<SlideModel>({
-    instanceId: `${pageId}.${windowId ?? "primary"}`,
-    accessors: slideTransitionAdvanceAccessors,
-    capabilityContext: presentationCapabilityContext,
-    runtime: presentationFeatureRuntime,
-  });
   const togglePresentationViewAid = useCallback(
     (kind: PresentationViewAidKind) => {
       if (!isPresentationViewAidKind(kind)) return;
@@ -50648,9 +45630,6 @@ export default function PresentationWindow({
     [zoomNumberFormatter],
   );
   const slideZoomPercentValue = Number((slideZoom * 100).toFixed(2));
-  const slideZoomPercentLabel = formatPresentationZoomPercent(
-    slideZoomPercentValue,
-  );
   // PowerPoint's zoom runs from 10% to 400% whatever the window (View.Zoom,
   // Microsoft Learn); past Fit the canvas scrolls.
   const slideZoomDialMaximumPercent = PRESENTATION_VIEW_ZOOM_MAX_PERCENT;
@@ -50730,150 +45709,6 @@ export default function PresentationWindow({
       />
     </div>
   );
-  const setSlideTransition = useCallback(
-    (
-      kind: AuthorableSlideTransition,
-      direction?: SlideTransitionDirection,
-    ) => {
-      if (
-        !isAuthorableSlideTransition(kind) ||
-        (direction !== undefined &&
-          !isSlideTransitionDirectionForKind(kind, direction)) ||
-        slideTransitionPendingRef.current
-      ) {
-        return;
-      }
-      const active = slidesRef.current[activeIndexRef.current];
-      const authority = slideTransitionCommandAuthorityRef.current;
-      if (!active || !authority) return;
-      const payload: PresentationSlideTransitionCommandPayload = {
-        slideModelId: active.id,
-        kind,
-        ...(direction !== undefined ? { direction } : {}),
-      };
-      slideTransitionPendingRef.current = payload;
-      void authority
-        .invoke(presentationCapabilityContext, presentationFeatureRuntime)
-        .finally(() => {
-          if (slideTransitionPendingRef.current === payload) {
-            slideTransitionPendingRef.current = null;
-          }
-        });
-    },
-    [presentationCapabilityContext, presentationFeatureRuntime],
-  );
-  const setSlideTransitionDirection = useCallback(
-    (direction: string) => {
-      const liveSlide = slidesRef.current[activeIndexRef.current];
-      const liveKind = normalizeSlideTransition(liveSlide?.transition);
-      if (
-        !liveSlide ||
-        !isDirectionalSlideTransition(liveKind) ||
-        !isSlideTransitionDirectionForKind(liveKind, direction) ||
-        !slideTransitionCommand.canExecute(liveKind, direction)
-      ) {
-        return;
-      }
-      setSlideTransition(liveKind, direction);
-    },
-    [setSlideTransition, slideTransitionCommand],
-  );
-  const addAnimationEffect = useCallback(
-    (kind: PresentationAnimationEffectId) => {
-      if (animationEffectPendingRef.current) return;
-      const liveSlides = slidesRef.current;
-      const liveSlide = liveSlides[activeIndexRef.current];
-      const liveBlockId = selectedBlockIdRef.current;
-      const authority = animationEffectCommandAuthorityRef.current;
-      if (!liveSlide || !liveBlockId || !authority) return;
-      const payload: PresentationAnimationEffectCommandPayload = {
-        slideModelId: liveSlide.id,
-        blockModelId: liveBlockId,
-        kind,
-      };
-      animationEffectPendingRef.current = payload;
-      void authority
-        .invoke(presentationCapabilityContext, presentationFeatureRuntime)
-        .finally(() => {
-          if (animationEffectPendingRef.current === payload) {
-            animationEffectPendingRef.current = null;
-          }
-        });
-    },
-    [presentationCapabilityContext, presentationFeatureRuntime],
-  );
-  const addTimelineAnimationEffect = useCallback(
-    (kind: TimelineAnimation, motionPathPreset?: MotionPathPreset) => {
-      const liveSlides = slidesRef.current;
-      const slideIndex = activeIndexRef.current;
-      const liveSlide = liveSlides[slideIndex];
-      const blockId = selectedBlockIdRef.current;
-      const sequence = liveSlide?.animationSequence ?? [];
-      const liveBlock = liveSlide?.blocks.find((block) => block.id === blockId);
-      const requestedAnimation = motionPathPreset ? "none" : kind;
-      if (
-        !liveSlide ||
-        !blockId ||
-        !liveBlock ||
-        sequence.length >= MAX_TIMELINE_STEPS
-      ) {
-        return;
-      }
-      const request = {
-        slideSource: liveSlide.source,
-        blockSource: (liveBlock as { source?: unknown }).source,
-        animation: requestedAnimation,
-        ...(motionPathPreset !== undefined ? { motionPathPreset } : {}),
-      } as const;
-      if (!timelineAnimationAuthoringCapability(request).enabled) return;
-      if (!motionPathPreset && isPresentationAnimationEffectId(kind)) {
-        addAnimationEffect(kind);
-        return;
-      }
-      const nextStep = createAuthorableTimelineStep(blockId, request);
-      if (!nextStep) return;
-      const nextSequence = [...sequence, nextStep];
-      commitSlides(
-        liveSlides.map((slide, index) =>
-          index === slideIndex
-            ? { ...slide, animationSequence: nextSequence }
-            : slide,
-        ),
-      );
-      const nextIndex = nextSequence.length - 1;
-      selectedAnimationIndexRef.current = nextIndex;
-      selectedAnimationSlideIdRef.current = liveSlide.id;
-      setSelectedAnimationIndex(nextIndex);
-    },
-    [addAnimationEffect, commitSlides],
-  );
-  /**
-   * The Animations gallery on an object whose step is selected REPLACES that
-   * step's effect -- what its own hint promises ("choose another effect to
-   * replace it") -- and adds one otherwise. It used to append a second step
-   * beside the first (PPT-B297); the Animation Pane's Add Animation still
-   * appends.
-   */
-  const applyAnimationGalleryEffect = useCallback(
-    (kind: TimelineAnimation) => {
-      const liveSlide = slidesRef.current[activeIndexRef.current];
-      const index = selectedAnimationIndexRef.current;
-      const step =
-        index !== null ? liveSlide?.animationSequence?.[index] : undefined;
-      if (
-        liveSlide &&
-        index !== null &&
-        step &&
-        selectedAnimationSlideIdRef.current === liveSlide.id &&
-        step.blockId === selectedBlockIdRef.current
-      ) {
-        updateTimelineStep(index, { animation: kind });
-        return;
-      }
-      addTimelineAnimationEffect(kind);
-    },
-    [addTimelineAnimationEffect, updateTimelineStep],
-  );
   const closeAnimationPane = useCallback(() => {
     setAnimationPaneOpen(false);
     selectedAnimationIndexRef.current = null;
@@ -50884,161 +45719,8 @@ export default function PresentationWindow({
     );
   }, []);
   const toggleAnimationPane = useCallback(() => {
-    if (animationPaneOpen) {
-      const dock = taskPaneDockRef.current;
-      if (dock && !dock.isFront("animation")) {
-        // Open behind another pane of the dock: bring it forward.
-        dock.bringForward("animation");
-        queueMicrotask(() =>
-          animationPaneTabRef.current?.focus({ preventScroll: true }),
-        );
-        return;
-      }
-      closeAnimationPane();
-      return;
-    }
     setAnimationPaneOpen(true);
-  }, [animationPaneOpen, closeAnimationPane]);
-  const resizeAnimationPaneFromClientX = useCallback((clientX: number) => {
-    if (typeof window === "undefined") return;
-    // The pane is docked at the stage's right edge; the splitter sits on its
-    // left edge, so the width is the distance from the pointer to that edge.
-    // Without a layout (a pane not drawn yet) the dock's edge is the
-    // window's, less the stage's inset.
-    const rect = animationPaneRef.current?.getBoundingClientRect();
-    const dockRight =
-      rect && rect.width > 0 ? rect.right : window.innerWidth - 18;
-    setAnimationPaneWidth(
-      clampAnimationPaneWidth(dockRight - clientX, window.innerWidth),
-    );
-  }, []);
-  const stepAnimationPaneWidth = useCallback((delta: number) => {
-    if (typeof window === "undefined") return;
-    setAnimationPaneWidth((current) =>
-      clampAnimationPaneWidth(current + delta, window.innerWidth),
-    );
-  }, []);
-  const selectAnimationStep = useCallback((index: number) => {
-    const liveSlide = slidesRef.current[activeIndexRef.current];
-    const step = liveSlide?.animationSequence?.[index];
-    if (!liveSlide || !step) return;
-    selectedAnimationIndexRef.current = index;
-    selectedAnimationSlideIdRef.current = liveSlide.id;
-    setSelectedAnimationIndex(index);
-  }, []);
-  // A tag on the slide picks its effect and the object it animates, as a
-  // click on PowerPoint's tag does.
-  const pickAnimationTag = useCallback(
-    (blockId: string, index: number) => {
-      const liveSlide = slidesRef.current[activeIndexRef.current];
-      if (!liveSlide?.blocks.some((block) => block.id === blockId)) return;
-      selectedAnimationIndexRef.current = index;
-      selectedAnimationSlideIdRef.current = liveSlide.id;
-      selectedBlockIdsRef.current = new Set([blockId]);
-      selectedBlockIdRef.current = blockId;
-      setSelectedBlockIds(new Set([blockId]));
-      setSelectedBlockId(blockId);
-      setSelectedAnimationIndex(index);
-    },
-    [setSelectedAnimationIndex, setSelectedBlockId, setSelectedBlockIds],
-  );
-  const animationTagLabels = useMemo(
-    () => ({
-      group: t("presentation.animationTags.label"),
-      click: (click: number) => t("presentation.animationTags.click", { click }),
-      onEntry: t("presentation.animationTags.onEntry"),
-      trigger: t("presentation.animationTags.trigger"),
-    }),
-    [t],
-  );
-  const editAnimationSequence = useCallback(
-    (operation: AnimationSequenceEditOperation) => {
-      if (animationSequencePendingRef.current) return;
-      const liveSlides = slidesRef.current;
-      const liveSlide = liveSlides[activeIndexRef.current];
-      const index = selectedAnimationIndexRef.current;
-      const step =
-        liveSlide && index !== null
-          ? liveSlide.animationSequence?.[index]
-          : undefined;
-      const authority = animationSequenceCommandAuthorityRef.current;
-      if (
-        !liveSlide ||
-        selectedAnimationSlideIdRef.current !== liveSlide.id ||
-        index === null ||
-        !step ||
-        !authority
-      ) {
-        return;
-      }
-      const payload: PresentationAnimationSequenceCommandPayload = {
-        slideModelId: liveSlide.id,
-        index,
-        expectedStep: copyTimelineStep(step),
-        operation,
-      };
-      animationSequencePendingRef.current = payload;
-      void authority
-        .invoke(presentationCapabilityContext, presentationFeatureRuntime)
-        .then((applied) => {
-          if (!applied) return;
-          if (operation === "move-earlier") {
-            selectedAnimationIndexRef.current = index - 1;
-            setSelectedAnimationIndex(index - 1);
-          } else if (operation === "move-later") {
-            selectedAnimationIndexRef.current = index + 1;
-            setSelectedAnimationIndex(index + 1);
-          } else {
-            const remaining = liveSlide.animationSequence?.length ?? 0;
-            const nextIndex =
-              remaining <= 1 ? null : Math.min(index, remaining - 2);
-            selectedAnimationIndexRef.current = nextIndex;
-            if (nextIndex === null) selectedAnimationSlideIdRef.current = null;
-            setSelectedAnimationIndex(nextIndex);
-          }
-        })
-        .finally(() => {
-          if (animationSequencePendingRef.current === payload) {
-            animationSequencePendingRef.current = null;
-          }
-        });
-    },
-    [presentationCapabilityContext, presentationFeatureRuntime],
-  );
-  const editAnimationTiming = useCallback(
-    (
-      index: number,
-      expectedStep: TimelineStep,
-      value: AnimationTimingValue,
-    ) => {
-      if (animationTimingPendingRef.current) return;
-      const liveSlide = slidesRef.current[activeIndexRef.current];
-      const authority = animationTimingCommandAuthorityRef.current;
-      if (
-        !liveSlide ||
-        !authority ||
-        selectedAnimationSlideIdRef.current !== liveSlide.id ||
-        selectedAnimationIndexRef.current !== index
-      ) {
-        return;
-      }
-      const payload: PresentationAnimationTimingCommandPayload = {
-        slideModelId: liveSlide.id,
-        index,
-        expectedStep,
-        ...value,
-      };
-      animationTimingPendingRef.current = payload;
-      void authority
-        .invoke(presentationCapabilityContext, presentationFeatureRuntime)
-        .finally(() => {
-          if (animationTimingPendingRef.current === payload) {
-            animationTimingPendingRef.current = null;
-          }
-        });
-    },
-    [presentationCapabilityContext, presentationFeatureRuntime],
-  );
+  }, [false, closeAnimationPane]);
   const restoreTransitionSoundFocus = useCallback(() => {
     const target = transitionSoundReturnFocusRef.current;
     transitionSoundReturnFocusRef.current = null;
@@ -51053,23 +45735,6 @@ export default function PresentationWindow({
   }, [restoreTransitionSoundFocus]);
   const bindTransitionSoundInput = useFilePickerCancel(transitionSoundInputRef, cancelTransitionSoundPicker);
   useFilePickerFocusFallback(transitionSoundInputRef, transitionSoundPickerOpenRef, cancelTransitionSoundPicker);
-  const beginTransitionSoundPicker = useCallback(
-    (trigger: HTMLButtonElement | null) => {
-      const input = transitionSoundInputRef.current;
-      if (
-        !input ||
-        transitionSoundBusyRef.current ||
-        !slideTransitionSoundCommand.canExecute()
-      ) {
-        return;
-      }
-      transitionSoundReturnFocusRef.current = trigger;
-      transitionSoundPickerOpenRef.current = true;
-      input.value = "";
-      input.click();
-    },
-    [slideTransitionSoundCommand],
-  );
   const onTransitionSoundFile = useCallback(
     async (event: ReactChangeEvent<HTMLInputElement>) => {
       const input = event.currentTarget;
@@ -51144,69 +45809,9 @@ export default function PresentationWindow({
       toast,
     ],
   );
-  const clearTransitionSound = useCallback(() => {
-    const active = slidesRef.current[activeIndexRef.current];
-    if (!active || slideTransitionSoundPendingRef.current) return;
-    const payload: PresentationSlideTransitionSoundCommandPayload = {
-      slideModelId: active.id,
-      sound: null,
-    };
-    slideTransitionSoundPendingRef.current = payload;
-    slideTransitionSoundCommand.execute(payload);
-    slideTransitionSoundPendingRef.current = null;
-  }, [slideTransitionSoundCommand]);
-  /** Transitions > Sound > a built-in sound, embedded as PowerPoint does (E037). */
-  const applyBuiltinTransitionSound = useCallback(
-    (id: PresentationBuiltinTransitionSoundId) => {
-      const active = slidesRef.current[activeIndexRef.current];
-      if (!active || slideTransitionSoundPendingRef.current || transitionSoundBusyRef.current) {
-        return;
-      }
-      const payload: PresentationSlideTransitionSoundCommandPayload = {
-        slideModelId: active.id,
-        sound: builtinTransitionSound(id),
-      };
-      slideTransitionSoundPendingRef.current = payload;
-      const applied = slideTransitionSoundCommand.execute(payload);
-      slideTransitionSoundPendingRef.current = null;
-      if (!applied) {
-        toast({
-          title: t("presentation.transition.soundFailed"),
-          description: t("presentation.transition.soundUnchanged"),
-          variant: "destructive",
-        });
-      }
-    },
-    [slideTransitionSoundCommand, t, toast],
-  );
   // The Duration box's draft, committed (`commitTransitionDurationDraft`,
   // defined with the box's handlers below).
   const commitTransitionDurationDraftRef = useRef<() => Promise<unknown> | undefined>(() => undefined);
-  const applyTransitionToAll = useCallback(() => {
-    if (slideTransitionApplyAllPendingRef.current) return;
-    const apply = () => {
-      const active = slidesRef.current[activeIndexRef.current];
-      const authority = slideTransitionApplyAllCommandAuthorityRef.current;
-      if (!active || !authority) return;
-      const payload: PresentationSlideTransitionApplyAllCommandPayload = {
-        sourceSlideModelId: active.id,
-      };
-      slideTransitionApplyAllPendingRef.current = payload;
-      void authority
-        .invoke(presentationCapabilityContext, presentationFeatureRuntime)
-        .finally(() => {
-          if (slideTransitionApplyAllPendingRef.current === payload) {
-            slideTransitionApplyAllPendingRef.current = null;
-          }
-        });
-    };
-    // A duration typed and not yet committed (the ribbon's button keeps the
-    // box's focus, so it never blurs) is the slide's duration first: Apply To
-    
-    const committing = commitTransitionDurationDraftRef.current();
-    if (committing) void committing.finally(apply);
-    else apply();
-  }, [presentationCapabilityContext, presentationFeatureRuntime]);
   const clearTransitionPreviewTimer = useCallback(() => {
     if (transitionPreviewTimerRef.current !== null) {
       clearTimeout(transitionPreviewTimerRef.current);
@@ -51229,66 +45834,6 @@ export default function PresentationWindow({
     },
     [clearTransitionPreviewTimer],
   );
-  const previewSlideTransition = useCallback(() => {
-    const liveSlides = slidesRef.current;
-    const liveIndex = Math.min(activeIndexRef.current, liveSlides.length - 1);
-    const liveSlide = liveSlides[liveIndex];
-    if (!liveSlide) return;
-    const morphPlayback = resolveMorphSlideTransitionPreview(
-      liveSlides,
-      liveIndex,
-    );
-    const basicPlayback = morphPlayback
-      ? null
-      : resolveSlideTransitionPreview(liveSlide, Math.random);
-    if (!morphPlayback && !basicPlayback) return;
-
-    clearTransitionPreviewTimer();
-    const token = transitionPreviewTokenRef.current + 1;
-    const next: EditorTransitionPreviewPlayback = morphPlayback
-      ? {
-          ...morphPlayback,
-          fromSlide: liveSlides[liveIndex - 1],
-          toSlide: liveSlide,
-          token,
-        }
-      : { ...basicPlayback!, kind: "basic", token };
-    transitionPreviewTokenRef.current = next.token;
-    transitionPreviewRef.current = next;
-    setTransitionPreview(next);
-    const sound = normalizePresentationTransitionSound(
-      liveSlide.transitionSound,
-    );
-    if (sound && typeof Audio === "function") {
-      const play = (src: string) => {
-        if (transitionPreviewTokenRef.current !== token) return;
-        try {
-          const audio = new Audio(src);
-          transitionSoundPreviewRef.current = audio;
-          void audio.play().catch(() => undefined);
-        } catch {
-          transitionSoundPreviewRef.current = null;
-        }
-      };
-      if ("dataUrl" in sound) play(sound.dataUrl);
-      else if ("fingerprint" in sound) {
-        // An imported deck's own sound plays from its package part.
-        if (pageId) play(packageTransitionSoundUrl(getApiHttpBaseUrl(), pageId, sound));
-      } else
-        // A stored sound plays through the link its page mints.
-        void storedPresentationAudioUrl(pageId, sound).then((url) => {
-          if (url) play(url);
-        });
-    }
-
-    const reducedMotion =
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    transitionPreviewTimerRef.current = setTimeout(
-      () => finishTransitionPreview(next.token),
-      reducedMotion ? 0 : next.durationMs + 80,
-    );
-  }, [clearTransitionPreviewTimer, finishTransitionPreview, pageId]);
   const handleTransitionPreviewAnimationEnd = useCallback(
     (event: ReactAnimationEvent<HTMLDivElement>, token: number) => {
       if (event.target !== event.currentTarget) return;
@@ -51303,16 +45848,16 @@ export default function PresentationWindow({
     }
   }, [activeSlide.id, finishTransitionPreview]);
   useEffect(() => {
-    if (!transitionPreview) return;
+    return;
     const cancelOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
-      finishTransitionPreview(transitionPreview.token);
+      finishTransitionPreview(null.token);
     };
     window.addEventListener("keydown", cancelOnEscape, true);
     return () => window.removeEventListener("keydown", cancelOnEscape, true);
-  }, [finishTransitionPreview, transitionPreview]);
+  }, [finishTransitionPreview, null]);
   useEffect(
     () => () => {
       clearTransitionPreviewTimer();
@@ -51342,216 +45887,6 @@ export default function PresentationWindow({
     },
     [clearAnimationPreviewTimer],
   );
-  const previewAnimationSequenceFrom = useCallback((startIndex: number) => {
-    const liveSlides = slidesRef.current;
-    const liveIndex = Math.min(activeIndexRef.current, liveSlides.length - 1);
-    const liveSlide = liveSlides[liveIndex];
-    if (!liveSlide) return;
-    const frames = resolveTimelinePreviewFramesFrom(
-      liveSlide.animationSequence ?? [],
-      startIndex,
-    );
-    if (frames.length === 0) return;
-
-    clearAnimationPreviewTimer();
-    const firstFrame = {
-      slideModelId: liveSlide.id,
-      token: animationPreviewTokenRef.current + 1,
-      frames,
-      frameIndex: 0,
-    };
-    animationPreviewTokenRef.current = firstFrame.token;
-    animationPreviewRef.current = firstFrame;
-    setAnimationPreview(firstFrame);
-
-    const reducedMotion =
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    function scheduleFrame(): void {
-      const current = animationPreviewRef.current;
-      if (!current || current.token !== firstFrame.token) return;
-      const frame = current.frames[current.frameIndex];
-      animationPreviewTimerRef.current = setTimeout(
-        advanceFrame,
-        reducedMotion ? 0 : frame.durationMs + 80,
-      );
-    }
-    function advanceFrame(): void {
-      const current = animationPreviewRef.current;
-      if (!current || current.token !== firstFrame.token) return;
-      if (current.frameIndex >= current.frames.length - 1) {
-        finishAnimationPreview(current.token);
-        return;
-      }
-      const nextFrame = {
-        ...current,
-        frameIndex: current.frameIndex + 1,
-      };
-      animationPreviewRef.current = nextFrame;
-      setAnimationPreview(nextFrame);
-      scheduleFrame();
-    }
-    scheduleFrame();
-  }, [clearAnimationPreviewTimer, finishAnimationPreview]);
-  const previewAnimations = useCallback(
-    () => previewAnimationSequenceFrom(0),
-    [previewAnimationSequenceFrom],
-  );
-  const setAnimationEffectOption = useCallback(
-    (option: PresentationAnimationEffectOption) => {
-      if (animationEffectPendingRef.current) return;
-      const liveSlide = slidesRef.current[activeIndexRef.current];
-      const index = selectedAnimationIndexRef.current;
-      const authority = animationEffectOptionCommandAuthorityRef.current;
-      const expectedStep =
-        index === null ? null : liveSlide?.animationSequence?.[index] ?? null;
-      if (
-        !liveSlide ||
-        index === null ||
-        !expectedStep ||
-        selectedAnimationSlideIdRef.current !== liveSlide.id ||
-        !authority
-      ) {
-        return;
-      }
-      const payload: PresentationAnimationEffectCommandPayload = {
-        operation: "set-effect-option",
-        slideModelId: liveSlide.id,
-        index,
-        expectedStep: copyTimelineStep(expectedStep),
-        option,
-      };
-      if (!animationEffectCommandRef.current.canExecute(payload)) return;
-      animationEffectPendingRef.current = payload;
-      void authority
-        .invoke(presentationCapabilityContext, presentationFeatureRuntime)
-        .then((applied) => {
-          if (applied) queueMicrotask(previewAnimations);
-        })
-        .finally(() => {
-          if (animationEffectPendingRef.current === payload) {
-            animationEffectPendingRef.current = null;
-          }
-        });
-    },
-    [
-      presentationCapabilityContext,
-      presentationFeatureRuntime,
-      previewAnimations,
-    ],
-  );
-  const setAnimationTextSequence = useCallback(
-    (sequence: TimelineTextSequence) => {
-      const liveSlide = slidesRef.current[activeIndexRef.current];
-      const index = selectedAnimationIndexRef.current;
-      const expectedStep =
-        liveSlide && index !== null
-          ? liveSlide.animationSequence?.[index]
-          : undefined;
-      if (
-        !liveSlide ||
-        index === null ||
-        !expectedStep ||
-        selectedAnimationSlideIdRef.current !== liveSlide.id
-      ) {
-        return;
-      }
-      const build = timelineTextBuildRange(liveSlide.animationSequence ?? [], index);
-      const applied = animationEffectCommand.execute({
-        operation: "set-text-sequence",
-        slideModelId: liveSlide.id,
-        index,
-        expectedStep: copyTimelineStep(expectedStep),
-        sequence,
-      });
-      if (!applied || !build) return;
-      // The effect stays selected: its first step, where the build begins.
-      selectedAnimationIndexRef.current = build.first;
-      setSelectedAnimationIndex(build.first);
-      queueMicrotask(previewAnimations);
-    },
-    [animationEffectCommand, previewAnimations],
-  );
-  const setAnimationObjectTrigger = useCallback(
-    (triggerBlockId: string | null) => {
-      const liveSlide = slidesRef.current[activeIndexRef.current];
-      const index = selectedAnimationIndexRef.current;
-      const expectedStep =
-        liveSlide && index !== null
-          ? liveSlide.animationSequence?.[index]
-          : undefined;
-      if (
-        !liveSlide ||
-        index === null ||
-        !expectedStep ||
-        selectedAnimationSlideIdRef.current !== liveSlide.id
-      ) {
-        return;
-      }
-      animationEffectCommand.execute({
-        operation: "set-object-trigger",
-        slideModelId: liveSlide.id,
-        index,
-        expectedStep: copyTimelineStep(expectedStep),
-        triggerBlockId,
-      });
-    },
-    [animationEffectCommand],
-  );
-  const setAnimationEffectColor = useCallback(
-    (value: string | null) => {
-      if (animationEffectPendingRef.current) return;
-      const normalized = value === null ? null : normalizeOfficeHexColor(value);
-      if (value !== null && normalized === null) return;
-      const color = normalized === defaultAnimationFillColor ? null : normalized;
-      const liveSlide = slidesRef.current[activeIndexRef.current];
-      const index = selectedAnimationIndexRef.current;
-      const authority = animationEffectOptionCommandAuthorityRef.current;
-      const expectedStep =
-        index === null ? null : liveSlide?.animationSequence?.[index] ?? null;
-      if (
-        !liveSlide ||
-        index === null ||
-        !expectedStep ||
-        selectedAnimationSlideIdRef.current !== liveSlide.id ||
-        !authority
-      ) {
-        return;
-      }
-      const payload: PresentationAnimationEffectCommandPayload = {
-        operation: "set-effect-color",
-        slideModelId: liveSlide.id,
-        index,
-        expectedStep: copyTimelineStep(expectedStep),
-        color,
-      };
-      if (!animationEffectCommandRef.current.canExecute(payload)) return;
-      animationEffectPendingRef.current = payload;
-      setAnimationEffectOptionsMenuOpen(false);
-      void authority
-        .invoke(presentationCapabilityContext, presentationFeatureRuntime)
-        .then((applied) => {
-          if (!applied) return;
-          if (normalized) {
-            setAnimationEffectRecentColors((current) =>
-              pushRecentColor(current, normalized),
-            );
-          }
-          queueMicrotask(previewAnimations);
-        })
-        .finally(() => {
-          if (animationEffectPendingRef.current === payload) {
-            animationEffectPendingRef.current = null;
-          }
-        });
-    },
-    [
-      defaultAnimationFillColor,
-      presentationCapabilityContext,
-      presentationFeatureRuntime,
-      previewAnimations,
-    ],
-  );
   useEffect(() => {
     const current = animationPreviewRef.current;
     if (current && current.slideModelId !== activeSlide.id) {
@@ -51559,16 +45894,16 @@ export default function PresentationWindow({
     }
   }, [activeSlide.id, finishAnimationPreview]);
   useEffect(() => {
-    if (!animationPreview) return;
+    return;
     const cancelOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
-      finishAnimationPreview(animationPreview.token);
+      finishAnimationPreview(null.token);
     };
     window.addEventListener("keydown", cancelOnEscape, true);
     return () => window.removeEventListener("keydown", cancelOnEscape, true);
-  }, [animationPreview, finishAnimationPreview]);
+  }, [null, finishAnimationPreview]);
   useEffect(
     () => () => {
       clearAnimationPreviewTimer();
@@ -51604,21 +45939,6 @@ export default function PresentationWindow({
     },
     [],
   );
-  const beginTransitionDurationEdit = useCallback(
-    (slideModelId: string, durationMs: number) => {
-      writeTransitionDurationDraft({
-        slideModelId,
-        value: formatTransitionDurationSeconds(durationMs),
-      });
-    },
-    [writeTransitionDurationDraft],
-  );
-  const changeTransitionDurationDraft = useCallback(
-    (slideModelId: string, value: string) => {
-      writeTransitionDurationDraft({ slideModelId, value });
-    },
-    [writeTransitionDurationDraft],
-  );
   const commitTransitionDurationDraft = useCallback(() => {
     const draft = transitionDurationDraftRef.current;
     writeTransitionDurationDraft(null);
@@ -51630,286 +45950,6 @@ export default function PresentationWindow({
   useEffect(() => {
     commitTransitionDurationDraftRef.current = commitTransitionDurationDraft;
   }, [commitTransitionDurationDraft]);
-  const cancelTransitionDurationDraft = useCallback(() => {
-    writeTransitionDurationDraft(null);
-  }, [writeTransitionDurationDraft]);
-  const handleTransitionDurationKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLInputElement>) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        transitionDurationSkipBlurRef.current = true;
-        cancelTransitionDurationDraft();
-        event.currentTarget.blur();
-      } else if (event.key === "Enter") {
-        event.preventDefault();
-        transitionDurationSkipBlurRef.current = true;
-        commitTransitionDurationDraft();
-        event.currentTarget.blur();
-      }
-    },
-    [cancelTransitionDurationDraft, commitTransitionDurationDraft],
-  );
-  const activeTransitionDirection = normalizeSlideTransitionDirection(
-    normalizedActiveTransition,
-    activeSlide.transitionDirection,
-  );
-  const activeDirectionalTransition = isDirectionalSlideTransition(
-    activeAuthorableTransition,
-  )
-    ? activeAuthorableTransition
-    : null;
-  const transitionEffectDirectionOptions =
-    activeDirectionalTransition === null
-      ? []
-      : slideTransitionEffectOptions(activeDirectionalTransition).map(
-          (direction) => ({
-            direction,
-            enabled: slideTransitionCommand.canExecute(
-              activeDirectionalTransition,
-              direction,
-            ),
-          }),
-        );
-  const transitionEffectOptionLabel = (
-    option: SlideTransitionDirection,
-  ): string => {
-    if (activeDirectionalTransition === "morph") {
-      // Transitions > Effect Options for Morph: Objects, Words, Characters.
-      if (option === "words") return t("presentation.transition.morphWords");
-      if (option === "characters") return t("presentation.transition.morphCharacters");
-      return t("presentation.transition.morphObjects");
-    }
-    if (isSlideTransitionP14SideDirectionKind(activeDirectionalTransition)) {
-      if (option === "left") return t("presentation.transition.directionLeft");
-      if (option === "right") return t("presentation.transition.directionRight");
-      if (option === "up") return t("presentation.transition.directionUp");
-      if (option === "down") return t("presentation.transition.directionDown");
-    }
-    if (
-      activeDirectionalTransition === "push" &&
-      option in SLIDE_TRANSITION_PUSH_OPTION_FROM
-    ) {
-      // PowerPoint names a Push option by the side the new slide enters from.
-      const from =
-        SLIDE_TRANSITION_PUSH_OPTION_FROM[
-          option as keyof typeof SLIDE_TRANSITION_PUSH_OPTION_FROM
-        ];
-      return t(`presentation.transition.pushFrom.${from}` as "presentation.transition.pushFrom.bottom");
-    }
-    if (activeDirectionalTransition === "clock") {
-      if (option === "one-spoke") {
-        return t("presentation.transition.clockOneSpoke");
-      }
-      if (option === "two-spokes") {
-        return t("presentation.transition.clockTwoSpokes");
-      }
-      if (option === "three-spokes") {
-        return t("presentation.transition.clockThreeSpokes");
-      }
-      if (option === "four-spokes") {
-        return t("presentation.transition.clockFourSpokes");
-      }
-      return t("presentation.transition.clockEightSpokes");
-    }
-    if (activeDirectionalTransition === "reveal") {
-      if (option === "left") return t("presentation.transition.directionLeft");
-      if (option === "right") {
-        return t("presentation.transition.directionRight");
-      }
-      if (option === "left-through-black") {
-        return t("presentation.transition.revealLeftThroughBlack");
-      }
-      return t("presentation.transition.revealRightThroughBlack");
-    }
-    if (activeDirectionalTransition === "ripple") {
-      if (option === "center") {
-        return t("presentation.transition.directionCenter");
-      }
-      if (option === "left-up") {
-        return t("presentation.transition.directionLeftUp");
-      }
-      if (option === "left-down") {
-        return t("presentation.transition.directionLeftDown");
-      }
-      if (option === "right-up") {
-        return t("presentation.transition.directionRightUp");
-      }
-      return t("presentation.transition.directionRightDown");
-    }
-    if (activeDirectionalTransition === "glitter") {
-      if (option === "left-diamond") {
-        return t("presentation.transition.glitterLeftDiamond");
-      }
-      if (option === "right-diamond") {
-        return t("presentation.transition.glitterRightDiamond");
-      }
-      if (option === "up-diamond") {
-        return t("presentation.transition.glitterUpDiamond");
-      }
-      if (option === "down-diamond") {
-        return t("presentation.transition.glitterDownDiamond");
-      }
-      if (option === "left-hexagon") {
-        return t("presentation.transition.glitterLeftHexagon");
-      }
-      if (option === "right-hexagon") {
-        return t("presentation.transition.glitterRightHexagon");
-      }
-      if (option === "up-hexagon") {
-        return t("presentation.transition.glitterUpHexagon");
-      }
-      return t("presentation.transition.glitterDownHexagon");
-    }
-    if (activeDirectionalTransition === "shred") {
-      if (option === "strips-in") {
-        return t("presentation.transition.shredStripsIn");
-      }
-      if (option === "strips-out") {
-        return t("presentation.transition.shredStripsOut");
-      }
-      if (option === "rectangles-in") {
-        return t("presentation.transition.shredRectanglesIn");
-      }
-      return t("presentation.transition.shredRectanglesOut");
-    }
-    if (activeDirectionalTransition === "fly-through") {
-      if (option === "in") return t("presentation.transition.flyThroughIn");
-      if (option === "out") {
-        return t("presentation.transition.flyThroughOut");
-      }
-      if (option === "in-bounce") {
-        return t("presentation.transition.flyThroughInBounce");
-      }
-      return t("presentation.transition.flyThroughOutBounce");
-    }
-    // PowerPoint names the Page Curl options for the single page they turn;
-    // the Double ones belong to a preset MRAI does not author.
-    if (activeDirectionalTransition === "page-curl") {
-      return option === "left"
-        ? t("presentation.transition.pageCurlSingleLeft")
-        : t("presentation.transition.pageCurlSingleRight");
-    }
-    if (
-      (isSlideTransitionP14LeftRightKind(activeDirectionalTransition) ||
-        isSlideTransitionP15LeftRightKind(activeDirectionalTransition) ||
-        isSlideTransitionEightDirectionKind(activeDirectionalTransition)) &&
-      option === "left"
-    ) {
-      return t("presentation.transition.directionLeft");
-    }
-    if (
-      (isSlideTransitionP14LeftRightKind(activeDirectionalTransition) ||
-        isSlideTransitionP15LeftRightKind(activeDirectionalTransition) ||
-        isSlideTransitionEightDirectionKind(activeDirectionalTransition)) &&
-      option === "right"
-    ) {
-      return t("presentation.transition.directionRight");
-    }
-    if (isSlideTransitionEightDirectionKind(activeDirectionalTransition)) {
-      if (option === "up") return t("presentation.transition.directionUp");
-      if (option === "down") return t("presentation.transition.directionDown");
-      if (option === "left-up") {
-        return t("presentation.transition.directionLeftUp");
-      }
-      if (option === "left-down") {
-        return t("presentation.transition.directionLeftDown");
-      }
-      if (option === "right-up") {
-        return t("presentation.transition.directionRightUp");
-      }
-      if (option === "right-down") {
-        return t("presentation.transition.directionRightDown");
-      }
-    }
-    if (option === "circle") return t("presentation.motionPath.circle");
-    if (option === "diamond") return t("presentation.shape.diamond");
-    if (option === "plus") return t("presentation.shape.plus");
-    if (option === "in") return t("memoryGraph.camera.zoomIn");
-    if (option === "out") return t("memoryGraph.camera.zoomOut");
-    if (option === "horizontal-out") {
-      return t("presentation.transition.splitHorizontalOut");
-    }
-    if (option === "horizontal-in") {
-      return t("presentation.transition.splitHorizontalIn");
-    }
-    if (option === "vertical-out") {
-      return t("presentation.transition.splitVerticalOut");
-    }
-    if (option === "vertical-in") {
-      return t("presentation.transition.splitVerticalIn");
-    }
-    if (option === "horizontal") {
-      return t("presentation.transition.orientationHorizontal");
-    }
-    if (option === "vertical") {
-      return t("presentation.transition.orientationVertical");
-    }
-    return t(
-      `presentation.transition.${activeDirectionalTransition}-${option}` as "presentation.transition.push-left",
-    );
-  };
-  const transitionEffectOptionsEditable =
-    transitionEffectDirectionOptions.some((option) => option.enabled);
-  const transitionEffectOptionsDisabledReason =
-    transitionEffectOptionsEditable
-      ? undefined
-      : activeDirectionalTransition !== null
-        ? t("presentation.transition.effectOptionsUnavailable")
-        : t("document.capability.unavailable");
-  const activeTransitionSound = normalizePresentationTransitionSound(
-    activeSlide.transitionSound,
-  );
-  const transitionSoundEditable =
-    slideTransitionSoundCommand.canExecute() && !transitionSoundBusy;
-  const activeTransitionDurationMs =
-    activeAuthorableTransition === DEFAULT_SLIDE_TRANSITION
-      ? 0
-      : (activeSlide.transitionDurationMs ??
-        (activeAuthorableTransition
-          ? defaultAuthoringTransitionDuration(activeAuthorableTransition)
-          : null) ??
-        BASIC_TRANSITION_DURATION_MS);
-  const activeTransitionDurationInputValue =
-    transitionDurationDraft?.slideModelId === activeSlide.id
-      ? transitionDurationDraft.value
-      : activeAuthorableTransition === DEFAULT_SLIDE_TRANSITION
-        ? formatTransitionDurationSeconds(NONE_TRANSITION_DISPLAY_DURATION_MS)
-        : formatTransitionDurationSeconds(activeTransitionDurationMs);
-  const transitionDurationEditable =
-    slideTransitionDurationCommand.canExecute();
-  const transitionDurationControlDisabled =
-    !transitionDurationEditable ||
-    activeAuthorableTransition === null ||
-    activeAuthorableTransition === DEFAULT_SLIDE_TRANSITION;
-  const stepTransitionDuration = useCallback(
-    (direction: "increment" | "decrement") => {
-      if (transitionDurationControlDisabled) return;
-      const durationMs = parseTransitionDurationSeconds(
-        activeTransitionDurationInputValue,
-      );
-      if (durationMs === undefined) return;
-      const nextDurationMs = Math.max(
-        MIN_TRANSITION_DURATION_SECONDS * 1000,
-        Math.min(
-          MAX_TRANSITION_DURATION_SECONDS * 1000,
-          durationMs +
-            (direction === "increment"
-              ? TRANSITION_DURATION_STEP_MS
-              : -TRANSITION_DURATION_STEP_MS),
-        ),
-      );
-      writeTransitionDurationDraft(null);
-      if (nextDurationMs === durationMs) return;
-      setSlideTransitionDuration(nextDurationMs, activeSlide.id);
-    },
-    [
-      activeSlide.id,
-      activeTransitionDurationInputValue,
-      setSlideTransitionDuration,
-      transitionDurationControlDisabled,
-      writeTransitionDurationDraft,
-    ],
-  );
   // This render's bindings: their handlers and availability read this
   // render's state. The registry is built over them only when their shape
   // changes (presentationCommandBindingShape) and calls through to the
@@ -53275,7 +47315,7 @@ export default function PresentationWindow({
         }
         return next === block ? null : next;
       });
-      return committed || true;
+      return true;
     }
     if (result.exactPoints === undefined) {
       return Object.keys(result.patch).length === 0
@@ -53301,7 +47341,7 @@ export default function PresentationWindow({
         (formatted === block ? null : formatted)
       );
     });
-    return committed || true;
+    return true;
   };
   const ribbonParagraphDialogExtras = ribbonTextBlock
     ? paragraphDialogSelectionExtras(
@@ -53441,66 +47481,15 @@ export default function PresentationWindow({
   const updateContextualShapeShadow = (enabled: boolean) => {
     updateLiveSelectedShapeObjects({ shadow: enabled });
   };
-  const ribbonImageHasGeometry = contextualImageBlock
-    ? hasLayoutGeometry(contextualImageBlock)
-    : false;
   const ribbonChartHasGeometry = contextualChartBlock
     ? hasLayoutGeometry(contextualChartBlock)
     : false;
-  // Arrange, Align and Size move or size the frame: a locked one stays.
-  const ribbonMediaHasGeometry = contextualMediaBlock
-    ? hasLayoutGeometry(contextualMediaBlock) && canManipulateBlock(contextualMediaBlock)
-    : false;
-  const tableSplitMaxRows = contextualTableBlock
-    ? Math.max(1, MAX_TABLE_SPLIT_ROWS - contextualTableBlock.rows.length + 1)
-    : 1;
-  const tableSplitMaxColumns = contextualTableBlock
-    ? Math.max(
-        1,
-        MAX_TABLE_SPLIT_COLUMNS -
-          tableLogicalWidth(contextualTableBlock.rows) +
-          1,
-      )
-    : 1;
-  const tableSplitRowsValue = Number(tableSplitRowsDraft);
-  const tableSplitColumnsValue = Number(tableSplitColumnsDraft);
-  const tableSplitDraftIsValid =
-    Number.isInteger(tableSplitRowsValue) &&
-    Number.isInteger(tableSplitColumnsValue) &&
-    tableSplitRowsValue >= 1 &&
-    tableSplitRowsValue <= tableSplitMaxRows &&
-    tableSplitColumnsValue >= 1 &&
-    tableSplitColumnsValue <= tableSplitMaxColumns &&
-    (tableSplitRowsValue > 1 || tableSplitColumnsValue > 1);
   const insertCapacityReached =
     activeSlide.blocks.length >= MAX_PRESENTATION_BLOCKS_PER_SLIDE;
   const narrationRecorderSupported =
     typeof navigator !== "undefined" &&
     Boolean(navigator.mediaDevices?.getUserMedia) &&
     preferredPresentationNarrationRecorderMime() !== null;
-  // What the Record tab's player plays: the recording, or the file's own
-  
-  const activeSlideNarration =
-    typeof activeSlide.narration === "string"
-      ? (slideNarrationPlaybackSrc(activeSlide.narration) ?? activeSlide.narration)
-      : null;
-  const deckHasNarration = slides.some(
-    (slide) => typeof slide.narration === "string",
-  );
-  const activeSlideCanResetToCameo =
-    canResetPresentationSlideToCameo(activeSlide);
-  const deckCanResetAllToCameo =
-    deckHasNarration &&
-    slides.every(
-      (slide) =>
-        typeof slide.narration !== "string" ||
-        canResetPresentationSlideToCameo(slide),
-    );
-  const activeSlideHasRecordedTiming =
-    typeof activeSlide.transitionAdvanceAfterMs === "number";
-  const deckHasRecordedTimings = slides.some(
-    (slide) => typeof slide.transitionAdvanceAfterMs === "number",
-  );
   const narrationRecorderBusy = narrationRecorderStatus !== "idle";
   const narrationRecorderCanTogglePause =
     narrationRecorderStatus === "recording"
@@ -53508,15 +47497,6 @@ export default function PresentationWindow({
       : narrationRecorderStatus === "paused"
         ? typeof narrationRecorderRef.current?.resume === "function"
         : false;
-  const narrationMicrophonePermissionLabel = t(
-    narrationMicrophonePermissionStatus === "ready"
-      ? "presentation.record.microphoneReady"
-      : narrationMicrophonePermissionStatus === "requesting"
-        ? "presentation.record.microphoneRequesting"
-        : narrationMicrophonePermissionStatus === "error"
-          ? "presentation.record.microphoneRetry"
-          : "presentation.record.microphoneEnable",
-  );
   const selectedNarrationMicrophoneLabel =
     narrationMicrophones.find(
       (device) => device.deviceId === selectedNarrationMicrophoneId,
@@ -53741,9 +47721,7 @@ export default function PresentationWindow({
               disabledReason: reachable
                 ? undefined
                 : t(
-                    tab === "image-format"
-                      ? "presentation.capability.pictureSelectionRequired"
-                      : "presentation.capability.selectionRequired",
+                    "presentation.capability.selectionRequired",
                   ),
             },
           ];
@@ -53819,7 +47797,7 @@ export default function PresentationWindow({
     contextualRibbonTabs.includes(explicitContextualRibbonTab.tab)
       ? explicitContextualRibbonTab.tab
       : null;
-  const activeRibbonTab: PresentationWebRibbonTab =
+  const activeRibbonTabUnchecked: PresentationWebRibbonTab =
     activeExplicitContextualRibbonTab ??
     ((webRibbonTab === PRESENTATION_SLIDE_MASTER_RIBBON_TAB && viewMode === "master") ||
     isPresentationBaseRibbonTab(webRibbonTab) ||
@@ -53828,12 +47806,13 @@ export default function PresentationWindow({
     )
       ? webRibbonTab
       : (contextualRibbonDefaultTab ?? lastBaseRibbonTabRef.current));
+  const activeRibbonTab = (["home","insert"] as readonly unknown[]).includes(activeRibbonTabUnchecked) ? activeRibbonTabUnchecked : "home";
   ribbonTabRef.current = activeRibbonTab;
   // Draw ▸ Lasso Select's strokes while they are still exactly the selection
   // on this slide: one frame around them all (their geometry as a move or a
   // scale previews it), the loop drawn around it.
   const inkLassoView = (() => {
-    const lasso = inkLassoSelection;
+    const lasso = null;
     if (!lasso || lasso.slideId !== activeSlide.id || !sameInkLassoIds(lasso.ids, selectedBlockIds)) return null;
     const box = inkLassoUnionBox(
       activeSlide.blocks.flatMap((block) => {
@@ -53919,11 +47898,11 @@ export default function PresentationWindow({
   // the editor, and with Draw with Touch off (or a pen about) a finger pans
   // the stage instead of inking (lib/ink-touch-shield). The state follows
   // the canvas ref through the render that picks the tool.
-  const inkSurfaceArmed = activeRibbonTab === "draw" && inkInteractionMode !== null;
+  const inkSurfaceArmed = false;
   // Pen-first drawing (lib/pen-first-draw): with a pen on a touch device the
   // Draw tab folds the ribbon away and the floating palette stands in for it.
   const penDrawDisabled = autosave.readOnly || !featureDecision("ink.pen").enabled;
-  const penFirst = usePenFirstDraw(activeRibbonTab === "draw" && !penDrawDisabled, activeRibbonTab === "draw", () => [
+  const penFirst = usePenFirstDraw(false, false, () => [
     canvasViewportRef.current ?? slideCanvasRef.current,
   ]);
   const penCompactRef = useRef(false);
@@ -53942,7 +47921,7 @@ export default function PresentationWindow({
   }, [activeInkPresetId, inkPens]);
   // Leaving the Draw tab lands the wet strokes.
   useEffect(() => {
-    if (activeRibbonTab !== "draw") inkWetRef.current?.flush();
+    inkWetRef.current?.flush();
   }, [activeRibbonTab]);
   const [inkSurfaceNode, setInkSurfaceNode] = useChangedState<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -54005,15 +47984,7 @@ export default function PresentationWindow({
         key,
         label: presentationWebRibbonTabLabels[key],
         controlId:
-          key === "draw"
-            ? "PPTCTL.RIBBON.TAB.DRAW"
-            : key === "transitions"
-              ? "PPTCTL.RIBBON.TAB.TRANSITIONS"
-              : key === "animations"
-                ? "PPTCTL.RIBBON.TAB.ANIMATIONS"
-                : key === "view"
-                  ? "PPTCTL.RIBBON.TAB.VIEW"
-                  : undefined,
+          (((undefined))),
       })),
       ...contextualRibbonTabs.map((key) => ({
         key,
@@ -54021,9 +47992,7 @@ export default function PresentationWindow({
         ariaLabel: presentationWebRibbonTabLabels[key],
         controlId: presentationContextualRibbonControlIds[key],
         contextual:
-          key === "record"
-            ? "record"
-            : (contextualRibbonSelectionType ?? undefined),
+          (contextualRibbonSelectionType ?? undefined),
       })),
     ],
     [
@@ -54050,7 +48019,7 @@ export default function PresentationWindow({
       if (isPresentationBaseRibbonTab(key)) {
         lastBaseRibbonTabRef.current = key;
       }
-      if (key !== "draw") {
+      {
         writeInkInteractionMode(null);
         if (isPresentationBaseRibbonTab(key) && !options?.preserveFocus) {
           slideCanvasRef.current?.focus({ preventScroll: true });
@@ -54058,7 +48027,7 @@ export default function PresentationWindow({
       }
       setRibbonTab(key);
       setTableSplitPanelOpen(false);
-      if (key !== "design") {
+      {
         closeBackgroundPane(false);
       }
       setDeckPropsOpen(false);
@@ -54073,7 +48042,7 @@ export default function PresentationWindow({
   // A double click on a drawn series opens the Format pane on the Chart
   // Format tab, as Office's does.
   useEffect(() => {
-    if (chartElementHit?.open) selectPresentationRibbonTab("chart-format");
+    if (chartElementHit?.open) void 0;
     // One opening per click token.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chartElementHit?.token]);
@@ -54083,14 +48052,10 @@ export default function PresentationWindow({
   // user came from, through the contextual-tab effect above.
   const recordStudioWasOpenRef = useRef(false);
   useEffect(() => {
-    const wasOpen = recordStudioWasOpenRef.current;
-    recordStudioWasOpenRef.current = recordStudioOpen;
-    if (recordStudioOpen && !wasOpen) {
-      selectPresentationRibbonTab("record", { preserveFocus: true });
-    }
+    recordStudioWasOpenRef.current = false;
     // Only the studio's opening edge selects the tab.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recordStudioOpen]);
+  }, [false]);
   useLayoutEffect(() => {
     const activateFocusedRibbonTab = (event: FocusEvent) => {
       const target = event.target;
@@ -54117,7 +48082,6 @@ export default function PresentationWindow({
   }, [activeRibbonTab, selectPresentationRibbonTab, visibleRibbonTabs]);
   useLayoutEffect(() => {
     if (
-      activeRibbonTab !== "draw" &&
       inkInteractionModeRef.current !== null
     ) {
       writeInkInteractionMode(null);
@@ -54125,15 +48089,6 @@ export default function PresentationWindow({
     }
   }, [activeRibbonTab, writeInkInteractionMode]);
   const stageAlignmentToolbarVisible =
-    activeRibbonTab !== "shape-format" &&
-    activeRibbonTab !== "camera-format" &&
-    activeRibbonTab !== "image-format" &&
-    activeRibbonTab !== "chart-design" &&
-    activeRibbonTab !== "chart-format" &&
-    activeRibbonTab !== "media-format" &&
-    activeRibbonTab !== "media-playback" &&
-    activeRibbonTab !== "smartart-design" &&
-    activeRibbonTab !== "smartart-format" &&
     activeSlideUsesCanvas &&
     (selectedGeometryBlocks.length > 0 ||
       (exclusivelySelectedBlock !== null &&
@@ -54153,7 +48108,7 @@ export default function PresentationWindow({
       ? `props:${activeSlideBgKind}:${normalizedActiveTransition}`
       : "props:closed",
     formatPaneOpen ? "inspector:open" : "inspector:closed",
-    animationPaneOpen ? "animation-pane:open" : "animation-pane:closed",
+    "animation-pane:closed",
     selectionPaneOpen ? "selection-pane:open" : "selection-pane:closed",
     accessibilityPanelOpen ? "a11y-pane:open" : "a11y-pane:closed",
     commentsPanelOpen ? "comments-pane:open" : "comments-pane:closed",
@@ -54664,47 +48619,6 @@ export default function PresentationWindow({
       : contextualShapeObjectBlocks.length < 2
         ? t("presentation.group.selectAtLeastTwo")
         : groupRefusalReason(selectedShapeObjectsGroupRefusal);
-
-  /**
-   * The ONE Shape Format tab (components/office-ribbon/OfficeShapeFormatTab):
-   * the deck supplies its selection, its writers and its reasons. PowerPoint's
-   * tab (Insert Shapes, Shape Styles, WordArt Styles, Accessibility, Arrange,
-   * Size) has no Text group -- Text Direction and Align Text sit on Home --
-   * so the adapter states none; WordArt styles have no deck writer yet, so
-   * that group stays on the ribbon greyed with its reason. The deck's own
-   * strengths ride the adapter: a mixed multi-selection, theme columns from
-   * the deck's recipes, its ShapeKind catalog, an exact weight box, Align to
-   * Slide, Connect under Group and the selection count.
-   */
-  // View ▸ Window (PPT-A109): this deck's windows in the workspace, with the
-  // shared Office window commands; none for a guest or an embedded preview.
-  const presentationViewWindowCommands =
-    windowManagerActions && windowId && !embeddedPresentation && autosave.page?.notebook_id
-      ? {
-          choices: () =>
-            officeWindowChoices(windowManagerActions.readWindows(), windowId, "presentation"),
-          onNewWindow: () => {
-            const notebookId = autosave.page?.notebook_id;
-            if (!notebookId) return;
-            openNewOfficeWindow(windowManagerActions, {
-              notebookId,
-              pageId,
-              pageType: "presentation",
-              title: title || t("pages.untitled"),
-              sourceWindowId: windowId,
-            });
-          },
-          onArrangeAll: () => {
-            arrangeAllOfficeWindows(windowManagerActions, windowId, "presentation");
-          },
-          onCascade: () => {
-            cascadeOfficeWindows(windowManagerActions, windowId, "presentation");
-          },
-          onSwitch: (id: string) => {
-            switchToOfficeWindow(windowManagerActions, id, "presentation");
-          },
-        }
-      : null;
   // Arrange (PPT-A045 / A119 / A120 / A121): Home's Arrange menu and the
   // Shape Format tab's Align / Group / Rotate / Reorder Objects run the same
   // commands with the same availability.
@@ -55157,19 +49071,6 @@ export default function PresentationWindow({
       (block) => presentationBlockWithWordArtStyle(block, style),
     );
   };
-  // Text Direction's four, PowerPoint's order and wording, shared by the
-  // Table Design and Layout menus (PPT-A145).
-  const tableCellTextDirectionOptions = TABLE_CELL_TEXT_DIRECTIONS.map((direction) => ({
-    value: direction,
-    label:
-      direction === "horizontal"
-        ? t("presentation.writingMode.horizontal")
-        : direction === "rotate-90"
-          ? t("presentation.home.textDirectionRotate90")
-          : direction === "rotate-270"
-            ? t("presentation.home.textDirectionRotate270")
-            : t("presentation.home.textDirectionStacked"),
-  }));
   // The Shape Format tab's names, shared by the SmartArt Format tab (PPT-A010).
   const presentationShapeFormatLabels = (): OfficeShapeFormatLabels => ({
     insertShapes: t("presentation.ui.shapeFormat.insertShapes"),
@@ -55515,14 +49416,14 @@ export default function PresentationWindow({
       {activeRibbonTab !== "home" &&
       selectedBlockId &&
       (inspectorBlock || formatPaneShapeGroup) &&
-      activeRibbonTab !== "camera-format" &&
-      activeRibbonTab !== "image-format" &&
-      activeRibbonTab !== "chart-design" &&
-      activeRibbonTab !== "chart-format" &&
-      activeRibbonTab !== "media-format" &&
-      activeRibbonTab !== "media-playback" &&
-      activeRibbonTab !== "smartart-design" &&
-      activeRibbonTab !== "smartart-format" ? (
+      true &&
+      true &&
+      true &&
+      true &&
+      true &&
+      true &&
+      true &&
+      true ? (
         <button
           type="button"
           className={`office-ribbon-control note-editor-office-toolbar__button${
@@ -55734,296 +49635,6 @@ export default function PresentationWindow({
           },
         }
       : null;
-
-  // SmartArt > Format (PPT-A010): the shapes the selection names inside the
-  // diagram, every one when the graphic is selected; each command is one
-  // undo step on the LIVE selection (`lib/presentation-smartart-format`).
-  const smartArtFormatTarget =
-    contextualSmartArtMarker && !contextualNativeSmartArt
-      ? presentationSmartArtFormatTarget(activeSlide.blocks, selectedBlockIds, selectedBlockId)
-      : null;
-  const smartArtFormatNodes = smartArtFormatTarget
-    ? presentationSmartArtTargetNodes(activeSlide.blocks, smartArtFormatTarget)
-    : [];
-  const smartArtFormatLabels = smartArtFormatTarget
-    ? presentationSmartArtTargetLabels(activeSlide.blocks, smartArtFormatTarget)
-    : [];
-  // A plain function, not a hook: this part of the render runs after the
-  // window's conditional returns.
-  const commitSmartArtFormat = (
-    write: (
-      blocks: PresentationBlock[],
-      target: PresentationSmartArtFormatTarget,
-    ) => PresentationBlock[] | null,
-  ) =>
-    commitLiveActiveBlocks((blocks) => {
-      const target = presentationSmartArtFormatTarget(
-        blocks,
-        selectedBlockIdsRef.current,
-        selectedBlockIdRef.current,
-      );
-      return target ? write(blocks, target) : null;
-    });
-  const smartArtFormatSizeNode =
-    smartArtFormatNodes.length === 1 ? smartArtFormatNodes[0] : null;
-  // Picture Format on the picture in the pressed slot (PowerPoint's Picture
-  // Format tab for a picture placeholder holding a picture): the deck's own
-  // crop math, Picture Styles and Reset Picture on that one picture block.
-  const smartArtSlotPicture = smartArtFormatTarget
-    ? presentationSmartArtSlotPicture(activeSlide.blocks, smartArtFormatTarget)
-    : null;
-  const cropSmartArtSlotPicture = (mode: "fill" | "fit") => {
-    const slot = smartArtSlotPicture;
-    if (!slot) return;
-    // Fill / Fit need the picture's own pixel size: the drawn picture has it.
-    const drawn = Array.from(
-      document.querySelectorAll<HTMLImageElement>(`[data-block-id="${CSS.escape(slot.id)}"] img`),
-    ).find((image) => image.naturalWidth > 0 && image.naturalHeight > 0);
-    const natural = drawn ? { width: drawn.naturalWidth, height: drawn.naturalHeight } : null;
-    commitSmartArtFormat((blocks, target) =>
-      presentationSmartArtBlocksWithSlotPicture(blocks, target, { kind: "crop", mode, natural }, canEditBlockContent),
-    );
-  };
-  // Format ▸ Shapes ▸ Edit in 2-D on the graphic in hand: live only for a 3-D
-  // style with a perspective scene, whose shapes stay put until it is on.
-  const smartArtEditIn2dGraphicKey = contextualSmartArtMarker
-    ? smartArtEditIn2dKey("presentation", contextualSmartArtMarker.groupId)
-    : null;
-  const smartArtEditIn2dAvailable =
-    smartArtEditIn2dGraphicKey !== null &&
-    smartArtGraphicHasScene(contextualSmartArtStyleId, contextualSmartArtBlocks);
-  const smartArtEditIn2dOn = smartArtEditingIn2d(smartArtEditIn2dGraphicKey);
-  const smartArtShapesLocked = smartArtEditIn2dAvailable && !smartArtEditIn2dOn;
-  // SmartArt Format > Shape Effects on the shapes the selection names inside
-  // the graphic: the deck's shared Effects menu (every Preset, Shadow,
-  // Reflection, Glow, Soft Edges, Bevel and 3-D Rotation variation) writing
-  // each shape's own `shapeEffects`, as one save and one Undo. A shape in a
-  // 3-D scene style is turned by the scene until Edit in 2-D: its Preset,
-  // Bevel and 3-D Rotation are greyed with the reason.
-  const smartArtFormatWritable =
-    contextualSmartArtSelectionIsWritable && !contextualNativeSmartArt && smartArtFormatTarget !== null;
-  const renderSmartArtShapeEffectsMenu = (trigger: {
-    label: string;
-    displayLabel: string;
-    testId: string;
-    controlId?: string;
-  }) => {
-    if (smartArtGraphicTurnRefused) {
-      // The WHOLE graphic: its background's effects (`dgm:bg`), which hold
-      // Shadow, Reflection, Glow and Soft Edges with every variation and no
-      // 3-D (CT_BackgroundFormatting): Preset, Bevel and 3-D Rotation are
-      // greyed, saying so.
-      const writable = contextualSmartArtSelectionIsWritable && !contextualNativeSmartArt;
-      const no3d = t("presentation.smartartContext.graphicEffectsNo3d");
-      return renderOfficeEffectsMenu({
-        effects:
-          smartArtGraphicEffects(readSmartArtGraphicFormat(contextualSmartArtBlocks[0])) ?? undefined,
-        shadow: false,
-        disabled: !writable,
-        disabledReason: writable ? undefined : t("presentation.smartartContext.formatReadOnly"),
-        ...trigger,
-        unavailable: { preset: no3d, bevel: no3d, rotation3d: no3d },
-        // No Format Shape pane over the whole graphic's background here: the
-        // "... Options" rows are greyed, saying to select a shape in it.
-        optionsUnavailableReason: t("presentation.smartartContext.graphicEffectOptionsUnavailable"),
-        onPick: (kind, value) => {
-          if (liveSmartArtGraphicSelected()) commitLiveSmartArtGraphicFormat({ effectPick: { kind, value } });
-        },
-      });
-    }
-    const locked3d = smartArtShapesLocked ? t("presentation.smartartContext.effects3dInScene") : undefined;
-    return renderOfficeEffectsMenu({
-      effects: presentationSmartArtShapeEffects(smartArtFormatNodes, deckThemeGridColors.accent1),
-      shadow: false,
-      // The SmartArt Style's bevel: No Bevel reads unchecked and takes it off.
-      styleEffects: presentationSmartArtStyleEffects(smartArtFormatNodes),
-      disabled: !smartArtFormatWritable,
-      disabledReason: smartArtFormatWritable
-        ? undefined
-        : !contextualSmartArtSelectionIsWritable || contextualNativeSmartArt
-          ? t("presentation.smartartContext.formatReadOnly")
-          : t("presentation.smartartContext.formatSelectShape"),
-      ...trigger,
-      unavailable: locked3d ? { preset: locked3d, bevel: locked3d, rotation3d: locked3d } : undefined,
-      // 3-D Options... / 3-D Rotation Options...: Format Shape at Effects,
-      // on the same shapes (the pane's SmartArt reading below).
-      effectsPage: "office-effects",
-      onPick: (kind, value) =>
-        commitSmartArtFormat((blocks, target) =>
-          presentationSmartArtBlocksWithShapeEffect(
-            blocks,
-            target,
-            kind,
-            value,
-            deckThemeGridColorsRef.current.accent1,
-            canManipulateBlock,
-          ),
-        ),
-    });
-  };
-  const smartArtFormatTab = activeRibbonTab === "smartart-format" ? (
-    <PresentationSmartArtFormatTab
-      labels={presentationShapeFormatLabels()}
-      writable={contextualSmartArtSelectionIsWritable && !contextualNativeSmartArt}
-      hasTarget={smartArtFormatTarget !== null}
-      disabledReason={
-        !contextualSmartArtSelectionIsWritable || contextualNativeSmartArt
-          ? t("presentation.smartartContext.formatReadOnly")
-          : t("presentation.smartartContext.formatSelectShape")
-      }
-      state={presentationSmartArtFormatState(smartArtFormatNodes, smartArtFormatLabels, shapeStyleRecipes, {
-        width: (node) => sizeDisplayFromEmu(node.width, presentationPictureSizeDisplayCm(node.width)),
-        height: (node) => sizeDisplayFromEmu(node.height, presentationPictureSizeDisplayCm(node.height)),
-      })}
-      styleRecipes={shapeStyleRecipes}
-      themeColumns={shapeFormatThemeColumns}
-      recents={shapeFormatRecentColors}
-      canResize={contextualSmartArtSelectedItemId !== null && !smartArtShapesLocked}
-      resizeDisabledReason={
-        smartArtShapesLocked
-          ? t("presentation.smartartContext.shapesLockedIn3d")
-          : undefined
-      }
-      editIn2d={{
-        label: t("presentation.smartartContext.editIn2d"),
-        pressed: smartArtEditIn2dAvailable && smartArtEditIn2dOn,
-        disabled: !smartArtEditIn2dAvailable,
-        disabledReason: t("presentation.smartartContext.editIn2dNeedsScene"),
-        onToggle: () => {
-          if (smartArtEditIn2dGraphicKey) toggleSmartArtEditingIn2d(smartArtEditIn2dGraphicKey);
-        },
-      }}
-      graphicSelected={smartArtGraphicTurnRefused}
-      effectsMenu={renderSmartArtShapeEffectsMenu}
-      graphicOutline={readSmartArtGraphicFormat(contextualSmartArtBlocks[0])?.line?.color ?? null}
-      picture={
-        smartArtSlotPicture
-          ? {
-              image: smartArtSlotPicture,
-              accentColors: themeAccentColors,
-              onCrop: cropSmartArtSlotPicture,
-              onStyle: (style) =>
-                commitSmartArtFormat((blocks, target) =>
-                  presentationSmartArtBlocksWithSlotPicture(blocks, target, { kind: "style", style }, canManipulateBlock),
-                ),
-              onReset: () =>
-                commitSmartArtFormat((blocks, target) =>
-                  presentationSmartArtBlocksWithSlotPicture(blocks, target, { kind: "reset" }, canManipulateBlock),
-                ),
-            }
-          : null
-      }
-      sizeStep={sizeStep}
-      sizeMax={sizeBound(MAX_TABLE_FRAME_CM)}
-      wordArt={{
-        recipes: deckWordArtRecipes,
-        labelFor: (recipe) => wordArtStyleLabel(recipe.id),
-        value: (() => {
-          const textPaint = presentationSmartArtTextPaint(smartArtFormatLabels);
-          const item = presentationWordArtStyleOf(textPaint);
-          return item ? `ppt-wordart-${item}` : null;
-        })(),
-        onCommit: (recipe) => {
-          const style = deckWordArtStyles.find((candidate) => candidate.id === recipe.id);
-          if (!style) return;
-          commitSmartArtFormat((blocks, target) =>
-            presentationSmartArtBlocksWithWordArtStyle(blocks, target, style, canManipulateBlock),
-          );
-        },
-      }}
-      commands={{
-        changeShape: (shape) =>
-          commitSmartArtFormat((blocks, target) =>
-            presentationSmartArtBlocksWithNodePatch(blocks, target, smartArtChangeShapePatch(shape), canManipulateBlock),
-          ),
-        resize: (direction) => {
-          resizeContextualSmartArtShape(direction);
-        },
-        fill: (color) => {
-          if (color) setShapeFormatRecentColors((recents) => pushRecentColor(recents, color));
-          // The WHOLE graphic selected: Shape Fill is the graphic's own
-          // background (`dgm:bg`), every shape inside untouched, and No Fill
-          // clears it, as PowerPoint's Fill on a SmartArt graphic does
-          
-          if (liveSmartArtGraphicSelected()) {
-            commitLiveSmartArtGraphicFormat({ fill: color ?? null });
-            return;
-          }
-          commitSmartArtFormat((blocks, target) =>
-            presentationSmartArtBlocksWithNodePatch(blocks, target, smartArtShapeFillPatch(color ?? "none"), canManipulateBlock),
-          );
-        },
-        outline: (color) => {
-          if (color) setShapeFormatRecentColors((recents) => pushRecentColor(recents, color));
-          // The whole graphic: its own line on the frame (`dgm:whole`).
-          if (liveSmartArtGraphicSelected()) {
-            commitLiveSmartArtGraphicFormat({ line: color ? { color } : null });
-            return;
-          }
-          commitSmartArtFormat((blocks, target) =>
-            presentationSmartArtBlocksWithNodePatch(blocks, target, smartArtShapeOutlinePatch(color ?? "none"), canManipulateBlock),
-          );
-        },
-        outlineWeight: (pt) => {
-          if (liveSmartArtGraphicSelected()) {
-            commitLiveSmartArtGraphicFormat({ line: pt > 0 ? { widthPt: pt } : null });
-            return;
-          }
-          commitSmartArtFormat((blocks, target) =>
-            presentationSmartArtBlocksWithNodePatch(blocks, target, { strokeWidth: pt }, canManipulateBlock),
-          );
-        },
-        effect: (effect) => {
-          // The whole graphic: its background's effect (`dgm:bg`), which
-          // holds Shadow, Reflection, Glow and Soft Edges.
-          if (liveSmartArtGraphicSelected()) {
-            if (effect === "none" || readSmartArtGraphicEffect(effect)) {
-              commitLiveSmartArtGraphicFormat({ effect: readSmartArtGraphicEffect(effect) });
-            }
-            return;
-          }
-          commitSmartArtFormat((blocks, target) =>
-            presentationSmartArtBlocksWithNodePatch(blocks, target, smartArtShapeEffectPatch(effect), canManipulateBlock),
-          );
-        },
-        style: (recipe) =>
-          commitSmartArtFormat((blocks, target) =>
-            presentationSmartArtBlocksWithStyle(blocks, target, recipe, canManipulateBlock),
-          ),
-        textPaint: (paint) =>
-          commitSmartArtFormat((blocks, target) =>
-            presentationSmartArtBlocksWithTextPaint(blocks, target, paint, canManipulateBlock),
-          ),
-        textFill: (color) => {
-          setShapeFormatRecentColors((recents) => pushRecentColor(recents, color));
-          commitSmartArtFormat((blocks, target) =>
-            presentationSmartArtBlocksWithTextFill(blocks, target, color, canManipulateBlock),
-          );
-        },
-        size: (axis, value, lockAspect) => {
-          const factor = smartArtFormatSizeNode
-            ? presentationSmartArtSizeFactor(
-                smartArtFormatSizeNode,
-                axis,
-                presentationMeasurementCmDraft(String(value), sizeUnit),
-                lockAspect,
-              )
-            : null;
-          if (factor) resizeContextualSmartArtShape(factor);
-        },
-        altText: () => openAltTextPane(),
-        selectionPane: () => executePresentationFeature("editing.selectionPane"),
-        // The whole graphic moves in the slide's stack, as Home > Arrange
-        // moves it.
-        zOrder: (action) => {
-          if (action === "bringToFront") bringBlockToFront();
-          else if (action === "sendToBack") sendBlockToBack();
-          else if (action === "bringForward") bringBlockForward();
-          else sendBlockBackward();
-        },
-      }}
-    />
-  ) : null;
   const presentationSmartArtReadyDiagram: OfficeSmartArtDesignTabDiagram | null =
     contextualSmartArtMarker
       ? {
@@ -56170,8 +49781,8 @@ export default function PresentationWindow({
   // Add Animation: the Animations tab's effect strip, with the Animation pane
   // in front, is where the deck adds one (PowerPoint's gallery flyout).
   const openAddAnimationFromContextMenu = () => {
-    selectPresentationRibbonTab("animations", { preserveFocus: true });
-    if (!animationPaneOpen) toggleAnimationPane();
+    void 0;
+    toggleAnimationPane();
   };
   // Cut / Copy on the words being edited: the text block's own clipboard
   // command where the deck tracks the words (a text box), else the browser's
@@ -56959,117 +50570,6 @@ export default function PresentationWindow({
       videoContextMenuRows,
     })(blockId);
 
-  // Design ▸ Variants ▸ Background Styles (PPT-A073), on the Design tab's
-  // Variants menu and the Slide Master tab: the theme's twelve styles.
-  const officeBackgroundStyleCells = officeBackgroundStyles(theme);
-  const currentBackgroundStyle = theme?.officeMaster?.backgroundStyle;
-  const presentationBackgroundStyleItems = (prefix: string) =>
-    officeBackgroundStyleCells.length === 0 ? null : (
-      <div
-        role="grid"
-        aria-label={t("presentation.slideMaster.backgroundStyles")}
-        data-testid={`presentation-${prefix}-background-style-grid`}
-        style={{ display: "grid", gridTemplateColumns: "repeat(4, 52px)", gap: 6, padding: 6 }}
-      >
-        {officeBackgroundStyleCells.map((style) => {
-          const label = t("presentation.backgroundStyles.style", { index: style.index });
-          return (
-            <DropdownMenuItem
-              key={`${prefix}-background-style-${style.index}`}
-              asChild
-              disabled={themeSelectionDisabled}
-              onSelect={() => {
-                const next = themeWithOfficeBackgroundStyle(themeRef.current, style.index);
-                if (next) applyDeckTheme(next);
-              }}
-            >
-              <button
-                type="button"
-                aria-label={label}
-                title={label}
-                aria-pressed={currentBackgroundStyle === style.index}
-                data-testid={`presentation-${prefix}-background-style-${style.index}`}
-                style={{
-                  width: 52,
-                  height: 30,
-                  padding: 0,
-                  borderRadius: 3,
-                  border:
-                    currentBackgroundStyle === style.index
-                      ? "2px solid var(--ppt-accent, #c43e1c)"
-                      : "1px solid rgba(15, 23, 42, 0.2)",
-                  background: style.backgroundGradient
-                    ? bgGradientCss(style.backgroundGradient)
-                    : style.background,
-                }}
-              />
-            </DropdownMenuItem>
-          );
-        })}
-      </div>
-    );
-
-  // Design ▸ Slide Size, on the Design tab and on the Slide Master tab
-  // (PPT-A075, PPT-B030): one menu, one command.
-  const slideSizeMenu = (
-    <DropdownMenu onOpenChange={open => { if (open) void prepareSlideSizeAuthority(); }}>
-      <DropdownMenuTrigger asChild>
-        <OfficeHomeMenuTrigger
-          ref={slideSizeTriggerRef}
-          disabled={autosave.readOnly}
-          onClick={() => { void prepareSlideSizeAuthority(); }}
-          hasMenuIndicator
-          icon={<IconDesignSlideSize home size={24} />}
-          label={t("presentation.slideSize.label")}
-          testId="presentation-slide-size-open"
-          title={t("presentation.slideSize.label")}
-          variant="large"
-        />
-      </DropdownMenuTrigger>
-      <RibbonDropdownMenuContent align="start">
-        {designSizeLoading || designSizeError ? <DropdownMenuLabel role="status">{designSizeLoading ? t("presentation.slideSize.verifying") : designSizeError}</DropdownMenuLabel> : null}
-        {/* PowerPoint's menu: Standard (4:3), Widescreen
-            (16:9), then Page Setup... (PPT-A075). */}
-        {SLIDE_SIZE_MENU_PRESET_IDS.flatMap((id) =>
-          SLIDE_SIZE_PRESETS.filter((preset) => preset.id === id),
-        ).map((preset) => (
-          <DropdownMenuItem
-            key={preset.id}
-            disabled={!slideSizeSelectionIsWritable}
-            onSelect={() => {
-              const size = presetSize(preset.id);
-              if (size) {
-                requestSlideSizeChange(
-                  size,
-                  headerFooter?.firstSlideNumber ?? 1,
-                  headerFooter?.notesSize ??
-                    DEFAULT_PRESENTATION_NOTES_SIZE,
-                );
-              }
-            }}
-            data-testid={`presentation-slide-size-${preset.id}`}
-          >
-            {matchPresetId(currentSlideSize) ===
-            preset.id ? (
-              <Check size={15} />
-            ) : null}
-            <RectangleHorizontal size={15} />
-            {t(preset.labelKey)}
-          </DropdownMenuItem>
-        ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          disabled={!slideSizeSelectionIsWritable}
-          onSelect={() => setSlideSizeOpen(true)}
-          data-testid="presentation-slide-size-custom"
-        >
-          <SlidersHorizontal size={15} />
-          {t("presentation.slideSize.pageSetup")}
-        </DropdownMenuItem>
-      </RibbonDropdownMenuContent>
-    </DropdownMenu>
-  );
-
   return (
     <PresentationFontAliasesContext.Provider value={fontDisplay.aliases}>
       <PresentationAutofitMeasurer hostRef={rootRef} />
@@ -57523,9 +51023,7 @@ export default function PresentationWindow({
             activeTab={activeRibbonTab}
             testIdPrefix="presentation"
             collapse={
-              activeRibbonTab === "draw" && penFirst.available && !penDrawDisabled
-                ? { onCollapse: penFirst.showPalette }
-                : undefined
+              undefined
             }
             panelId="presentation-ribbon-panel"
             onSelect={(key) => {
@@ -57585,10 +51083,16 @@ export default function PresentationWindow({
                     // edit: "synced", never a failure.
                     // Edits held on this device because the deck's room cannot
                     // take them (lib/collab/room-unreachable): said so.
-                    status: guestMode ? "unsaved" : deckShowsSynced ? "synced" : autosave.notConnected ? "offline"
+                    // A save the hook has been sending again for minutes
+                    // (saveGuarantee "held"): the edits are kept here while it
+                    // reconnects -- said gently, never as a failure.
+                    status: guestMode ? "unsaved" : deckShowsSynced ? "synced"
+                      : autosave.notConnected || autosave.guaranteedRetrying === "held" ? "offline"
                       : autosave.error && autosave.saveStatus === "unsaved" ? "error" : deckSaveStatus,
                     statusLabel: guestMode ? t("pages.unsaved") : deckShowsSynced ? t("pages.synced")
-                      : autosave.notConnected ? t("pages.notConnectedKeptOnDevice") : t(`pages.${deckSaveStatus}` as "pages.saving"),
+                      : autosave.notConnected ? t("pages.notConnectedKeptOnDevice")
+                      : autosave.guaranteedRetrying === "held" ? t("pages.savedOnDeviceReconnecting")
+                      : t(`pages.${deckSaveStatus}` as "pages.saving"),
                     failureReason: !guestMode && autosave.error ? autosave.error : undefined,
                     failureTestId: "presentation-save-failure-reason",
                     statusDetail: packageWriteStatus ?? undefined,
@@ -57793,355 +51297,16 @@ export default function PresentationWindow({
                     }}
                   />
                 ) : null}
-                {activeRibbonTab === "draw" ? (
-                  <Suspense fallback={null}><PresentationDrawRibbonTab
-                    ctl={{
-                      t,
-                      inkReplay,
-                      setInkReplay,
-                      slideCanvasRef,
-                      showRuler,
-                      inkRuler,
-                      toggleInkRuler,
-                      autosave,
-                      hasPersistedReviewInk,
-                      activeSlideInkLassoAvailable,
-                      viewAidCommandAuthority,
-                      inkTool,
-                      inkInteractionMode,
-                      inkEraserKind,
-                      inkColor,
-                      inkWidthPt,
-                      inkTrackpadEnabled,
-                      writeInkTrackpadEnabled,
-                      placePresentationTrackpadStroke,
-                      inkConversionMode,
-                      runPresentationInkToMath,
-                      runPresentationInkToText,
-                      inkPens,
-                      activeInkPresetId,
-                      writeInkInteractionMode: pickInkInteractionMode,
-                      choosePresentationInkEraser,
-                      selectInkPreset,
-                      addInkPen,
-                      updateInkPen,
-                      removeInkPen,
-                      runPresentationInkToShape,
-                      presentationInkPenLabel,
-                      togglePresentationViewAid,
-                      featureDecision,
-                      executePresentationFeature,
-                      hideRibbon:
-                        penFirst.available && !penDrawDisabled
-                          ? penFirst.showPalette
-                          : null,
-                    }}
-                  /></Suspense>
-                ) : null}
+                {null}
               {presentationShapeFormatAdapter ? (
-                <Suspense fallback={null}><PresentationShapeFormatRibbonTab
-                  ctl={{
-                    presentationShapeFormatAdapter,
-                  }}
-                /></Suspense>
+                <Suspense fallback={null}>{null}</Suspense>
               ) : null}
-              {activeRibbonTab === "graphic-format" &&
-              contextualOfficeGraphicBlock ? (
-                <Suspense fallback={null}><PresentationGraphicFormatRibbonTab
-                  ctl={{
-                    t,
-                    sizeUnit,
-                    sizeUnitLabel,
-                    sizeStep,
-                    sizeBound,
-                    sizeDisplayFromEmu,
-                    pictureReplaceBusy,
-                    pictureCropTriggerRef,
-                    pictureSizeDraft,
-                    formatPaneOpen,
-                    cropEditingId,
-                    deckThemeGridColors,
-                    contextualOfficeGraphicBlock,
-                    selectedPictureSizeEditable,
-                    pictureAltTextCommandAuthority,
-                    pictureCropCommand,
-                    isPictureCropCommandEnabled,
-                    toggleFormatPane,
-                    beginReplaceImage,
-                    beginPictureAltText,
-                    commitPictureSizeDraft,
-                    stepPictureSize,
-                    invokePictureCrop,
-                    commitOfficeGraphic,
-                    renderOfficeGraphicPaintMenu,
-                    renderPictureArrangeGroup,
-                    renderPictureEffectsMenu,
-                    ribbonImageHasGeometry,
-                  }}
-                /></Suspense>
-              ) : null}
-              {activeRibbonTab === "image-format" && pictureEditSession ? (
-                <PresentationPictureEditSessionRibbonGroup
-                  ctl={{
-                    t,
-                    pictureEditSession,
-                    setPictureEditSession,
-                    discardPictureEdit,
-                    keepPictureEdit,
-                  }}
-                />
-              ) : null}
-              {activeRibbonTab === "image-format" &&
-                !pictureEditSession &&
-                contextualPictureBlocks.length > 0 ? (
-                  <Suspense fallback={null}><PresentationPictureFormatRibbonTab
-                    ctl={{
-                      t,
-                      sizeUnit,
-                      sizeUnitLabel,
-                      sizeStep,
-                      sizeBound,
-                      sizeDisplayFromEmu,
-                      pictureReplaceMenuTriggerRef,
-                      pictureReplaceBusy,
-                      pictureCropTriggerRef,
-                      pictureCropMenuTriggerRef,
-                      pictureBorderMenuTriggerRef,
-                      pictureSizeDraft,
-                      pictureBorderRememberedRef,
-                      pictureBorderRecentColors,
-                      setPictureBorderRecentColors,
-                      pictureCompressionTriggerRef,
-                      formatPaneOpen,
-                      cropEditingId,
-                      autosave,
-                      activeSlideBounds,
-                      eyeDropperAvailable,
-                      themeAccentColors,
-                      contextualImageBlock,
-                      contextualPictureSourcePreserveOnly,
-                      contextualPictureSourceReason,
-                      contextualImageCanResetAndSize,
-                      selectedPictureBorderEditable,
-                      selectedPictureTransparencyEditable,
-                      selectedPictureCorrectionsEditable,
-                      selectedPictureColorEditable,
-                      selectedPictureCompressionEditable,
-                      selectedPictureSizeEditable,
-                      pictureAltTextCommandAuthority,
-                      pictureCropCommand,
-                      isPictureCropCommandEnabled,
-                      toggleFormatPane,
-                      openFormatPane,
-                      openFormatPaneAtPicture,
-                      commitLiveActiveBlocks,
-                      restorePictureOriginal,
-                      resetSelectedImage,
-                      resetSelectedImageAndSize,
-                      beginReplaceImage,
-                      resetImageCrop,
-                      beginPictureAltText,
-                      commitPictureSizeDraft,
-                      stepPictureSize,
-                      invokePictureBorder,
-                      previewPictureStyle,
-                      commitPictureStyle,
-                      invokePictureCrop,
-                      invokePictureCropAspectRatio,
-                      updateImageEffects,
-                      renderPictureArrangeGroup,
-                      renderPictureEffectsMenu,
-                      autoEnhanceSelectedPicture,
-                      pictureEditTarget,
-                      startPictureEdit,
-                      openPictureCompression,
-                      ribbonImageHasGeometry,
-                    }}
-                  /></Suspense>
-                ) : null}
-                {contextualChartBlock && (activeRibbonTab === "chart-design" || activeRibbonTab === "chart-format") ? (() => {
-                  const block = contextualChartBlock;
-                  const readOnly = autosave.readOnly || !canEditBlockContent(block);
-                  const currentBlock = () => {
-                    const current = getSingleLiveSelectedBlock();
-                    return chartDesktopAuthorityRef.current === chartDesktopAuthority && !autosave.readOnly && current === block
-                      ? current : null;
-                  };
-                  // One condition for the Group menu, given to both the Radix trigger
-                  // and the button face: Chromium delivers pointerdown to a disabled
-                  // button, and Radix opens on pointerdown unless its own trigger is
-                  // disabled, so disabling only the face would still open the menu.
-                  const chartGroupDisabled = readOnly || (selectedGeometryBlocks.length < 2 && !selectedHasGroupedBlock);
-                  const common = {
-                    tab: activeRibbonTab as "chart-design" | "chart-format",
-                    locale,
-                    accentColors: themeAccentColors,
-                    size: {
-                      widthEmu: geometryNumber(block, "width") ?? 5_486_400,
-                      heightEmu: geometryNumber(block, "height") ?? 3_127_200,
-                    },
-                    // The chart's Format pane docks at the stage's right edge,
-                    // where Format Shape and the deck's other panes dock.
-                    paneContainer: taskPaneDockHost ?? chartDesktopPaneContainer,
-                    paneClassName: presentationChrome.taskPane,
-                    // The frame is the slide's: a chart the one editor may not
-                    // write (a preserve-only receipt) still takes a size.
-                    onSize: (axis: "widthEmu" | "heightEmu", emu: number) => {
-                      const current = currentBlock();
-                      if (!current || readOnly || !canManipulateBlock(current) || !Number.isSafeInteger(emu) || emu < 1 || emu > MAX_PRESENTATION_GEOMETRY_EMU) return false;
-                      replaceBlock(current.id, { ...current, [axis === "widthEmu" ? "width" : "height"]: emu });
-                      return true;
-                    },
-                    // PowerPoint for Mac's chart Format tab: one Insert Shape
-                    // button and one Arrange button (PPT-A153, PPT-A154),
-                    // on the handlers the Home tab's Shapes and Arrange use.
-                    insertShapes: <OfficeHomeRibbonGroup ribbon="chartFormat" label={t("toolbar.insertShapes")} testId="presentation-chart-format-insert-shapes-group">
-                      <DropdownMenu><DropdownMenuTrigger asChild><OfficeHomeMenuTrigger variant="large" hasMenuIndicator icon={<OfficeSemanticIcon semanticId="shape.insert" size={24}/>} label={t("toolbar.insertShapes")} disabled={!featureDecision("drawing.shape").enabled} testId="presentation-chart-format-insert-shapes"/></DropdownMenuTrigger>
-                        <RibbonDropdownMenuContent align="start"><PresentationHomeShapeGallery disabled={!featureDecision("drawing.shape").enabled} labelFor={(kind)=>t(`presentation.shape.${kind}` as "presentation.shape.rectangle")} onSelect={kind => { if (currentBlock()) executeHomeShapeInsert(kind); }}/></RibbonDropdownMenuContent>
-                      </DropdownMenu>
-                    </OfficeHomeRibbonGroup>,
-                    arrange: (() => {
-                      const blocked = readOnly || !canFlipSelection;
-                      const atFront = !selectionLayerCapability.canMoveForward, atBack = !selectionLayerCapability.canMoveBackward;
-                      const run = (fn: () => void) => () => { if (currentBlock()) fn(); };
-                      return <OfficeHomeRibbonGroup ribbon="chartFormat" label={t("presentation.home.arrange")} testId="presentation-chart-format-arrange-group">
-                        <DropdownMenu><DropdownMenuTrigger asChild><OfficeHomeMenuTrigger variant="large" hasMenuIndicator icon={<IconArrangeMenu size={24}/>} label={t("presentation.home.arrange")} testId="presentation-chart-format-arrange"/></DropdownMenuTrigger>
-                          <RibbonDropdownMenuContent align="start" data-testid="presentation-chart-format-arrange-menu">
-                            <DropdownMenuItem disabled={blocked || atFront} onSelect={run(() => bringBlockToFront(block.id))} data-testid="presentation-chart-format-bring-front">{t("presentation.contextMenu.bringToFront")}</DropdownMenuItem>
-                            <DropdownMenuItem disabled={blocked || atBack} onSelect={run(() => sendBlockToBack(block.id))} data-testid="presentation-chart-format-send-back">{t("presentation.contextMenu.sendToBack")}</DropdownMenuItem>
-                            <DropdownMenuItem disabled={blocked || atFront} onSelect={run(() => bringBlockForward(block.id))} data-testid="presentation-chart-format-forward">{t("presentation.contextMenu.bringForward")}</DropdownMenuItem>
-                            <DropdownMenuItem disabled={blocked || atBack} onSelect={run(() => sendBlockBackward(block.id))} data-testid="presentation-chart-format-backward">{t("presentation.contextMenu.sendBackward")}</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {/* Group is enabled once more than one object is
-                                selected; this tab opens on a single chart, so
-                                its reason is the selection count. */}
-                            <DropdownMenuItem disabled={chartGroupDisabled || selectedGeometryGroupRefused} title={selectedGeometryGroupRefusalReason ?? (!readOnly && selectedGeometryBlocks.length < 2 && !selectedHasGroupedBlock ? t("presentation.group.selectAtLeastTwo") : undefined)} onSelect={() => groupSelectedBlocks()} data-testid="presentation-chart-format-group-objects">{t("presentation.group.group")}</DropdownMenuItem>
-                            <DropdownMenuItem disabled={readOnly || !selectedHasGroupedBlock} onSelect={() => ungroupSelectedBlocks()} data-testid="presentation-chart-format-ungroup">{t("presentation.group.ungroup")}</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuSub><DropdownMenuSubTrigger disabled={blocked} data-testid="presentation-chart-format-align">{t("presentation.ui.shapeFormat.align")}</DropdownMenuSubTrigger>
-                              <RibbonDropdownMenuSubContent>{(["left","hcenter","right","top","vcenter","bottom"] as const).map(edge => <DropdownMenuItem key={edge} onSelect={run(() => alignSelectedBlocks(edge))} data-testid={`presentation-chart-format-align-${edge}`}>{t(`presentation.align.${edge}` as "presentation.align.left")}</DropdownMenuItem>)}</RibbonDropdownMenuSubContent>
-                            </DropdownMenuSub>
-                            <DropdownMenuSub><DropdownMenuSubTrigger disabled={blocked} data-testid="presentation-chart-format-rotate">{t("presentation.ui.shapeFormat.rotate")}</DropdownMenuSubTrigger>
-                              <RibbonDropdownMenuSubContent>
-                                <DropdownMenuItem onSelect={run(() => quarterTurnSelectedBlocks("right"))}>{t("presentation.rotate.right")}</DropdownMenuItem>
-                                <DropdownMenuItem onSelect={run(() => quarterTurnSelectedBlocks("left"))}>{t("presentation.rotate.left")}</DropdownMenuItem>
-                                <DropdownMenuItem onSelect={run(() => flipSelectedBlocks("flipV"))}>{t("presentation.flip.vertical")}</DropdownMenuItem>
-                                <DropdownMenuItem onSelect={run(() => flipSelectedBlocks("flipH"))}>{t("presentation.flip.horizontal")}</DropdownMenuItem>
-                              </RibbonDropdownMenuSubContent>
-                            </DropdownMenuSub>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onSelect={() => executePresentationFeature("editing.selectionPane")} data-testid="presentation-chart-format-selection-pane">{t("toolbar.selectionPane")}...</DropdownMenuItem>
-                          </RibbonDropdownMenuContent>
-                        </DropdownMenu>
-                      </OfficeHomeRibbonGroup>;
-                    })(),
-                  };
-                  return chartDesktopAttrs ? <Suspense fallback={null}><PresentationChartContextRibbon
-                    key={`${pageId}:${activeSlide.id}:${block.id}`}
-                    {...common} attrs={chartDesktopAttrs} workbook={block.chartWorkbook}
-                    identity={chartRibbonIdentity(block.id)} authority={block}
-                    nativeLook={presentationImportedChartLook(block, chartDesktopAttrs)}
-                    disabledReason={readOnly ? (chartReadOnlyReason(block) ?? chartLockNotice(block)) : chartLockNotice(block)}
-                    notice={!readOnly && presentationChartV2PreserveOnly(block) ? chartLockNotice(block) : null}
-                    sizeDisabledReason={readOnly || !canManipulateBlock(block) ? (chartReadOnlyReason(block) ?? chartLockNotice(block)) : null}
-                    dataDisabledReason={presentationChartV2DataWritable(block) ? null : linkedChartDataReason}
-                    dataShapeDisabledReason={presentationChartV2DataShapeWritable(block) ? null : literalChartDataShapeReason}
-                    changeTypeDisabledReason={chartTypeLockReason(block)}
-                    titleDisabledReason={chartTitleLockReason(block)}
-                    accentColors={themeAccentColors}
-                    onCommit={(attrs, book) => currentBlock() ? commitChartDesktop(block, attrs, book) : false}
-                    onPreview={attrs => setChartDesktopPreview(attrs ? { blockId: block.id, attrs } : null)}
-                    onEditData={() => { if (currentBlock()) openChartWorkbook(block); }}
-                    formatFocus={chartFormatFocus ?? undefined}
-                    elementHit={chartElementHit}
-                    onAreaChange={(area) => setOfficeChartSelectedArea(deckChartSelectionKey(block.id), area)}
-                    selectedArea={selectedBlockId === block.id ? selectedChartElementArea : null}
-                    onOpenFormat={(area) => {
-                      chartFormatFocusTokenRef.current += 1;
-                      setChartFormatFocus({ area, token: chartFormatFocusTokenRef.current });
-                      selectPresentationRibbonTab("chart-format");
-                    }}
-                    dialogRequest={chartDialogRequest}
-                    onDialogRequestHandled={() => setChartDialogRequest(null)}
-                    onAltText={openAltTextPane}
-                    altTextPaneOpen={altTextPaneOpen}
-                  /></Suspense> : null;
-                })() : null}
-                {activeRibbonTab === "camera-format" &&
-                contextualCameoBlock ? (
-                  <Suspense fallback={null}><PresentationCameraFormatRibbonTab
-                    ctl={{
-                      t,
-                      sizeUnit,
-                      sizeUnitLabel,
-                      sizeStep,
-                      sizeBound,
-                      sizeDisplayFromEmu,
-                      pictureCropTriggerRef,
-                      selectionPaneReturnFocusRef,
-                      openAltTextPane,
-                      alignToSlide,
-                      writeAlignToSlide,
-                      cropEditingId,
-                      setCropEditingId,
-                      themeAccentColors,
-                      contextualCameoBlock,
-                      contextualCameoAltTextWritable,
-                      contextualShapeFrameSizeEditable,
-                      selectionPaneOpen,
-                      commitContextualShapeFrameSize,
-                      alignSelectedBlocks,
-                      autoFixSelectedBlocks,
-                      flipSelectedBlocks,
-                      canAutoFixSelection,
-                      canFlipSelection,
-                      quarterTurnSelectedBlocks,
-                      contextualShapeLayerCapability,
-                      bringBlockToFront,
-                      sendBlockToBack,
-                      bringBlockForward,
-                      sendBlockBackward,
-                      updateShapeBlock,
-                      featureDecision,
-                      executePresentationFeature,
-                    }}
-                  /></Suspense>
-                ) : null}
-                {activeRibbonTab === "media-format" && contextualMediaBlock ? (
-                  <Suspense fallback={null}><PresentationMediaFormatRibbonTab
-                    ctl={{
-                      t,
-                      sizeUnit,
-                      sizeUnitLabel,
-                      sizeStep,
-                      sizeBound,
-                      sizeDisplayFromEmu,
-                      selectionPaneReturnFocusRef,
-                      selectionPaneMediaTriggerRef,
-                      formatPaneOpen,
-                      rootRef,
-                      alignToSlide,
-                      writeAlignToSlide,
-                      contextualMediaBlock,
-                      contextualMediaSelectionIsWritable,
-                      contextualMediaKind,
-                      selectionPaneOpen,
-                      toggleFormatPane,
-                      openFormatPane,
-                      selectedGeometryBlocks,
-                      alignSelectedBlocks,
-                      contextualMediaLayerCapability,
-                      bringBlockToFront,
-                      sendBlockToBack,
-                      bringBlockForward,
-                      sendBlockBackward,
-                      commitContextualMediaFrameSize,
-                      featureDecision,
-                      executePresentationFeature,
-                      ribbonMediaHasGeometry,
-                    }}
-                  /></Suspense>
-                ) : null}
+              {null}
+              {null}
+              {null}
+                {null}
+                {null}
+                {null}
                 {/* Desktop PowerPoint gives a video the same two tabs it gives
                     audio: "Video Format" (Preview, Video Styles, Accessibility,
                     Arrange, Size) and "Playback" (Preview, Editing, Video
@@ -58149,68 +51314,9 @@ export default function PresentationWindow({
                     accessibility tree. Preview opens both. PowerPoint for the
                     web folds them into one "Video" tab; this editor follows the
                     desktop. */}
-                {(activeRibbonTab === "media-playback" ||
-                  (activeRibbonTab === "media-format" &&
-                    contextualMediaKind === "video")) &&
-                contextualMediaBlock ? (
-                  <Suspense fallback={null}><PresentationMediaPlaybackRibbonTab
-                    ctl={{
-                      t,
-                      captionMenuTriggerRef,
-                      captionInsertBusy,
-                      setMediaTrimDialog,
-                      slideCanvasRef,
-                      activeSlide,
-                      contextualMediaBlock,
-                      contextualMediaKind,
-                      contextualMediaPlaybackSettings,
-                      contextualMediaPlaybackIsWritable,
-                      contextualMediaTrimDurationMs,
-                      contextualMediaTrimIsWritable,
-                      contextualMediaCaptionAuthority,
-                      contextualMediaCaptionTracks,
-                      contextualMediaCaptionsIsWritable,
-                      mediaPlaybackCommandLabel,
-                      contextualMediaBackgroundActive,
-                      contextualMediaBackgroundResidue,
-                      mediaPlaybackStartLabels,
-                      mediaPlayInBackgroundLabel,
-                      mediaAudioStylesLabel,
-                      mediaNoAudioStyleLabel,
-                      contextualMediaCanPreview,
-                      getMediaElement: canvasMediaElement,
-                      commitMediaCaptionTracks,
-                      updateMediaPlaybackSettings,
-                      selectedMediaBookmark,
-                      addMediaBookmark,
-                      removeMediaBookmark,
-                      beginMediaCaptionInsert,
-                      renderVideoShapeMenu,
-                      renderVideoStylesGallery,
-                      renderVideoAdjustGroup,
-                      renderVideoBorderMenu,
-                      renderPictureEffectsMenu,
-                      featureDecision,
-                      executePresentationFeature,
-                      activeRibbonTab,
-                    }}
-                  /></Suspense>
-                ) : null}
-                {activeRibbonTab === "smartart-design" ? (
-                  <Suspense fallback={null}><PresentationSmartArtDesignRibbonTab
-                    ctl={{
-                      smartArtPlaceholders,
-                      smartArtDesignLabels,
-                      smartArtTextPaneTriggerRef,
-                      activeSlideBounds,
-                      themeAccentColors,
-                      deckSmartArtColorTheme,
-                      presentationSmartArtPreserved,
-                      presentationSmartArtDiagram,
-                    }}
-                  /></Suspense>
-                ) : null}
-                {activeRibbonTab === "smartart-format" ? smartArtFormatTab : null}
+                {null}
+                {null}
+                {null}
                 {activeRibbonTab === "insert" ? (
                   <Suspense fallback={null}><PresentationInsertRibbonTab
                     ctl={{
@@ -58290,514 +51396,17 @@ export default function PresentationWindow({
                     }}
                   /></Suspense>
                 ) : null}
-                {activeRibbonTab === "slide-master" ? (
-                  <Suspense fallback={null}><PresentationSlideMasterRibbonTab
-                    ctl={{
-                      t,
-                      locale,
-                      theme,
-                      themeRef,
-                      slidesRef,
-                      autosave,
-                      activeOfficeTheme,
-                      themeSelectionDisabled,
-                      officeThemeTiles,
-                      applyDeckTheme,
-                      applyThemePreset,
-                      applyThemeColorScheme,
-                      applyThemeFontScheme,
-                      themeFontsGallery,
-                      setOfficeMasterKey,
-                      setMasterBackgroundPaneOpen,
-                      setMasterRenameOpen,
-                      setMasterLayoutDialogOpen,
-                      dispatchPresentationView,
-                      officeMasterEntries,
-                      officeMasterSelectedEntry,
-                      officeMasterSelectedLayoutId,
-                      officeMasterLayoutWritable,
-                      officeMasterSelectedMasterKey,
-                      officeMasterSelectedIsInserted,
-                      slideMasterThemeDisabled,
-                      slideMasterThemeReason,
-                      officeMasterDeleteReason,
-                      officePlaceholderKindLabels,
-                      commitOfficeDeckEdit,
-                      presentationEffectGallery,
-                      presentationBackgroundStyleItems,
-                      slideSizeMenu,
-                    }}
-                  /></Suspense>
-                ) : null}
-                {activeRibbonTab === "design" ? (
-                  <Suspense fallback={null}><PresentationDesignRibbonTab
-                    ctl={{
-                      t,
-                      locale,
-                      backgroundPaneOpen,
-                      backgroundPaneTriggerRef,
-                      openBackgroundPane,
-                      theme,
-                      activeThemePresetId,
-                      activeOfficeTheme,
-                      activeThemeVariantId,
-                      themeSelectionDisabled,
-                      themeSelectionUnavailableReason,
-                      availableThemeVariants,
-                      officeThemeTiles,
-                      currentThemeTile,
-                      applyThemePreset,
-                      applyThemeVariant,
-                      applyThemeColorScheme,
-                      applyThemeFontScheme,
-                      themeFontsGallery,
-                      designIdeasOpen,
-                      designerDisabledReason,
-                      presentationEffectGallery,
-                      featureDecision,
-                      executePresentationFeature,
-                      officeBackgroundStyleCells,
-                      presentationBackgroundStyleItems,
-                      slideSizeMenu,
-                    }}
-                  /></Suspense>
-                ) : null}
-                {activeRibbonTab === "transitions" ? (
-                  <Suspense fallback={null}><PresentationTransitionsRibbonTab
-                    ctl={{
-                      t,
-                      transitionPreview,
-                      transitionDurationSkipBlurRef,
-                      activeSlide,
-                      normalizedActiveTransition,
-                      activeTransitionPreview,
-                      transitionPreviewDisabledReason,
-                      slideTransitionCommand,
-                      slideTransitionAdvance,
-                      setSlideTransition,
-                      setSlideTransitionDirection,
-                      beginTransitionSoundPicker,
-                      clearTransitionSound,
-                      applyBuiltinTransitionSound,
-                      applyTransitionToAll,
-                      previewSlideTransition,
-                      beginTransitionDurationEdit,
-                      changeTransitionDurationDraft,
-                      commitTransitionDurationDraft,
-                      handleTransitionDurationKeyDown,
-                      activeTransitionDirection,
-                      activeDirectionalTransition,
-                      transitionEffectDirectionOptions,
-                      transitionEffectOptionLabel,
-                      transitionEffectOptionsEditable,
-                      transitionEffectOptionsDisabledReason,
-                      activeTransitionSound,
-                      transitionSoundEditable,
-                      activeTransitionDurationMs,
-                      activeTransitionDurationInputValue,
-                      transitionDurationControlDisabled,
-                      stepTransitionDuration,
-                      // Read where it is shown: Apply To All checks every
-                      // slide of the deck, which a long deck paid at every
-                      // render of the window (850 slides: ~40 ms a render).
-                      transitionApplyAllEditable: slideTransitionApplyAllCommand.canExecute(),
-                    }}
-                  /></Suspense>
-                ) : null}
-                {activeRibbonTab === "animations" ? (
-                  <Suspense fallback={null}><PresentationAnimationsRibbonTab
-                    ctl={{
-                      t,
-                      animationPaneOpen,
-                      animationPaneToggleRef,
-                      selectedAnimationIndex,
-                      animationPreview,
-                      selectedBlockId,
-                      animationEffectOptionsMenuOpen,
-                      setAnimationEffectOptionsMenuOpen,
-                      animationEffectRecentColors,
-                      activeSlide,
-                      exclusivelySelectedBlockId,
-                      tableCellColorPaletteLabels,
-                      animationEffectCommand,
-                      blockAriaName,
-                      armAnimationPainter,
-                      animationPainterArmed: animationPainter !== null,
-                      timelineSequence,
-                      timelinePreviewFrames,
-                      timelineSequenceEditingEnabled,
-                      timelineTimingEditingEnabled,
-                      selectedAnimationTimingStep,
-                      selectedAnimationEffectOption,
-                      selectedAnimationEffectColor,
-                      selectedAnimationEffectOptions,
-                      animationEffectOptionsEditable,
-                      animationTextSequenceOptions,
-                      selectedAnimationTextSequence,
-                      setAnimationTextSequence,
-                      animationObjectTriggerTargets,
-                      animationObjectTriggerEditable,
-                      canAuthorTimelineMenuEffect,
-                      addTimelineAnimationEffect,
-                      applyAnimationGalleryEffect,
-                      toggleAnimationPane,
-                      editAnimationSequence,
-                      editAnimationTiming,
-                      previewAnimations,
-                      setAnimationEffectOption,
-                      setAnimationObjectTrigger,
-                      setAnimationEffectColor,
-                    }}
-                  /></Suspense>
-                ) : null}
-                {activeRibbonTab === "slideshow" ? (
-                  <Suspense fallback={null}><PresentationSlideShowRibbonTab
-                    ctl={{
-                      t,
-                      rehearsalReturnFocusRef,
-                      slideShowMoreTriggerRef,
-                      slideShowSetupTriggerRef,
-                      customShowTriggerRef,
-                      slides,
-                      slideShowSetupButtonRef,
-                      slideShowRehearseButtonRef,
-                      useRecordedSlideTimings,
-                      configuredSlideShowType,
-                      showSlideShowMediaControls,
-                      playSlideShowNarrations,
-                      canPersistSlideShowMediaControls,
-                      presenterWindowOpen,
-                      autosave,
-                      activeSlide,
-                      clearActiveSlideNarration,
-                      clearAllSlideNarrations,
-                      clearRecordedSlideTimings,
-                      commitUseRecordedSlideTimings,
-                      commitPlaySlideShowNarrations,
-                      commitShowSlideShowMediaControls,
-                      openCustomShowManager,
-                      openSlideShowSetup,
-                      openPresenterWindow,
-                      openRecordStudioFromBeginning,
-                      openRecordStudioFromCurrent,
-                      slideVisibilityCommand,
-                      featureDecision,
-                      executePresentationFeature,
-                      toggleActiveSlideVisibility,
-                      activeSlideNarration,
-                      deckHasNarration,
-                      activeSlideHasRecordedTiming,
-                      deckHasRecordedTimings,
-                      narrationRecorderBusy,
-                    }}
-                  /></Suspense>
-                ) : null}
-                {activeRibbonTab === "record" ? (
-                  <Suspense fallback={null}><PresentationRecordRibbonTab
-                    ctl={{
-                      t,
-                      narrationRecorderStatus,
-                      narrationRecorderError,
-                      recordStudioOpen,
-                      recordStudioEntry,
-                      recordStudioTriggerRef,
-                      recordStudioCurrentTriggerRef,
-                      narrationMicrophones,
-                      selectedNarrationMicrophoneId,
-                      setSelectedNarrationMicrophoneId,
-                      narrationPreviewAudioRef,
-                      setNarrationPreviewPlaying,
-                      setNarrationPreviewCurrentSeconds,
-                      setNarrationPreviewDurationSeconds,
-                      autosave,
-                      activeSlide,
-                      startNarrationRecording,
-                      stopNarrationRecording,
-                      clearActiveSlideNarration,
-                      clearAllSlideNarrations,
-                      clearRecordedSlideTimings,
-                      previewActiveSlideNarration,
-                      teleprompterOpen,
-                      teleprompterTriggerRef,
-                      closeTeleprompter,
-                      openTeleprompter,
-                      openRecordStudioFromBeginning,
-                      openRecordStudioFromCurrent,
-                      openPresentationRecordingHelp,
-                      insertCameo,
-                      resetRecordedSlidesToCameo,
-                      insertCapacityReached,
-                      narrationRecorderSupported,
-                      activeSlideNarration,
-                      deckHasNarration,
-                      activeSlideCanResetToCameo,
-                      deckCanResetAllToCameo,
-                      activeSlideHasRecordedTiming,
-                      deckHasRecordedTimings,
-                      narrationRecorderBusy,
-                      selectedNarrationMicrophoneLabel,
-                    }}
-                  /></Suspense>
-                ) : null}
-                {activeRibbonTab === "review" ? (
-                  <Suspense fallback={null}><PresentationReviewRibbonTab
-                    ctl={{
-                      t,
-                      reviewAccessibilityTriggerRef,
-                      accessibilityPanelOpen,
-                      proofingLanguageReturnFocusRef,
-                      reviewInkHidden,
-                      setReviewInkHidden,
-                      slides,
-                      activeIndex,
-                      activeIndexRef,
-                      autosave,
-                      hasPersistedReviewInk,
-                      deleteReviewInk,
-                      commentsPanelOpen,
-                      showProofingErrors,
-                      setShowProofingErrors,
-                      setSpellingStartIndex,
-                      showReviewMarkup,
-                      setShowReviewMarkup,
-                      showAdvancedReviewMarkup,
-                      setShowAdvancedReviewMarkup,
-                      currentCommentActorId,
-                      canAuthorReviewComment,
-                      commentAuthoringBlockedReason,
-                      canOpenReviewCommentComposer,
-                      reviewCommentEntries,
-                      selectedReviewCommentEntry,
-                      openReviewCommentComposer,
-                      toggleReviewCommentsPane,
-                      navigateReviewComment,
-                      deleteSelectedReviewComment,
-                      canDeleteAllReviewCommentsOnSlide,
-                      deleteAllReviewCommentsOnSlide,
-                      openThesaurus,
-                      deckChangeCount: deckChanges?.slides.size ?? 0,
-                      deckChangeAuthors: deckChanges?.authors ?? [],
-                      showChanges,
-                      toggleShowChanges: () => setShowChanges((shown) => !shown && Boolean(deckChanges)),
-                      markAllChangesRead,
-                      accessibilityCheckCommandAuthority,
-                      invokeAccessibilityCheck,
-                    }}
-                  /></Suspense>
-                ) : null}
-                {activeRibbonTab === "view" ? (
-                  <Suspense fallback={null}><PresentationViewRibbonTab
-                    ctl={{
-                      t,
-                      slideZoomMode,
-                      zoomRibbonTriggerRef,
-                      presentationZoomDialogOpen,
-                      setPresentationZoomDialogOpen,
-                      showRuler,
-                      showGridlines,
-                      showGuides,
-                      immersiveReaderProjection,
-                      immersiveReaderOpen,
-                      setImmersiveReaderOpen,
-                      viewColorMode,
-                      setViewColorMode,
-                      immersiveReaderTriggerRef,
-                      ribbonReadingViewTriggerRef,
-                      activePresentationLiveView,
-                      dispatchPresentationView,
-                      notesVisible,
-                      togglePresentationNotesPane,
-                      viewAidCommandAuthority,
-                      viewportZoomCommandAuthority,
-                      presentationBlackWhiteObject,
-                      togglePresentationViewAid,
-                      zoomFitToWindow,
-                      slideZoomPercentValue,
-                      slideZoomPercentLabel,
-                      slideZoomDialMaximumPercent,
-                      presentationViewWindowCommands,
-                      gridSettingsOpen,
-                      openGridSettings: () => setGridSettingsOpen(true),
-                    }}
-                  /></Suspense>
-                ) : null}
-                {activeRibbonTab === "table-design" && contextualTableBlock ? (
-                  <Suspense fallback={null}><PresentationTableDesignRibbonTab
-                    ctl={{
-                      pageId,
-                      t,
-                      tableCellPaletteTarget,
-                      setTableCellPaletteTarget,
-                      tableCellRecentColors,
-                      setTableCellRecentColors,
-                      tableCellFontSizeDraft,
-                      setTableCellFontSizeDraft,
-                      setTableCellFontSizeFocused,
-                      setTableCellFontSizeDirty,
-                      tableCellMarginDrafts,
-                      setTableCellMarginDrafts,
-                      setTableCellMarginFocused,
-                      setTableCellMarginDirty,
-                      setTableCellMarginsDialogOpen,
-                      tableCellMarginsTriggerRef,
-                      tableBorderWidthDraft,
-                      setTableBorderWidthDraft,
-                      setTableBorderWidthFocused,
-                      setTableBorderWidthDirty,
-                      tableGridlinesVisible,
-                      setTableGridlinesVisible,
-                      tableBorderTarget,
-                      tableBorderPenMode,
-                      tableBorderPen,
-                      autosave,
-                      tableDrawAuthorityRef,
-                      activeEffectiveTheme,
-                      deckWordArtStyles,
-                      wordArtStyleLabel,
-                      contextualTableBlock,
-                      contextualTableSelectionIsWritable,
-                      contextualTableFocus: contextualTableCommandFocus,
-                      contextualTableCell: contextualTableCommandCell,
-                      contextualTableCellStyle: contextualTableCommandCellStyle,
-                      contextualTableCellFormatState,
-                      contextualTableBorderState,
-                      contextualTableBorderTargetOptions,
-                      contextualTableCellFontFamilyValue,
-                      contextualTableCellFontFamilyLabel,
-                      contextualTableCellFontSections,
-                      contextualTableCellMarginMenuValue,
-                      tableCellMarginMenuLabels,
-                      tableCellColorPaletteLabels,
-                      updateTableCellStyle,
-                      updateContextualTableCellStyle,
-                      writeContextualTableTextPaint,
-                      contextualTableTextPaint,
-                      contextualTableTextPaintMixed,
-                      pickContextualTableCellColor,
-                      selectContextualTableCellFontFamily,
-                      commitContextualTableCellFontSize,
-                      commitContextualTableCellMargin,
-                      commitContextualTableBorderWidth,
-                      selectContextualTableBorderStyle,
-                      toggleTableBorderPen,
-                      updateDrawingPen,
-                      armDrawingPen,
-                      applyDrawingPenToBorders,
-                      updateTableFlags,
-                      updateTableFrame,
-                      previewTableStyle,
-                      commitTableStyle,
-                      deckTableStyleLooks,
-                      tableCellTextDirectionOptions,
-                    }}
-                  /></Suspense>
-                ) : null}
-                {activeRibbonTab === "equation" ? (
-                  <Suspense fallback={null}><PresentationEquationRibbonTab
-                    ctl={{
-                      t,
-                      locale,
-                      autosave,
-                      presentationEquations,
-                    }}
-                  /></Suspense>
-                ) : null}
-                {activeRibbonTab === "table-layout" && contextualTableBlock ? (
-                  <Suspense fallback={null}><PresentationTableLayoutRibbonTab
-                    ctl={{
-                      t,
-                      sizeUnit,
-                      sizeUnitLabel,
-                      sizeStep,
-                      sizeBound,
-                      sizeDisplayFromEmu,
-                      tableCellFocus,
-                      tableSelectionScope,
-                      tableCellFontSizeDraft,
-                      setTableCellFontSizeDraft,
-                      setTableCellFontSizeFocused,
-                      setTableCellFontSizeDirty,
-                      setTableCellMarginsDialogOpen,
-                      tableCellMarginsTriggerRef,
-                      tableAxisSizeDrafts,
-                      tableSplitPanelOpen,
-                      setTableSplitPanelOpen,
-                      tableSplitRowsDraft,
-                      setTableSplitRowsDraft,
-                      tableSplitColumnsDraft,
-                      setTableSplitColumnsDraft,
-                      tableSplitTriggerRef,
-                      tableSplitRowsInputRef,
-                      tableFrameAspectLocked,
-                      setTableFrameAspectLocked,
-                      tableGridlinesVisible,
-                      setTableGridlinesVisible,
-                      selectWholeTableCellRef,
-                      tableScopeChosenFromMenuRef,
-                      tableCellInputRefs,
-                      restoringTableScopeFocusRef,
-                      alignToSlide,
-                      writeAlignToSlide,
-                      contextualTableBlock,
-                      contextualTableSelectionIsWritable,
-                      contextualTableFrameIsWritable,
-                      contextualTableFocus: contextualTableCommandFocus,
-                      contextualTableCellFormatState,
-                      contextualTableCellFontFamilyValue,
-                      contextualTableCellFontFamilyLabel,
-                      contextualTableCellFontSections,
-                      contextualTableCellMarginMenuValue,
-                      tableCellMarginMenuLabels,
-                      contextualTableRowStructureRange,
-                      contextualTableColumnStructureRange,
-                      contextualTableRowSpanRange,
-                      contextualTableColumnSpanRange,
-                      contextualTableColumnSizeState,
-                      contextualTableRowSizeState,
-                      formatPaneShowing,
-                      toggleFormatPane,
-                      formatPaneInFront,
-                      deleteBlock,
-                      selectedGeometryBlocks,
-                      alignSelectedBlocks,
-                      distributeSelectedBlocks,
-                      flipSelectedBlocks,
-                      canFlipSelection,
-                      quarterTurnSelectedBlocks,
-                      ungroupSelectedBlocks,
-                      contextualTableCanUngroup,
-                      contextualTableLayerCapability,
-                      bringBlockToFront,
-                      sendBlockToBack,
-                      bringBlockForward,
-                      sendBlockBackward,
-                      insertTableRowAtFocus,
-                      insertTableColumnAtFocus,
-                      deleteTableRowAtFocus,
-                      deleteTableColumnAtFocus,
-                      deleteTableAtFocus,
-                      selectTableScope,
-                      mergeTableSelection,
-                      splitTableCellIntoParts,
-                      tableSelectionCanMerge,
-                      tableFocusCanUseSplitCommand,
-                      requestTableCellSplit,
-                      updateContextualTableCellStyle,
-                      selectContextualTableCellFontFamily,
-                      commitContextualTableCellFontSize,
-                      commitContextualTableAxisSize,
-                      commitContextualTableFrameSize,
-                      distributeTableAxis,
-                      autoFitTableColumns,
-                      tableSplitMaxRows,
-                      tableSplitMaxColumns,
-                      tableSplitRowsValue,
-                      tableSplitColumnsValue,
-                      tableSplitDraftIsValid,
-                      tableCellTextDirectionOptions,
-                    }}
-                  /></Suspense>
-                ) : null}
+                {null}
+                {null}
+                {null}
+                {null}
+                {null}
+                {null}
+                {null}
+                {null}
+                {null}
+                {null}
+                {null}
           </PresentationRibbonStrip>
         </div>
       </section>
@@ -59191,7 +51800,7 @@ export default function PresentationWindow({
         }}
       />
       <OfficeDialogShell
-        open={customShowDialogOpen}
+        open={false}
         title={t("presentation.slideshow.customShowManage")}
         description={t("presentation.slideshow.customShowDescription")}
         defaultActionLabel={t("common.close")}
@@ -59476,7 +52085,7 @@ export default function PresentationWindow({
         testIdPrefix="presentation-zoom-dialog"
       />
       <OfficeDialogShell
-        open={slideShowSetupOpen}
+        open={false}
         title={t("presentation.slideshow.setUpShowDialog")}
         description={t("presentation.slideshow.setupDescription")}
         defaultActionLabel={t("presentation.slideshow.setupOk")}
@@ -60102,97 +52711,9 @@ export default function PresentationWindow({
               }}
             /></Suspense>
           ) : null}
-          {viewMode === "master" && masterLayoutDialogOpen && officeMasterEntries.length > 0 ? (
-            <Suspense fallback={null}><PresentationMasterLayoutDialog
-              open
-              labels={{
-                title: t("presentation.slideMaster.masterLayout"),
-                placeholders: t("presentation.slideMaster.masterLayoutPlaceholders"),
-                family: {
-                  title: t("presentation.slideMaster.masterLayoutTitle"),
-                  body: t("presentation.slideMaster.masterLayoutText"),
-                  date: t("presentation.slideMaster.masterLayoutDate"),
-                  slideNumber: t("presentation.slideMaster.masterLayoutSlideNumber"),
-                  footer: t("presentation.slideMaster.masterLayoutFooter"),
-                },
-                ok: t("presentation.columnsDialog.ok"),
-                cancel: t("common.cancel"),
-              }}
-              deleted={officeMasterPlaceholdersOff(theme, officeMasterSelectedMasterKey)}
-              onApply={(restore) => {
-                setMasterLayoutDialogOpen(false);
-                let next = themeRef.current;
-                for (const family of restore) {
-                  next = themeWithOfficeMasterPlaceholder(next, family, true, officeMasterSelectedMasterKey) ?? next;
-                }
-                if (next !== themeRef.current && next) applyDeckTheme(next);
-              }}
-              onCancel={() => setMasterLayoutDialogOpen(false)}
-            /></Suspense>
-          ) : null}
-          {viewMode === "master" && masterRenameOpen && officeMasterEntries.length > 0 ? (
-            <Suspense fallback={null}><PresentationMasterRenameDialog
-              key={officeMasterKey}
-              open
-              labels={
-                officeMasterSelectedEntry?.kind === "master"
-                  ? {
-                      title: t("presentation.slideMaster.renameMasterTitle"),
-                      field: t("presentation.slideMaster.renameMasterField"),
-                      rename: t("presentation.slideMaster.renameAction"),
-                      cancel: t("common.cancel"),
-                    }
-                  : {
-                      title: t("presentation.slideMaster.renameLayoutTitle"),
-                      field: t("presentation.slideMaster.renameLayoutField"),
-                      rename: t("presentation.slideMaster.renameAction"),
-                      cancel: t("common.cancel"),
-                    }
-              }
-              initialName={
-                officeMasterSelectedEntry?.kind === "master"
-                  ? officeSlideMasterDisplayName(officeMasterSelectedEntry.masterKey)
-                  : presentationLayoutDisplayName({
-                      id: officeMasterSelectedEntry?.key ?? officeMasterKey,
-                      nameKey: officeMasterSelectedEntry?.nameKey ?? "blank",
-                    })
-              }
-              onRename={(name) => {
-                setMasterRenameOpen(false);
-                const next = themeWithOfficeMasterName(
-                  themeRef.current,
-                  officeMasterSelectedEntry?.key ?? officeMasterKey,
-                  name,
-                );
-                if (next) applyDeckTheme(next);
-              }}
-              onCancel={() => setMasterRenameOpen(false)}
-            /></Suspense>
-          ) : null}
-          {viewMode === "master" && masterBackgroundPaneOpen && officeMasterEntries.length > 0 ? (
-            <Suspense fallback={null}><PresentationMasterBackgroundPane
-              background={theme?.background}
-              backgroundGradient={theme?.backgroundGradient}
-              backgroundPattern={theme?.backgroundPattern}
-              disabled={autosave.readOnly || themeSelectionDisabled}
-              paletteLabels={{
-                themeColors: t("spreadsheet.themeColors"),
-                standardColors: t("spreadsheet.standardColors"),
-                recentColors: t("spreadsheet.recentColors"),
-                moreColors: t("spreadsheet.moreColors"),
-              }}
-              onFill={(fill) => {
-                const next = themeWithOfficeMasterBackground(themeRef.current, fill);
-                if (next) applyDeckTheme(next);
-              }}
-              onReset={() => {
-                const next = themeWithoutOfficeMasterBackground(themeRef.current);
-                if (next) applyDeckTheme(next);
-              }}
-              onClose={() => setMasterBackgroundPaneOpen(false)}
-              t={t}
-            /></Suspense>
-          ) : null}
+          {null}
+          {null}
+          {null}
           {/* MRAI's own master pane (assign / create masters) serves decks
               that carry authored or imported masters; an Office theme deck's
               one master is edited through the Slide Master tab (PPT-B030). */}
@@ -60607,6 +53128,8 @@ export default function PresentationWindow({
           ) : null}
           <div
             ref={canvasViewportRef}
+            // The slide keeps its ltr geometry under an rtl interface.
+            dir="ltr"
             className={`presentation-window__canvas-viewport ${presentationChrome.canvasViewport}`}
             data-testid="presentation-canvas-viewport"
             data-fit-zoom-ceiling={Math.round(slideFitZoomCeiling * 100)}
@@ -60689,19 +53212,12 @@ export default function PresentationWindow({
                 
                 touchAction:
                   tableBorderPenMode === "draw" ||
-                  (activeRibbonTab === "draw" && inkInteractionMode) ||
+                  (false) ||
                   activeCustomGeometryTool
                     ? "none"
                     : undefined,
                 cursor:
-                  activeRibbonTab === "draw" &&
-                  inkInteractionMode
-                    ? inkInteractionMode === "eraser"
-                      ? "cell"
-                      : inkInteractionMode === "lasso"
-                        ? "crosshair"
-                        : "url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22%3E%3Cpath d=%22M4 20L18 6l2 2L6 22z%22 fill=%22%231f2937%22/%3E%3C/svg%3E') 2 22, crosshair"
-                    : undefined,
+                  undefined,
               }}
               // A11y: the slide canvas is a labelled group of blocks. The label
               // names the slide ("Slide N: Title") so a screen-reader user knows
@@ -60738,7 +53254,6 @@ export default function PresentationWindow({
               // no hand and no selection (styles/native-page-window.css).
               data-presentation-ink-armed={inkSurfaceArmed ? "true" : undefined}
               data-touch-hold={
-                (activeRibbonTab === "draw" && inkInteractionMode) ||
                 activeCustomGeometryTool
                   ? "off"
                   : "drag"
@@ -61002,7 +53517,7 @@ export default function PresentationWindow({
                 the design surface where the box stands. */}
             {presentationEquations.inPlaceEditor}
             {showReviewMarkup ? activeComments.filter((comment) =>
-              !comment.resolved && (showAdvancedReviewMarkup || comment.id === selectedReviewCommentId || comment.blockId === selectedBlockId)
+              !comment.resolved && (comment.id === selectedReviewCommentId || comment.blockId === selectedBlockId)
             ).map((comment, index) => {
               const anchor = activeSlide.blocks.find((block) => block.id === comment.blockId);
               const geometry = anchor && hasGeometry(anchor) ? anchor : null;
@@ -61087,15 +53602,7 @@ export default function PresentationWindow({
                 }}
               />
             ) : null}
-            {inkCircleOffer && inkCircleOffer.slideId === activeSlide.id ? (
-              <OfficeInkCircleSelect
-                offer={inkCircleOffer}
-                space={activeSlideBounds}
-                label={t("toolbar.drawCircleSelect")}
-                testId="presentation-ink-circle-select"
-                onSelect={() => endInkCircleOffer(false)?.select()}
-              />
-            ) : null}
+            {null}
             <InkPresenceSvgLayer
               awareness={roomAwareness}
               surface={`slide:${activeSlide.id}`}
@@ -61104,29 +53611,14 @@ export default function PresentationWindow({
               settledKey={activeSlide.blocks}
               testId="presentation-peer-ink"
             />
-            {activeRibbonTab === "draw" && (inkInteractionMode || inkRuler) ? (
-              <PresentationDrawToolSurface
-                ctl={{
-                  activeSlideBounds,
-                  inkInteractionMode,
-                  inkColor,
-                  inkStrokePx,
-                  inkPreview,
-                  inkLiveRef,
-                  inkWetLayer: inkWet.layer,
-                  inkRuler,
-                  setInkRuler,
-                  rulerLabel: t("toolbar.ruler"),
-                }}
-              />
-            ) : null}
-            {animationPreview?.slideModelId === activeSlide.id ? (
+            {null}
+            {null?.slideModelId === activeSlide.id ? (
               <div
-                key={`animation-preview-backdrop-${animationPreview.token}`}
+                key={`animation-preview-backdrop-${null.token}`}
                 aria-hidden="true"
                 data-testid="presentation-animation-preview-backdrop"
-                data-animation-preview-slide-id={animationPreview.slideModelId}
-                data-animation-preview-token={animationPreview.token}
+                data-animation-preview-slide-id={null.slideModelId}
+                data-animation-preview-token={null.token}
                 data-animation-preview-underlay="masked"
                 style={{
                   ...(activeSlideStyle ?? {}),
@@ -61139,16 +53631,16 @@ export default function PresentationWindow({
                 }}
               />
             ) : null}
-            {animationPreview?.slideModelId === activeSlide.id ? (
+            {null?.slideModelId === activeSlide.id ? (
               <div
-                key={`${animationPreview.token}-${animationPreview.frameIndex}`}
+                key={`${null.token}-${null.frameIndex}`}
                 aria-hidden="true"
                 data-testid="presentation-animation-preview-layer"
-                data-animation-preview-slide-id={animationPreview.slideModelId}
-                data-animation-preview-token={animationPreview.token}
-                data-animation-preview-frame={animationPreview.frameIndex}
+                data-animation-preview-slide-id={null.slideModelId}
+                data-animation-preview-token={null.token}
+                data-animation-preview-frame={null.frameIndex}
                 data-animation-preview-revealed-groups={
-                  animationPreview.frames[animationPreview.frameIndex]
+                  null.frames[null.frameIndex]
                     .revealedGroups
                 }
                 style={{
@@ -61164,7 +53656,7 @@ export default function PresentationWindow({
                   theme={theme}
                   masters={masters}
                   revealedGroups={
-                    animationPreview.frames[animationPreview.frameIndex]
+                    null.frames[null.frameIndex]
                       .revealedGroups
                   }
                   staticMedia
@@ -61175,15 +53667,15 @@ export default function PresentationWindow({
                 Without this start backdrop, Fade/Wipe/Dissolve reveal the same
                 already-visible pixels and are not a real preview. The resolved
                 slide fill stays faithful; opaque white backs rich fills. */}
-            {transitionPreview?.slideModelId === activeSlide.id ? (
+            {null?.slideModelId === activeSlide.id ? (
               <div
-                key={`transition-preview-backdrop-${transitionPreview.token}`}
+                key={`transition-preview-backdrop-${null.token}`}
                 aria-hidden="true"
                 data-testid="presentation-transition-preview-backdrop"
                 data-transition-preview-slide-id={
-                  transitionPreview.slideModelId
+                  null.slideModelId
                 }
-                data-transition-preview-token={transitionPreview.token}
+                data-transition-preview-token={null.token}
                 data-transition-preview-underlay="masked"
                 style={{
                   ...(activeSlideStyle ?? {}),
@@ -61196,28 +53688,28 @@ export default function PresentationWindow({
                 }}
               />
             ) : null}
-            {transitionPreview?.slideModelId === activeSlide.id &&
-            transitionPreview.kind === "basic" ? (
+            {null?.slideModelId === activeSlide.id &&
+            null.kind === "basic" ? (
               <div
-                key={transitionPreview.token}
+                key={null.token}
                 aria-hidden="true"
-                className={/--enter-(cube|box|rotate|orbit)-/.test(transitionPreview.className ?? "") ? undefined : transitionPreview.className ?? undefined}
+                className={/--enter-(cube|box|rotate|orbit)-/.test(null.className ?? "") ? undefined : null.className ?? undefined}
                 data-transition-preview-mode={
-                  transitionPreview.className ? "animated" : "instant"
+                  null.className ? "animated" : "instant"
                 }
                 data-testid="presentation-transition-preview-layer"
                 data-transition-preview-slide-id={
-                  transitionPreview.slideModelId
+                  null.slideModelId
                 }
-                data-transition-preview-token={transitionPreview.token}
+                data-transition-preview-token={null.token}
                 onAnimationEnd={(event) =>
                   handleTransitionPreviewAnimationEnd(
                     event,
-                    transitionPreview.token,
+                    null.token,
                   )
                 }
                 style={{
-                  animationDuration: `${transitionPreview.durationMs}ms`,
+                  animationDuration: `${null.durationMs}ms`,
                   inset: 0,
                   overflow: "hidden",
                   pointerEvents: "none",
@@ -61229,22 +53721,22 @@ export default function PresentationWindow({
                   slide={activeSlide}
                   theme={theme}
                   masters={masters}
-                  transitionClassName={/--enter-(cube|box|rotate|orbit)-/.test(transitionPreview.className ?? "") ? transitionPreview.className ?? undefined : undefined}
+                  transitionClassName={/--enter-(cube|box|rotate|orbit)-/.test(null.className ?? "") ? null.className ?? undefined : undefined}
                   staticMedia
                 />
               </div>
             ) : null}
-            {transitionPreview?.slideModelId === activeSlide.id &&
-            transitionPreview.kind === "morph" ? (
+            {null?.slideModelId === activeSlide.id &&
+            null.kind === "morph" ? (
               <div
-                key={`transition-preview-morph-${transitionPreview.token}`}
+                key={`transition-preview-morph-${null.token}`}
                 aria-hidden="true"
                 data-testid="presentation-transition-preview-layer"
                 data-transition-preview-kind="morph"
                 data-transition-preview-slide-id={
-                  transitionPreview.slideModelId
+                  null.slideModelId
                 }
-                data-transition-preview-token={transitionPreview.token}
+                data-transition-preview-token={null.token}
                 style={{
                   inset: 0,
                   overflow: "hidden",
@@ -61254,11 +53746,11 @@ export default function PresentationWindow({
                 }}
               >
                 <PresentationMorphLayer
-                  spec={transitionPreview}
+                  spec={null}
                   theme={theme}
                   masters={masters}
                   onDone={() =>
-                    finishTransitionPreview(transitionPreview.token)
+                    finishTransitionPreview(null.token)
                   }
                 />
               </div>
@@ -61753,10 +54245,10 @@ export default function PresentationWindow({
                 (tableDrawBoundaryPreview?.id === block.id ? tableDrawBoundaryPreview : null) ?? tableGesturePreview ?? tableFrameAlignedBlock;
               const tableBlockWithStylePreview =
                 tableInteractionBlock &&
-                tableStylePreview?.blockId === block.id
+                null?.blockId === block.id
                   ? applyPresentationTableStyleSelection(
                       tableInteractionBlock,
-                      tableStylePreview.selection,
+                      null.selection,
                     )
                   : tableInteractionBlock;
               const displayedTableBlock =
@@ -62775,7 +55267,7 @@ export default function PresentationWindow({
                         setTableSelectionAnchor,
                         tableSelectionScope,
                         setTableSelectionScope,
-                        tableGridlinesVisible,
+                        tableGridlinesVisible: false,
                         tableCellInputRefs,
                         setTableCharacterSelectionVersion,
                         restoringTableScopeFocusRef,
@@ -62872,7 +55364,7 @@ export default function PresentationWindow({
                     <PresentationCanvasEmbedBlock
                       ctl={{
                         t,
-                        videoStylePreview,
+                        videoStylePreview: null,
                         mediaControlBarInside,
                         deckThemeGridColors,
                         contextualMediaBlock,
@@ -62996,22 +55488,7 @@ export default function PresentationWindow({
             {/* The click order beside each animated object, as PowerPoint
                 tags it in Normal view while the Animations tab or the
                 Animation Pane is open (not while a preview plays). */}
-            {viewAidNormalMode &&
-            (ribbonTab === "animations" || animationPaneOpen) &&
-            !animationPreview &&
-            timelineSequence.length > 0 ? (
-              <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: PRESENTATION_SELECTION_CHROME_LAYER }}>
-                <PresentationAnimationTagLayer
-                  blocks={activeSlide.blocks}
-                  sequence={timelineSequence}
-                  bounds={activeSlideBounds}
-                  screenWidth={activeSlideDesignSize.width * slideDesignScale}
-                  selectedIndex={selectedAnimationIndex}
-                  labels={animationTagLabels}
-                  onPick={pickAnimationTag}
-                />
-              </div>
-            ) : null}
+            {null}
             {smartArtFrameRotateGrip ? (
               <PresentationSmartArtMemberRotateGrip
                 ctl={{
@@ -63103,94 +55580,8 @@ export default function PresentationWindow({
           </div>
             </div>
           </div>
-          {recordStudioOpen ? (
-            <Suspense fallback={null}><PresentationRecordStudioPane
-              ctl={{
-                pageId,
-                t,
-                slides,
-                activeIndex,
-                narrationRecorderStatus,
-                narrationRecorderError,
-                recordStudioLayout,
-                setRecordStudioLayout,
-                recordStudioElapsedMs,
-                recordStudioTotalElapsedMs,
-                recordStudioPanelRef,
-                recordStudioStageRef,
-                recordStudioTeleprompterScrollRef,
-                recordStudioTeleprompterRunning,
-                setRecordStudioTeleprompterRunning,
-                recordStudioAnnotationColor,
-                setRecordStudioAnnotationColor,
-                recordStudioInkSurfaceRect,
-                resetRecordStudioElapsed,
-                bankRecordStudioElapsed,
-                narrationMicrophones,
-                selectedNarrationMicrophoneId,
-                setSelectedNarrationMicrophoneId,
-                narrationMicrophonePermissionStatus,
-                narrationPreviewPlaying,
-                narrationPreviewCurrentSeconds,
-                narrationPreviewDurationSeconds,
-                toggleNarrationPreview,
-                seekNarrationPreview,
-                autosave,
-                activeSlide,
-                requestNarrationMicrophoneAccess,
-                startNarrationRecording,
-                stopNarrationRecording,
-                toggleNarrationRecordingPaused,
-                teleprompterOpen,
-                teleprompterSpeed,
-                setTeleprompterSpeed,
-                activeTeleprompterNotes,
-                closeTeleprompter,
-                openTeleprompter,
-                closeRecordStudio,
-                moveRecordStudioSlide,
-                recordStudioCanDrawInk,
-                recordStudioCanEraseInk,
-                recordStudioActiveAnnotationTool,
-                recordStudioDraftStrokes,
-                selectRecordStudioAnnotationTool,
-                startRecordStudioInkStroke,
-                appendRecordStudioInkStroke,
-                finishRecordStudioInkStroke,
-                eraseRecordStudioInkAt,
-                finishRecordStudioInkErase,
-                clearRecordStudioInk,
-                resetActiveSlideRecordingToCameo,
-                narrationRecorderSupported,
-                activeSlideNarration,
-                activeSlideCanResetToCameo,
-                narrationRecorderBusy,
-                narrationRecorderCanTogglePause,
-                narrationMicrophonePermissionLabel,
-                selectedNarrationMicrophoneLabel,
-              }}
-            /></Suspense>
-          ) : null}
-          {teleprompterOpen ? (
-            <Suspense fallback={null}><PresentationTeleprompterPane
-              ctl={{
-                pageId,
-                t,
-                activeIndex,
-                recordStudioOpen,
-                teleprompterRunning,
-                setTeleprompterRunning,
-                teleprompterSpeed,
-                setTeleprompterSpeed,
-                teleprompterFontSize,
-                setTeleprompterFontSize,
-                teleprompterPanelRef,
-                teleprompterScrollRef,
-                activeTeleprompterNotes,
-                closeTeleprompter,
-              }}
-            /></Suspense>
-          ) : null}
+          {null}
+          {null}
           {smartArtTextPaneOpen &&
           (contextualSmartArtMarker || contextualNativeSmartArt) &&
           contextualSmartArtOutline ? (
@@ -63566,11 +55957,6 @@ export default function PresentationWindow({
                         })),
                       };
                     })(),
-                    addAnimation: {
-                      onSelect: run(openAddAnimationFromContextMenu),
-                      disabled: !writable,
-                      testId: "presentation-context-add-animation",
-                    },
                     newComment: {
                       onSelect: run(() => {
                         setCommentsPanelOpen(true);
@@ -64044,37 +56430,7 @@ export default function PresentationWindow({
               closed (the timeline keeps its selection), hidden and not a
               dialog then. */}
           {dockTaskPane(
-          <PresentationAnimationTaskPane
-            ctl={{
-              t,
-              animationPaneWidth,
-              setAnimationPaneWidth,
-              animationPaneTabRef,
-              animationPaneRef,
-              animationPaneResizePointerRef,
-              selectedAnimationIndex,
-              animationPreview,
-              activeSlide,
-              taskPaneDock,
-              taskPaneTabsLabel,
-              timelineSequence,
-              timelinePreviewFrames,
-              timelineSequenceEditingEnabled,
-              timelineRowEditingEnabled,
-              animationPanePreserveOnly,
-              timelineTimingEditingEnabled,
-              addTimelineStep,
-              updateTimelineStep,
-              closeAnimationPane,
-              resizeAnimationPaneFromClientX,
-              stepAnimationPaneWidth,
-              selectAnimationStep,
-              editAnimationSequence,
-              editAnimationTiming,
-              previewAnimations,
-              blockAriaName,
-            }}
-          />,
+          null,
           )}
           {PRESENTATION_COPILOT_V1_ENABLED && !guestMode && deckCopilotResume.resume?.parts ? (
             null
@@ -64211,65 +56567,10 @@ export default function PresentationWindow({
       />
       )}
       </>)} />
-      {slideSizeOpen ? (
-        <SlideSizeDialog
-          current={currentSlideSize}
-          currentFirstSlideNumber={headerFooter?.firstSlideNumber ?? 1}
-          currentNotesSize={
-            headerFooter?.notesSize ?? DEFAULT_PRESENTATION_NOTES_SIZE
-          }
-          firstSlideNumberEditable={
-            !importedDeckHasNativePptxSource || nativeSlideSizeCanApply(slides)
-          }
-          notesSizeEditable={
-            !importedDeckHasNativePptxSource || nativeSlideSizeCanApply(slides)
-          }
-          onApply={requestSlideSizeChange}
-          onClose={closeSlideSizeDialog}
-          onOpenHeaderFooter={() => {
-            setSlideSizeOpen(false);
-            openHeaderFooterDialog(slideSizeTriggerRef.current);
-          }}
-          t={t}
-        />
-      ) : null}
-      {pendingSlideSize ? (
-        <SlideSizeFitChoiceDialog
-          onApply={(strategy) =>
-            applySlideSize(
-              pendingSlideSize.size,
-              strategy,
-              pendingSlideSize.firstSlideNumber,
-              pendingSlideSize.notesSize,
-            )
-          }
-          onClose={closeSlideSizeFitDialog}
-          t={t}
-        />
-      ) : null}
-      {spellingStartIndex !== null ? (
-        <PresentationSpellingDialog
-          host={spellingHost}
-          startSlideIndex={spellingStartIndex}
-          locale={locale}
-          onClose={() => setSpellingStartIndex(null)}
-          t={t}
-          scope={pageId}
-        />
-      ) : null}
-      {mediaTrimDialog ? (
-        <PresentationMediaTrimDialog
-          key={`${mediaTrimDialog.slideId}:${mediaTrimDialog.blockId}:${mediaTrimDialog.durationMs}`}
-          kind={mediaTrimDialog.kind}
-          src={mediaTrimDialog.src}
-          durationMs={mediaTrimDialog.durationMs}
-          trimStartMs={mediaTrimDialog.trimStartMs}
-          trimEndMs={mediaTrimDialog.trimEndMs}
-          onApply={applyContextualMediaTrim}
-          onClose={closeMediaTrimDialog}
-          t={t}
-        />
-      ) : null}
+      {null}
+      {null}
+      {null}
+      {null}
       {replaceFontsOpen ? (
         <ReplaceFontsDialog
           usedFonts={collectDeckFonts(slides)}
@@ -64965,9 +57266,7 @@ export default function PresentationWindow({
           </OfficeSelectionPaneList>
         </OfficeTaskPane>,
       ) : null}
-      {thesaurusOpen ? dockTaskPane(
-        null,
-      ) : null}
+      {null}
       {reuseSlidesOpen ? dockTaskPane(
         // PowerPoint's Reuse Slides is a task pane at the window's right
         // (PPT-B029), docked with the others.
@@ -65069,7 +57368,7 @@ export default function PresentationWindow({
         />
       ) : null}
       <DocumentPictureCompressionDialog
-        open={pictureCompressionTarget !== null}
+        open={false}
         canEdit={
           !autosave.readOnly && selectedPictureCompressionEditable
         }
@@ -65325,17 +57624,7 @@ export default function PresentationWindow({
         onApply={applyParagraphDialogResult}
         onCancel={() => setParagraphDialogOpen(false)}
       />
-      {themeFontsDialogOpen ? (
-        <OfficeCreateThemeFontsDialog
-          open
-          initial={themeFontsDialogInitial}
-          showEastAsian={locale.startsWith("zh") || Boolean(themeFontsDialogInitial.headingEastAsian || themeFontsDialogInitial.bodyEastAsian)}
-          locale={locale}
-          onSave={applyCustomThemeFonts}
-          onCancel={() => setThemeFontsDialogOpen(false)}
-          testIdPrefix="presentation-theme-fonts-dialog"
-        />
-      ) : null}
+      {null}
       {columnsDialogTarget ? (
         <Suspense fallback={null}><PresentationColumnsDialog
           open

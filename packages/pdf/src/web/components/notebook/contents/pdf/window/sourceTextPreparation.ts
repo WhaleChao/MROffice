@@ -9,7 +9,7 @@ import {
 } from "../../../../../lib/pdf/engine/native/list-text-model";
 import type { PdfRibbonTranslator } from "../pdfRibbonTranslator";
 
-export type PdfSourceTextPreparationStage = "lease" | "source-seal" | "appearance" | "reconciliation" | "superseded" | "server" | "unexpected";
+export type PdfSourceTextPreparationStage = "lease" | "source-seal" | "appearance" | "binding-too-long" | "reconciliation" | "superseded" | "server" | "unexpected";
 export interface PdfSourceTextPreparationDiagnostic {
   stage: PdfSourceTextPreparationStage;
   failure: PdfSourceTextPreparationStage | null;
@@ -49,6 +49,7 @@ export async function runPdfSourceTextPreparationDiagnostic(
     lease: "pdf.pageWindow.sourceTextPrepLease",
     "source-seal": "pdf.pageWindow.sourceTextPrepSourceSeal",
     appearance: "pdf.pageWindow.sourceTextPrepAppearance",
+    "binding-too-long": "pdf.pageWindow.sourceTextPrepBindingTooLong",
     reconciliation: "pdf.pageWindow.sourceTextPrepReconciliation",
     superseded: "pdf.pageWindow.sourceTextPrepSuperseded",
     server: "pdf.pageWindow.sourceTextPrepServer",

@@ -117,11 +117,24 @@ export function derivedPdfCellsForSheet(
   };
   const push = (cell: SpreadsheetPdfDerivedCell) => {
     if (!(cell.t !== undefined || cell.s || cell.cf)) return;
+    // A cell past the saved sheet's rows is on no printed page; the export's
+    // validator refuses a view holding one, and the print then lost the
+    // whole view (R455-X26: a PivotTable the file never refreshed, its
+    // report planned from the source down past its sheet's one saved row,
+    // dropped every sheet's paint).
+    if (cell.r >= candidate.rowCount) return;
     if (out.length < budget) out.push(cell);
     else trimmed = true;
   };
   // A PivotTable report: its cells are a read model, never stored.
   sheetPivots(candidate).forEach((config, slot) => {
+    // A PivotTable the file holds no report for (never laid out: no row or
+    // column items cached, its location's first data row 0) prints nothing,
+    // as Windows Excel prints it -- not the report the source would give
+    // (R455-X80: a generated workbook's refreshOnLoad report over a table,
+    // 9 pages in Excel, 12 with the planned report).
+    const layout = config.native?.savedLayout;
+    if (layout && !layout.rowItems.length && !layout.colItems.length && layout.firstDataRow === 0) return;
     const plan = sources.formulaWorkbook.pivotPlans.get(pivotPlanKey(candidate.id, slot));
     if (!plan || plan.status !== "ready") {
       // A report the grid does not draw prints the cells the file cached,

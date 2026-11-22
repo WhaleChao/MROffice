@@ -48,24 +48,14 @@ const chartFont = createSpreadsheetLazyPanel<OfficeChartFontDialogProps>(
   () => import("@mrnote/core/web/components/office-ribbon/OfficeChartFontDialog.tsx").then((module) => ({ default: module.OfficeChartFontDialog })),
   (props) => props.onCancel(),
 );
-const chartFormat = createSpreadsheetLazyPanel<DocumentChartFormatRibbonProps>(
-  () => import("@mrnote/core/web/components/console/editor/native-document/DocumentChartFormatRibbon.tsx").then((module) => ({ default: module.DocumentChartFormatRibbon })),
-  () => undefined,
-);
 
 export const SpreadsheetImmersiveReader = reader.Component;
 export const SpreadsheetEditorCopilotSurface = editorCopilot.Component;
 export const SpreadsheetSelectionCopilotPanel = selectionCopilot.Component;
 export const SpreadsheetCopilotPartsPanel = partsPanel.Component;
 export const SpreadsheetChartFontDialog = chartFont.Component;
-export const SpreadsheetChartFormatRibbon = chartFormat.Component;
 
-const PANELS = [chartFormat, chartFont, selectionCopilot, partsPanel, editorCopilot, reader];
-
-/** Every panel's code, fetched (tests load them before rendering a window). */
-export function loadSpreadsheetLazyPanels(): Promise<void> {
-  return Promise.all(PANELS.map((panel) => panel.load())).then(() => undefined);
-}
+const PANELS = [chartFont, selectionCopilot, partsPanel, editorCopilot, reader];
 
 /** Calls `task` once the page has settled: past `afterMs`, three idle
  * periods in a row (requestIdleCallback) each with most of a frame to spare,

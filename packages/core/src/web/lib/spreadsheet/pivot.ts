@@ -837,6 +837,37 @@ export function pivotLiveSourceRange(
     : normalizePivotRange(config.source);
 }
 
+/**
+ * The rows of a live source a report reads: a range past its data (a whole
+ * column, `'T6 data'!A1:N1048576`) ends one row below the last row any of
+ * its columns holds a cell or a spilled value in. That blank row stands for
+ * all the blank rows under it: a blank row adds its fields' "(blank)" item
+ * and no value, however many there are, so the report is the same; reading
+ * the million rows was most of a save (xlsx-rounds R471-X24: 25 of 27 s of
+ * an inserted row, 33 million cells read for its two PivotCharts). A sheet
+ * with What-If tables (their results stand where no cell is) is read whole.
+ */
+export function pivotSourceRowsRead(
+  range: PivotRange,
+  sheet: { cells: Record<string, unknown>; whatIfTables?: unknown },
+  spilled?: { readonly spilled: ReadonlyMap<string, unknown> },
+): PivotRange {
+  if (Array.isArray(sheet.whatIfTables) && sheet.whatIfTables.length) return range;
+  if (range.r2 - range.r1 < 2) return range;
+  let last = range.r1;
+  const reach = (key: string) => {
+    const colon = key.indexOf(":");
+    if (colon <= 0) return;
+    const row = Number(key.slice(0, colon));
+    if (!(row > last) || row > range.r2) return;
+    const col = Number(key.slice(colon + 1));
+    if (col >= range.c1 && col <= range.c2) last = row;
+  };
+  for (const key in sheet.cells) reach(key);
+  if (spilled) for (const key of spilled.spilled.keys()) reach(key);
+  return last + 1 < range.r2 ? { ...range, r2: last + 1 } : range;
+}
+
 export function pivotComputationMatrix(
   config: PivotConfig,
   liveSourceMatrix: PivotMatrix,

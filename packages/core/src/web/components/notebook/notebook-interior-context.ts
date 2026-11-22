@@ -20,42 +20,29 @@ export interface NotebookInteriorState {
   readonly mode: NotebookInteriorMode;
   /** The mode is decided (plan and ownership are known). */
   readonly resolved: boolean;
-  /** This person may switch this notebook between the designs. */
+  
+
   readonly canSwitch: boolean;
-  /** Asking for the workbench here opens the upgrade panel. */
-  readonly workbenchNeedsUpgrade: boolean;
   
 
   readonly workbenchNeedsLargerScreen: boolean;
-  /** Ask for a design: switches it (and remembers the choice), or explains
-   * the upgrade when the workbench is not in this person's plan, in a panel
-   * beside `anchor` (the switch that asked). */
+  /** Ask for a design: switches it and remembers the choice (on a phone the
+   * workbench explains it needs a larger screen, in a panel beside `anchor`,
+   * the switch that asked). */
   readonly requestMode: (mode: NotebookInteriorMode, anchor?: HTMLElement | null) => void;
-  /** This is the person's own notebook and their plan holds only them:
-   * sharing it opens the upgrade panel (the server refuses it anyway). */
-  readonly sharingNeedsUpgrade: boolean;
-  /** Someone else's notebook whose owner's plan no longer includes sharing:
-   * this member's editing role reads only (the read-only chrome says why). */
-  readonly memberAccessCapped: boolean;
-  /** Explain a paid feature in the floating panel beside `anchor`. */
-  readonly requestUpgrade: (reason: NotebookUpgradeReason, anchor?: HTMLElement | null) => void;
-}
+  
 
-/** What a free plan asked for: the workbench design, or sharing. */
-/** What the floating panel explains: a paid feature, or (on a phone) that the
- * workbench needs a larger screen. */
-export type NotebookUpgradeReason = "workbench" | "share" | "largerScreen";
+
+  readonly memberAccessCapped: boolean;
+}
 
 export const WORKBENCH_ONLY: NotebookInteriorState = {
   mode: "workbench",
   resolved: true,
   canSwitch: false,
-  workbenchNeedsUpgrade: false,
   workbenchNeedsLargerScreen: false,
   requestMode: () => {},
-  sharingNeedsUpgrade: false,
   memberAccessCapped: false,
-  requestUpgrade: () => {},
 };
 
 export const NotebookInteriorContext = createContext<NotebookInteriorState>(WORKBENCH_ONLY);

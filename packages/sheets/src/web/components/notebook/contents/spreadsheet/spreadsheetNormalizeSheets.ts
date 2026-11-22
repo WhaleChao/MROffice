@@ -815,6 +815,17 @@ export function normalizeSheets(
     const manuallyHiddenCols = serializeManualHidden(
       normalizeManualHidden(sheet.manuallyHiddenCols, columnCount),
     );
+    // Reading 998: the hidden rows the file writes 0 points high, kept only
+    // while they are hidden (a subset of manuallyHiddenRows).
+    const zeroHeightRows =
+      manuallyHiddenRows && Array.isArray(sheet.zeroHeightRows) && sheet.zeroHeightRows.length > 0
+        ? (() => {
+            const listed = new Set(manuallyHiddenRows);
+            return serializeManualHidden(
+              new Set([...normalizeManualHidden(sheet.zeroHeightRows, rowCount)].filter((row) => listed.has(row))),
+            );
+          })()
+        : undefined;
     // Row / column formats: validated through the cell style normalizer, then
     // materialized onto the grid's blank positions below (as the blank-cell
     // ranges are), so the grid renders them without a per-cell entry in the
@@ -1030,6 +1041,7 @@ export function normalizeSheets(
           ? sheet.outlineGroupsNativeBlocker.slice(0, 220)
           : undefined,
       ...(manuallyHiddenRows ? { manuallyHiddenRows } : {}),
+      ...(zeroHeightRows ? { zeroHeightRows } : {}),
       ...(manuallyHiddenCols ? { manuallyHiddenCols } : {}),
       ...(sheet.rowsHiddenByDefault === true
         ? { rowsHiddenByDefault: true as const }

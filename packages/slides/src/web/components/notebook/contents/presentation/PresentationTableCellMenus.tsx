@@ -16,7 +16,7 @@
 
 import { lineWeightPointsToDesignPx } from "@mrnote/core/web/lib/presentation/text-units.ts";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { IconTableDraw, IconTableCellMargins } from "@mrnote/core/web/components/notebook/contents/PresentationRibbonIcons.tsx";
+import { IconTableDraw, IconTableCellMargins } from "../PresentationRibbonIcons";
 import type { TableCellMarginField } from "../../../../lib/presentation/TableMarginsDialog";
 import {
   OfficeHomeCommand,

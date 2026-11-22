@@ -23,7 +23,6 @@
     "@mrnote/code": "*",
     "@mrnote/core": "*",
     "@mrnote/docs": "*",
-    "@mrnote/ink": "*",
     "@mrnote/pdf": "*",
     "@mrnote/slides": "*",
     "fflate": "0.8.2",

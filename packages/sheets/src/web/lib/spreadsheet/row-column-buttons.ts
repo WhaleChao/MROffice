@@ -521,6 +521,20 @@ export interface HiddenLineSheet {
   columnCount: number;
   manuallyHiddenRows?: number[];
   manuallyHiddenCols?: number[];
+  /** Reading 998: those of manuallyHiddenRows the file writes 0 points high. */
+  zeroHeightRows?: number[];
+}
+
+/** A row shown again is no longer one hidden by a height of 0 points
+ *  (reading 998): `zeroHeightRows` keeps only rows still hidden. */
+function keepZeroHeightRowsHidden<S extends HiddenLineSheet>(next: S): S {
+  if (!Array.isArray(next.zeroHeightRows)) return next;
+  const hidden = new Set(next.manuallyHiddenRows ?? []);
+  const kept = next.zeroHeightRows.filter((row) => hidden.has(row));
+  if (kept.length === next.zeroHeightRows.length) return next;
+  if (kept.length > 0) next.zeroHeightRows = kept;
+  else delete next.zeroHeightRows;
+  return next;
 }
 
 /** Set equality of two hidden-line lists. */
@@ -563,6 +577,7 @@ function withManualHidden<S extends HiddenLineSheet>(
   const sheetNext: S = { ...sheet };
   if (next) sheetNext[key] = next;
   else delete sheetNext[key];
+  if (axis === "row") keepZeroHeightRowsHidden(sheetNext);
   // A line hidden past the stored extent stores that line, as a width given
   // to one does: the grid and the loader read the hidden lines inside the
   // extent only, so Hide on a blank column past it did nothing visible and
@@ -702,6 +717,7 @@ export interface LineSizeSheet extends CellButtonsSheet {
   defaultRowHeight?: number;
   manuallyHiddenRows?: number[];
   manuallyHiddenCols?: number[];
+  zeroHeightRows?: number[];
 }
 
 /**
@@ -759,7 +775,7 @@ function revealing<S extends LineSizeSheet>(
     withShown: (next) => {
       if (list) next[key] = list;
       else delete next[key];
-      return next;
+      return axis === "row" ? keepZeroHeightRowsHidden(next) : next;
     },
   };
 }

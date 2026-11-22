@@ -5,10 +5,13 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-import type { Mark, Node as ProseMirrorNode } from "@tiptap/pm/model";
+import { Fragment, type Mark, type Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
 import { liftListItem } from "@tiptap/pm/schema-list";
 import { RemoveMarkStep, ReplaceStep, canJoin, type Step } from "@tiptap/pm/transform";
+import { wordStyleHeadingLevels } from "../../../../lib/document-style-identity";
+import { inheritedBoldValue } from "./boldExtension";
+import { inheritedItalicValue } from "./italicExtension";
 import { FOOTNOTE_MARK_NAME, normalizeFootnotes, removeFootnoteEntry, sanitizeFootnoteId } from "./footnotes";
 import { BOOKMARK_POINT_NODE_NAME } from "./bookmarks";
 import { COMMENT_MARK_NAME, normalizeCommentThreads, removeReplyAt, removeThread, sanitizeThreadId } from "./comments";
@@ -451,7 +454,8 @@ export type TrackedObjectKind =
   | "columnBreak"
   | "sectionBreak"
   | "horizontalRule"
-  | "noteReference";
+  | "noteReference"
+  | "field";
 
 /** Node types whose deletion is one object revision (Word's own set). */
 export const OBJECT_DELETION_NODE_KINDS: ReadonlyMap<string, TrackedObjectKind> = new Map([
@@ -472,6 +476,11 @@ export const OBJECT_DELETION_NODE_KINDS: ReadonlyMap<string, TrackedObjectKind> 
   // w:del around the run holding w:footnoteReference): struck in the revision
   // colour; accepting it deletes the mark, and the note with it.
   ["footnoteRef", "noteReference"],
+  // A field deleted with Track Changes on (Word's w:del around every run of
+  // it, the code as w:delInstrText): struck in the revision colour; accepting
+  // it takes the field away, rejecting it gives the live field back (corpus
+  // R490-D02's EndNote citations, reading generation 404).
+  ["documentField", "field"],
 ]);
 
 export const OBJECT_DELETION_NODE_NAMES: readonly string[] = [...OBJECT_DELETION_NODE_KINDS.keys()];
@@ -722,11 +731,31 @@ export const IMPORTED_PARAGRAPH_FORMAT_ATTRS = [
   "autoSpaceDN",
 ] as const;
 
+/**
+ * An imported revision whose recorded properties (Word's `w:pPrChange/w:pPr`)
+ * number the paragraph: `{numId, level}` of the recorded `w:numPr` (numId 0,
+ * Word's "not numbered"), and, where the import reads the recorded paragraph
+ * as a list item, the list it would draw it in (`list`: the wrapper's type and
+ * attributes, the paragraph standing alone). Rejecting the revision puts the
+ * paragraph back into that list, or takes it out of its list for numId 0, as
+ * Word does (corpus R490-D02 E43: "Paragraph, was List Paragraph" items in
+ * table cells). A numbered heading states no list: its numbering is the
+ * heading's, which the page does not draw.
+ */
+export const PARAGRAPH_FORMAT_RECORDED_NUMBERING_KEY = "recordedNumbering";
+
+export interface RecordedParagraphNumbering {
+  numId: number;
+  level: number;
+  list?: { type: "bulletList" | "orderedList"; attrs?: Record<string, unknown> };
+}
+
 const PARAGRAPH_FORMAT_SNAPSHOT_KEYS: readonly string[] = [
   ...TRACKED_PARAGRAPH_FORMAT_ATTRS,
   ...IMPORTED_PARAGRAPH_FORMAT_ATTRS,
   PARAGRAPH_FORMAT_HEADING_LEVEL_KEY,
   PARAGRAPH_FORMAT_LIST_LEVEL_KEY,
+  PARAGRAPH_FORMAT_RECORDED_NUMBERING_KEY,
 ];
 
 export interface TrackedFormatMarkSnapshot {
@@ -755,7 +784,9 @@ export interface NativeParagraphFormatRevisionAuthority extends ChangeAttrs {
  */
 // A line break typed with Track Changes on is an insertion like typed text
 // (WUA 228: Shift+Return was untracked and Reject All left it).
-export const TRACKED_INSERTION_INLINE_ATOM_NAMES = new Set(["inlineMath", "footnoteRef", "hardBreak"]);
+// A field inserted with Track Changes on is Word's w:ins around its runs:
+// rejecting it takes the field away (reading generation 404).
+export const TRACKED_INSERTION_INLINE_ATOM_NAMES = new Set(["inlineMath", "footnoteRef", "hardBreak", "documentField"]);
 
 export function supportsTrackedInsertion(node: ProseMirrorNode): boolean {
   return (
@@ -1049,6 +1080,12 @@ export function normalizeParagraphFormatSnapshot(
   const normalized: Record<string, unknown> = {};
   for (const key of PARAGRAPH_FORMAT_SNAPSHOT_KEYS) {
     if (!(key in source)) continue;
+    if (key === PARAGRAPH_FORMAT_RECORDED_NUMBERING_KEY) {
+      const numbering = normalizeRecordedParagraphNumbering(source[key]);
+      if (!numbering) return null;
+      normalized[key] = numbering;
+      continue;
+    }
     const next = boundedJsonValue(source[key]);
     if (next === undefined) return null;
     if (
@@ -1060,9 +1097,46 @@ export function normalizeParagraphFormatSnapshot(
     if (key === PARAGRAPH_FORMAT_LIST_LEVEL_KEY && next !== 0) return null;
     normalized[key] = next;
   }
-  return JSON.stringify(normalized).length <= MAX_FORMAT_AUTHORITY_JSON_LENGTH
-    ? normalized
-    : null;
+  if (JSON.stringify(normalized).length > MAX_FORMAT_AUTHORITY_JSON_LENGTH) {
+    // A long numbering definition on the recorded list is drawn from the
+    // gallery instead: the revision itself is kept.
+    const numbering = normalized[PARAGRAPH_FORMAT_RECORDED_NUMBERING_KEY] as
+      | RecordedParagraphNumbering
+      | undefined;
+    if (!numbering?.list?.attrs || !("listDefinition" in numbering.list.attrs)) return null;
+    const attrs = Object.fromEntries(
+      Object.entries(numbering.list.attrs).filter(([key]) => key !== "listDefinition" && key !== "listStyleId"),
+    );
+    normalized[PARAGRAPH_FORMAT_RECORDED_NUMBERING_KEY] = {
+      ...numbering,
+      list: { ...numbering.list, attrs },
+    };
+    if (JSON.stringify(normalized).length > MAX_FORMAT_AUTHORITY_JSON_LENGTH) return null;
+  }
+  return normalized;
+}
+
+function normalizeRecordedParagraphNumbering(value: unknown): RecordedParagraphNumbering | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const source = value as Record<string, unknown>;
+  const { numId, level, list } = source;
+  if (Object.keys(source).some((key) => key !== "numId" && key !== "level" && key !== "list")) return null;
+  if (typeof numId !== "number" || !Number.isInteger(numId) || numId < 0 || numId > 2147483647) return null;
+  if (typeof level !== "number" || !Number.isInteger(level) || level < 0 || level > 8) return null;
+  const numbering: RecordedParagraphNumbering = { numId, level };
+  if (list === undefined || list === null) return numbering;
+  if (numId === 0 || typeof list !== "object" || Array.isArray(list)) return null;
+  const { type, attrs } = list as Record<string, unknown>;
+  if (Object.keys(list).some((key) => key !== "type" && key !== "attrs")) return null;
+  if (type !== "bulletList" && type !== "orderedList") return null;
+  if (attrs === undefined || attrs === null) {
+    numbering.list = { type };
+    return numbering;
+  }
+  const bounded = boundedJsonValue(attrs);
+  if (!bounded || typeof bounded !== "object" || Array.isArray(bounded)) return null;
+  numbering.list = { type, attrs: bounded as Record<string, unknown> };
+  return numbering;
 }
 
 /**
@@ -1611,13 +1685,20 @@ export function liftParagraphOutOfLists(tr: Transaction, nodePos: number): numbe
   return pos;
 }
 
+/**
+ * What Reject does to a paragraph's list membership once its properties are
+ * back: take it out of its list (a live list conversion, or recorded numId 0),
+ * or put it into the list its recorded numbering draws.
+ */
+type ParagraphListPutBack = { kind: "lift" } | { kind: "wrap"; numbering: RecordedParagraphNumbering };
+
 function clearParagraphFormatRevision(
   tr: Transaction,
   nodePos: number,
   previousAttrs?: Record<string, unknown>,
-  /** Where a list lift goes when the caller still has positions to use:
-   * it runs the lifts itself, once they are done. */
-  deferLift?: (nodePos: number, mappingFrom: number) => void,
+  /** Where a list lift or wrap goes when the caller still has positions to
+   * use: it runs them itself, once they are done. */
+  deferLift?: (nodePos: number, mappingFrom: number, putBack: ParagraphListPutBack) => void,
 ): boolean {
   const node = tr.doc.nodeAt(nodePos);
   if (
@@ -1634,6 +1715,7 @@ function clearParagraphFormatRevision(
   attrs[PARAGRAPH_FORMAT_REVISION_ATTR] = null;
   let type = node.type;
   let liftOut = false;
+  let putBack: ParagraphListPutBack | null = null;
   if (previousAttrs) {
     // Public equivalent of NodeType.defaultAttrs: the schema defaults exist
     // only when no attribute is required.
@@ -1652,9 +1734,15 @@ function clearParagraphFormatRevision(
     const {
       [PARAGRAPH_FORMAT_HEADING_LEVEL_KEY]: headingLevel,
       [PARAGRAPH_FORMAT_LIST_LEVEL_KEY]: listLevel,
+      [PARAGRAPH_FORMAT_RECORDED_NUMBERING_KEY]: recordedNumbering,
       ...previous
     } = previousAttrs;
     liftOut = listLevel === 0;
+    if (!liftOut && typeof headingLevel !== "number" && !recordedNumberingOff()) {
+      const numbering = normalizeRecordedParagraphNumbering(recordedNumbering);
+      if (numbering?.numId === 0) liftOut = true;
+      else if (numbering?.list) putBack = { kind: "wrap", numbering };
+    }
     Object.assign(attrs, previous);
     // A live-recorded revision knows whether the paragraph was a heading.
     if (typeof headingLevel === "number") {
@@ -1664,14 +1752,216 @@ function clearParagraphFormatRevision(
         type = previousType;
         if (headingLevel > 0) attrs.level = headingLevel;
       }
+    } else {
+      const restyled = importedRevisionRestyle(tr, node, attrs);
+      if (restyled) {
+        tr.setNodeMarkup(nodePos, restyled.type, restyled.attrs, node.marks);
+        restyleInheritedToggles(tr, nodePos, node);
+        settleParagraphListMembership(tr, nodePos, liftOut ? { kind: "lift" } : putBack, deferLift);
+        return true;
+      }
     }
   }
   tr.setNodeMarkup(nodePos, type, attrs, node.marks);
-  if (liftOut) {
-    if (deferLift) deferLift(nodePos, tr.mapping.maps.length);
-    else liftParagraphOutOfLists(tr, nodePos);
-  }
+  settleParagraphListMembership(tr, nodePos, liftOut ? { kind: "lift" } : putBack, deferLift);
   return true;
+}
+
+/** `window.__docsRecordedNumberingOff`: Reject leaves list membership to the
+ * live-recorded list conversion alone (the A/B arm). */
+function recordedNumberingOff(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    (window as unknown as { __docsRecordedNumberingOff?: unknown }).__docsRecordedNumberingOff === true
+  );
+}
+
+function settleParagraphListMembership(
+  tr: Transaction,
+  nodePos: number,
+  putBack: ParagraphListPutBack | null,
+  deferLift?: (nodePos: number, mappingFrom: number, putBack: ParagraphListPutBack) => void,
+): void {
+  if (!putBack) return;
+  if (deferLift) deferLift(nodePos, tr.mapping.maps.length, putBack);
+  else if (putBack.kind === "lift") liftParagraphOutOfLists(tr, nodePos);
+  else wrapParagraphInRecordedList(tr, nodePos, putBack.numbering);
+}
+
+/**
+ * Put a body paragraph that is in no list into the list its rejected
+ * revision's recorded numbering draws (one list item in a wrapper of the
+ * recorded type and attributes), joined to the list just after it when that
+ * one was put back from the same numbering (Word's consecutive paragraphs of
+ * one w:numId are one list). A heading, a paragraph already in a list, or a
+ * place the schema holds no list leave the paragraph as it is. Returns the
+ * wrapper's position, or null.
+ */
+export function wrapParagraphInRecordedList(
+  tr: Transaction,
+  nodePos: number,
+  numbering: RecordedParagraphNumbering,
+  /** The list put back just before, at `pos` once `mapped` maps were made. */
+  joinWith?: { pos: number; mapped: number; numbering: RecordedParagraphNumbering } | null,
+): number | null {
+  const node = tr.doc.nodeAt(nodePos);
+  const list = numbering.list;
+  if (!node || node.type.name !== "paragraph" || !list) return null;
+  if (enclosingListItemType(tr.doc, nodePos)) return null;
+  const schema = tr.doc.type.schema;
+  const listType = schema.nodes[list.type];
+  const itemType = schema.nodes.listItem;
+  if (!listType || !itemType) return null;
+  const known = listType.spec.attrs ?? {};
+  const attrs: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(list.attrs ?? {})) {
+    if (key in known) attrs[key] = value;
+  }
+  const $from = tr.doc.resolve(nodePos + 1);
+  const range = $from.blockRange(tr.doc.resolve(nodePos + node.nodeSize - 1));
+  if (!range || range.startIndex + 1 !== range.endIndex) return null;
+  let wrapper: ProseMirrorNode;
+  try {
+    wrapper = listType.create(attrs, itemType.create(null, node));
+  } catch {
+    return null;
+  }
+  if (!range.parent.canReplaceWith(range.startIndex, range.endIndex, wrapper.type)) return null;
+  if (!wrapper.type.validContent(wrapper.content) || !itemType.validContent(Fragment.from(node))) return null;
+  try {
+    tr.wrap(range, [
+      { type: listType, attrs },
+      { type: itemType },
+    ]);
+  } catch {
+    return null;
+  }
+  const listPos = nodePos;
+  if (joinWith) {
+    const after = listPos + (tr.doc.nodeAt(listPos)?.nodeSize ?? 0);
+    const next = tr.doc.nodeAt(after);
+    if (
+      after === tr.mapping.slice(joinWith.mapped).map(joinWith.pos, 1) &&
+      next?.type === listType &&
+      joinWith.numbering.numId === numbering.numId &&
+      joinWith.numbering.level === numbering.level &&
+      JSON.stringify(next.attrs) === JSON.stringify(tr.doc.nodeAt(listPos)?.attrs) &&
+      canJoin(tr.doc, after)
+    ) {
+      tr.join(after);
+    }
+  }
+  return listPos;
+}
+
+/**
+ * An imported paragraph revision (Word's `w:pPrChange`) that puts back another
+ * paragraph style: whether the paragraph is a heading follows the style it
+ * returns to, as when the file is read (the style's heading name or outline
+ * level, along `w:basedOn`). Rejecting "Heading 1, was Keywords" leaves a
+ * Keywords paragraph, not a heading in the Keywords style; rejecting
+ * "Figure caption, was MDPI heading 1" leaves a heading (corpus R490-D02 /
+ * R491-D02 E43: the saved file read back as a paragraph / heading the page
+ * did not show). Null when the style does not change, the document has no
+ * style definitions, or the paragraph's present type is not the one its
+ * present style reads as (its heading level came from elsewhere).
+ */
+function importedRevisionRestyle(
+  tr: Transaction,
+  node: ProseMirrorNode,
+  attrs: Record<string, unknown>,
+): { type: ProseMirrorNode["type"]; attrs: Record<string, unknown> } | null {
+  const before = node.attrs.docxStyleId ?? null;
+  const after = attrs.docxStyleId ?? null;
+  if (before === after) return null;
+  const definitions = (tr.doc.attrs as { styleDefinitions?: { styles?: unknown } }).styleDefinitions;
+  const styles = Array.isArray(definitions?.styles) ? (definitions.styles as unknown[]) : [];
+  const levels = wordStyleHeadingLevels(styles);
+  if (levels.size === 0) return null;
+  const defaultStyle = styles.find(
+    (style): style is { styleId: string } =>
+      !!style &&
+      typeof style === "object" &&
+      (style as Record<string, unknown>).type === "paragraph" &&
+      (style as Record<string, unknown>).default === true &&
+      typeof (style as Record<string, unknown>).styleId === "string",
+  );
+  const levelOf = (styleId: unknown): number | null | undefined => {
+    const id = typeof styleId === "string" && styleId ? styleId : defaultStyle?.styleId;
+    return id === undefined ? undefined : levels.get(id);
+  };
+  const levelBefore = levelOf(before);
+  const levelAfter = levelOf(after);
+  if (levelBefore === undefined || levelAfter === undefined) return null;
+  const headingBefore = node.type.name === "heading";
+  if (headingBefore !== (levelBefore !== null)) return null;
+  if (headingBefore && Number(node.attrs.level) !== levelBefore) return null;
+  const nodes = tr.doc.type.schema.nodes;
+  const type = levelAfter !== null ? nodes.heading : nodes.paragraph;
+  if (!type) return null;
+  return {
+    type,
+    attrs: levelAfter !== null ? { ...attrs, level: levelAfter } : attrs,
+  };
+}
+
+/**
+ * The bold and italic a paragraph's runs take from its style, written as the
+ * reader writes them once the paragraph is restyled by
+ * {@link importedRevisionRestyle}: in a heading, a run without direct bold
+ * carries the bold mark stating no value (`{value: null}`); in body text the
+ * style's bold is a plain bold mark, and an italic style's italic is a plain
+ * italic mark in either. The old style's leave with it (as Home > Styles
+ * drops them, WUA 150) and the new style's come; a direct format (`value`
+ * true or false) stays, and nothing is changed where a style's look is not
+ * known.
+ */
+function restyleInheritedToggles(tr: Transaction, nodePos: number, before: ProseMirrorNode): void {
+  const node = tr.doc.nodeAt(nodePos);
+  if (!node) return;
+  const docAttrs = tr.doc.attrs as Record<string, unknown>;
+  const heading = node.type.name === "heading";
+  const headingBefore = before.type.name === "heading";
+  const edits: Array<{ from: number; to: number; mark: Mark | null; drop: Mark | null }> = [];
+  for (const [name, inherited] of [
+    ["bold", inheritedBoldValue],
+    ["italic", inheritedItalicValue],
+  ] as const) {
+    const type = tr.doc.type.schema.marks[name];
+    if (!type) continue;
+    node.forEach((child, offset) => {
+      if (!child.isText) return;
+      const from = nodePos + 1 + offset;
+      const to = from + child.nodeSize;
+      const mark = child.marks.find((entry) => entry.type === type) ?? null;
+      const was = inherited(docAttrs, before, child.marks);
+      const now = inherited(docAttrs, node, child.marks);
+      if (name === "bold" && heading) {
+        // In a heading no direct bold states inheritance.
+        if (!mark || mark.attrs.value === undefined) {
+          edits.push({ from, to, mark: type.create({ value: null }), drop: mark });
+        }
+        return;
+      }
+      if (name === "bold" && headingBefore) {
+        if (mark && mark.attrs.value === null && now !== null) {
+          edits.push({ from, to, mark: now ? type.create() : null, drop: mark });
+        } else if (!mark && now === true) {
+          edits.push({ from, to, mark: type.create(), drop: null });
+        }
+        return;
+      }
+      if (mark && mark.attrs.value === undefined && was === true && now === false) {
+        edits.push({ from, to, mark: null, drop: mark });
+      } else if (!mark && was === false && now === true) {
+        edits.push({ from, to, mark: type.create(), drop: null });
+      }
+    });
+  }
+  for (const edit of edits) {
+    if (edit.drop) tr.removeMark(edit.from, edit.to, edit.drop);
+    if (edit.mark) tr.addMark(edit.from, edit.to, edit.mark);
+  }
 }
 
 /** The paragraph revision id of the paragraph or heading around `pos`. */
@@ -2349,9 +2639,10 @@ function rejectAllRevisions(tr: Transaction): boolean {
     ...ops.filter((op) => op.kind !== "delete"),
     ...ops.filter((op) => op.kind === "delete"),
   ];
-  // Paragraphs a rejected list conversion takes out of their list: lifted
-  // last, from where the other ops left them (a lift moves positions).
-  const lifts: Array<{ nodePos: number; mappingFrom: number }> = [];
+  // Paragraphs a rejected list conversion takes out of their list, or a
+  // rejected revision's recorded numbering puts into one: lifted or wrapped
+  // last, from where the other ops left them (both move positions).
+  const lifts: Array<{ nodePos: number; mappingFrom: number; putBack: ParagraphListPutBack }> = [];
   for (const op of ordered) {
     if (op.kind === "delete") {
       tr.delete(op.from, op.to);
@@ -2366,20 +2657,32 @@ function rejectAllRevisions(tr: Transaction): boolean {
       changed = true;
     } else if (
       op.kind === "restoreParagraph" &&
-      clearParagraphFormatRevision(tr, op.nodePos, op.previousAttrs, (nodePos, mappingFrom) =>
-        lifts.push({ nodePos, mappingFrom }),
+      clearParagraphFormatRevision(tr, op.nodePos, op.previousAttrs, (nodePos, mappingFrom, putBack) =>
+        lifts.push({ nodePos, mappingFrom, putBack }),
       )
     ) {
       changed = true;
     }
   }
-  const liftAt = lifts.map(({ nodePos, mappingFrom }) => ({
+  const liftAt = lifts.map(({ nodePos, mappingFrom, putBack }) => ({
     pos: tr.mapping.slice(mappingFrom).map(nodePos, 1),
     mapped: tr.mapping.maps.length,
+    putBack,
   }));
-  // The last paragraph first: lifting one leaves the positions before it.
-  for (const { pos, mapped } of liftAt.sort((a, b) => b.pos - a.pos)) {
-    liftParagraphOutOfLists(tr, tr.mapping.slice(mapped).map(pos, 1));
+  // The last paragraph first: lifting or wrapping one leaves the positions
+  // before it. A paragraph put back into the list of the numbering the one
+  // after it was put back into joins that list.
+  let wrapped: { pos: number; mapped: number; numbering: RecordedParagraphNumbering } | null = null;
+  for (const { pos, mapped, putBack } of liftAt.sort((a, b) => b.pos - a.pos)) {
+    const at = tr.mapping.slice(mapped).map(pos, 1);
+    if (putBack.kind === "lift") {
+      liftParagraphOutOfLists(tr, at);
+      wrapped = null;
+      continue;
+    }
+    const listPos = wrapParagraphInRecordedList(tr, at, putBack.numbering, wrapped);
+    wrapped =
+      listPos === null ? null : { pos: listPos, mapped: tr.mapping.maps.length, numbering: putBack.numbering };
   }
   return resolveParagraphMarkRevisions(tr, "reject") || changed;
 }
@@ -2879,6 +3182,8 @@ function snippetBetween(
         push("↵");
       } else if (node.type.name === "footnoteRef") {
         objects.push("noteReference");
+      } else if (node.type.name === "documentField") {
+        objects.push("field");
       } else {
         const latex = node.attrs.latex;
         if (typeof latex === "string" && latex.trim()) {

@@ -39,6 +39,7 @@ import {
   type OfficeAutosaveLabels,
 } from "../../lib/office-autosave-preference";
 import { saveTouchMode, useTouchMode } from "../../lib/touch-mode";
+import { useCompactEditorChrome } from "../../lib/narrow-window";
 import { OfficeSemanticIcon } from "./icons/OfficeSemanticIcon";
 import styles from "./OfficeEditorActionRail.module.css";
 
@@ -583,6 +584,10 @@ export function OfficeEditorActionRail({
 }: OfficeEditorActionRailProps) {
   const t = useTranslations("console-notebooks");
   const touchModeOn = useTouchMode();
+  // The compact chrome (a phone, an embedded mobile editor): the row keeps
+  // Undo, Redo and Save; every other command of the rail moves behind More,
+  // worded there, so nothing is lost to a narrow row.
+  const compact = useCompactEditorChrome();
   const primaryIcon =
     primary?.kind === "comments" ? (
       <OfficeSemanticIcon semanticId="review.comment" size={18} />
@@ -591,11 +596,104 @@ export function OfficeEditorActionRail({
     ) : (
       <OfficeSemanticIcon semanticId="media.play" size={18} />
     );
-  const utilities = <div className={styles.utilities}>{overflow}</div>;
+  const searchAction = search ? (
+    <RailAction
+      action={search}
+      icon={<OfficeSemanticIcon semanticId="edit.find" size={18} />}
+      kind="search"
+      compact={!compact}
+    />
+  ) : null;
+  // Office's Touch/Mouse Mode, where its Quick Access Toolbar keeps it:
+  // after Undo and Redo, before Save (lib/touch-mode).
+  const touchModeAction = (
+    <RailAction
+      action={{
+        label: t("pages.touchMode"),
+        // One accessible name; the pressed state says whether it is on.
+        ariaLabel: t("pages.touchMode"),
+        title: touchModeOn ? t("pages.touchModeTurnOff") : t("pages.touchModeTurnOn"),
+        pressed: touchModeOn,
+        onClick: () => saveTouchMode(!touchModeOn),
+        testId: "office-rail-touch-mode",
+      }}
+      icon={<OfficeSemanticIcon semanticId="edit.hand" size={18} />}
+      kind="touch-mode"
+      compact={!compact}
+    />
+  );
+  const aiAction = false ? (
+    <RailAction
+      action={ai}
+      icon={<OfficeSemanticIcon semanticId="ai.assistant" size={18} />}
+      kind="ai"
+    />
+  ) : null;
+  const primaryAction = primary ? (
+    <RailAction action={primary} icon={primaryIcon} kind={primary.kind} />
+  ) : null;
   // No overflow commands: the "more" button would open an empty flyout, so
   // the rail does not draw it.
   const hasOverflow =
     overflow !== undefined && overflow !== null && overflow !== false;
+  const utilities = compact ? (
+    <div className={styles.utilities} data-compact-rail-overflow="true">
+      {leading ? (
+        <div className={styles.leading} data-office-editor-action-rail-leading="true">
+          {leading}
+        </div>
+      ) : null}
+      {save?.verification ? <RailVerification verification={save.verification} /> : null}
+      {save?.note ? <RailNote note={save.note} /> : null}
+      {searchAction}
+      {touchModeAction}
+      {aiAction}
+      {primaryAction}
+      {trailing}
+      {hasOverflow ? overflow : null}
+    </div>
+  ) : (
+    <div className={styles.utilities}>{overflow}</div>
+  );
+  const history = (
+    <div className={styles.history}>
+      {undo ? (
+        <RailAction
+          action={undo}
+          icon={<OfficeSemanticIcon semanticId="edit.undo" size={18} />}
+          kind="undo"
+          compact
+        />
+      ) : null}
+      {redo ? (
+        <RailAction
+          action={redo}
+          icon={<OfficeSemanticIcon semanticId="edit.redo" size={18} />}
+          kind="redo"
+          compact
+        />
+      ) : null}
+    </div>
+  );
+  if (compact) {
+    return (
+      <OfficeRibbonQuickStrip
+        alwaysOverflow
+        className={styles.rail}
+        ariaLabel={ariaLabel ?? overflowLabel}
+        overflowLabel={overflowLabel}
+        overflowOpen={overflowOpen}
+        onOverflowOpenChange={onOverflowOpenChange}
+        tail={utilities}
+        testIds={testIds}
+      >
+        <div className={styles.core} data-office-editor-action-rail="true" data-compact-rail="true">
+          {history}
+          {save ? <RailSave save={save} /> : null}
+        </div>
+      </OfficeRibbonQuickStrip>
+    );
+  }
   return (
     <OfficeRibbonQuickStrip
       alwaysOverflow
@@ -616,48 +714,9 @@ export function OfficeEditorActionRail({
             <span className={styles.divider} aria-hidden="true" />
           </>
         ) : null}
-        {search ? (
-          <RailAction
-            action={search}
-            icon={<OfficeSemanticIcon semanticId="edit.find" size={18} />}
-            kind="search"
-            compact
-          />
-        ) : null}
-        <div className={styles.history}>
-          {undo ? (
-            <RailAction
-              action={undo}
-              icon={<OfficeSemanticIcon semanticId="edit.undo" size={18} />}
-              kind="undo"
-              compact
-            />
-          ) : null}
-          {redo ? (
-            <RailAction
-              action={redo}
-              icon={<OfficeSemanticIcon semanticId="edit.redo" size={18} />}
-              kind="redo"
-              compact
-            />
-          ) : null}
-        </div>
-        {/* Office's Touch/Mouse Mode, where its Quick Access Toolbar keeps
-            it: after Undo and Redo, before Save (lib/touch-mode). */}
-        <RailAction
-          action={{
-            label: t("pages.touchMode"),
-            // One accessible name; the pressed state says whether it is on.
-            ariaLabel: t("pages.touchMode"),
-            title: touchModeOn ? t("pages.touchModeTurnOff") : t("pages.touchModeTurnOn"),
-            pressed: touchModeOn,
-            onClick: () => saveTouchMode(!touchModeOn),
-            testId: "office-rail-touch-mode",
-          }}
-          icon={<OfficeSemanticIcon semanticId="edit.hand" size={18} />}
-          kind="touch-mode"
-          compact
-        />
+        {searchAction}
+        {history}
+        {touchModeAction}
         {
 
 }
@@ -669,16 +728,8 @@ export function OfficeEditorActionRail({
         {primary ? (
           <span className={styles.divider} aria-hidden="true" />
         ) : null}
-        {false ? (
-          <RailAction
-            action={ai}
-            icon={<OfficeSemanticIcon semanticId="ai.assistant" size={18} />}
-            kind="ai"
-          />
-        ) : null}
-        {primary ? (
-          <RailAction action={primary} icon={primaryIcon} kind={primary.kind} />
-        ) : null}
+        {aiAction}
+        {primaryAction}
         {trailing}
       </div>
     </OfficeRibbonQuickStrip>

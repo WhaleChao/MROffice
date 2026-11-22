@@ -197,8 +197,12 @@ export const OFFICE_COMPLEX_WRAP_TEXT = /[\u0590-\u08ff\u0900-\u0dff\u0e00-\u0ef
  * "spaced" (office-complex-wrap): the complex scripts' letters, and a
  * combining diacritical mark, which Uniscribe shapes too (lookwin p217-lw: a
  * wrapped "o" + U+0301 does, as a Hebrew alef; a zero width space, a tab and
- * curly quotes do not). The API's _SPACED_WRAP_TRIGGER_TEXT. */
-export const OFFICE_SPACED_WRAP_TRIGGER_TEXT = /[\u0300-\u036f\u0590-\u08ff\u0900-\u0dff\u0e00-\u0eff\u0f00-\u0fff\u1000-\u109f\u1780-\u17ff\ufb1d-\ufdff\ufe70-\ufeff]/u;
+ * curly quotes do not), and any character past the Basic Multilingual Plane,
+ * a surrogate pair Uniscribe shapes as well (lookwin p275-lw: a flag's
+ * regional indicators, an emoji face, a mathematical bold letter, a CJK
+ * Extension B ideograph; not a check mark or a heart with its emoji variation
+ * selector, both in the BMP). The API's _SPACED_WRAP_TRIGGER_TEXT. */
+export const OFFICE_SPACED_WRAP_TRIGGER_TEXT = /[\u0300-\u036f\u0590-\u08ff\u0900-\u0dff\u0e00-\u0eff\u0f00-\u0fff\u1000-\u109f\u1780-\u17ff\ufb1d-\ufdff\ufe70-\ufeff\u{10000}-\u{10ffff}]/u;
 
 /** GDI's whole pixels per em of a `sizePt` face at 96 dpi (the advances table's key). */
 function emPxOf(sizePt: number): number {
@@ -471,6 +475,7 @@ function wrapWith(text: string, advanceAt: (at: number, ch: string) => number | 
       // advances (lookwin p216-lw: one, two and three leading spaces of Arial
       // 10 take 4, 8 and 12 px of the room; the spaces a line ends with take
       // none); the spaces a wrap breaks at start no line.
+      const opensParagraph = first;
       if (first) {
         line = pendingSpaces;
         width = pendingWidth;
@@ -490,13 +495,22 @@ function wrapWith(text: string, advanceAt: (at: number, ch: string) => number | 
         line = "";
         width = 0;
       }
-      // A token wider than the room breaks between its letters.
+      // A token wider than the room breaks between its letters. In the
+      // spaced wrap a word a break has put at a line's start that fits the
+      // room alone but not with the space after it breaks too, its first
+      // piece at the room less that space (lookwin p280-lw: R464-X05's
+      // "Koordinierungsstelle", 94 px of a 95-96 px room: eight lines, not
+      // seven; p281/p282-lw: a wider word, or a paragraph's first, breaks at
+      // the room as before). The API's _wrap alike.
+      let limit = room;
+      if (spaced && follow > 0 && !opensParagraph && tokenWidth <= room + 1e-9 && tokenWidth + follow > room + 1e-9) limit = room - follow;
       for (let index = 0; index < chars.length; index += 1) {
         const value = widths[index];
-        if (width + value > room + 1e-9 && width > 0) {
+        if (width + value > limit + 1e-9 && width > 0) {
           lines.push(line);
           line = "";
           width = 0;
+          limit = room;
         }
         line += chars[index];
         width += value;

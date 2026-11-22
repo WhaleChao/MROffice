@@ -59,7 +59,7 @@ The source is [${REPO}](${REPO}) (packages/, built with \`npm run pack:npm\`).`;
 function editorReadme(pkg, config, version) {
   const info = config.packages[pkg];
   const name = info.name;
-  const ident = { docs: "docs", sheets: "sheets", slides: "slides", pdf: "pdf", ink: "ink", code: "code" }[pkg];
+  const ident = { docs: "docs", sheets: "sheets", slides: "slides", pdf: "pdf", code: "code" }[pkg];
   const file = pkg === "pdf"
     ? `declare const pdfBytes: Uint8Array; // a PDF's bytes (from <input type="file">, fetch(), ...)\nconst file = { id: "1", name: "paper.pdf", bytes: pdfBytes };`
     : `const file = { id: "1", ...${ident}.newFile!() }; // or { id, name, bytes } of a file you have`;

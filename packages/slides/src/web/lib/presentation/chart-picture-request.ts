@@ -23,8 +23,6 @@ import {
   officeChartDataTableValue,
   type OfficeChartDataTable,
 } from "@mrnote/core/web/lib/office-charts/data-table.ts";
-import { geometryNumber } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
-import { AUTOFIT_EMU_PER_PX } from "./text-layout-css";
 
 /** The picture's own size in slide px: the block's extent, as the chart is drawn. */
 function pictureSize(block: PresentationChartBlock): { width: number; height: number } {
@@ -55,9 +53,14 @@ export function presentationChartPictureRequest(
 ): { request: ChartRenderRequest; contentKey: string } {
   const { width, height } = pictureSize(block);
   const drawn = { ...block, left: undefined, top: undefined } as unknown as Record<string, unknown>;
+  // A chart with a data table is drawn on its whole frame, its table laid
+  // out inside it as PowerPoint lays it out (`dataTableLayout`, TRIAGE C40;
+  // `PresentationChartPlotDataTable` draws it where the picture says).
+  const tabled = presentationChartDataTableBasis(block) !== null;
   const request: ChartRenderRequest = {
     host: "presentation",
     block: drawn,
+    ...(tabled ? { dataTableBand: true, dataTableLayout: "plot" as const } : {}),
     ...(themeAccents?.length ? { themeAccents: [...themeAccents] } : {}),
     ...(themeFontFamily ? { themeFontFamily } : {}),
     locale,
@@ -162,9 +165,11 @@ export function presentationChartDataTableBand(
 }
 
 /**
- * The block a deck chart's picture is drawn for: the frame less the band its
- * data table takes from the bottom (the chart is drawn in the rest, not
- * squeezed into it), at the block's own extent or a resize's live one.
+ * The block a deck chart's picture is drawn for: the frame at the block's own
+ * extent or a resize's live one. A data table is laid out inside the picture
+ * (`dataTableLayout: "plot"`, TRIAGE C40), so the picture takes the whole
+ * frame; the band a table took under a shortened picture is the server's own
+ * PDF's (`presentationChartDataTableBand`).
  */
 export function presentationChartCanvasBlock(
   block: PresentationChartBlock,
@@ -172,16 +177,7 @@ export function presentationChartCanvasBlock(
 ): PresentationChartBlock {
   const resizing =
     liveSize !== undefined && (liveSize.width !== block.width || liveSize.height !== block.height);
-  const frameHeight = resizing ? liveSize!.height : geometryNumber(block, "height");
-  const basis = presentationChartDataTableBasis(block);
-  const tableEmu = basis
-    ? presentationChartDataTableBand(basis, typeof frameHeight === "number" ? frameHeight / AUTOFIT_EMU_PER_PX : 0)
-        .heightPx * AUTOFIT_EMU_PER_PX
-    : 0;
-  const sized = resizing ? { ...block, width: liveSize!.width, height: liveSize!.height } : block;
-  return tableEmu > 0 && typeof frameHeight === "number"
-    ? { ...sized, height: Math.max(1, frameHeight - tableEmu) }
-    : sized;
+  return resizing ? { ...block, width: liveSize!.width, height: liveSize!.height } : block;
 }
 
 /** Whether a deck chart is drawn by the engine (else its saved picture or nothing). */

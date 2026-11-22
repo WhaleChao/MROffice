@@ -24,6 +24,24 @@ import { floatFlowMode, normalizeFloatAnchor } from "../../../../lib/office-floa
  */
 export const GAP_ADDS_AFTER_ATTR = "data-gap-adds-after-pt";
 
+/**
+ * A continuous section break read from a dedicated empty paragraph (its
+ * carrier) states that paragraph's space after (`sectionBreak.attrs.
+ * carrierSpaceAfter`, points). Word gives the carrier no line and ignores its
+ * space before, keeps the space after of the paragraph before it, and takes
+ * the carrier's space after off the next section's first space before, to no
+ * less than 0 (Windows Word, probes docx-look/vsp12/m7: carrier 12/4 between
+ * a paragraph of 0 after and a heading of 12 before set them 8 pt apart; 0/0,
+ * 12; carrier after 16, 0; the paragraph before at 6 after, 6 + 8; one or two
+ * columns in the next section alike; corpus R351-D09, its two-column body's
+ * first heading 4 pt high). The next section's first paragraph draws
+ * `after + max(0, before - carrier)` as its space before, which the blocks'
+ * collapsing margins and the page ledger's gap (the larger of the two) both
+ * take as it is. Marked with the carrier's space after.
+ * `window.__docsCarrierSpacingOff = true` keeps the collapsed spacing (A/B).
+ */
+export const CARRIER_GAP_ATTR = "data-carrier-gap-pt";
+
 const paragraphSpacingAddsUpKey = new PluginKey<DecorationSet>("paragraphSpacingAddsUp");
 
 const PAIR_CONTAINERS = new Set(["doc", "pageBlock", "tableCell", "tableHeader"]);
@@ -61,11 +79,64 @@ function anchoredObject(node: ProseMirrorNode): boolean {
 
 const anchoredObjects = new WeakMap<ProseMirrorNode, boolean>();
 
+function carrierSpacingOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsCarrierSpacingOff?: boolean }).__docsCarrierSpacingOff === true;
+}
+
+const LIST_WRAPPERS = new Set(["orderedList", "bulletList", "listItem", "taskList", "taskItem"]);
+
+/** The paragraph a block's first (or last) line belongs to: the block itself,
+ * or the first (last) paragraph of a list, with its position. */
+function edgeTextblock(node: ProseMirrorNode, pos: number, first: boolean): { node: ProseMirrorNode; pos: number } | null {
+  let current = node;
+  let at = pos;
+  for (let depth = 0; depth < 8; depth += 1) {
+    if (spacingLine(current)) return { node: current, pos: at };
+    if (!LIST_WRAPPERS.has(current.type.name) || current.childCount === 0) return null;
+    if (first) {
+      at += 1;
+      current = current.firstChild!;
+    } else {
+      at += current.nodeSize - 1 - current.lastChild!.nodeSize;
+      current = current.lastChild!;
+    }
+  }
+  return null;
+}
+
+function carrierGapDecoration(
+  doc: ProseMirrorNode,
+  previous: ProseMirrorNode,
+  previousPos: number,
+  next: ProseMirrorNode,
+  nextPos: number,
+  carrierPt: number,
+): Decoration | null {
+  const above = edgeTextblock(previous, previousPos, false);
+  const below = edgeTextblock(next, nextPos, true);
+  if (!above || !below) return null;
+  if (above.node.attrs?.contextualSpacing === true || below.node.attrs?.contextualSpacing === true) return null;
+  const after = points(above.node.attrs?.spaceAfter) ?? points(doc.attrs?.defaultParagraphSpaceAfter) ?? 0;
+  const before = points(below.node.attrs?.spaceBefore) ?? points(doc.attrs?.defaultParagraphSpaceBefore) ?? 0;
+  const gap = after + Math.max(0, before - carrierPt);
+  // Collapsed, the two already stand the larger apart.
+  if (Math.abs(gap - Math.max(after, before)) < 0.005) return null;
+  return Decoration.node(below.pos, below.pos + below.node.nodeSize, {
+    style: `margin-top: ${Math.round(gap * 100) / 100}pt`,
+    [CARRIER_GAP_ATTR]: String(carrierPt),
+  });
+}
+
 export function paragraphSpacingAddsUpDecorations(doc: ProseMirrorNode): DecorationSet {
   const everywhere = doc.attrs?.wordSpacingAddsUp === true;
   const decorations: Decoration[] = [];
+  const carriers = !everywhere && !carrierSpacingOff();
   const visit = (container: ProseMirrorNode, start: number) => {
     let previous: ProseMirrorNode | null = null;
+    let previousPos = -1;
+    // The block before a continuous section break read from its own empty
+    // paragraph, and that paragraph's space after (CARRIER_GAP_ATTR).
+    let carried: { node: ProseMirrorNode; pos: number; carrierPt: number } | null = null;
     // A floating table between two paragraphs keeps their spacing apart:
     // Word sets the second paragraph's space before below the first one's
     // space after, where the table stands (Word 16.86, corpus R83-D15 H9: a
@@ -75,6 +146,21 @@ export function paragraphSpacingAddsUpDecorations(doc: ProseMirrorNode): Decorat
     container.forEach((child, offset) => {
       const position = start + offset;
       if (anchoredObject(child)) return;
+      if (child.type.name === "sectionBreak") {
+        const carrierPt = carriers && child.attrs?.breakType === "continuous" ? points(child.attrs?.carrierSpaceAfter) : null;
+        carried = carrierPt !== null && previous && previous.type.name !== "sectionBreak"
+          ? { node: previous, pos: previousPos, carrierPt }
+          : null;
+        previous = child;
+        previousPos = position;
+        return;
+      }
+      const across = carried;
+      carried = null;
+      if (across) {
+        const decoration = carrierGapDecoration(doc, across.node, across.pos, child, position, across.carrierPt);
+        if (decoration) decorations.push(decoration);
+      }
       if (floatingTable(child) && previous && spacingLine(previous)) {
         acrossFloat = true;
         visit(child, position + 1);
@@ -105,6 +191,7 @@ export function paragraphSpacingAddsUpDecorations(doc: ProseMirrorNode): Decorat
         visit(child, position + 1);
       }
       previous = child;
+      previousPos = position;
     });
   };
   visit(doc, 0);

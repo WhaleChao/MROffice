@@ -9,6 +9,7 @@ import { canonicalDocumentFontSizePx, documentFontSizePx } from "../native-docum
 import { PX_PER_PT, ptToPx, pxToPt, pxToPtRounded } from "../../../../lib/office-units";
 import { cssAbsoluteLengthPt, cssAbsoluteLengthPx } from "../../../../lib/css-absolute-length";
 import { BULK_FILL_CHUNK_META, mappedThroughBulkFill, rebuildsAfterFill } from "../native-document/bulkFillTransaction";
+import { mapDecorationsFast } from "../native-document/fastRangeMapping";
 import { cssNamedColorHex } from "../../../../lib/css-named-colors";
 import { Extension, getMarkRange, Mark } from "@tiptap/core";
 import { closeHistory } from "@tiptap/pm/history";
@@ -238,7 +239,8 @@ const CHARACTER_STYLE_MARK = "characterStyle";
 /**
  * Character spacing (字符间距) mark: positive = expanded, negative = condensed,
  * stored in typographic points. Drives `<w:spacing w:val>` on export (twentieths
- * of a point). Range: -72..72 pt (well beyond Word's normal UI limit of ±1584/20 pt).
+ * of a point). Range: -1584..1584 pt, Word's own (Font > Advanced > Spacing; a
+ * PDF converter's -111.7 pt over one letter is drawn as written, corpus R501-D14).
  */
 export const CHAR_SPACING_MARK = "charSpacing";
 /**
@@ -425,7 +427,7 @@ declare module "@tiptap/core" {
       clearTextStyles: () => ReturnType;
       /**
        * Set character spacing (字符间距) in typographic points (positive =
-       * expanded, negative = condensed). Validated and clamped to ±72 pt.
+       * expanded, negative = condensed). Validated against Word's ±1584 pt.
        */
       setCharSpacing: (pt: number) => ReturnType;
       /** Remove the character spacing mark from the selection. */
@@ -2003,6 +2005,19 @@ function knownStep(step: Step): boolean {
 }
 
 /**
+ * The kerning decorations mapped through `tr` at the cost of what it touches
+ * (mapDecorationsFast): a page move or a fill chunk of a long document took
+ * every decoration of the sheets it reached through every one of its steps
+ * (R492-D04's print: 25 s of 850). `window.__docsKerningFastMapOff = true`:
+ * through `tr.mapping`, as before.
+ */
+function mapKerningDecorations(current: DecorationSet, tr: Transaction): DecorationSet {
+  const off =
+    (globalThis as { __docsKerningFastMapOff?: boolean }).__docsKerningFastMapOff === true;
+  return off ? current.map(tr.mapping, tr.doc) : mapDecorationsFast(current, tr);
+}
+
+/**
  * The kerning and font-slot decorations after `tr`: a textblock's are its
  * own and the document's attributes' alone, so the set is mapped and only
  * the textblocks the transaction touched are drawn again (every page move
@@ -2016,7 +2031,7 @@ function applyKerningRenderingDecorations(
   if (!sameDocumentStyling(tr.before, tr.doc) || !tr.steps.every(knownStep)) {
     return buildKerningRenderingDecorations(newState);
   }
-  let next = current.map(tr.mapping, tr.doc);
+  let next = mapKerningDecorations(current, tr);
   const touched = touchedTextblocks(tr);
   if (touched.size === 0) return next;
   const resolveKerning = createEffectiveKerningThresholdResolver(newState);
@@ -2042,7 +2057,7 @@ function kerningRenderingPlugin(): Plugin<DecorationSet> {
         composing
           ? current.map(tr.mapping, tr.doc)
           : tr.getMeta(BULK_FILL_CHUNK_META) === true && !tr.getMeta(kerningRenderingPluginKey)
-            ? mappedThroughBulkFill(current.map(tr.mapping, tr.doc))
+            ? mappedThroughBulkFill(mapKerningDecorations(current, tr))
           : tr.getMeta(kerningRenderingPluginKey) || (tr.docChanged && rebuildsAfterFill(current))
             ? buildKerningRenderingDecorations(newState)
             : tr.docChanged
@@ -2636,14 +2651,17 @@ export function normalizeHighlightColor(value: unknown): HighlightColorValue | n
 
 /**
  * Normalize a character spacing value (pt, may be fractional, can be negative).
- * Accepts a number or a numeric string. Clamps to ±72 pt (arbitrary safe cap;
- * Word's twip range is ±32767/20 ≈ ±1638 pt, but we cap at a sane UI range).
+ * Accepts a number or a numeric string, within Word's range: Font > Advanced >
+ * Spacing expands or condenses by up to 1584 pt (31680 twips), and the
+ * import reads a document's spacing up to that (reading generation 406).
  * Returns null for non-finite / out-of-range / non-numeric values.
  */
+export const CHAR_SPACING_LIMIT_PT = 1584;
+
 export function normalizeCharSpacing(value: unknown): number | null {
   const n = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
   if (!Number.isFinite(n)) return null;
-  if (n < -72 || n > 72) return null;
+  if (n < -CHAR_SPACING_LIMIT_PT || n > CHAR_SPACING_LIMIT_PT) return null;
   // Round to 3 decimal places to avoid floating-point noise.
   return Math.round(n * 1000) / 1000;
 }

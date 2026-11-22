@@ -200,3 +200,151 @@ export function officeSheetChartDataTableLook(
   const fitted: CSSProperties = band.fitted ? { fontSize: band.fitted.fontSize, lineHeight: 1.1 } : {};
   return { table, band, style: { ...inherited, ...own, ...fitted } };
 }
+
+/** A point in CSS px. */
+const PT_PX = 4 / 3;
+/** PowerPoint's chart text size when neither the table nor the chart states one (pt). */
+const POWERPOINT_CHART_TEXT_PT = 10;
+
+/**
+ * How Windows PowerPoint lays out a chart's data table, measured on its own
+ * pictures (office-truth/probes/c30dtab, 16 charts, Slide.Export; TRIAGE C40):
+ * a row is 1.2 of its text and 3.6 pt, a line of 1.2 em more for each line a
+ * wrapped name takes (10 / 12 / 16 pt: 15.6 / 18.0 / 22.8 pt; a two-line 16 pt
+ * name 42.0 pt). The series names' column is the legend key's slot (0.975 em,
+ * none without keys), the widest name and 10 pt, at most a third of the chart,
+ * less 6 pt (12 pt Calibri "Bravo": 44.4 pt drawn; keys off 32.4; a 576 pt
+ * chart's capped column 186.6), its names wrapping inside it. The table's
+ * left edge stands 16.8 pt in from the chart's at every size (the inner plot
+ * begins after the names), its foot 5.4 pt above the chart's. The workbook
+ * table keeps Excel's own band (`officeChartDataTableBand`): these numbers are
+ * PowerPoint's, not Excel's.
+ */
+export const POWERPOINT_DATA_TABLE = {
+  rowFactor: 1.2,
+  rowPadPt: 3.6,
+  keySlotEm: 0.975,
+  namePadPt: 10,
+  nameColumnShare: 1 / 3,
+  nameColumnInsetPt: 6,
+  leftPt: 16.8,
+  footPt: 5.4,
+  categoryPadPt: 3,
+} as const;
+
+export interface OfficeDeckChartDataTableLook {
+  table: OfficeChartDataTable;
+  /** The text's CSS font (for measuring) and one line's height (px). */
+  font: string;
+  linePx: number;
+  /** The lines the longest category name takes in the header row (absent: one). */
+  headerLines?: number;
+  /** The table's text size (px). */
+  fontPx: number;
+  /** Each row's height (px): the categories' row, then a row per series. */
+  rowHeightsPx: number[];
+  /** The band: every row together. */
+  heightPx: number;
+  /** The series names' column, left of the plot (px). */
+  nameColumnPx: number;
+  /** The lines each series' name takes in its column. */
+  nameLines: number[];
+  style: CSSProperties;
+}
+
+/**
+ * A deck chart's data table laid out as Windows PowerPoint lays it out under
+ * a chart `widthPx` wide (`POWERPOINT_DATA_TABLE`), names measured with
+ * `measure(text, font)` (px). The rows' text is the table's own size, else the
+ * chart's, else PowerPoint's 10 pt (`officeChartDataTableFontPx`).
+ */
+export function officeDeckChartDataTableLook(
+  attrs: ChartBlockAttrsV2,
+  widthPx: number,
+  measure: (text: string, font: string) => number,
+  /** The face the chart's text that names none is drawn in (the deck's theme body face). */
+  defaultFamily?: string | null,
+): OfficeDeckChartDataTableLook | null {
+  const table = officeChartDataTable(attrs);
+  if (!table) return null;
+  const fontPx = officeChartDataTableFontPx(attrs.format?.dataTableStyle, attrs.format?.text) ?? POWERPOINT_CHART_TEXT_PT * PT_PX;
+  const text = officeChartTextEChartsStyle(attrs.format?.text);
+  const ownText = (attrs.format?.dataTableStyle as { text?: { color?: unknown } } | undefined)?.text;
+  const own: CSSProperties = {
+    ...presentationChartAreaStyleCss(attrs.format?.dataTableStyle),
+    ...(typeof ownText?.color === "string" ? { color: ownText.color } : {}),
+  };
+  const inherited: CSSProperties = {
+    ...(typeof text.color === "string" ? { color: text.color } : {}),
+    ...(typeof text.fontFamily === "string" ? { fontFamily: text.fontFamily } : {}),
+  };
+  // The table's own face, else the chart's, else the deck's body face: the
+  
+  // measured as Calibri and drawn in the page's face, its names wrapped).
+  const family =
+    typeof own.fontFamily === "string" && own.fontFamily
+      ? own.fontFamily
+      : typeof text.fontFamily === "string" && text.fontFamily
+        ? text.fontFamily
+        : defaultFamily || "Calibri";
+  const weight = own.fontWeight === "bold" || own.fontWeight === 700 ? "bold " : "";
+  const font = `${weight}${fontPx}px ${family}`;
+  const key = table.legendKeys ? POWERPOINT_DATA_TABLE.keySlotEm * fontPx : 0;
+  const pad = POWERPOINT_DATA_TABLE.namePadPt * PT_PX;
+  const widest = Math.max(0, ...table.series.map((series) => measure(series.name, font)));
+  const cap = widthPx > 0 ? widthPx * POWERPOINT_DATA_TABLE.nameColumnShare : Infinity;
+  const inset = POWERPOINT_DATA_TABLE.nameColumnInsetPt * PT_PX;
+  const nameColumnPx = Math.max(key + 1, Math.min(key + widest + pad, cap) - inset);
+  const room = Math.max(1, nameColumnPx + inset - key - pad);
+  const nameLines = table.series.map((series) => wrappedLines(series.name, font, room, measure));
+  const line = POWERPOINT_DATA_TABLE.rowFactor * fontPx;
+  const rowPad = POWERPOINT_DATA_TABLE.rowPadPt * PT_PX;
+  const rowHeightsPx = [line + rowPad, ...nameLines.map((lines) => lines * line + rowPad)];
+  const heightPx = rowHeightsPx.reduce((sum, height) => sum + height, 0);
+  return { table, fontPx, font, linePx: line, rowHeightsPx, heightPx, nameColumnPx, nameLines, style: { ...inherited, ...own, fontFamily: family, fontSize: fontPx } };
+}
+
+
+
+
+
+
+
+
+
+export function officeDeckChartDataTableHeaderGrowth(
+  look: OfficeDeckChartDataTableLook,
+  plotWidthPx: number,
+  measure: (text: string, font: string) => number,
+): number {
+  const count = look.table.categories.length;
+  if (!(plotWidthPx > 0) || !count) return 0;
+  const room = Math.max(1, plotWidthPx / count - 2 * POWERPOINT_DATA_TABLE.categoryPadPt * PT_PX);
+  const lines = Math.max(1, ...look.table.categories.map((category) => wrappedLines(String(category), look.font, room, measure)));
+  const growth = (lines - 1) * look.linePx;
+  if (growth > 0) {
+    look.rowHeightsPx[0] += growth;
+    look.heightPx += growth;
+    look.headerLines = lines;
+  }
+  return growth;
+}
+
+/** The lines `text` takes broken at its spaces within `room` px (a word wider
+ * than the room is a line of its own). */
+function wrappedLines(text: string, font: string, room: number, measure: (text: string, font: string) => number): number {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (!words.length) return 1;
+  let lines = 1;
+  let current = "";
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (current && measure(next, font) > room) {
+      lines += 1;
+      current = word;
+    } else {
+      current = next;
+    }
+  }
+  return lines;
+}

@@ -2,13 +2,13 @@
 
 <p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
-<p align="center"><b>MR Officen avoimen lähdekoodin editorit – asiakirjat, laskentataulukot, esitykset, PDF, käsiala ja koodi – selaimessa.</b></p>
+<p align="center"><b>MR Officen avoimen lähdekoodin editorit, Microsoft Officea lähimpänä oleva editori — asiakirjat, laskentataulukot, esitykset, PDF ja koodi — selaimessa.</b></p>
 
 <p align="center"><a href="https://mroffice.ai/fi"><b>▶ Kokeile verkossa</b></a> · <a href="https://mroffice.ai/fi/office/download"><b>⬇ Lataa</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/fi/developers">🧑‍💻 Kehittäjät</a> · <a href="https://mroffice.ai/fi/developers/embed">🧩 Upota</a> · <a href="https://mroffice.ai/fi/developers/mcp">🤖 MCP tekoälysovelluksille</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm-SDK</a> · <a href="https://mroffice.ai/fi/developers/oauth">🔑 Kirjaudu MR Officella</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
-<p align="center"><a href="https://mroffice.ai/fi"><img src="../docs/media/mr-office-demo.webp" alt="MR Officen avoimen lähdekoodin editorit – asiakirjat, laskentataulukot, esitykset, PDF, käsiala ja koodi – selaimessa." width="100%"></a></p>
+<p align="center"><a href="https://mroffice.ai/fi"><img src="../docs/media/mr-office-demo.webp" alt="MR Officen avoimen lähdekoodin editorit, Microsoft Officea lähimpänä oleva editori — asiakirjat, laskentataulukot, esitykset, PDF ja koodi — selaimessa." width="100%"></a></p>
 
 <p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 Katso 50 sekunnin esittely äänen kanssa</a></p>
 
@@ -22,12 +22,11 @@
 <td align="center" width="50%"><a href="https://mroffice.ai/fi"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
 </tr>
 <tr>
-<td align="center" width="50%"><a href="https://mroffice.ai/fi"><img src="../docs/screenshots/ink.png" alt="Käsiala" width="100%"></a><br><b>Käsiala</b></td>
 <td align="center" width="50%"><a href="https://mroffice.ai/fi"><img src="../docs/screenshots/code.png" alt="Koodi" width="100%"></a><br><b>Koodi</b></td>
 </tr>
 </table>
 
-MR Office on työtila muistiinpanoille, tekoälylle ja oikeille tiedostoille. Tämä tietovarasto julkaisee sen editorien lähdekoodin: samat editorit, joita MR Office käyttää ja jotka voit itse koota, ajaa ja upottaa. Nämä ovat avoimen lähdekoodin editoreja, eivät täydellinen avoimen lähdekoodin toimisto-ohjelmisto: Microsoft Office -tiedostojen lukeminen ja kirjoittaminen jäävät MR Officeen (katso alla).
+MR Office on työtila muistiinpanoille, tekoälylle ja oikeille tiedostoille. Tämä repositorio julkaisee sen editorien lähdekoodin: samat editorit, joita MR Office käyttää, ja jotka voit kääntää, ajaa ja upottaa omiin tuotteisiisi. Yhdessä ilmaisen MR Office -työpöytäsovelluksen tai hostatun upotuksen kanssa ne avaavat ja tallentavat oikeita Word-, Excel- ja PowerPoint-tiedostoja.
 
 ## Kehittäjille
 
@@ -35,7 +34,7 @@ Kaikki kehittäjille on osoitteessa **[MR Office Developers](https://mroffice.ai
 
 ### Upota editorit verkkosovellukseesi (suositus)
 
-MR Office ylläpitää editoreja; palvelimesi allekirjoittaa lyhytikäisen istuntotunnuksen, ja sivusi avaa editorin sillä. Se muokkaa oikeita Word-, Excel-, PowerPoint- ja PDF-tiedostoja (.docx, .xlsx, .pptx, .pdf) yhteismuokkauksen, latausten, kaikkien vientimuotojen ja tulostuksen kera, ja tallennukset lähetetään palvelimellesi allekirjoitetulla takaisinkutsulla. Ilmainen paketti: 1 000 istuntoa kuukaudessa localhostissa, 100 omilla verkkotunnuksillasi, enintään 2 sovellusta. Se on ylläpidetty kaupallinen palvelu, joten oma sovelluksesi ei ole tämän repositorion AGPL-lisenssin sitoma.
+MR Office hostaa editoreja; palvelimesi allekirjoittaa lyhytikäisen istuntotunnisteen ja sivusi avaa editorin. Se muokkaa oikeita Word-, Excel-, PowerPoint- ja PDF-tiedostoja (.docx, .xlsx, .pptx, .pdf), ja siinä on yhteismuokkaus, lataukset, kaikki vientimuodot, tulostus ja allekirjoitetulla takaisinkutsulla palvelimellesi lähetettävät tallennukset. Ilmainen suunnitelma: 1 000 istuntoa kuukaudessa localhostissa, 100 omilla verkkotunnuksillasi, enintään 2 sovellusta. Hostattuna palveluna se ei aseta AGPL-velvoitteita omalle sovelluksellesi.
 
 1. Suorita projektin kansiossa `npx mroffice-embed init` (tai luo sovellus kehittäjäkonsolissa): yksi "Salli"-napsautus selaimessa, ja sovelluksen avaimet kirjoitetaan tiedostoon `.env.local` / `.env`.
 2. Palvelimesi luo istuntotunnuksen `mroffice-embed/server`-moduulin `createSessionToken`-funktiolla; salainen avain ei koskaan poistu palvelimelta.
@@ -69,28 +68,27 @@ MR Office on OAuth 2.1 -valtuutuspalvelin (PKCE, asiakastunnuksen metatietoasiak
 
 ### Ylläpidä avoimen lähdekoodin editoreja itse
 
-Tämän repositorion kuusi editoria voi rakentaa omaan tuotteeseesi AGPL-3.0-lisenssillä: jos muut käyttävät muokattua versiota verkon yli, sinun on tarjottava heille sen koko lähdekoodi ja säilytettävä "MR Office" -maininta (NOTICE.md). Ne avaavat omia muotojaan, CSV-, HTML-, Markdown- ja PDF-tiedostoja; Word-, Excel- ja PowerPoint-tiedostot eivät kuulu avoimen lähdekoodin editoreihin (yllä oleva ylläpidetty upotus tukee niitä). Kaupallisen lisenssin saa osoitteesta support@mr-note.com. [Avoimen lähdekoodin opas →](https://mroffice.ai/fi/developers/open-source)
+Tämän tietovaraston viisi editoria voidaan rakentaa omaan tuotteeseen AGPL-3.0-lisenssin alaisina: jos ihmiset käyttävät muokattua versiota verkon yli, sinun on tarjottava heille sen täydellinen lähdekoodi ja säilytettävä "MR Office" -nimeäminen (NOTICE.md). Ne avaavat omia formaattejaan, CSV-, HTML-, Markdown- ja PDF-tiedostoja; Word-, Excel- ja PowerPoint-tiedostoja varten käytä yllä olevaa isännöityä upotusta. Kaupallinen lisenssi on saatavilla osoitteesta support@mr-note.com. [Avoimen lähdekoodin opas →](https://mroffice.ai/fi/developers/open-source)
 
-Editorit ovat npm:ssä React-komponentteina: `npm i mroffice-docs mroffice-core` (sekä `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`); kunkin paketin README kertoo, miten se upotetaan.
+Editorit ovat npm:ssä React-komponentteina: `npm i mroffice-docs mroffice-core` (sekä `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-code`); kunkin paketin README näyttää, miten se upotetaan.
 
 ## Editorit
 
 Mitä kukin editori tekee tässä tietovarastossa:
 
-- **Asiakirjat** — sivupohjainen tekstinkäsittely: tyylit, fontit, luettelot, taulukot, ylä- ja alatunnisteet, osat ja palstat, muodot ja kaavat, kansilehdet ja sisällysluettelot, kommentit ja muutosten seuranta sekä käsin piirtäminen sivulle. Tallentaa omaan muotoonsa (.mrdoc); avaa HTML-, Markdown- ja tekstitiedostot.
-- **Laskentataulukot** — solut ja kaavat, lukumuodot, ehdollinen muotoilu, lajittelu ja suodatus, kiinnitetyt ruudut ja useita taulukoita sekä valinnan summa ja keskiarvo. Solujen välinen laskenta (=A1*B1+10) lasketaan selaimessa kirjoitettaessa; funktioita käyttävät kaavat (SUMMA, JOS, PHAKU …) säilyvät kirjoitetussa muodossa. Tallentaa omaan muotoonsa (.mrsheet); avaa ja tallentaa CSV- ja TSV-tiedostot.
-- **Esitykset** — dioja kahdeksalla omalla teemalla: asettelut, diapohja- ja asettelunäkymä, teksti, muodot, tekstiruudut, taulukot, WordArt ja kaavat, kommentit, osiot, siirtymät ja animaatiot esikatseluineen sekä diaesitys. Tallentaa omaan muotoonsa (.mrslides).
-- **PDF** — PDF-tiedostojen lukeminen, haku, esittäminen ja tulostus, tekstin kopiointi ja ääneen lukeminen sekä valitun tekstin merkitseminen (korostus, alleviivaus, yliviivaus, aaltoviiva) muistilappujen ja kommenttiruudun kanssa tiedoston ollessa auki; tallennus palauttaa tiedoston sellaisena kuin se avattiin.
-- **Käsiala** — käsin kirjoitetut muistiinpanot paineherkillä kynillä, korostuskynillä, pyyhekumeilla, lassolla ja viivaimella, ja käsiala muuttuu muodoiksi. Tallentaa omaan muotoonsa (.mrink).
-- **Koodi** — kevyt koodieditori, jossa on syntaksikorostus monille kielille, jäsennys sekä etsi ja korvaa; JavaScript/TypeScript, Python, SQL, Lua ja komentotulkki toimivat suoraan selaimessa.
+- **Asiakirjat** — sivutettu tekstinkäsittelyohjelma: fontit, kappaleiden muotoilu, luettelot ja tyylit Aloitus-välilehdellä; kansi- ja tyhjät sivut, sivunvaihdot, taulukot, kuvat, muodot, SmartArt, kaaviot, linkit, kirjanmerkit, kommentit, ylä- ja alatunnisteet sekä sivunumerot, yhtälöt, symbolit, tekstiruudut ja WordArt Lisää-välilehdellä. Tallentaa oman formaattinsa (.mrdoc); avaa HTML-, Markdown- ja pelkän tekstin tiedostoja.
+- **Laskentataulukot** — solut ja kaavat fonteilla, tasauksella, lukumuodoilla, ehdollisella muotoilulla, solutyyleillä sekä solujen lisäämisellä ja poistamisella Aloitus-välilehdellä; taulukot, kuvat, muodot, kuvakkeet, valintaruudut, kaaviot ja sparklinet Lisää-välilehdellä; useita taulukoita, valinnan summat ja keskiarvot. Solujen välinen aritmetiikka (=A1*B1+10) lasketaan selaimessa kirjoittaessasi; funktioita sisältävät kaavat (SUM, IF, VLOOKUP …) säilytetään kirjoitetussa muodossa. Tallentaa oman formaattinsa (.mrsheet); avaa ja tallentaa CSV- ja TSV-tiedostoja.
+- **Esitykset** — diat asetteluilla ja osioilla, teksti, fontit ja kappaleet sekä muodot järjestelyineen Aloitus-välilehdellä; taulukot, kuvat, kuvakkeet, SmartArt, kaaviot, tekstiruudut, WordArt, ylä- ja alatunnisteet, yhtälöt, symbolit ja video Lisää-välilehdellä; muistiinpanot, kommentit ja esittäminen. Tallentaa oman formaattinsa (.mrslides).
+- **PDF** — PDF-tiedostojen luku, esittäminen ja tulostus: yhden ja kahden sivun näkymät, jatkuva vieritys, kierto, pikkukuvat ja lukutila, tekstin haku ja kopiointi sekä kommentit tiedoston ollessa auki; tallennus palauttaa tiedoston sellaisena kuin se avattiin.
+- **Koodi** — kevyt koodieditori, jossa on syntaksikorostus monille kielille, jäsennyspuu, haku, pikahaku, tiedostoselain ja ongelmaluettelo.
 
-Funktioita sisältävien kaavojen laskennan, kaavioiden piirtämisen ja SmartArtin asettelun hoitaa MR Officen oma moottori MR Office -työpöytäsovelluksessa: avoimen lähdekoodin editorit säilyttävät tiedoston kaavat, kaaviot ja SmartArtin ja näyttävät SmartArtin sellaisena kuin se tallennettiin.
+Kaavat funktioineen, kaaviot ja SmartArt lasketaan ja piirretään MR Officen moottorilla sekä ilmaisessa työpöytäsovelluksessa että hostatussa palvelussa; tämän repositorion editorit säilyttävät jokaisen tiedoston sisältämän kaavan, kaavion ja SmartArtin ja näyttävät SmartArtin sellaisena kuin se on tallennettu.
 
 ## Editorien ajaminen
 
 **▶ [Kokeile live-demoa – ei asennusta](https://mroffice.ai/fi)**
 
-Kuusi editoria ovat hakemistossa `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, yhteisenä `@mrnote/core`), ja ne toimivat yhdessä hakemistossa `apps/playground`:
+Viisi editoria ovat hakemistossa `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `code`, jotka jakavat `@mrnote/core`) ja toimivat yhdessä hakemistossa `apps/playground`:
 
 ```bash
 npm install
@@ -103,7 +101,7 @@ npm run preview   # http://localhost:5178
 
 ## Työpöytäsovellus
 
-[`apps/desktop`](../apps/desktop) sisältää **MR Office Editorsin**: MR Officen työpöytäsovelluksen kuoren (Electron) lähdekoodin omalla sovellustunnisteellaan. Kun Releases-sivun ilmainen MR Office -komponentti on asennettu, se on MR Officen työpöytäsovellus: Word-, Excel-, PowerPoint- ja PDF-tiedostot, kirjautuminen ja tekoäly. Ilman komponenttia se ajaa vain avoimen lähdekoodin editoreja, jotka avaavat .mrdoc-, .mrsheet-, .mrslides- ja .mrink-tiedostot sekä CSV-, HTML-, Markdown- ja PDF-tiedostot. Kuori ja editorit ovat AGPL-lähdekoodia; komponentti on käännetty, ilmainen käyttää eikä avointa lähdekoodia. Kun olet ajanut `npm run build`, käynnistä se komennolla:
+[`apps/desktop`](../apps/desktop) sisältää **MR Office Editors** -sovelluksen: MR Office -työpöytäsovelluksen kuoren (Electron) lähdekoodin omalla identiteetillään. Releases-julkaisuista ladattavan ilmaisen MR Office -komponentin kanssa se on MR Office -työpöytäsovellus, jossa on Word-, Excel-, PowerPoint- ja PDF-tiedostot, kirjautuminen ja AI. Ilman komponenttia se ajaa avoimen lähdekoodin editoreja sellaisinaan, ja ne avaavat .mrdoc-, .mrsheet- ja .mrslides-tiedostoja, CSV-, HTML-, Markdown- ja PDF-tiedostoja. Kuori ja editorit ovat AGPL-lähdekoodia; komponentti on ilmainen lataus Releases-julkaisuista. Kun `npm run build` on suoritettu, käynnistä se komennolla:
 
 ```bash
 npm run desktop
@@ -111,7 +109,7 @@ npm run desktop
 
 ## Kaikki ominaisuudet: asenna MR Officen työpöytäsovellus (maksuton)
 
-MR Office -työpöytäsovellus on maksuton, sisältää nämä editorit ja koko palvelun ja toimii offline-tilassa omalla tietokoneellasi. Se tuo sen, mitä avoimen lähdekoodin editoreista puuttuu:
+MR Office -työpöytäsovellus on ilmainen, sisältää nämä editorit ja koko palvelun, ja toimii offline-tilassa omalla tietokoneellasi. Editorien lisäksi se tarjoaa:
 
 - Word-, Excel- ja PowerPoint-tiedostojen (.docx, .xlsx, .pptx) avaaminen ja tallentaminen
 - Funktioita sisältävien kaavojen (SUMMA, JOS, PHAKU …) laskenta
@@ -123,7 +121,7 @@ MR Office -työpöytäsovellus on maksuton, sisältää nämä editorit ja koko 
 
 ### Word-, Excel-, PowerPoint- ja PDF-tiedostot
 
-Word-, Excel- ja PowerPoint-tiedostojen (.docx, .xlsx, .pptx) avaamisen ja tallentamisen sekä PDF-muokkausten tallentamisen takaisin tiedostoon tarjoaa maksuton MR Office -työpöytäsovellus. Se sisältää kaikki nämä editorit ja toimii offline-tilassa omalla tietokoneellasi:
+Työskentele oikeiden Word-, Excel- ja PowerPoint-tiedostojen (.docx, .xlsx, .pptx) parissa ja tallenna PDF-muokkaukset suoraan tiedostoon ilmaisella MR Office -työpöytäsovelluksella, joka sisältää kaikki nämä editorit ja toimii offline-tilassa omalla tietokoneellasi:
 
 ## Miten osat liittyvät toisiinsa
 
@@ -131,12 +129,12 @@ Word-, Excel- ja PowerPoint-tiedostojen (.docx, .xlsx, .pptx) avaamisen ja talle
 flowchart LR
   subgraph OSS["Avoin lähdekoodi · AGPL-3.0"]
     direction LR
-    core["@mrnote/core"] --> E["Kuusi editoria<br/>Asiakirjat · Laskentataulukot · Esitykset · PDF · Käsiala · Koodi"]
+    core["@mrnote/core"] --> E["Viisi editoria<br/>Asiakirjat · Laskentataulukot · Esitykset · PDF · Koodi"]
     E --> PG["apps/playground<br/>Selain"]
     E --> DS["apps/desktop<br/>Työpöytäsovelluksen kuori"]
     MCP["apps/mcp<br/>MCP-palvelin tekoälysovelluksille"]
   end
-  COMP["MR Office -komponentti: Word-, Excel- ja PowerPoint-tiedostot · ilmainen, ei avointa lähdekoodia"] -.-> DS
+  COMP["MR Office -komponentti: Word-, Excel- ja PowerPoint-tiedostot · ilmainen"] -.-> DS
 ```
 
 ## Lisenssi

@@ -47,6 +47,8 @@ import {
   engineBreakStrutOff,
   docsLineOpensWithSpace,
   DOCS_ENGINE_HYPHEN_CLASS,
+  DOCS_ENGINE_JOINER_CLASS,
+  docsBracketJoins,
   DOCS_ENGINE_HEAD_HYPHEN_CLASS,
   docsHyphenationOff,
   hyphenPointKind,
@@ -143,6 +145,9 @@ export interface Span {
   /** The head of a paragraph the page cut inside a hyphenated word ends at
    * `from` (`from === to`): the hyphen Word draws there ("estab-"). */
   headHyphen?: true;
+  /** A word joiner before an opening bracket the engine keeps with the
+   * closing punctuation before it (docsBracketJoins): `from === to`. */
+  joiner?: true;
 }
 
 /** Marks a paragraph the engine hyphenates (documentHyphenationRules leaves it). */
@@ -152,6 +157,15 @@ function hyphenElement(): HTMLElement {
   const span = document.createElement("span");
   span.className = DOCS_ENGINE_HYPHEN_CLASS;
   span.textContent = "\u00ad";
+  return span;
+}
+
+/** A word joiner: no line break on either side of it (UAX #14 LB11). */
+function joinerElement(): HTMLElement {
+  const span = document.createElement("span");
+  span.className = DOCS_ENGINE_JOINER_CLASS;
+  span.setAttribute("aria-hidden", "true");
+  span.textContent = "\u2060";
   return span;
 }
 
@@ -258,6 +272,9 @@ function decorationsFor(doc: ProseMirrorNode, spans: readonly Span[]): Decoratio
     }
     if (span.hyphen) {
       return [Decoration.widget(span.from, hyphenElement, { side: -1, key: DOCS_ENGINE_HYPHEN_CLASS, engineLine: true, ignoreSelection: true })];
+    }
+    if (span.joiner) {
+      return [Decoration.widget(span.from, joinerElement, { side: -1, key: DOCS_ENGINE_JOINER_CLASS, engineLine: true, ignoreSelection: true })];
     }
     if (span.headHyphen) {
       return [Decoration.widget(span.from, headHyphenElement, { side: -1, key: DOCS_ENGINE_HEAD_HYPHEN_CLASS, engineLine: true, ignoreSelection: true })];
@@ -676,7 +693,11 @@ function readBlockLines(
   // A paragraph the engine hyphenates: the browser's own hyphens are off and
   // an optional hyphen stands where each automatic one ends a line. The
   // first reading saw the browser's hyphens: read again once these stand.
-  const hyphenSpans = paragraph.hyphenation ? engineHyphenSpans(view, paragraph, raw, pos) : [];
+  // And the word joiners that keep the browser from breaking where Word
+  // keeps closing punctuation and an opening bracket together: drawn
+  // whatever the browser does now, so a reading with them and one without
+  // keep the same spans.
+  const hyphenSpans = [...(paragraph.hyphenation ? engineHyphenSpans(view, paragraph, raw, pos) : []), ...engineJoinerSpans(view, paragraph, raw)];
   const hyphenFresh = paragraph.hyphenation !== undefined && element.getAttribute(DOCS_ENGINE_HYPHENATION_ATTR) !== "true";
   if (!hyphenFresh && !current && !tabOpened && docsBrowserAgreesQuickly(element, paragraph, engine)) {
     keep(hyphenSpans);
@@ -726,7 +747,10 @@ function readBlockLines(
       }
       try {
         const from = view.posAtDOM(textNode, startOffset);
-        const to = view.posAtDOM(textNode, endOffset);
+        // Biased forward: the number of a note reference (its view's own
+        // text, footnoteExtension) ends after its node, so the line's spacing
+        // reaches it as the engine counts it; in a text node the bias is moot.
+        const to = view.posAtDOM(textNode, endOffset, 1);
         if (to > from) {
           spans.push({
             from, to, extra: line.letterSpacing, base: piece.letterSpacing ?? 0,
@@ -782,6 +806,20 @@ function engineHyphenSpans(view: EditorView, paragraph: DocsParagraph, starts: r
   if (node && cutInsideHyphenatedWord(view.state.doc, node, pos)) {
     const end = pos + 1 + node.content.size;
     spans.push({ from: end, to: end, ...blank, headHyphen: true });
+  }
+  return spans;
+}
+
+/** Word joiners before the opening brackets docsBracketJoins names. */
+function engineJoinerSpans(view: EditorView, paragraph: DocsParagraph, starts: readonly number[]): Span[] {
+  const spans: Span[] = [];
+  for (const at of docsBracketJoins(paragraph, starts)) {
+    const piece = paragraph.pieces[at]!;
+    if (!piece.node || piece.offset === undefined) continue;
+    try {
+      const before = view.posAtDOM(piece.node, piece.offset);
+      spans.push({ from: before, to: before, extra: 0, base: 0, wordExtra: 0, wordBase: 0, joiner: true });
+    } catch { /* a node outside the editor's content */ }
   }
   return spans;
 }

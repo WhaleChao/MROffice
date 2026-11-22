@@ -240,6 +240,9 @@ export const PresentationShapeGraphic = memo(function PresentationShapeGraphic(p
       seed: officeSketchSeed(props.block.id),
       // Blurred as PowerPoint blurs a shape's shadow.
       shadowBlurDeviation: POWERPOINT_SHADOW_BLUR_DEVIATION,
+      // An evenly scaled shadow too is the shape grown or shrunk about its
+      // alignment point, as PowerPoint draws it (probe lf13-shscale).
+      scaledShadowSilhouette: { blurDeviation: POWERPOINT_SHADOW_BLUR_DEVIATION },
       frame: {
         rotation: typeof turned.rotation === "number" ? turned.rotation : 0,
         flipH: turned.flipH === true,

@@ -198,7 +198,11 @@ function buildState(local: ProseMirrorNode): MapState {
     for (const source of sources.get(id ?? -1) ?? []) {
       const start = source.from;
       if (source.node.isText || source.node.isLeaf) {
-        if (source.node.nodeSize !== size) throw new Error("A projected leaf changed semantic size");
+        // The leaf's type and both sizes (no content): the message alone
+        
+        if (source.node.nodeSize !== size) {
+          throw new Error(`A projected leaf changed semantic size (${source.node.type.name} ${source.node.nodeSize} -> ${size})`);
+        }
         segments.push({ localFrom: start, localTo: start + size, canonicalFrom: from, canonicalTo: from + size, replica: source.replica });
       } else if (!root && source.node.type.name !== "pageBlock") {
         if (!CONTINUATION.some(key => source.node.attrs[key] === true)) {

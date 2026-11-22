@@ -2,13 +2,13 @@
 
 <p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
-<p align="center"><b>MR Office のオープンソースエディター。文書、スプレッドシート、プレゼンテーション、PDF、手書き、コードがブラウザーで動きます。</b></p>
+<p align="center"><b>Microsoft Officeに最も近いエディター、MR Officeのオープンソースエディター — 文書、スプレッドシート、プレゼンテーション、PDF、コード — がブラウザーで動作します。</b></p>
 
 <p align="center"><a href="https://mroffice.ai/ja"><b>▶ オンラインで試す</b></a> · <a href="https://mroffice.ai/ja/office/download"><b>⬇ ダウンロード</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/ja/developers">🧑‍💻 開発者</a> · <a href="https://mroffice.ai/ja/developers/embed">🧩 埋め込み</a> · <a href="https://mroffice.ai/ja/developers/mcp">🤖 AI アプリ向け MCP</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm SDK</a> · <a href="https://mroffice.ai/ja/developers/oauth">🔑 MR Office でサインイン</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
-<p align="center"><a href="https://mroffice.ai/ja"><img src="../docs/media/mr-office-demo.webp" alt="MR Office のオープンソースエディター。文書、スプレッドシート、プレゼンテーション、PDF、手書き、コードがブラウザーで動きます。" width="100%"></a></p>
+<p align="center"><a href="https://mroffice.ai/ja"><img src="../docs/media/mr-office-demo.webp" alt="Microsoft Officeに最も近いエディター、MR Officeのオープンソースエディター — 文書、スプレッドシート、プレゼンテーション、PDF、コード — がブラウザーで動作します。" width="100%"></a></p>
 
 <p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 50 秒の紹介動画を見る（音声あり）</a></p>
 
@@ -22,12 +22,11 @@
 <td align="center" width="50%"><a href="https://mroffice.ai/ja"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
 </tr>
 <tr>
-<td align="center" width="50%"><a href="https://mroffice.ai/ja"><img src="../docs/screenshots/ink.png" alt="手書き" width="100%"></a><br><b>手書き</b></td>
 <td align="center" width="50%"><a href="https://mroffice.ai/ja"><img src="../docs/screenshots/code.png" alt="コード" width="100%"></a><br><b>コード</b></td>
 </tr>
 </table>
 
-MR Office は、ノート、AI、実際のファイルをひとつにまとめたワークスペースです。このリポジトリでは、そのエディターのソースコードを公開しています。MR Office で動いているものと同じエディターで、自分でビルド、実行、組み込みができます。これはオープンソースのエディターであり、完全なオープンソースの Office スイートではありません。Microsoft Office ファイルの読み書きは MR Office が提供します（下記参照）。
+MR Officeは、ノート、AI、実際のファイルのためのワークスペースです。このリポジトリは、そのエディタのソースコードを公開しています。MR Officeが動かしているのと同じエディタで、自分でビルドし、実行し、組み込むことができます。無料のMR Officeデスクトップアプリやホスト型の埋め込みと合わせて、本物のWord、Excel、PowerPointファイルを開いて保存できます。
 
 ## 開発者向け
 
@@ -35,7 +34,7 @@ MR Office は、ノート、AI、実際のファイルをひとつにまとめ�
 
 ### Web アプリにエディターを埋め込む（推奨）
 
-エディターは MR Office がホストします。サーバーが短期間有効なセッショントークンに署名し、ページがそれでエディターを開きます。本物の Word、Excel、PowerPoint、PDF ファイル（.docx、.xlsx、.pptx、.pdf）を編集でき、共同編集、アップロード、すべてのエクスポート形式、印刷に対応し、保存したファイルは署名付きコールバックでサーバーに返されます。無料プラン：localhost での開発は月 1,000 セッション、本番ドメインは月 100 セッション、アプリは最大 2 個。ホスト型の商用サービスなので、あなたのアプリはこのリポジトリの AGPL ライセンスに縛られません。
+MR Officeがエディタをホストし、あなたのサーバーが短命のセッショントークンに署名し、あなたのページがエディタを開きます。本物のWord、Excel、PowerPoint、PDFファイル（.docx、.xlsx、.pptx、.pdf）を編集でき、共同編集、アップロード、すべてのエクスポート形式、印刷、署名付きコールバックであなたのサーバーに返される保存に対応します。無料プラン：localhostで月1,000セッション、独自ドメインで100、最大2アプリ。ホスト型サービスとして、あなたのアプリにAGPLの義務を課しません。
 
 1. プロジェクトのフォルダーで `npx mroffice-embed init` を実行します（または開発者コンソールでアプリを作成）。ブラウザーで「許可」を 1 回押すと、アプリのキーが `.env.local` / `.env` に書き込まれます。
 2. サーバーは `mroffice-embed/server` の `createSessionToken` でセッショントークンを発行します。シークレットキーはサーバーの外に出ません。
@@ -69,28 +68,27 @@ MR Office は OAuth 2.1 認可サーバーです（PKCE、クライアント ID 
 
 ### オープンソースのエディターをセルフホストする
 
-このリポジトリの 6 つのエディターは AGPL-3.0 のもとで自社製品に組み込めます。改変版をネットワーク越しに利用させる場合は完全なソースコードを提供し、「MR Office」の表示（NOTICE.md）を残す必要があります。独自形式、CSV、HTML、Markdown、PDF を開けます。Word、Excel、PowerPoint ファイルはオープンソースのエディターには含まれません（上のホスト型埋め込みが対応）。商用ライセンスは support@mr-note.com へ。 [オープンソースガイド →](https://mroffice.ai/ja/developers/open-source)
+このリポジトリの5つのエディターは、AGPL-3.0の下で独自の製品に組み込めます。改変版をネットワーク経由で使用させる場合は、完全なソースコードを提供し、「MR Office」の表示（NOTICE.md）を保持する必要があります。独自形式、CSV、HTML、Markdown、PDFを開きます。Word、Excel、PowerPointファイルには、上記のホスト型埋め込みをご利用ください。商用ライセンスはsupport@mr-note.comから入手できます。 [オープンソースガイド →](https://mroffice.ai/ja/developers/open-source)
 
-エディターは React コンポーネントとして npm にあります：`npm i mroffice-docs mroffice-core`（ほかに `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`）。埋め込み方は各パッケージの README にあります。
+エディターはReactコンポーネントとしてnpmで公開されています: `npm i mroffice-docs mroffice-core`（および`mroffice-sheets`、`mroffice-slides`、`mroffice-pdf`、`mroffice-code`）。各パッケージのREADMEに埋め込み方法が記載されています。
 
 ## エディター
 
 このリポジトリで各エディターができること：
 
-- **文書** — ページ単位のワープロ：スタイル、フォント、リスト、表、ヘッダーとフッター、セクションと段組み、図形と数式、表紙と目次、コメントと変更履歴、ページへの手書き。独自形式（.mrdoc）で保存し、HTML、Markdown、テキストを開けます。
-- **スプレッドシート** — セルと数式、表示形式、条件付き書式、並べ替えとフィルター、ウィンドウ枠の固定、複数シート、選択範囲の合計と平均。セル同士の四則演算（=A1*B1+10 など）は入力するとブラウザーで計算され、関数を使う数式（SUM、IF、VLOOKUP など）は書いたまま保持されます。独自形式（.mrsheet）で保存し、CSV と TSV を開いて保存できます。
-- **プレゼンテーション** — 独自の 8 つのテーマを備えたスライド：レイアウト、スライド マスターとレイアウト表示、テキスト、図形、テキスト ボックス、表、ワードアート、数式、コメント、セクション、画面切り替えとアニメーション（プレビュー付き）、スライドショー。独自形式（.mrslides）で保存します。
-- **PDF** — PDF の閲覧、検索、プレゼンテーション表示、印刷、テキストのコピーと読み上げ。開いている間は選択したテキストにハイライト、下線、取り消し線、波線を付け、メモとコメント パネルを使えます。保存すると開いたときのファイルを返します。
-- **手書き** — 筆圧対応のペン、蛍光ペン、消しゴム、投げ縄、ルーラー。インクを図形に変換できます。独自形式（.mrink）で保存します。
-- **コード** — 多くの言語の構文ハイライト、アウトライン、検索と置換を備えた軽量コードエディター。JavaScript/TypeScript、Python、SQL、Lua、シェルをブラウザーで実行できます。
+- **文書** — ページ単位のワープロ:ホームタブにはフォント、段落書式、リスト、スタイル。挿入タブには表紙と空白ページ、改ページ、表、画像、図形、SmartArt、グラフ、リンク、ブックマーク、コメント、ヘッダー、フッター、ページ番号、数式、記号、テキストボックス、WordArt。独自形式（.mrdoc）で保存し、HTML、Markdown、プレーンテキストを開きます。
+- **スプレッドシート** — セルと数式:ホームタブにはフォント、配置、表示形式、条件付き書式、セルのスタイル、セルの挿入と削除。挿入タブには表、画像、図形、アイコン、チェックボックス、グラフ、スパークライン。複数のシートに対応し、選択範囲の合計と平均を表示。セル間の四則演算（=A1*B1+10）は入力に合わせてブラウザーで計算され、関数を使う数式（SUM、IF、VLOOKUP …）は書いたとおりに保持されます。独自形式（.mrsheet）で保存し、CSVとTSVを開いて保存できます。
+- **プレゼンテーション** — スライド:ホームタブにはレイアウトとセクション、テキスト、フォントと段落、図形とその配置。挿入タブには表、画像、アイコン、SmartArt、グラフ、テキストボックス、WordArt、ヘッダーとフッター、数式、記号、動画。発表者メモ、コメント、プレゼンテーションに対応。独自形式（.mrslides）で保存します。
+- **PDF** — PDFファイルの閲覧、プレゼンテーション、印刷:単一ページ表示と見開き表示、連続スクロール、回転、サムネイル、閲覧モード、テキストの検索とコピー、ファイルを開いている間のコメント。保存すると、開いたときのままのファイルが返されます。
+- **コード** — 多くの言語のシンタックスハイライト、アウトライン、検索、クイックオープン、ファイルエクスプローラー、問題リストを備えた軽量コードエディター。
 
-関数を使う数式の計算、グラフの描画、SmartArt のレイアウトは MR Office 独自のエンジンで行われ、MR Office デスクトップ版で利用できます。オープンソースのエディターはファイル内の数式・グラフ・SmartArt を保持し、SmartArt は保存時の見た目で表示します。
+関数を使った数式、グラフ、SmartArtは、無料のデスクトップアプリでもホスト型サービスでも、MR Officeのエンジンによって計算・描画されます。ここにあるエディタは、ファイルに含まれるすべての数式、グラフ、SmartArtを保持し、SmartArtは保存されたとおりに表示します。
 
 ## エディターを動かす
 
 **▶ [ライブデモを試す（インストール不要）](https://mroffice.ai/ja)**
 
-6 つのエディターは `packages/`（`@mrnote/docs`、`sheets`、`slides`、`pdf`、`ink`、`code`。共通部分は `@mrnote/core`）にあり、`apps/playground` でまとめて動きます：
+5つのエディターは`packages/`（`@mrnote/docs`、`sheets`、`slides`、`pdf`、`code`、共通の`@mrnote/core`）にあり、`apps/playground`で一緒に動作します:
 
 ```bash
 npm install
@@ -103,7 +101,7 @@ npm run preview   # http://localhost:5178
 
 ## デスクトップアプリ
 
-[`apps/desktop`](../apps/desktop) には **MR Office Editors** があります。MR Office デスクトップアプリのシェル（Electron）のソースコードで、独自のアプリ ID を持ちます。Releases にある無料の MR Office コンポーネントを入れると MR Office デスクトップアプリになり、Word、Excel、PowerPoint、PDF ファイル、サインイン、AI が使えます。コンポーネントがなければ、オープンソースのエディターだけで動き、.mrdoc、.mrsheet、.mrslides、.mrink ファイルと CSV、HTML、Markdown、PDF を開きます。シェルとエディターは AGPL のソースコードで、コンポーネントはコンパイル済みで無料で使えますが、オープンソースではありません。`npm run build` の後、次のコマンドで起動します:
+[`apps/desktop`](../apps/desktop)には**MR Office Editors**があります。これはMR Officeデスクトップアプリのシェル（Electron）のソースであり、独自のアイデンティティを持ちます。Releasesの無料MR Officeコンポーネントと組み合わせると、Word、Excel、PowerPoint、PDFファイル、サインイン、AIを備えたMR Officeデスクトップアプリになります。コンポーネントなしでは、オープンソースエディターを単独で実行し、.mrdoc、.mrsheet、.mrslidesファイル、CSV、HTML、Markdown、PDFを開きます。シェルとエディターはAGPLソースコードです。コンポーネントはReleasesから無料でダウンロードできます。`npm run build`の後、次のコマンドで起動します:
 
 ```bash
 npm run desktop
@@ -111,7 +109,7 @@ npm run desktop
 
 ## すべての機能を使うには MR Office デスクトップ版（無料）をインストールしてください
 
-MR Office デスクトップ版は無料で、これらのエディターとすべてのサービスを備え、お使いのコンピューターでオフラインでも動作します。オープンソース版にない次の機能を利用できます：
+MR Officeデスクトップアプリは無料で、これらのエディタとフルサービスを備え、お使いのコンピュータでオフラインでも動作します。エディタに加えて、次の機能があります：
 
 - Word・Excel・PowerPoint ファイル（.docx、.xlsx、.pptx）を開いて保存
 - 関数を使う数式（SUM、IF、VLOOKUP など）の計算
@@ -123,7 +121,7 @@ MR Office デスクトップ版は無料で、これらのエディターとす�
 
 ### Word、Excel、PowerPoint、PDF ファイル
 
-Word・Excel・PowerPoint ファイル（.docx、.xlsx、.pptx）を開いて保存する機能と、PDF の編集内容をファイルに書き戻す機能は、無料の MR Office デスクトップ版が提供します。デスクトップ版にはこれらのエディターがすべて含まれ、お使いのコンピューターでオフラインでも動作します：
+本物のWord、Excel、PowerPointファイル（.docx、.xlsx、.pptx）で作業し、PDFの編集内容をファイルにそのまま保存できます。無料のMR Officeデスクトップアプリにはこれらのエディタがすべて揃い、お使いのコンピュータでオフラインでも動作します：
 
 ## 構成
 
@@ -131,12 +129,12 @@ Word・Excel・PowerPoint ファイル（.docx、.xlsx、.pptx）を開いて保
 flowchart LR
   subgraph OSS["オープンソース · AGPL-3.0"]
     direction LR
-    core["@mrnote/core"] --> E["6 つのエディター<br/>文書 · スプレッドシート · プレゼンテーション · PDF · 手書き · コード"]
+    core["@mrnote/core"] --> E["5つのエディター<br/>文書 · スプレッドシート · プレゼンテーション · PDF · コード"]
     E --> PG["apps/playground<br/>ブラウザー"]
     E --> DS["apps/desktop<br/>デスクトップシェル"]
     MCP["apps/mcp<br/>AI アプリ向け MCP サーバー"]
   end
-  COMP["MR Office コンポーネント：Word・Excel・PowerPoint ファイル · 無料、非オープンソース"] -.-> DS
+  COMP["MR Officeコンポーネント：Word、Excel、PowerPointファイル · 無料"] -.-> DS
 ```
 
 ## ライセンス

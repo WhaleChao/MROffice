@@ -62,6 +62,7 @@ import {
 import { paginationLayoutRect, paginationLayoutScale } from "./paginationGeometry";
 import { trailingAutoLeadingCreditPx } from "./pageEdgeLeading";
 import { collapseMargins, collapsedEdgeMarginPx, type AuthoredMarginPx } from "./marginCollapse";
+import { contextualParagraphStyleIdentity } from "../contextualParagraphSpacingExtension";
 import {
   mergeAdjacentTableFragmentsJson,
   TABLE_FRAGMENT_ID_ATTR,
@@ -2298,19 +2299,49 @@ export function containerContinuationJoinMargin(
     headContainerDom = leftDom;
     tailContainerDom = rightDom;
   }
-  if (!(leftDom instanceof HTMLElement) || !(rightDom instanceof HTMLElement))
+  if (!leftNode || !rightNode || !(leftDom instanceof HTMLElement) || !(rightDom instanceof HTMLElement))
     return Infinity;
+  // Two paragraphs of one style the seam parts are next to each other in
+  // the text, and Word's "Don't add space between paragraphs of the same
+  // style" holds across it: the page edge draws neither of their margins,
+  // the join draws none either (contextualParagraphSpacingExtension marks
+  // the pair suppressed once they share a page). Charged the 8 px of the
+  // pair's 6 pt before and after, the head of a List Paragraph list could
+  // never take back the next item, 2 px short where Word keeps it, its glyphs
+  // 0.1 pt above the foot (corpus R491-D05 page 11, "Questionnaires/surveys").
+  // (A cut between two whole items stops at the items: their paragraphs
+  // are the item's last and the next item's first.)
+  const leftText = contextualJoinOff() ? null : edgeTextblock(leftNode, "last");
+  const rightText = leftText ? edgeTextblock(rightNode, "first") : null;
+  const identity = leftText ? contextualParagraphStyleIdentity(leftText) : null;
+  const sameStyle = identity !== null && rightText !== null && contextualParagraphStyleIdentity(rightText) === identity;
+  const leftAfter = sameStyle && leftText!.attrs.contextualSpacing === true ? 0 : collapsedEdgeMarginPx(leftDom, "bottom", authored);
+  const rightBefore = sameStyle && rightText!.attrs.contextualSpacing === true ? 0 : collapsedEdgeMarginPx(rightDom, "top", authored);
   // The gap the join paints is the collapsed margin between the two blocks,
   // including what their descendants push through: a Word list item keeps
   // its spacing on its own paragraph (the wrapper item has none), and that
   // paragraph's after-spacing collapses through the item into the gap.
-  return Math.max(
-    0,
-    collapseMargins(
-      collapsedEdgeMarginPx(leftDom, "bottom", authored),
-      collapsedEdgeMarginPx(rightDom, "top", authored),
-    ),
-  );
+  return Math.max(0, collapseMargins(leftAfter, rightBefore));
+}
+
+/** The paragraph a block ends (or opens) with, read through list items and
+ * lists; null for anything else (a table, a picture). */
+export function edgeTextblock(node: PmNode, edge: "first" | "last"): PmNode | null {
+  let current: PmNode | null = node;
+  for (let depth = 0; current && depth < 32; depth += 1) {
+    if (current.isTextblock) return current;
+    if (!SPLITTABLE_CONTAINERS.has(current.type.name) && current.type.name !== "listItem" && current.type.name !== "taskItem") return null;
+    current = edge === "last" ? current.lastChild : current.firstChild;
+  }
+  return null;
+}
+
+/** `window.__docsContainerJoinContextualOff = true` (A/B): a container seam
+ * between two same-style contextual paragraphs is charged their margins, the
+ * older reading. */
+function contextualJoinOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsContainerJoinContextualOff?: boolean }).__docsContainerJoinContextualOff === true;
 }
 
 /** Transfer only a measured tail prefix, without painting the whole merged list. */

@@ -40,6 +40,8 @@ export function PresentationPictureEffectsFrame({
       testId="presentation-picture-effects"
       shadowTestIds={{ under: "presentation-picture-shadow-under", over: "presentation-picture-shadow-over" }}
       shadowBlurDeviation={POWERPOINT_SHADOW_BLUR_DEVIATION}
+      // Scaled about its alignment point even when evenly (probe lf13-shscale).
+      evenScaleShadowUnder
     >
       {children}
     </OfficePictureEffectsFrame>

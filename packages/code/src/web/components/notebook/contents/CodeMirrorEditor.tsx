@@ -14694,6 +14694,8 @@ function CodeMirrorEditorMounted({
 
       <div
         ref={hostRef}
+        // Code keeps its ltr geometry under an rtl interface.
+        dir="ltr"
         onContextMenu={(event) => {
           // VSCode-style right-click menu: suppress the native menu and open our
           // own at the pointer. Read-only viewer mode leaves the native menu

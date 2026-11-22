@@ -32,6 +32,7 @@ import {
   type OfficeShapeEffectsPaint,
 } from "@mrnote/core/web/lib/office-shape-effects-paint.ts";
 import { POWERPOINT_SHADOW_BLUR_DEVIATION } from "@mrnote/core/web/lib/office-shadow-effects.ts";
+import { resolveTextBoxFill, type TextBoxFillInput } from "@mrnote/core/web/lib/presentation-text-fill.ts";
 
 const EMU_PER_PX = 9525;
 
@@ -49,6 +50,12 @@ export interface PresentationTextBoxEffectsLook {
   readonly hostTurn: string;
   /** `-webkit-box-reflect` of the whole box ("" for none). */
   readonly reflect: string;
+}
+
+/** The box paints a frame: a fill (No Fill is none) or a line. */
+function textBoxFramePaints(record: Record<string, unknown>): boolean {
+  const fill = resolveTextBoxFill(record as TextBoxFillInput);
+  return (fill.fill !== null && fill.fill !== "none") || fill.outlineWidth > 0;
 }
 
 export function presentationTextBoxEffectsLook(
@@ -83,6 +90,15 @@ export function presentationTextBoxEffectsLook(
     gradientFill: typeof record.fillTo === "string",
     // Blurred as PowerPoint blurs a shape's shadow.
     shadowBlurDeviation: POWERPOINT_SHADOW_BLUR_DEVIATION,
+    // A box that paints a frame casts an evenly scaled shadow as its frame
+    // grown or shrunk about the alignment point (probe lf13-shscale); one
+    // that paints none -- No Fill and no line, though it is still a "box"
+    // (`hasBox`) -- casts it from its words, a drop shadow as before: as a
+    // silhouette it drew a grey box over a teardrop PowerPoint leaves white
+    
+    ...(options.hasFrame && textBoxFramePaints(record)
+      ? { scaledShadowSilhouette: { blurDeviation: POWERPOINT_SHADOW_BLUR_DEVIATION } }
+      : {}),
   });
   if (!paint) return null;
   const filter = [paint.primitives.length ? options.filterUrl : "", ...paint.cssFilters].filter(Boolean).join(" ");

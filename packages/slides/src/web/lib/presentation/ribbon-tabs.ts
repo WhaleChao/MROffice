@@ -17,22 +17,7 @@ import type {
 } from "./presentation-ribbon-structure";
 import type { ShapeKind } from "@mrnote/core/web/lib/presentation-shapes.ts";
 
-export const PRESENTATION_WEB_RIBBON_TABS = [
-  "home",
-  "insert",
-  "draw",
-  "design",
-  "transitions",
-  "animations",
-  "slideshow",
-  // B395: the owner's product scope is these permanent tabs (Help left the
-  
-  // (PPT-A001 / F007) is a contextual tab instead -- see
-  // `presentationContextualRibbonTabs` -- shown while the recording studio is
-  // open or a recording runs, and while a camera (Cameo) object is selected.
-  "review",
-  "view",
-] as const;
+export const PRESENTATION_WEB_RIBBON_TABS = ["home", "insert"] as const;
 
 /*
  * Animations > Advanced Animation follows desktop PowerPoint (PPT-A089):
@@ -43,22 +28,7 @@ export const PRESENTATION_WEB_RIBBON_TABS = [
 
 export type PresentationBaseRibbonTab = (typeof PRESENTATION_WEB_RIBBON_TABS)[number];
 
-export const PRESENTATION_CONTEXTUAL_RIBBON_TABS = [
-  "shape-format",
-  "camera-format",
-  "image-format",
-  "graphic-format",
-  "chart-design",
-  "chart-format",
-  "media-format",
-  "media-playback",
-  "smartart-design",
-  "smartart-format",
-  "table-design",
-  "table-layout",
-  "equation",
-  "record",
-] as const satisfies readonly PresentationContextualRibbonTab[];
+export const PRESENTATION_CONTEXTUAL_RIBBON_TABS = [] as const satisfies readonly PresentationContextualRibbonTab[];
 
 /**
  * The Slide Master tab (PPT-B030): PowerPoint shows it first, and selects it,

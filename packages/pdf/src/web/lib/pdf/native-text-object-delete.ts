@@ -363,3 +363,26 @@ function restoredPens(
   return Object.freeze({ ...last, ...(pens.length > 0 ? { precedingShows: Object.freeze(pens) } : {}) });
 }
 
+/**
+ * The page's content streams of two files of the same content (the version
+ * the server rewrote as another file, and the bytes a queued delete wrote
+ * when it was planned): what a delete that no longer reads as its run is
+ * stood on (native-text-delete-retarget: sameContentStreams).
+ */
+export async function readPdfNativeSameContentDeleteStreams(input: {
+  readonly savedBytes: Uint8Array;
+  readonly plannedBytes: Uint8Array;
+  readonly pageNumber: number;
+}): Promise<Readonly<{
+  saved: readonly Readonly<{ ref: Readonly<{ objectNumber: number; generation: number }>; bytes: Uint8Array }>[];
+  planned: readonly Uint8Array[];
+}>> {
+  const { inspectMraiNativePageContentStreams } = await import("./engine/native/content-stream-transaction");
+  const saved = await inspectMraiNativePageContentStreams(input.savedBytes, input.pageNumber);
+  const planned = await inspectMraiNativePageContentStreams(input.plannedBytes, input.pageNumber);
+  return Object.freeze({
+    saved: saved.map((stream) => Object.freeze({ ref: Object.freeze({ objectNumber: stream.contentStream.objectNumber,
+      generation: stream.contentStream.generation }), bytes: Uint8Array.from(stream.streamBytes) })),
+    planned: planned.map((stream) => Uint8Array.from(stream.streamBytes)),
+  });
+}

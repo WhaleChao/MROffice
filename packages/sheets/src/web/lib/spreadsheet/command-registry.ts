@@ -104,7 +104,9 @@ export type SpreadsheetShortcutCommandId =
   | "print"
   // F7: Review > Spelling. In Edit mode it checks the entry being edited, so
   // it is consulted before the Edit-mode branches.
-  | "checkSpelling";
+  | "checkSpelling"
+  // Shift+F7: Review > Thesaurus on the active cell's word.
+  | "openThesaurus";
 
 /** The Ctrl+Shift+~ / ! / @ / # / $ / % / ^ number formats. */
 export type SpreadsheetShortcutNumberFormatCommand =
@@ -177,6 +179,7 @@ export const SPREADSHEET_KEYBINDINGS: readonly SpreadsheetKeybinding[] = [
   },
   { command: "openNameManager", stage: "chrome", key: "f3", mod: true, shift: false },
   { command: "checkSpelling", stage: "chrome", key: "f7", mod: false, shift: false },
+  { command: "openThesaurus", stage: "chrome", key: "f7", mod: false, shift: true },
   // Excel inserts the new worksheet before the active one.
   {
     command: "insertWorksheet",

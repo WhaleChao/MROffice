@@ -25,6 +25,7 @@ import { OverflowPunctuationHang } from "./overflowPunctuationHang";
 import { DocumentInlineAtomCaret } from "./inlineAtomCaret";
 import { PasteParagraphFormat } from "./pasteParagraphFormat";
 import { JoinedParagraphStyleRuns } from "./joinedParagraphStyleRuns";
+import { FloatAnchorsFollowParagraphs } from "./floatAnchorsFollowParagraphs";
 import { PasteSelectionEnd } from "./pasteSelectionEnd";
 import { PasteIntoList } from "./pasteIntoList";
 import { PlainTextBlankLines } from "./plainTextPaste";
@@ -2588,6 +2589,9 @@ export function createNativeDocumentPluginRegistry({
         PasteParagraphFormat,
         // Two paragraphs joined: the second's words take the first's style look.
         JoinedParagraphStyleRuns,
+        // A floating object goes where its anchor paragraph goes (Word's anchor):
+        // a whole paragraph deleted or cut takes it, a join or a part keeps it.
+        FloatAnchorsFollowParagraphs,
         // A paste ends at what it put in, never on an object after it.
         PasteSelectionEnd,
         // A pasted document's headings and tables stay out of the list

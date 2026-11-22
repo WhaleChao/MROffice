@@ -326,3 +326,13 @@ function wordBuiltInChartLook(
   const hex = (value: unknown) => (typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : undefined);
   return withOfficeAutomaticChartLine(look, hex(evidence?.line), hex(evidence?.frame));
 }
+
+/** Why an imported Word chart is drawn and never edited (`source.preserveReasons`,
+ * the server's reading generation 398): the preserve-only reading's gaps, one of
+ * them not a look -- as a deck chart's receipt says `editable: false`. `null`
+ * for every chart that takes an edit. */
+export function documentChartPreserveReasons(source: unknown): string[] | null {
+  if (!record(source) || !Array.isArray(source.preserveReasons)) return null;
+  const reasons = source.preserveReasons.filter((reason): reason is string => typeof reason === "string" && reason !== "");
+  return reasons.length ? reasons : null;
+}

@@ -25,7 +25,7 @@
  *
  * `window.__officeHangulEmOff = true` leaves every stack as it was.
  */
-import { isExcelCutFamily } from "./excel-cut-families";
+import { EXCEL_CUT_FAMILY_PREFIX, isExcelCutFamily } from "./excel-cut-families";
 import hangulEmFaces from "./hangul-em-faces.json";
 
 interface HangulEmManifest {
@@ -132,4 +132,26 @@ export function withHangulFallback(stack: string, ensure?: (family: string) => v
   if (at < 0) return stack;
   ensure?.("Malgun Gothic");
   return [...tokens.slice(0, at), `"${malgun.alias}"`, ...tokens.slice(at)].join(", ");
+}
+
+/**
+ * The sheet's own family for a Korean Office face's Hangul at its full em,
+ * or null: "MRAI Sheet 맑은 고딕", named in front of the face by a sheet's
+ * stack alone (lib/spreadsheet/native-typography `spreadsheetFontStack`).
+ * Windows Excel sets a Hangul syllable or jamo a whole em in every Korean
+ * face (lookwin p187-lw, 92 dots at 11 pt) where the stand-in draws 0.92 em:
+ * a Korean cell's line on the screen held 8% more than Excel's. It is
+ * declared with the face (substitutes.ts) from the same clone slices as
+ * the Docs family (`withHangulEmFaces`), which a sheet's stack never names,
+ * and it takes the sheet's cut-family prefix (excel-cut-families.ts): every
+ * reader of a stack's face passes over it to the face it is named for
+ * (`stackPrimaryFamily`, face-index `leadingFamily`, `excelCutFamilyFace`).
+ * A face that has a cut family of its own keeps that one (the stack builder
+ * names one or the other; no Korean face has a cut family).
+ */
+export function sheetHangulEmFamily(face: string | null | undefined): string | null {
+  if (!face || hangulEmOff() || isExcelCutFamily(face) || isHangulEmAlias(face)) return null;
+  const name = unquote(face);
+  if (!hangulEmFamilyOf(name)) return null;
+  return `${EXCEL_CUT_FAMILY_PREFIX}${name}`;
 }

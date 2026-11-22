@@ -20,6 +20,8 @@
 
 
 
+
+
 /*!
  * MR Office - https://mroffice.ai
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
@@ -33,11 +35,8 @@ export interface NotebookInteriorFacts {
   readonly own: boolean | null;
   /** The person's effective plan code ("free", "plus", "pro", ...). */
   readonly plan: string | null;
-  /** The person's saved choice for their own notebooks (paid plans only). */
+  /** The person's saved choice (this device's, else the account's). */
   readonly preference: NotebookInteriorMode | null;
-  /** The notebook was already shared when sharing left the Free plan
-   * (`collaboration_grandfathered_at`): its collaboration keeps working. */
-  readonly grandfathered?: boolean;
 }
 
 export interface NotebookInteriorResolution {
@@ -45,8 +44,6 @@ export interface NotebookInteriorResolution {
   readonly mode: NotebookInteriorMode | null;
   /** The person may switch this notebook between the two designs. */
   readonly canSwitch: boolean;
-  /** Switching to the workbench here needs a paid plan. */
-  readonly workbenchNeedsUpgrade: boolean;
 }
 
 export function isPaidPlan(plan: string | null | undefined): boolean {
@@ -58,24 +55,24 @@ export function resolveNotebookInteriorMode(
   facts: NotebookInteriorFacts,
 ): NotebookInteriorResolution {
   if (facts.own === false) {
-    return { mode: "workbench", canSwitch: false, workbenchNeedsUpgrade: false };
+    return { mode: facts.preference ?? "workbench", canSwitch: true };
   }
   if (facts.own === null || facts.plan === null) {
-    return { mode: null, canSwitch: false, workbenchNeedsUpgrade: false };
-  }
-  if (!isPaidPlan(facts.plan)) {
-    
-    // workbench: nobody is taken out of an active collaboration.
-    if (facts.grandfathered) {
-      return { mode: "workbench", canSwitch: false, workbenchNeedsUpgrade: false };
-    }
-    return { mode: "classic", canSwitch: false, workbenchNeedsUpgrade: true };
+    return { mode: null, canSwitch: false };
   }
   return {
-    mode: facts.preference ?? "workbench",
+    mode: facts.preference ?? (isPaidPlan(facts.plan) ? "workbench" : "classic"),
     canSwitch: true,
-    workbenchNeedsUpgrade: false,
   };
+}
+
+
+
+
+export function resolveOfficeInteriorMode(
+  choice: NotebookInteriorMode | null,
+): NotebookInteriorResolution {
+  return { mode: choice ?? "classic", canSwitch: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -203,6 +200,35 @@ export function clearNotebookInteriorPreference(accountKey: string): void {
       }),
     );
   }
+}
+
+const OFFICE_CHOICE_KEY_PREFIX = "mroffice.workspaceInterior.";
+
+/** The design an MR Office workspace was last switched to on this device. */
+export function readOfficeNotebookInterior(
+  notebookId: string,
+): NotebookInteriorMode | null {
+  return asMode(readStorage(OFFICE_CHOICE_KEY_PREFIX + notebookId));
+}
+
+export function writeOfficeNotebookInterior(
+  notebookId: string,
+  mode: NotebookInteriorMode,
+): void {
+  if (readOfficeNotebookInterior(notebookId) === mode) return;
+  writeStorage(OFFICE_CHOICE_KEY_PREFIX + notebookId, mode);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(NOTEBOOK_INTERIOR_PREFERENCE_EVENT, {
+        detail: { notebookId, mode, office: true },
+      }),
+    );
+  }
+}
+
+/** The key of an MR Office workspace's choice (other tabs hear it change). */
+export function isOfficeNotebookInteriorKey(key: string | null): boolean {
+  return Boolean(key?.startsWith(OFFICE_CHOICE_KEY_PREFIX));
 }
 
 export function readLastNotebookInteriorMode(

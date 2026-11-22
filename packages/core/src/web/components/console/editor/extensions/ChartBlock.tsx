@@ -99,6 +99,7 @@ import {
   documentChartSize,
   documentChartParagraphAlignment,
   normalizeDocumentChartHost,
+  documentChartPreserveReasons,
 } from "./documentChartHost";
 import { chartPreset } from "./chartPresets";
 import { chartPictureSeriesColors } from "../../../../lib/office-charts/chart-picture-client";
@@ -375,8 +376,12 @@ export function ChartBlockView(props: NodeViewProps) {
   }, [editor, getPos]);
   const workbookErrorRef=useRef<string|null>(null);
   const setWorkbookError=useCallback((error:string|null)=>{workbookErrorRef.current=error;},[]);
+  // A Word chart drawn from the preserve-only reading takes no edit
+  // (`source.preserveReasons`): its part keeps what the model has no words
+  // for, and the save declines every change to it, as the deck's does.
+  const preserved = documentChartPreserveReasons(rawAttrs.source) !== null;
   const [editable, setEditable] = useState(
-    () => !editor.isDestroyed && editor.isEditable,
+    () => !editor.isDestroyed && editor.isEditable && !preserved,
   );
   const [previewStylePreset, setPreviewStylePreset] =
     useState<ChartStylePresetId | null>(null);
@@ -429,6 +434,7 @@ export function ChartBlockView(props: NodeViewProps) {
         !editor.isEditable ||
         typeof position !== "number" ||
         editor.state.doc.nodeAt(position)?.type !== node.type ||
+        documentChartPreserveReasons(node.attrs.source) !== null ||
         // An imported Office 2016 chart opens only when its own part seeds a
         // grid that reads back as the numbers that part holds. Imported classic
         // charts keep their own editor, which their writer rebuilds from
@@ -534,7 +540,7 @@ export function ChartBlockView(props: NodeViewProps) {
 
   useEffect(() => {
     const syncEditable = () => {
-      const next = !editor.isDestroyed && editor.isEditable;
+      const next = !editor.isDestroyed && editor.isEditable && !preserved;
       setEditable(next);
       if (!next && editing) closeDataEditor();
     };
@@ -544,7 +550,8 @@ export function ChartBlockView(props: NodeViewProps) {
       editor.off("update", syncEditable);
       editor.off("transaction", syncEditable);
     };
-  }, [closeDataEditor, editing, editor]);
+    // A chart that becomes preserved (or stops being) is read again at once.
+  }, [closeDataEditor, editing, editor, preserved]);
 
   const restoreChartFocus = useCallback(() => {
     if (editor.isDestroyed) return;
@@ -825,7 +832,8 @@ export function ChartBlockView(props: NodeViewProps) {
       if (
         editor.isDestroyed ||
         !editor.isEditable ||
-        typeof position !== "number"
+        typeof position !== "number" ||
+        documentChartPreserveReasons(editor.state.doc.nodeAt(position)?.attrs.source) !== null
       ) {
         return;
       }
@@ -1303,7 +1311,7 @@ const ChartBlock = Node.create({
     const deleteElement = () => {
       if (!this.editor.isEditable) return false;
       const chart = selectedChartNode(this.editor, this.name);
-      if (!chart) return false;
+      if (!chart || documentChartPreserveReasons(chart.node.attrs.source) !== null) return false;
       // A whole series selected: it leaves the chart, as Word's Delete and
       // Select Data > Remove take it -- its cells stay in the chart's sheet,
       // outside the range the chart reads (`chartWorkbookWithoutSeries`).
@@ -1374,7 +1382,7 @@ const ChartBlock = Node.create({
     // F2 on a selected title or axis title: its words, every character selected.
     const editTitle = () => {
       const chart = selectedChartNode(this.editor, this.name);
-      if (!chart || !this.editor.isEditable) return false;
+      if (!chart || !this.editor.isEditable || documentChartPreserveReasons(chart.node.attrs.source) !== null) return false;
       const area = officeChartSelectedArea(chart.key);
       const axis = area ? /^axisTitle:(category|value)$/.exec(area) : null;
       const kind: ChartTextPart | null =

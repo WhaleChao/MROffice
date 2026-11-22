@@ -47,7 +47,7 @@ import type {
   LedgerPlanStop,
 } from "./ledgerTypes";
 
-import { balancedColumnHeightPx } from "../unequalColumnProjection";
+import { balancedColumnHeightPx, type ColumnLineBreak } from "../unequalColumnProjection";
 
 const EPSILON_PX = 1e-6;
 
@@ -76,11 +76,23 @@ function balancedSegmentHeightPx(
     splittable: piece.splittable,
     ...(piece.linePitchPx > 0 ? { lineHeightPx: piece.linePitchPx } : {}),
     ...(piece.continuesPrevious ? { continuesPrevious: true } : {}),
+    // A list of uneven lines is balanced at the breaks the projector
+    // balances it at (its drawn lines), whole in the segment as there.
+    ...(wholeAtomBreaksPx(atoms[piece.atom], piece, columns) ? { breaksPx: wholeAtomBreaksPx(atoms[piece.atom], piece, columns)!, splittable: true } : {}),
     minSplitLines: piece.minSplitLines,
     // Keep with next holds at a column seam as the projector applies it
     // (an anchored object's keepNext is no paragraph's: it costs no flow).
     ...(piece.complete && atoms[piece.atom]?.keepNext && !atoms[piece.atom]?.anchored ? { keepNext: true } : {}),
   })), wordLegacy ? { wordLegacy: true } : {});
+}
+
+function wholeAtomBreaksPx(
+  atom: LedgerAtom | undefined,
+  piece: SegmentPiece,
+  columns: number,
+): readonly ColumnLineBreak[] | null {
+  const breaks = atom?.regionBreaksPx;
+  return breaks && wholeAtomHeightsPx(atom, piece, columns) ? breaks : null;
 }
 
 function wholeAtomHeightsPx(
@@ -921,6 +933,21 @@ export function planLedgerPages(
       // then the cover's next-page section break -- the mark took a page of
       // its own and "Inhalt" landed on page 3, not 2).
       let forced = atom.forcedBreakAfter;
+      // A Top and Bottom picture taller than the page it opened keeps its
+      // paragraph's one line there under it too, past the foot as the
+      // picture already is (Windows Word 16, mode 15, docx-look/pc6/probes/fp
+      // fp-c: a 700 pt picture in a 697.89 pt body, its line on page 1).
+      const line = atoms[index];
+      if (
+        !forced && lastColumn && line?.lineUnderObjects === true && !line.hasNotes && !page.notesBelow &&
+        pageOpenedByItsObjects(page, atoms, index) && !lineUnderTallPictureOff()
+      ) {
+        page.placements.push({ atom: index, from: null, to: null });
+        page.usedPx += line.heightPx;
+        page.previous = line;
+        forced = line.forcedBreakAfter;
+        index += 1;
+      }
       while (!forced && index < atoms.length && isZeroBreakMarker(atoms[index])) {
         page.placements.push({ atom: index, from: null, to: null });
         forced = atoms[index].forcedBreakAfter;
@@ -1059,4 +1086,12 @@ function keepChainExtent(
     end += 1;
   }
   return { end, heightPx, creditPx: atoms[end].creditPx, heightBeforeTailPx };
+}
+
+/** `window.__docsLineUnderTallPictureOff = true`: the line of a paragraph
+ * whose Top and Bottom picture is taller than the page it opened goes on to
+ * the next page, as before (A/B). */
+function lineUnderTallPictureOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsLineUnderTallPictureOff?: boolean }).__docsLineUnderTallPictureOff === true;
 }

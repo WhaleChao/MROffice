@@ -15,7 +15,7 @@ import { useEffect, useState } from "react";
 
 import type { DocumentDesign } from "./document-design";
 import { documentDesignColors, documentDesignThemeId } from "./document-design";
-import type { OfficeThemeFileTheme } from "./office-theme-file";
+import type { OfficeThemeFileTheme } from "@/lib/office-theme-file";
 import {
   normalizeSpreadsheetNativeThemeColors,
   normalizeSpreadsheetNativeThemeEffects,

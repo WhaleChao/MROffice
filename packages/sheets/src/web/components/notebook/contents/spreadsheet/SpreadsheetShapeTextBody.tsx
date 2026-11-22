@@ -20,11 +20,13 @@ import { cellTextRunCss, cellTextRunsInRange } from "@mrnote/core/web/lib/presen
 import type { TextRun } from "@mrnote/core/web/lib/presentation-runs.ts";
 import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { wordEastAsianSingleLineFactor } from "@mrnote/core/web/lib/document-word-line-metrics.ts";
-import { wordFontLineMetrics, wordGridFontLineMetrics } from "@mrnote/core/web/components/console/editor/native-document/wordFontMetrics.ts";
+import { wordFontLineMetrics, wordGridFontLineMetrics, wordGridFontVerticals } from "@mrnote/core/web/components/console/editor/native-document/wordFontMetrics.ts";
+import { officeEastAsianWinLine } from "@mrnote/core/web/lib/office-fonts/office-east-asian-faces.ts";
 
 import {
   MAX_SHAPE_TEXT_SIZE,
   MIN_SHAPE_TEXT_SIZE,
+  type SpreadsheetShapeEmptyLine,
   type SpreadsheetShapeStyle,
 } from "@mrnote/core/web/lib/spreadsheet/shapes.ts";
 import {
@@ -46,6 +48,10 @@ import type { PresentationCellParagraphStyle } from "@mrnote/core/web/components
  * opened for typing and spread again when it closed.
  */
 export const SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT = 1.2;
+/** Windows Excel's single line of an East Asian face over its GDI ascent and descent (xlsx backlog bl8/lnex9). */
+const EXCEL_EAST_ASIAN_LINE = 1.3;
+/** The share of an East Asian face's ascent and descent its baseline's rise takes back from its descent. */
+const EXCEL_EAST_ASIAN_RISE = 0.175;
 
 /** CJK, kana and hangul: text Office sets on an East Asian line. */
 const EAST_ASIAN_TEXT = /[\u3000-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]/u;
@@ -71,11 +77,41 @@ export const SpreadsheetShapeEastAsianFaceContext = createContext<string | null>
 export function spreadsheetShapeEastAsianLine(fontStack: string): number | null {
   for (const token of fontStack.split(",")) {
     const family = token.trim().replace(/^["']|["']$/g, "");
+    // Windows Excel's own: 1.3 x the face's GDI ascent and descent (xlsx
+    // backlog bl8/lnex9: 游明朝 16 pt 26.88 pt apart, its Word box 1.10 em
+    // would stand them 22.9).
+    const windows = officeEastAsianWinLine(family);
+    if (windows) return EXCEL_EAST_ASIAN_LINE * (windows.ascent + windows.descent);
     if (!EAST_ASIAN_FACE.test(family)) continue;
     const metrics = wordFontLineMetrics(family);
     if (metrics) return metrics.box * wordEastAsianSingleLineFactor(family);
   }
   return null;
+}
+
+/**
+ * The East Asian line of a shape's runs that draw East Asian text in a face
+ * of their own (reading row 995: a run whose `a:ea` names another face than
+ * its `a:latin` is read as its script pieces, the Han and kana in the East
+ * Asian face), per em, with that face: the tallest, else null. Windows Excel
+ * stands a line holding them on that face's line -- 1.3 x its GDI ascent and
+ * descent -- and its baseline by that face's rise (xlsx backlog bl8/lnex9:
+ * Calibri with `a:ea` 游明朝 at 16 pt, "J17A漢字" lines 26.88 pt apart).
+ */
+export function spreadsheetShapeRunsEastAsianLine(
+  runs: readonly TextRun[] | null | undefined,
+): { line: number; face: string } | null {
+  let best: { line: number; face: string } | null = null;
+  for (const run of runs ?? []) {
+    const family = run.style?.fontFamily;
+    if (!family || !EAST_ASIAN_TEXT.test(run.text)) continue;
+    const face = stackPrimaryFamily(family);
+    const windows = officeEastAsianWinLine(face);
+    if (!windows) continue;
+    const line = EXCEL_EAST_ASIAN_LINE * (windows.ascent + windows.descent);
+    if (!best || line > best.line) best = { line, face };
+  }
+  return best;
 }
 
 /**
@@ -88,12 +124,83 @@ export function spreadsheetShapeEastAsianLine(fontStack: string): number | null 
  * Office's lines, `framed` a SmartArt label's own box) or an unknown face.
  */
 export function spreadsheetShapeSingleLine(shape: SpreadsheetShapeStyle, framed = false): number {
-  if (framed || shape.smartArtStyle !== undefined) return SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT;
-  const face = shape.textFontFamily ? stackPrimaryFamily(shape.textFontFamily) : undefined;
-  if (!face || !normalizeOfficeTextLayout(shape.textLayout)?.bodyPr) return SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT;
+  const face = spreadsheetShapeLineFace(shape, framed);
+  if (!face) return SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT;
+  // An East Asian face's line is 1.3 x its GDI ascent and descent, its Latin
+  // lines' too (xlsx backlog bl8/lnex9: ＭＳ Ｐゴシック 16 pt "J11A" lines
+  // 20.76 pt apart, Meiryo 31.2).
+  const eastAsian = officeEastAsianWinLine(face);
+  if (eastAsian) return EXCEL_EAST_ASIAN_LINE * (eastAsian.ascent + eastAsian.descent);
   const metrics = wordGridFontLineMetrics(face);
   const line = metrics ? metrics.box + metrics.lineGap : NaN;
   return line >= 0.8 && line <= 3 ? line : SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT;
+}
+
+/**
+ * The face a shape read from Excel's file steps its lines by (its words'
+ * primary face, when the body is read), else undefined: a SmartArt shape's
+ * or a framed label's lines are Office's scene lines.
+ */
+function spreadsheetShapeLineFace(shape: SpreadsheetShapeStyle, framed = false): string | undefined {
+  if (framed || shape.smartArtStyle !== undefined) return undefined;
+  const face = shape.textFontFamily ? stackPrimaryFamily(shape.textFontFamily) : undefined;
+  return face && normalizeOfficeTextLayout(shape.textLayout)?.bodyPr ? face : undefined;
+}
+
+/**
+ * Each line's own end mark where the line is empty (`shape.textEmptyLines`,
+ * reading row 989): the size and face Windows Excel stands an empty line in
+ * -- its paragraph's `a:endParaRPr`, else 11 pt in the theme's body face --
+ * aligned with `text`'s lines; null when the label has none to draw (words
+ * typed since into another count of lines, or no empty line left).
+ */
+export function spreadsheetShapeEmptyLines(
+  shape: SpreadsheetShapeStyle,
+  text: string,
+): (SpreadsheetShapeEmptyLine | null)[] | null {
+  const stated = shape.textEmptyLines;
+  if (!stated?.length) return null;
+  const lines = text.split("\n");
+  if (lines.length !== stated.length) return null;
+  const drawn = stated.map((entry, index) => (entry && lines[index] === "" ? entry : null));
+  return drawn.some((entry) => entry !== null) ? drawn : null;
+}
+
+/**
+ * Each paragraph's end mark on its last line (`shape.textLineMarks`, reading
+ * row 997), aligned with `text`'s lines: the East Asian Office face's line
+ * (per em) and the baseline's rise, per em, Windows Excel holds a last line
+ * of East Asian text on where it is taller than the words' own (xlsx backlog
+ * bl10/lnmk: Han in a 游明朝 run's HG face, 18 pt, the last line 30.12 pt
+ * where the others are 23.4). Null when the label has none to draw.
+ */
+export function spreadsheetShapeLineMarks(
+  shape: SpreadsheetShapeStyle,
+  text: string,
+): ({ line: number; rise: number } | null)[] | null {
+  const stated = shape.textLineMarks;
+  if (!stated?.length) return null;
+  const lines = text.split("\n");
+  if (lines.length !== stated.length) return null;
+  const drawn = stated.map((entry, index) => {
+    const windows = entry && EAST_ASIAN_TEXT.test(lines[index] ?? "") ? officeEastAsianWinLine(entry.fontFamily) : undefined;
+    if (!windows) return null;
+    const sum = windows.ascent + windows.descent;
+    return { line: EXCEL_EAST_ASIAN_LINE * sum, rise: windows.descent - 0.175 * sum };
+  });
+  return drawn.some((entry) => entry !== null) ? drawn : null;
+}
+
+/**
+ * The single line, per em, an empty line stands in its own face: the face's
+ * line where the shape steps by faces (`spreadsheetShapeSingleLine`), else
+ * the label's.
+ */
+function spreadsheetEmptyLineSingle(shape: SpreadsheetShapeStyle, face: string | undefined, single: number): number {
+  if (!face || !normalizeOfficeTextLayout(shape.textLayout)?.bodyPr || shape.smartArtStyle !== undefined) return single;
+  const metrics = wordGridFontLineMetrics(face);
+  const line = metrics ? metrics.box + metrics.lineGap : NaN;
+  return line >= 0.8 && line <= 3 ? line : single;
 }
 
 /**
@@ -253,7 +360,14 @@ export function spreadsheetShapeEditorParagraphs(
   const fontSize = shapeTextSize(shape);
   const runSizes = shapeParagraphRunSizes(shape, text);
   return officeTextLayoutLines(text, layout).map((line, index) => {
-    const css = shapeTextLineCss(line, ownAlign ?? (textBox ? "left" : "center"), ownAlign, runSizes?.[index] ?? fontSize, spreadsheetShapeSingleLine(shape));
+    const css = shapeTextLineCss(
+      line,
+      ownAlign ?? (textBox ? "left" : "center"),
+      ownAlign,
+      runSizes?.[index] ?? fontSize,
+      spreadsheetShapeSingleLine(shape),
+      spreadsheetShapeLineFace(shape),
+    );
     if (runSizes?.[index] !== undefined && runSizes[index] !== fontSize) css.block.fontSize = `${runSizes[index]}px`;
     return {
       block: css.block,
@@ -296,13 +410,24 @@ function spreadsheetShapeRunSpans(
   eastAsianFace: string | null,
 ): ReactNode {
   const text = runs.map((run) => run.text).join("");
+  // The deck's run renderer keeps a run's stated bold / italic only when on,
+  // so a run stated off would wear the label's: where every run states its
+  // own, the label's is no run's (R467-X69: a text box whose first run alone
+  // is bold, its label marked bold for it, drew every paragraph bold).
+  const statesAll = (flag: "bold" | "italic") =>
+    runs.every((run) => run.style !== undefined && Object.prototype.hasOwnProperty.call(run.style, flag));
+  const runBase: CSSProperties = {
+    ...base,
+    ...(statesAll("bold") && Number(base.fontWeight) >= 600 ? { fontWeight: 400 } : {}),
+    ...(statesAll("italic") && base.fontStyle === "italic" ? { fontStyle: "normal" } : {}),
+  };
   return (
     <span key={key} data-spreadsheet-shape-run="">
       <PresentationRunsText
         text={text}
         runs={runs}
         runCss={(style) => {
-          const css = cellTextRunCss(style, base);
+          const css = cellTextRunCss(style, runBase);
           if (style?.fontFamily) css.fontFamily = spreadsheetShapeFontStack(style.fontFamily, eastAsianFace);
           return css;
         }}
@@ -375,7 +500,10 @@ export function SpreadsheetShapeTextBody({
   const [eastAsianLine, setEastAsianLine] = useState<number | null>(null);
   useLayoutEffect(() => {
     const node = bodyRef.current;
-    const next = eastAsian && node ? spreadsheetShapeEastAsianLine(getComputedStyle(node).fontFamily) : null;
+    const stack = eastAsian && node ? spreadsheetShapeEastAsianLine(getComputedStyle(node).fontFamily) : null;
+    // A run's own East Asian face's line, where it is taller (reading row 995).
+    const own = eastAsian ? spreadsheetShapeRunsEastAsianLine(runsSpelling(shape.textRuns, text)) : null;
+    const next = own && own.line > (stack ?? 0) ? own.line : stack;
     setEastAsianLine((current) => (current === next ? current : next));
   }, [eastAsian, text, shape.textFontFamily, shape.textRuns, eastAsianFace]);
   // A clipped body (`a:bodyPr@vertOverflow` clip / ellipsis) as Windows
@@ -437,11 +565,22 @@ export function SpreadsheetShapeTextBody({
   // path is one anonymous flex item that already shrinks to its longest
   // line, so centring the row centres that box.
   const anchorCtr = body?.anchorCtr === true;
-  const drawsLayout = lines.some(
+  // An empty line standing in its own end mark is drawn as a line of its
+  // own (reading row 989), as a laid-out label's lines are.
+  const emptyLines = spreadsheetShapeEmptyLines(shape, text);
+  // A paragraph's last line holding its end mark (reading row 997).
+  const lineMarks = !framed && shape.smartArtStyle === undefined ? spreadsheetShapeLineMarks(shape, text) : null;
+  const drawsLayout = emptyLines !== null || lineMarks !== null || lines.some(
     (line) => line.marker !== null || line.marginPx !== 0 || line.align || lineSpaced(line),
   );
   const fontSize = shapeTextSize(shape);
   const single = spreadsheetShapeSingleLine(shape, framed);
+  const lineFace = spreadsheetShapeLineFace(shape, framed);
+  // The face whose line and rise a line of East Asian text stands on when a
+  // run draws that text in its own East Asian face (reading row 995).
+  const runsEastAsian = !framed && shape.smartArtStyle === undefined && lineFace
+    ? spreadsheetShapeRunsEastAsianLine(runs)
+    : null;
   const font = officeShapeTextFontCss(shape, {
     familyStack: (family) => spreadsheetShapeFontStack(family, eastAsianFace),
     boldByDefault: Boolean(shape.textArt),
@@ -483,8 +622,26 @@ export function SpreadsheetShapeTextBody({
             fallbackAlign={ownAlign ?? (textBox ? "left" : "center")}
             ownAlign={ownAlign}
             fontSize={fontSize}
-            runSize={paragraphRunSizes?.[index]}
-            single={single}
+            runSize={emptyLines?.[index]?.size ?? paragraphRunSizes?.[index]}
+            mark={lines.length === lineMarks?.length ? lineMarks?.[index] ?? undefined : undefined}
+            single={
+              runsEastAsian && eastAsianLine === runsEastAsian.line && EAST_ASIAN_TEXT.test(line.text)
+                ? Math.max(single, runsEastAsian.line)
+                : single
+            }
+            face={
+              runsEastAsian && eastAsianLine === runsEastAsian.line && EAST_ASIAN_TEXT.test(line.text)
+                ? runsEastAsian.face
+                : lineFace
+            }
+            emptyFace={
+              emptyLines?.[index]?.fontFamily
+                ? {
+                    stack: spreadsheetShapeFontStack(emptyLines[index]!.fontFamily!, eastAsianFace),
+                    single: spreadsheetEmptyLineSingle(shape, emptyLines[index]!.fontFamily, single),
+                  }
+                : undefined
+            }
             words={
               lineRuns?.[index]?.length
                 ? spreadsheetShapeRunSpans(lineRuns[index]!, font, `line${index}`, eastAsianFace)
@@ -605,7 +762,63 @@ function shapeLineMarkerText(line: OfficeTextLine): string {
 
 /** Whether a line states its own paragraph spacing. */
 function lineSpaced(line: OfficeTextLine): boolean {
-  return line.lineSpacing !== undefined || Boolean(line.spaceBeforePx) || Boolean(line.spaceAfterPx);
+  return (
+    line.lineSpacing !== undefined ||
+    line.lineSpacingPoints !== undefined ||
+    Boolean(line.spaceBeforePx) ||
+    Boolean(line.spaceAfterPx)
+  );
+}
+
+/**
+ * A line's Line Spacing > Exactly as Windows Excel stands a worksheet
+ * shape's (reading row 991): whole points, half up (14.4 stands 14, 14.5
+ * stands 15; xlsx backlog bl6/lnex), in CSS px. Undefined without one.
+ */
+export function spreadsheetShapeExactLinePx(line: Pick<OfficeTextLine, "lineSpacing" | "lineSpacingPoints">): number | undefined {
+  if (line.lineSpacing !== undefined || line.lineSpacingPoints === undefined) return undefined;
+  return ptToPx(Math.floor(line.lineSpacingPoints + 0.5));
+}
+
+/**
+ * How far (CSS px, down) a spaced line's words move from where CSS stands
+ * them to where Windows Excel does: CSS centres the face's ascent and descent
+ * in the line (half-leading); Excel stands the baseline three quarters down
+ * a Multiple other than single and an Exactly line (the first line's too;
+ * xlsx backlog bl5/lnspc, bl6/lnex), and an Exactly line shorter than its
+ * type's own line keeps the type's descent under the baseline when a quarter
+ * of the line is less (Arial 12 at 12 pt: 9.5 pt down, not 9). Zero for a
+ * single line or a face whose lines are not recorded.
+ */
+export function spreadsheetShapeLineBaselineShift(
+  line: Pick<OfficeTextLine, "lineSpacing" | "lineSpacingPoints">,
+  face: string | undefined,
+  sizePx: number,
+  single: number,
+): number {
+  const exact = spreadsheetShapeExactLinePx(line);
+  const multiple = line.lineSpacing;
+  const eastAsian = face ? officeEastAsianWinLine(face) : undefined;
+  if (!eastAsian && exact === undefined && (multiple === undefined || Math.abs(multiple - 1) < 1e-9)) return 0;
+  if (!face || !(sizePx > 0)) return 0;
+  const metrics = wordGridFontLineMetrics(face);
+  const verticals = wordGridFontVerticals(face);
+  if (!metrics || !verticals || !(metrics.box > 0) || !(verticals.descent >= 0) || verticals.descent >= metrics.box) return 0;
+  const pitch = exact ?? single * (multiple ?? 1) * sizePx;
+  const cssBaseline = (pitch - metrics.box * sizePx) / 2 + (metrics.box - verticals.descent) * sizePx;
+  const own = (metrics.box + metrics.lineGap) * sizePx;
+  // An East Asian face: three quarters down less its rise, (descent - 0.175 x
+  // ascent and descent) of its size, single and Multiple alike; Exactly never
+  // lower than three quarters (xlsx backlog bl8/lnex8-9: 游明朝 16 pt in 11
+  // 1.0 pt above, Meiryo 2.83; ＭＳ 明朝 and Meiryo UI at three quarters).
+  const rise = eastAsian
+    ? (eastAsian.descent - EXCEL_EAST_ASIAN_RISE * (eastAsian.ascent + eastAsian.descent)) * sizePx
+    : 0;
+  const excelBaseline = eastAsian
+    ? 0.75 * pitch - (exact !== undefined ? Math.max(0, rise) : rise)
+    : exact !== undefined && pitch < own ? pitch - Math.min(0.25 * pitch, verticals.descent * sizePx) : 0.75 * pitch;
+  const shift = excelBaseline - cssBaseline;
+  return Number.isFinite(shift) && Math.abs(shift) > 0.01 ? shift : 0;
 }
 
 /**
@@ -621,19 +834,28 @@ function shapeTextLineCss(
   ownAlign: "left" | "center" | "right" | "justify" | undefined,
   fontSize: number,
   single: number = SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT,
+  face?: string,
 ): { block: CSSProperties; marker: CSSProperties } {
   const gutter = line.indentPx < 0 ? -line.indentPx : 0;
+  const exact = spreadsheetShapeExactLinePx(line);
+  // The words where Windows Excel stands them in a spaced line (reading row
+  
+  const shift = spreadsheetShapeLineBaselineShift(line, face, fontSize, single);
   return {
     block: {
       display: "block",
       marginInlineStart: line.marginPx ? `${line.marginPx}px` : undefined,
       textIndent: line.indentPx ? `${line.indentPx}px` : undefined,
       textAlign: ownAlign ?? ((line.align && CSS_ALIGN[line.align]) || fallbackAlign),
-      // Paragraph ▸ Spacing: Before / After and Line Spacing (Multiple).
+      // Paragraph ▸ Spacing: Before / After and Line Spacing (Multiple,
+      // or Exactly in whole points).
       lineHeight:
-        line.lineSpacing !== undefined
-          ? single * line.lineSpacing
-          : undefined,
+        exact !== undefined
+          ? `${exact}px`
+          : line.lineSpacing !== undefined
+            ? single * line.lineSpacing
+            : undefined,
+      ...(shift ? { position: "relative" as const, top: `${shift}px` } : {}),
       marginBlockStart: line.spaceBeforePx ? `${line.spaceBeforePx}px` : undefined,
       marginBlockEnd: line.spaceAfterPx ? `${line.spaceAfterPx}px` : undefined,
     },
@@ -669,8 +891,19 @@ function ShapeTextLine({
   words,
   eastAsianLine = null,
   single = SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT,
+  emptyFace,
+  face,
+  mark,
 }: {
   line: OfficeTextLine;
+  /** The paragraph's end mark on its last line (`textLineMarks`): its
+   * East Asian line and rise, per em. */
+  mark?: { line: number; rise: number };
+  /** The face the shape steps its lines by (`spreadsheetShapeLineFace`). */
+  face?: string;
+  /** An empty line's own end-mark face (`textEmptyLines`): its font stack
+   * and its single line, per em. */
+  emptyFace?: { stack: string; single: number };
   /** The paragraph's own font size (shapeParagraphRunSizes), when its runs state one. */
   runSize?: number;
   /** Office's East Asian line, per em, for a line holding East Asian text;
@@ -686,10 +919,25 @@ function ShapeTextLine({
   /** The body's single line, per em (`spreadsheetShapeSingleLine`). */
   single?: number;
 }) {
-  const css = shapeTextLineCss(line, fallbackAlign, ownAlign, runSize ?? fontSize, single);
+  const exact = spreadsheetShapeExactLinePx(line) !== undefined;
+  const css = shapeTextLineCss(
+    line,
+    fallbackAlign,
+    ownAlign,
+    runSize ?? fontSize,
+    single,
+    // An East Asian line and an empty line in its own face keep their CSS,
+    // but a line in an East Asian face of Office's own lines.
+    (eastAsianLine && !officeEastAsianWinLine(face)) || (emptyFace && !line.text) ? undefined : face,
+  );
   if (runSize !== undefined && runSize !== fontSize) css.block.fontSize = `${runSize}px`;
-  if (eastAsianLine !== null) {
+  // An Exactly line stands its own height whatever its type (reading row 991).
+  if (eastAsianLine !== null && !exact) {
     css.block.lineHeight = Math.max(single, eastAsianLine) * (line.lineSpacing ?? 1);
+  }
+  if (emptyFace && !line.text) {
+    css.block.fontFamily = emptyFace.stack;
+    if (!exact) css.block.lineHeight = emptyFace.single * (line.lineSpacing ?? 1);
   }
   return (
     <span data-spreadsheet-shape-line={line.marker === null ? "plain" : "marked"} style={css.block}>
@@ -699,6 +947,21 @@ function ShapeTextLine({
         </span>
       ) : null}
       {words ?? (line.text || "\u200b")}
+      {mark && !exact && (line.lineSpacing ?? 1) === 1 && line.text ? (
+        // The mark's line on the last line only: an empty box as tall as it,
+        // its foot the line's quarter and rise below the baseline (the
+        // server's `_hold_paragraph_mark`).
+        <span
+          aria-hidden="true"
+          data-spreadsheet-shape-mark=""
+          style={{
+            display: "inline-block",
+            width: 0,
+            height: `${mark.line}em`,
+            verticalAlign: `${-(0.25 * mark.line + mark.rise)}em`,
+          }}
+        />
+      ) : null}
     </span>
   );
 }

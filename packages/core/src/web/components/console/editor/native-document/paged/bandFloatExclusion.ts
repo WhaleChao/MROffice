@@ -118,6 +118,37 @@ function bandFloorOff(view: EditorView): boolean {
   return (view.dom.ownerDocument.defaultView as (Window & { __dqc2BandFloorOff?: boolean }) | null)?.__dqc2BandFloorOff === true;
 }
 
+/** Each sheet's band box in this editor's band overlay, by its
+ * `data-band-sheet-index` (the first in document order, as one lookup took). */
+export type BandBoxesBySheet = ReadonlyMap<string, HTMLElement>;
+
+/**
+ * The band boxes of this editor's overlay, read once for all the sheets of a
+ * plan: searched sheet by sheet, the boxes were walked once per sheet -- the
+ * pages squared (R492-D04's 1 886 pages: 22 s of a print's 850 s in the
+ * ledger's capacities). Null when there is no overlay.
+ */
+export function bandBoxesBySheet(view: EditorView): BandBoxesBySheet | null {
+  const overlay = bandOverlay(view);
+  if (!overlay) return null;
+  const boxes = new Map<string, HTMLElement>();
+  for (const box of overlay.querySelectorAll<HTMLElement>(".sheet-band-box[data-band-sheet-index]")) {
+    const index = box.dataset.bandSheetIndex;
+    if (index !== undefined && !boxes.has(index)) boxes.set(index, box);
+  }
+  return boxes;
+}
+
+/** Sheet `sheetIndex`'s band box, searched for it alone. */
+function bandBoxOf(view: EditorView, sheetIndex: number): HTMLElement | null {
+  const overlay = bandOverlay(view);
+  if (!overlay) return null;
+  for (const candidate of overlay.querySelectorAll<HTMLElement>(".sheet-band-box[data-band-sheet-index]")) {
+    if (candidate.dataset.bandSheetIndex === String(sheetIndex)) return candidate;
+  }
+  return null;
+}
+
 /**
  * Where the body of sheet `sheetIndex` ends for the text, from the body's
  * top (px), when a header or footer object wraps with no strip beside it
@@ -128,19 +159,17 @@ function bandFloorOff(view: EditorView): boolean {
  * whole body, the plan put a block there that fits by its height, the page
  * drew it lower and spilled, the plan put it back -- a cycle on every key
  * (R484-D04 p9/p10: a tab-only paragraph, 27.6 px planned, 32.6 px and past
- * the foot when drawn after the footer's exclusion).
+ * the foot when drawn after the footer's exclusion). `boxes`: the overlay's
+ * boxes read once for every sheet of a plan (`bandBoxesBySheet`).
  */
-export function bandBodyFloorPx(view: EditorView, sheetIndex: number, sheet: HTMLElement): number | null {
+export function bandBodyFloorPx(
+  view: EditorView,
+  sheetIndex: number,
+  sheet: HTMLElement,
+  boxes?: BandBoxesBySheet | null,
+): number | null {
   if (bandFloorOff(view)) return null;
-  const overlay = bandOverlay(view);
-  if (!overlay) return null;
-  let box: HTMLElement | null = null;
-  for (const candidate of overlay.querySelectorAll<HTMLElement>(".sheet-band-box[data-band-sheet-index]")) {
-    if (candidate.dataset.bandSheetIndex === String(sheetIndex)) {
-      box = candidate;
-      break;
-    }
-  }
+  const box = boxes === undefined ? bandBoxOf(view, sheetIndex) : (boxes?.get(String(sheetIndex)) ?? null);
   if (!box || !box.querySelector("[data-band-wrap]")) return null;
   const style = getComputedStyle(sheet);
   const bodyHeight = sheet.offsetHeight - (Number.parseFloat(style.paddingTop) || 0) - (Number.parseFloat(style.paddingBottom) || 0);

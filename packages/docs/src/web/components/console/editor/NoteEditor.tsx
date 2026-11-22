@@ -5,6 +5,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { onlyofficeInitialZoom, onlyofficeOpensReflowed } from "@mrnote/core/web/lib/embed/onlyoffice-frame.ts";
 import { reloadPage as reloadWebPage } from "@mrnote/core/web/lib/reload-reason.ts";
 import { registerEditorDraftHandover } from "@mrnote/core/web/lib/editor-draft-handover.ts";
 import { refuseStrayNativeDragExcept } from "@mrnote/core/web/lib/native-drag-guard.ts";
@@ -673,6 +674,7 @@ import { DOCUMENT_OFFICE_DATA, documentEditorBaseExtensions, documentLowlight } 
 import { PREVIEW_PAGE_WIDTH_INSET_PX, usePreviewPageFitZoom } from "./native-document/paged/usePreviewPageFitZoom";
 import { usePagedSurfaceZoomReserve } from "./native-document/paged/usePagedSurfaceZoomReserve";
 import { pageInterfaceLocale } from "@mrnote/core/web/lib/i18n/content-locale.ts";
+import { watchMobileWebObjects } from "@mrnote/core/web/lib/docs/mobile-web-fit.ts";
 
 /** The Docs body's dragstart guard: ProseMirror's own content keeps its drags. */
 const refuseDocumentStrayNativeDrag = refuseStrayNativeDragExcept(".ProseMirror");
@@ -2839,7 +2841,8 @@ export default function NoteEditor({
   // +/-/pinch action exits that view and returns to the manual bounds.
   // NOT persisted (per-window view pref that resets on close — document zoom
   // is a rare operation; persisting across sessions would be surprising).
-  const initialDocZoom = clampZoom(initialZoom ?? EDITOR_ZOOM_DEFAULT);
+  // An embedded editor's integration may name the zoom it opens at (lib/embed/onlyoffice-frame).
+  const initialDocZoom = clampZoom(initialZoom ?? onlyofficeInitialZoom() ?? EDITOR_ZOOM_DEFAULT);
   const lastManualDocZoomRef = useRef(initialDocZoom);
   const [docZoom, setDocZoom] = useState<number>(initialDocZoom);
   const onGuestZoomChangeRef = useRef(onGuestZoomChange);
@@ -2856,8 +2859,10 @@ export default function NoteEditor({
   const guestEditBaseRef = useRef<Record<string, unknown> | null>(null);
   const [docPageViewMode, setDocPageViewMode] =
     useState<DocumentPageViewMode>("single");
+  // An ONLYOFFICE mobile config opens reflowed (its Mobile view, standardView
+  // false): Web Layout, a view never saved.
   const [documentLayoutViewMode, setDocumentLayoutViewMode] =
-    useState<DocumentLayoutViewMode>("print");
+    useState<DocumentLayoutViewMode>(() => (onlyofficeOpensReflowed() ? "web" : "print"));
   const [documentSplitViewActive, setDocumentSplitViewActive] = useState(false);
   // Word for the web Reading View: the same document held read-only for this
   // session until the reader returns to Editing View. Session-only; never
@@ -7646,6 +7651,15 @@ export default function NoteEditor({
     return () => {
       runtimeRoot.removeAttribute("data-document-view-mode");
     };
+  }, [documentLayoutViewMode, editor]);
+
+  // A phone's Web Layout flows each placed object at its anchor; its drawing
+  // is fitted to the screen (lib/docs/mobile-web-fit.ts). Only in Web Layout.
+  useEffect(() => {
+    if (documentLayoutViewMode !== "web") return;
+    const runtimeRoot = editorDom(editor);
+    if (!runtimeRoot) return;
+    return watchMobileWebObjects(runtimeRoot);
   }, [documentLayoutViewMode, editor]);
 
   const captureSelectedPhysicalSheetAnchor = useCallback(() => {
@@ -12976,6 +12990,11 @@ export default function NoteEditor({
   useEffect(() => {
     docZoomNowRef.current = docZoom;
   }, [docZoom]);
+  // Web Layout wraps against the window: there is no paper to fit.
+  const layoutViewModeNowRef = useRef(documentLayoutViewMode);
+  useEffect(() => {
+    layoutViewModeNowRef.current = documentLayoutViewMode;
+  }, [documentLayoutViewMode]);
   useEffect(() => {
     if (previewMode || initialZoom !== undefined || !deviceHasTouch()) return;
     const wrapper = wrapperRef.current;
@@ -12983,7 +13002,7 @@ export default function NoteEditor({
     let fitted: number | null = null;
     let done = false;
     const fit = () => {
-      if (done) return;
+      if (done || layoutViewModeNowRef.current !== "print") return;
       // The reader zoomed since the last fit: their zoom stays.
       if (fitted !== null && Math.abs(docZoomNowRef.current - fitted) > 0.005) {
         done = true;

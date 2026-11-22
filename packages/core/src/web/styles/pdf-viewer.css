@@ -5618,6 +5618,18 @@ textarea[data-pdf-native-text-format-preview="true"] + [data-office-inactive-sel
   opacity: 1;
 }
 
+/* Narrower, the body is one column and the collapsed annotations bar a row
+   of its own under the page: the page's row takes the height, the bar its
+   own. Both rows were auto, and WebKit shared the free height between them
+   -- on an iPhone the PDF ended a third of the way up its window, the rest
+   an empty band (Safari, iOS 26 simulator; Playwright WebKit). */
+@media (max-width: 860px) {
+  .pdf-page-window
+    .pdf-page-window__body.pdf-page-window__body--annotations-collapsed {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+}
+
 @media (min-width: 861px) {
   .pdf-page-window
     .pdf-page-window__body.pdf-page-window__body--annotations-open {

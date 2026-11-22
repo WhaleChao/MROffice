@@ -2,13 +2,13 @@
 
 <p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
-<p align="center"><b>Editor sumber terbuka MR Office — dokumen, lembar kerja, presentasi, PDF, tulisan tangan, dan kode — yang berjalan di peramban.</b></p>
+<p align="center"><b>Editor open-source MR Office, editor yang paling dekat dengan Microsoft Office — dokumen, spreadsheet, presentasi, PDF, dan kode — berjalan di browser.</b></p>
 
 <p align="center"><a href="https://mroffice.ai/id"><b>▶ Coba online</b></a> · <a href="https://mroffice.ai/id/office/download"><b>⬇ Unduh</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/id/developers">🧑‍💻 Pengembang</a> · <a href="https://mroffice.ai/id/developers/embed">🧩 Sematkan</a> · <a href="https://mroffice.ai/id/developers/mcp">🤖 MCP untuk aplikasi AI</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 SDK npm</a> · <a href="https://mroffice.ai/id/developers/oauth">🔑 Masuk dengan MR Office</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
-<p align="center"><a href="https://mroffice.ai/id"><img src="../docs/media/mr-office-demo.webp" alt="Editor sumber terbuka MR Office — dokumen, lembar kerja, presentasi, PDF, tulisan tangan, dan kode — yang berjalan di peramban." width="100%"></a></p>
+<p align="center"><a href="https://mroffice.ai/id"><img src="../docs/media/mr-office-demo.webp" alt="Editor open-source MR Office, editor yang paling dekat dengan Microsoft Office — dokumen, spreadsheet, presentasi, PDF, dan kode — berjalan di browser." width="100%"></a></p>
 
 <p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 Tonton tur 50 detik dengan suara</a></p>
 
@@ -22,12 +22,11 @@
 <td align="center" width="50%"><a href="https://mroffice.ai/id"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
 </tr>
 <tr>
-<td align="center" width="50%"><a href="https://mroffice.ai/id"><img src="../docs/screenshots/ink.png" alt="Tulisan tangan" width="100%"></a><br><b>Tulisan tangan</b></td>
 <td align="center" width="50%"><a href="https://mroffice.ai/id"><img src="../docs/screenshots/code.png" alt="Kode" width="100%"></a><br><b>Kode</b></td>
 </tr>
 </table>
 
-MR Office adalah ruang kerja untuk catatan, AI, dan file sungguhan. Repositori ini menerbitkan kode sumber editornya: editor yang sama dengan yang dijalankan MR Office, yang bisa Anda bangun, jalankan, dan sematkan sendiri. Ini adalah editor sumber terbuka, bukan paket perkantoran sumber terbuka yang lengkap: membaca dan menulis file Microsoft Office tetap ada di MR Office (lihat di bawah).
+MR Office adalah ruang kerja untuk catatan, AI, dan file sungguhan. Repositori ini menerbitkan kode sumber editornya: editor yang sama yang dijalankan MR Office, yang dapat Anda bangun, jalankan, dan sematkan sendiri. Bersama aplikasi desktop MR Office gratis atau embed terkelola, editor ini membuka dan menyimpan file Word, Excel, dan PowerPoint sungguhan.
 
 ## Untuk pengembang
 
@@ -35,7 +34,7 @@ Semua untuk pengembang ada di **[MR Office Developers](https://mroffice.ai/id/de
 
 ### Sematkan editor di aplikasi web Anda (disarankan)
 
-MR Office menghosting editor; server Anda menandatangani token sesi berumur pendek dan halaman Anda membuka editor dengannya. Editor ini mengedit file Word, Excel, PowerPoint, dan PDF yang sesungguhnya (.docx, .xlsx, .pptx, .pdf), dengan pengeditan bersama, unggahan, semua format ekspor, pencetakan, dan hasil simpan yang dikirim ke server Anda lewat callback bertanda tangan. Paket gratis: 1.000 sesi per bulan di localhost, 100 di domain Anda sendiri, hingga 2 aplikasi. Ini layanan komersial yang dihosting, jadi aplikasi Anda tidak terikat lisensi AGPL repositori ini.
+MR Office menghosting editor; server Anda menandatangani token sesi berumur pendek dan halaman Anda membuka editor. Editor ini mengedit file Word, Excel, PowerPoint, dan PDF sungguhan (.docx, .xlsx, .pptx, .pdf), dengan pengeditan bersama, unggahan, semua format ekspor, pencetakan, dan penyimpanan yang dikirim kembali ke server Anda dalam callback bertanda tangan. Paket gratis: 1.000 sesi per bulan di localhost, 100 di domain Anda sendiri, hingga 2 aplikasi. Sebagai layanan terkelola, ini tidak menimbulkan kewajiban AGPL pada aplikasi Anda sendiri.
 
 1. Di folder proyek Anda, jalankan `npx mroffice-embed init` (atau buat aplikasi di konsol pengembang): satu klik "Izinkan" di browser, dan kunci aplikasi ditulis ke `.env.local` / `.env`.
 2. Server Anda membuat token sesi dengan `createSessionToken` dari `mroffice-embed/server`; kunci rahasia tidak pernah meninggalkan server.
@@ -69,28 +68,27 @@ MR Office adalah server otorisasi OAuth 2.1 (PKCE, dokumen metadata ID klien, pe
 
 ### Host sendiri editor sumber terbuka
 
-Enam editor di repositori ini dapat dibangun ke dalam produk Anda di bawah AGPL-3.0: jika orang menggunakan versi yang diubah melalui jaringan, Anda wajib menawarkan kode sumber lengkapnya dan mempertahankan atribusi "MR Office" (NOTICE.md). Editor ini membuka format miliknya sendiri, CSV, HTML, Markdown, dan PDF; file Word, Excel, dan PowerPoint tidak termasuk dalam editor sumber terbuka (penyematan yang dihosting di atas mendukungnya). Lisensi komersial tersedia melalui support@mr-note.com. [Panduan sumber terbuka →](https://mroffice.ai/id/developers/open-source)
+Kelima editor di repositori ini dapat dibangun menjadi produk Anda sendiri di bawah AGPL-3.0: jika orang menggunakan versi yang dimodifikasi melalui jaringan, Anda harus menawarkan kode sumber lengkapnya kepada mereka, dan mempertahankan atribusi "MR Office" (NOTICE.md). Mereka membuka formatnya sendiri, CSV, HTML, Markdown, dan PDF; untuk file Word, Excel, dan PowerPoint, gunakan embed terkelola di atas. Lisensi komersial tersedia dari support@mr-note.com. [Panduan sumber terbuka →](https://mroffice.ai/id/developers/open-source)
 
-Editor tersedia di npm sebagai komponen React: `npm i mroffice-docs mroffice-core` (serta `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`); README tiap paket menjelaskan cara menyematkannya.
+Editor tersedia di npm sebagai komponen React: `npm i mroffice-docs mroffice-core` (dan `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-code`); README setiap paket menunjukkan cara menyematkannya.
 
 ## Editor
 
 Yang dilakukan setiap editor di repositori ini:
 
-- **Dokumen** — pengolah kata berhalaman: gaya, font, daftar, tabel, header dan footer, bagian dan kolom, bentuk dan persamaan, halaman sampul dan daftar isi, komentar dan lacak perubahan, serta tinta di halaman. Menyimpan dalam formatnya sendiri (.mrdoc); membuka HTML, Markdown, dan teks biasa.
-- **Lembar kerja** — sel dan rumus, format angka, pemformatan bersyarat, pengurutan dan filter, panel beku, dan banyak lembar, dengan jumlah dan rata-rata pilihan. Aritmetika antarsel (=A1*B1+10) dihitung di peramban saat diketik; rumus dengan fungsi (SUM, IF, VLOOKUP …) disimpan seperti yang ditulis. Menyimpan dalam formatnya sendiri (.mrsheet); membuka dan menyimpan CSV serta TSV.
-- **Presentasi** — slide dengan delapan tema miliknya sendiri, tata letak, tampilan master slide dan tata letak, teks, bentuk, kotak teks, tabel, WordArt dan persamaan, komentar, bagian, transisi dan animasi dengan pratinjau, serta tayangan slide. Menyimpan dalam formatnya sendiri (.mrslides).
-- **PDF** — membaca, mencari, menyajikan, dan mencetak file PDF, menyalin dan membacakan teksnya, serta menandai teks terpilih (sorot, garis bawah, coret, bergelombang) dengan catatan dan panel komentar selama file terbuka; menyimpan mengembalikan file seperti saat dibuka.
-- **Tulisan tangan** — catatan tulisan tangan dengan pena peka tekanan, stabilo, penghapus, laso, dan penggaris, serta tinta yang diubah menjadi bentuk. Menyimpan dalam formatnya sendiri (.mrink).
-- **Kode** — editor kode ringan dengan penyorotan sintaks untuk banyak bahasa, kerangka, serta cari dan ganti; JavaScript/TypeScript, Python, SQL, Lua, dan shell berjalan langsung di peramban.
+- **Dokumen** — pengolah kata berhalaman: font, pemformatan paragraf, daftar dan gaya di Home; halaman sampul dan kosong, pemisah halaman, tabel, gambar, bentuk, SmartArt, bagan, tautan, penanda, komentar, header, footer dan nomor halaman, persamaan, simbol, kotak teks dan WordArt di Insert. Menyimpan formatnya sendiri (.mrdoc); membuka HTML, Markdown dan teks biasa.
+- **Lembar kerja** — sel dan formula dengan font, perataan, format angka, pemformatan bersyarat, gaya sel dan menyisipkan atau menghapus sel di Home; tabel, gambar, bentuk, ikon, kotak centang, bagan dan sparkline di Insert; beberapa sheet, dengan jumlah dan rata-rata dari pilihan. Aritmetika antar sel (=A1*B1+10) dihitung di browser saat Anda mengetik; formula dengan fungsi (SUM, IF, VLOOKUP …) disimpan sebagaimana ditulis. Menyimpan formatnya sendiri (.mrsheet); membuka dan menyimpan CSV dan TSV.
+- **Presentasi** — slide dengan tata letak dan bagian, teks, font dan paragraf, serta bentuk dengan penataannya di Home; tabel, gambar, ikon, SmartArt, bagan, kotak teks, WordArt, header dan footer, persamaan, simbol dan video di Insert; catatan pembicara, komentar dan presentasi. Menyimpan formatnya sendiri (.mrslides).
+- **PDF** — membaca, mempresentasikan dan mencetak file PDF: tampilan satu dan dua halaman, gulir berkelanjutan, rotasi, thumbnail dan mode baca, pencarian dan penyalinan teksnya, serta komentar saat file terbuka; menyimpan mengembalikan file seperti saat dibuka.
+- **Kode** — editor kode ringan dengan penyorotan sintaks untuk banyak bahasa, outline, pencarian, buka cepat, penjelajah file dan daftar masalah.
 
-Penghitungan rumus dengan fungsi, penggambaran bagan, dan tata letak SmartArt dijalankan oleh mesin MR Office sendiri, di aplikasi desktop MR Office: editor sumber terbuka menyimpan rumus, bagan, dan SmartArt dalam file, dan menampilkan SmartArt sebagaimana disimpan.
+Rumus dengan fungsi, grafik, dan SmartArt dihitung dan digambar oleh mesin MR Office, di aplikasi desktop gratis dan layanan terkelola; editor di sini mempertahankan setiap rumus, grafik, dan SmartArt yang dimiliki file, dan menampilkan SmartArt seperti saat disimpan.
 
 ## Menjalankan editor
 
 **▶ [Coba demo langsung — tanpa instalasi](https://mroffice.ai/id)**
 
-Keenam editor ada di `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, yang berbagi `@mrnote/core`) dan berjalan bersama di `apps/playground`:
+Kelima editor berada di `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `code`, berbagi `@mrnote/core`) dan berjalan bersama di `apps/playground`:
 
 ```bash
 npm install
@@ -103,7 +101,7 @@ npm run preview   # http://localhost:5178
 
 ## Aplikasi desktop
 
-[`apps/desktop`](../apps/desktop) berisi **MR Office Editors**: kode sumber cangkang aplikasi desktop MR Office (Electron), dengan identitas aplikasinya sendiri. Dengan komponen MR Office gratis dari Releases, ini adalah aplikasi desktop MR Office, dengan file Word, Excel, PowerPoint, dan PDF, masuk akun, dan AI. Tanpa komponen itu, hanya editor sumber terbuka yang berjalan; editor ini membuka file .mrdoc, .mrsheet, .mrslides, dan .mrink, serta CSV, HTML, Markdown, dan PDF. Cangkang dan editor adalah kode sumber AGPL; komponennya sudah dikompilasi, gratis dipakai, dan bukan sumber terbuka. Setelah `npm run build`, jalankan dengan:
+[`apps/desktop`](../apps/desktop) berisi **MR Office Editors**: sumber shell aplikasi desktop MR Office (Electron), dengan identitasnya sendiri. Dengan komponen MR Office gratis dari Releases, ia menjadi aplikasi desktop MR Office, dengan file Word, Excel, PowerPoint, dan PDF, masuk akun, dan AI. Tanpa komponen tersebut, ia menjalankan editor open-source secara mandiri, yang membuka file .mrdoc, .mrsheet, dan .mrslides, CSV, HTML, Markdown, dan PDF. Shell dan editor adalah kode sumber AGPL; komponennya adalah unduhan gratis dari Releases. Setelah `npm run build`, jalankan dengan:
 
 ```bash
 npm run desktop
@@ -111,7 +109,7 @@ npm run desktop
 
 ## Untuk semua fitur, pasang aplikasi desktop MR Office (gratis)
 
-Aplikasi desktop MR Office gratis, berisi editor-editor ini dan layanan lengkap, serta berjalan offline di komputer Anda sendiri. Aplikasi ini menambahkan yang tidak ada di editor sumber terbuka:
+Aplikasi desktop MR Office gratis, memiliki editor ini dan layanan lengkap, serta bekerja offline di komputer Anda sendiri. Di atas editor, aplikasi ini menambahkan:
 
 - Membuka dan menyimpan file Word, Excel, dan PowerPoint (.docx, .xlsx, .pptx)
 - Menghitung rumus dengan fungsi (SUM, IF, VLOOKUP …)
@@ -123,7 +121,7 @@ Aplikasi desktop MR Office gratis, berisi editor-editor ini dan layanan lengkap,
 
 ### File Word, Excel, PowerPoint, dan PDF
 
-Membuka dan menyimpan file Word, Excel, dan PowerPoint (.docx, .xlsx, .pptx), serta menyimpan hasil edit PDF kembali ke file, disediakan oleh aplikasi desktop MR Office (gratis), yang berisi semua editor ini dan berjalan offline di komputer Anda sendiri:
+Kerjakan file Word, Excel, dan PowerPoint sungguhan (.docx, .xlsx, .pptx) dan simpan perubahan PDF langsung ke dalam file dengan aplikasi desktop MR Office gratis, yang memiliki semua editor ini dan bekerja offline di komputer Anda sendiri:
 
 ## Bagaimana bagian-bagiannya terhubung
 
@@ -131,12 +129,12 @@ Membuka dan menyimpan file Word, Excel, dan PowerPoint (.docx, .xlsx, .pptx), se
 flowchart LR
   subgraph OSS["Sumber terbuka · AGPL-3.0"]
     direction LR
-    core["@mrnote/core"] --> E["Enam editor<br/>Dokumen · Lembar kerja · Presentasi · PDF · Tulisan tangan · Kode"]
+    core["@mrnote/core"] --> E["Kelima editor<br/>Dokumen · Lembar kerja · Presentasi · PDF · Kode"]
     E --> PG["apps/playground<br/>Peramban"]
     E --> DS["apps/desktop<br/>Shell desktop"]
     MCP["apps/mcp<br/>Server MCP untuk aplikasi AI"]
   end
-  COMP["Komponen MR Office: file Word, Excel, dan PowerPoint · gratis, bukan sumber terbuka"] -.-> DS
+  COMP["Komponen MR Office: file Word, Excel, dan PowerPoint · gratis"] -.-> DS
 ```
 
 ## Lisensi

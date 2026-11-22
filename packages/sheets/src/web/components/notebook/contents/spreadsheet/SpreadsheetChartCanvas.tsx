@@ -56,6 +56,7 @@ import { rasterDataUrlToPngBlob } from "@mrnote/core/web/lib/export/svg-to-png.t
 import { OfficeChartPicture } from "@mrnote/core/web/components/office-charts/OfficeChartPicture.tsx";
 import { OfficeGlChart } from "@mrnote/core/web/components/office-charts/OfficeGlChart.tsx";
 import { type ExcelDateSystemArg } from "@mrnote/core/web/lib/spreadsheet/excel-1900-calendar.ts";
+import { chartFrameLineOnEdge } from "../../../../lib/spreadsheet/chart-print-input";
 
 export interface SpreadsheetChartCanvasProps extends MiniChartProps {
   /** The workbook reads serials in the 1904 date system (date-formatted
@@ -106,6 +107,9 @@ export interface SpreadsheetChartCanvasProps extends MiniChartProps {
   /** Selection/export can wake a chart before it enters the viewport. */
   selected?: boolean;
   forceRender?: boolean;
+  /** Printed: the chart area's line is drawn on the frame's edge, half of it
+   *  outside, as Windows Excel prints it (R457-X21), not inside the box. */
+  frameOnEdge?: boolean;
   title?: string;
   chartStyle?: number;
   chartColorPalette?: string;
@@ -301,6 +305,7 @@ function SpreadsheetChartCanvasDrawn({
   mapRegionCodes,
   selected = false,
   forceRender = false,
+  frameOnEdge = false,
   selectionKey = null,
   drawTitles = true,
   onTitlesInPicture,
@@ -470,7 +475,8 @@ function SpreadsheetChartCanvasDrawn({
   // The frame's own line takes its width off both edges (the box is
   // border-box): the plot and a data table share what is left, or the
   // table's last row was cut by the frame (X-037).
-  const frameBorderPx =
+  // Printed on the frame's edge (frameOnEdge), the line takes nothing.
+  const frameBorderPx = frameOnEdge ? 0 :
     chartAreaStyle?.outline === undefined
       ? chart.chartStyle === undefined && look?.chartArea?.outline === "none" ? 0 : 1
       : chartAreaStyle.outline === "none"
@@ -596,6 +602,8 @@ function SpreadsheetChartCanvasDrawn({
   const status: RenderStatus = !engine ? "fallback" : pictured ? "ready" : "loading";
   const showFallback = status === "fallback";
   const appearance = drawn?.appearance;
+  const frameStyle = (style: CSSProperties): CSSProperties =>
+    frameOnEdge ? (chartFrameLineOnEdge(style as unknown as Record<string, unknown>) as unknown as CSSProperties) : style;
   return (
     <div
       data-chart-render-status={status}
@@ -606,7 +614,7 @@ function SpreadsheetChartCanvasDrawn({
       data-spreadsheet-chart-engine="echarts-v2"
       // Whether the chart draws its stored model or a flat reading.
       data-chart-drawn-from={drawn ? (drawn.drawnFromModel ? "model" : "fields") : undefined}
-      style={{
+      style={frameStyle({
         backgroundColor: appearance?.plotBackground ?? "transparent",
         color: appearance?.text,
         height,
@@ -635,7 +643,7 @@ function SpreadsheetChartCanvasDrawn({
         ...presentationChartAreaStyleCss(chartAreaStyle),
         // Format Chart Area ▸ Border ▸ Rounded corners.
         ...(drawn?.attrs.format?.roundedCorners ? { borderRadius: 10 } : {}),
-      }}
+      })}
     >
       <div style={{ height: dataTable ? pictureHeight : "100%", position: "relative", width: "100%" }}>
         <div

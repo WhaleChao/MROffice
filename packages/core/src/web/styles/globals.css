@@ -386,6 +386,121 @@
   --voice-error: #dc6b4a;
 }
 
+/* Interface faces for scripts the stacks above do not reach well.
+   The default stacks lead with Noto Sans SC / PingFang SC, which have no
+   Arabic, Hebrew, Armenian, Sinhala or Lao and draw Cyrillic and Greek
+   from a CJK design; a page in one of those languages names system faces
+   that do (no download: every face here ships with macOS, Windows,
+   Android or a common Linux desktop). Keyed on <html lang>, so the zh, ja,
+   ko and Latin pages keep their stacks exactly; :is(:root, .marketing-theme)
+   follows the dark marketing page, which re-declares the stacks. */
+:is(:root, .marketing-theme):lang(ar) {
+  --font-family-sans:
+    var(--font-latin-marks), "SF Arabic", "Geeza Pro", "Segoe UI",
+    "Noto Sans Arabic", Tahoma, system-ui, -apple-system, BlinkMacSystemFont,
+    "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-family-display: var(--font-family-sans);
+  --font-sans: var(--font-family-sans);
+}
+:is(:root, .marketing-theme):lang(he) {
+  --font-family-sans:
+    var(--font-latin-marks), "SF Hebrew", "Arial Hebrew", "Segoe UI",
+    "Noto Sans Hebrew", system-ui, -apple-system, BlinkMacSystemFont, Arial,
+    "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-family-display: var(--font-family-sans);
+  --font-sans: var(--font-family-sans);
+}
+/* Urdu is written in Nastaliq, then any Arabic face. */
+:is(:root, .marketing-theme):lang(ur) {
+  --font-family-sans:
+    var(--font-latin-marks), "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq",
+    "Urdu Typesetting", "Geeza Pro", "Segoe UI", "Noto Sans Arabic", Tahoma,
+    system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans SC",
+    "PingFang SC", sans-serif;
+  --font-family-display: var(--font-family-sans);
+  --font-sans: var(--font-family-sans);
+}
+/* Nastaliq's letters climb and fall far past a Naskh line: a little more
+   room between the interface's own lines (text that sets its own line
+   height keeps it). */
+:root:lang(ur) body {
+  line-height: 1.75;
+}
+:is(:root, .marketing-theme):lang(hy) {
+  --font-family-sans:
+    var(--font-latin-marks), Mshtakan, "Segoe UI", "Noto Sans Armenian",
+    system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans SC",
+    "PingFang SC", sans-serif;
+  --font-family-display: var(--font-family-sans);
+  --font-sans: var(--font-family-sans);
+}
+:is(:root, .marketing-theme):lang(si) {
+  --font-family-sans:
+    var(--font-latin-marks), "Sinhala Sangam MN", "Nirmala UI",
+    "Noto Sans Sinhala", system-ui, -apple-system, BlinkMacSystemFont,
+    "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-family-display: var(--font-family-sans);
+  --font-sans: var(--font-family-sans);
+}
+:is(:root, .marketing-theme):lang(lo) {
+  --font-family-sans:
+    var(--font-latin-marks), "Lao Sangam MN", "Leelawadee UI",
+    "Noto Sans Lao", system-ui, -apple-system, BlinkMacSystemFont,
+    "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-family-display: var(--font-family-sans);
+  --font-sans: var(--font-family-sans);
+}
+/* Cyrillic and Greek: the system face first, so a word is not drawn half
+   from a CJK font's Cyrillic. */
+:is(:root, .marketing-theme):is(:lang(ru), :lang(uk), :lang(be), :lang(bg), :lang(sr), :lang(mk), :lang(kk), :lang(ky), :lang(mn), :lang(tg), :lang(el)) {
+  --font-family-sans:
+    var(--font-latin-marks), system-ui, -apple-system, BlinkMacSystemFont,
+    "SF Pro Text", "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial,
+    "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-family-display:
+    system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+    Roboto, "Noto Sans", "Helvetica Neue", Arial, "Noto Sans SC",
+    "PingFang SC", sans-serif;
+  --font-sans: var(--font-family-sans);
+}
+
+/* Icons that point along the line mirror under an rtl interface, as
+   Office's do: back and forward arrows, chevrons (a submenu's, a tree's
+   disclosure, a pager's), and undo / redo. The individual `scale` property
+   composes with a `transform` the icon already has, so a disclosure
+   chevron rotated open still points down. Only where the icon itself is
+   rtl: inside a document's content root (dir="ltr") nothing turns.
+   `data-rtl-mirror="on"` mirrors any other icon, `="off"` keeps one as
+   drawn (a glyph that names a physical side, such as "align left"). */
+:where(html[dir="rtl"])
+  :is(
+    .lucide-chevron-left,
+    .lucide-chevron-right,
+    .lucide-chevrons-left,
+    .lucide-chevrons-right,
+    .lucide-arrow-left,
+    .lucide-arrow-right,
+    .lucide-undo,
+    .lucide-undo-2,
+    .lucide-redo,
+    .lucide-redo-2,
+    [data-house-icon="ribbon.scroll.left"],
+    [data-house-icon="ribbon.scroll.right"],
+    [data-house-icon="nav.chevrons.left"],
+    [data-house-icon="nav.chevrons.right"],
+    [data-house-icon="nav.arrow.left"],
+    [data-house-icon="nav.arrow.right"],
+    [data-house-icon="nav.corner.upLeft"],
+    [data-house-icon="nav.corner.upRight"],
+    [data-house-icon="edit.undo"],
+    [data-house-icon="edit.redo"],
+    [data-office-semantic-icon="edit.undo"],
+    [data-office-semantic-icon="edit.redo"],
+    [data-rtl-mirror="on"]
+  ):dir(rtl):not([data-rtl-mirror="off"]) {
+  scale: -1 1;
+}
+
 /* The user's theme colour on the document root (lib/theme-accent.ts
    overrides it with the chosen hue). Surfaces outside the console scope --
    popovers portalled to <body> -- and editors that re-scope
@@ -17064,6 +17179,16 @@ a[href] {
 .chat-markdown {
   line-height: 1.85;
 }
+/* An rtl interface (he, ar, ur) reads an answer in its own direction: a
+   Chinese or English reply is not set right to left because the chrome is.
+   Each block takes its direction from its first strong letter, as the
+   paragraph would in a document; ltr pages are untouched. */
+/* rtl:begin:ignore */
+html[dir="rtl"] .chat-markdown :is(p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th, figcaption, dt, dd) {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+/* rtl:end:ignore */
 .chat-markdown > :first-child {
   margin-top: 0;
 }

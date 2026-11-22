@@ -37,35 +37,7 @@ import { flushSync } from "react-dom";
 import { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import { EditorSelection } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import {
-  ArrowDown,
-  ArrowUp,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  CircleAlert,
-  Copy,
-  Download,
-  ExternalLink,
-  FileCode2,
-  FilePlus2,
-  History,
-  FileSearch,
-  Folder,
-  FolderOpen,
-  ListFilter,
-  Pencil,
-  Redo2,
-  RotateCcw,
-  Search,
-  Trash2,
-  Upload,
-  Undo2,
-  WandSparkles,
-  X,
-} from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
+import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleAlert, Copy, Download, ExternalLink, FileCode2, FilePlus2, FileSearch, Folder, FolderOpen, ListFilter, Pencil, Redo2, RotateCcw, Search, Trash2, Upload, Undo2, WandSparkles, X } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 
 import "@mrnote/core/web/styles/note-editor.css";
 import "@mrnote/core/web/styles/code-editor-touch.css";
@@ -119,11 +91,6 @@ import PageSaveConflictBanner from "@mrnote/core/web/components/notebook/PageSav
 import { EditorLoadingState } from "@mrnote/core/web/components/ui/editor-loading-state.tsx";
 import { OfficeFileDropOverlay } from "@mrnote/core/web/components/office-ribbon/OfficeFileDropOverlay.tsx";
 import officeHomeRibbonStyles from "@mrnote/core/web/components/office-ribbon/OfficeHomeRibbon.module.css";
-import { ContinuousZoomDial } from "@mrnote/core/web/components/ui/ContinuousZoomDial.tsx";
-import {
-  ContinuousZoomCrownGlyph,
-  ContinuousZoomDialPopover,
-} from "@mrnote/core/web/components/ui/ContinuousZoomDialPopover.tsx";
 import type { PageItem } from "@mrnote/core/web/lib/notebook-sdk.ts";
 import { showNameConflictDialog } from "@mrnote/core/web/lib/errors/name-conflict.ts";
 import VersionHistoryPanel from "@mrnote/core/web/components/console/editor/VersionHistoryPanel.tsx";
@@ -207,14 +174,7 @@ import CodeMirrorEditor, {
   type CrossFileReferenceResult,
   type ProblemEntry,
 } from "./CodeMirrorEditor";
-import CodeDebugPanel, {
-  isDebuggableLanguage,
-  type CodeDebugCommand,
-  type CodeDebugCommandRequest,
-  type CodeDebugSessionSettlement,
-  type CodeDebugState,
-  type CodeDebugTestExecution,
-} from "./CodeDebugPanel";
+import { type CodeDebugCommand, type CodeDebugCommandRequest, type CodeDebugSessionSettlement, type CodeDebugState, type CodeDebugTestExecution } from "@/components/notebook/contents/CodeDebugPanel";
 import CodeTestExplorerPanel, {
   type CodeTestReceiptFreshness,
 } from "./CodeTestExplorerPanel";
@@ -239,19 +199,13 @@ import {
   codeCommandAccessibleLabel,
 } from "./code-output/CodeRibbonChrome";
 import { CodeRibbonIcon } from "./code-output/CodeRibbonIcons";
-import { OfficeRibbonTabs, RibbonCol } from "@mrnote/core/web/components/office-ribbon/OfficeRibbonChassis.tsx";
+import { OfficeRibbonTabs } from "@mrnote/core/web/components/office-ribbon/OfficeRibbonChassis.tsx";
 import {
   OfficeHomeCommandStack,
   OfficeHomeUndoRail,
 } from "@mrnote/core/web/components/office-ribbon/OfficeHomeRibbon.tsx";
 import InlineProposalDiff from "@mrnote/core/web/__cut__/m52ed3b935e.tsx";
-import {
-  ENABLE_CODE_DEBUG_V1,
-  ENABLE_CODE_PAGE_SHARED_BUFFER,
-  ENABLE_INLINE_PROPOSAL_DIFF,
-  USE_COLLAB_EDITING,
-  USE_CODEMIRROR_EDITOR,
-} from "@mrnote/core/web/lib/code-runner/editor-flags.ts";
+import { ENABLE_CODE_PAGE_SHARED_BUFFER, ENABLE_INLINE_PROPOSAL_DIFF, USE_COLLAB_EDITING, USE_CODEMIRROR_EDITOR } from "@mrnote/core/web/lib/code-runner/editor-flags.ts";
 import {
   acquireCodePageBuffer,
   type CodePageBufferAuthority,
@@ -260,15 +214,7 @@ import {
   type CodePageCommandHistory,
   type CodePageBufferSaveState,
 } from "../../../lib/code-runner/code-page-buffer-session";
-import {
-  activateCodeSplitPane,
-  closeCodeSplitView,
-  codeSplitPaneEditorTestId,
-  codeSplitPaneViewStateKey,
-  createCodeSplitViewState,
-  toggleCodeSplitView,
-  visibleCodeSplitPanes,
-} from "../../../lib/code-runner/code-split-view";
+import { activateCodeSplitPane, closeCodeSplitView, codeSplitPaneEditorTestId, codeSplitPaneViewStateKey, createCodeSplitViewState, visibleCodeSplitPanes } from "../../../lib/code-runner/code-split-view";
 import {
   PAGE_AUTHORITY_OUTAGE_GRACE_MS,
   useLastVerifiedPageCollabBinding,
@@ -282,12 +228,6 @@ import {
 } from "../../../lib/code-runner/editor-cm-extensions";
 import { usePageLocate } from "@mrnote/core/web/hooks/usePageLocate.ts";
 import type { PageLocateRequest } from "@mrnote/core/web/lib/page-locate.ts";
-import { unbindableBreakpointLines } from "../../../lib/code-runner/debug-breakpoint-binding";
-import {
-  FONT_SCALE_DEFAULT,
-  FONT_SCALE_MAX,
-  FONT_SCALE_MIN,
-} from "../../../lib/code-runner/editor-prefs";
 import {
   runJavaScript,
   type RunResult,
@@ -435,47 +375,13 @@ import {
   type LanguageExecutionAvailability,
   LanguageExecutionProviderRegistry,
 } from "../../../lib/code-runner/language-execution-provider";
-import { useEmbedAccess } from "@mrnote/core/web/lib/embed/use-embed-access.ts";
 import { isRemoteExecutionRefusal } from "../../../lib/code-runner/remote-execution-provider";
 import {
   languageExecutionErrorMessageKey,
   type LanguageExecutionErrorMessageKey,
 } from "@mrnote/core/web/lib/code-runner/execution-error-code.ts";
 import { boundExecutionResult } from "@mrnote/core/web/lib/code-runner/execution-output-budget.ts";
-import {
-  appendCodeTestRunTimelineEntry,
-  buildPersistedCodeTestRunTimeline,
-  CODE_TEST_RUN_RECEIPT_KEY,
-  CODE_TEST_RUN_TIMELINE_KEY,
-  CODE_TEST_SOURCE_CODE_UNIT_LIMIT,
-  CODE_TEST_WORKSPACE_FILE_LIMIT,
-  codeTestRunTimelineEntryIsCurrent,
-  createCodeTestDebugHarness,
-  codeTestRunReceiptIsCurrent,
-  createCodeTestHarness,
-  createPersistedCodeTestRunReceipt,
-  createPersistedCodeTestRunTimelineEntry,
-  discoverCodeTests,
-  isCodeTestLanguage,
-  parseCodeTestHarnessResult,
-  publishCodeTestDebugHandoff,
-  restoreCodeTestRunReceipt,
-  restoreCodeTestRunTimeline,
-  stripCodeTestHarnessLogs,
-  subscribeCodeTestDebugHandoff,
-  takeCodeTestDebugHandoff,
-  discardCodeTestDebugHandoff,
-  discardCodeTestDebugHandoffRequest,
-  type CodeTestDebugHandoff,
-  type CodeTestDiscovery,
-  type CodeTestFile,
-  type CodeTestResult,
-  type CodeTestRunFileOutput,
-  type CodeTestRunScope,
-  type CodeTestSource,
-  type PersistedCodeTestRunReceipt,
-  type PersistedCodeTestRunTimelineEntry,
-} from "../../../lib/code-runner/code-test-explorer";
+import { appendCodeTestRunTimelineEntry, buildPersistedCodeTestRunTimeline, CODE_TEST_RUN_RECEIPT_KEY, CODE_TEST_RUN_TIMELINE_KEY, CODE_TEST_SOURCE_CODE_UNIT_LIMIT, CODE_TEST_WORKSPACE_FILE_LIMIT, codeTestRunTimelineEntryIsCurrent, createCodeTestDebugHarness, codeTestRunReceiptIsCurrent, createCodeTestHarness, createPersistedCodeTestRunReceipt, createPersistedCodeTestRunTimelineEntry, discoverCodeTests, isCodeTestLanguage, parseCodeTestHarnessResult, restoreCodeTestRunReceipt, restoreCodeTestRunTimeline, stripCodeTestHarnessLogs, subscribeCodeTestDebugHandoff, takeCodeTestDebugHandoff, discardCodeTestDebugHandoff, discardCodeTestDebugHandoffRequest, type CodeTestDebugHandoff, type CodeTestDiscovery, type CodeTestFile, type CodeTestResult, type CodeTestRunFileOutput, type CodeTestRunScope, type CodeTestSource, type PersistedCodeTestRunReceipt, type PersistedCodeTestRunTimelineEntry } from "../../../lib/code-runner/code-test-explorer";
 import { createCodeTestJUnitReport } from "../../../lib/code-runner/code-test-report";
 import {
   prepareCodeTestModules,
@@ -512,47 +418,8 @@ import {
   executionLineToDocumentLine,
   type ExecutionSelection,
 } from "../../../lib/code-runner/execution-selection";
-import {
-  appendCodePageRunTimelineEntry,
-  buildPersistedCodePageContent,
-  CODE_PAGE_RUN_PROFILE_LIMIT,
-  CODE_PAGE_RUN_STDIN_UTF8_BYTE_LIMIT,
-  createCodePageRunProfile,
-  createCodePageRunNavigation,
-  createCodePageRunTimelineEntry,
-  codePageRunInputIdentityIsCurrent,
-  codePageRunProfilesShareSlot,
-  codePageRunSourceFingerprint,
-  codePageRunTimelineEntryToRunResult,
-  codePageRunOutputClearedMarker,
-  codePageRunOutputWasCleared,
-  restoreCodePageLineEnding,
-  restoreCodePageOutput,
-  restoreCodePageRunNavigation,
-  restoreCodePageRunOutputCleared,
-  restoreCodePageRunProfiles,
-  restoreCodePageRunTimeline,
-  restoreCodePageRunTimelineNavigation,
-  restoreCodePageSourceEncoding,
-  restoreCodePageSourceFilename,
-  removeCodePageRunProfile,
-  saveCodePageRunProfile,
-  type PersistedCodeRunProfile,
-  type PersistedCodeRunNavigation,
-  type PersistedCodeRunOutputCleared,
-  type PersistedCodeRunTimelineEntry,
-} from "../../../lib/code-runner/code-page-output-persistence";
-import {
-  appendCodeDebugTimelineEntry,
-  codeDebugTimelineEntryIsCurrent,
-  createCodeDebugTimelineEntry,
-  EMPTY_CODE_DEBUG_CONFIGURATION,
-  normalizeCodeDebugConfiguration,
-  restoreCodeDebugConfiguration,
-  restoreCodeDebugTimeline,
-  type CodeDebugConfiguration,
-  type PersistedCodeDebugTimelineEntry,
-} from "../../../lib/code-runner/code-page-debug-persistence";
+import { appendCodePageRunTimelineEntry, buildPersistedCodePageContent, CODE_PAGE_RUN_PROFILE_LIMIT, createCodePageRunProfile, createCodePageRunNavigation, createCodePageRunTimelineEntry, codePageRunInputIdentityIsCurrent, codePageRunProfilesShareSlot, codePageRunSourceFingerprint, codePageRunTimelineEntryToRunResult, codePageRunOutputClearedMarker, codePageRunOutputWasCleared, restoreCodePageLineEnding, restoreCodePageOutput, restoreCodePageRunNavigation, restoreCodePageRunOutputCleared, restoreCodePageRunProfiles, restoreCodePageRunTimeline, restoreCodePageRunTimelineNavigation, restoreCodePageSourceEncoding, restoreCodePageSourceFilename, removeCodePageRunProfile, saveCodePageRunProfile, type PersistedCodeRunProfile, type PersistedCodeRunNavigation, type PersistedCodeRunOutputCleared, type PersistedCodeRunTimelineEntry } from "../../../lib/code-runner/code-page-output-persistence";
+import { EMPTY_CODE_DEBUG_CONFIGURATION, restoreCodeDebugConfiguration, restoreCodeDebugTimeline, type CodeDebugConfiguration, type PersistedCodeDebugTimelineEntry } from "../../../lib/code-runner/code-page-debug-persistence";
 import {
   MAX_RUN_OUTPUT_SEARCH_QUERY_CHARS,
   RUN_OUTPUT_LOG_PAGE_SIZE,
@@ -594,18 +461,7 @@ import {
   downloadTextFile,
   isBrowserDownloadAvailable,
 } from "@mrnote/core/web/lib/download-file.ts";
-import {
-  DropdownMenu,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@mrnote/core/web/components/ui/dropdown-menu.tsx";
+import { DropdownMenu, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@mrnote/core/web/components/ui/dropdown-menu.tsx";
 // The Docs menu surface (Cupertino glass + its open motion) for every menu of
 // the code window, as DocumentToolbar aliases it.
 import {
@@ -632,17 +488,7 @@ import {
 } from "@mrnote/core/web/components/office-ribbon/OfficeTaskPane.tsx";
 import workspacePanelStyles from "./CodeWorkspacePanels.module.css";
 import { useBottomPanelsInset } from "./code-output/useBottomPanelsInset";
-import {
-  OFFICE_PAGE_ID_ATTRIBUTE,
-  arrangeAllOfficeWindows,
-  openNewOfficeWindow,
-  placeOfficeCompanionWindow,
-  registerOfficeScrollPort,
-  startOfficeSideBySide,
-  toggleOfficeSynchronizedScrolling,
-  useOfficeSynchronizedScrollState,
-  type OfficeSideBySideRun,
-} from "@mrnote/core/web/lib/office-window-commands/index.ts";
+import { OFFICE_PAGE_ID_ATTRIBUTE, placeOfficeCompanionWindow, registerOfficeScrollPort, type OfficeSideBySideRun } from "@mrnote/core/web/lib/office-window-commands/index.ts";
 import {
   CodeDockedPane,
   CodeTaskPaneDockHost,
@@ -1269,30 +1115,6 @@ type CodeToolbarTab =
   | "debug"
   | "view";
 
-const CODE_FONT_ZOOM_MIN_PERCENT = FONT_SCALE_MIN * 100;
-const CODE_FONT_ZOOM_MAX_PERCENT = FONT_SCALE_MAX * 100;
-const CODE_FONT_ZOOM_DEFAULT_PERCENT = FONT_SCALE_DEFAULT * 100;
-
-function codeFontZoomValueToPosition(
-  value: number,
-  min: number,
-  max: number,
-) {
-  return (value - min) / (max - min);
-}
-
-function codeFontZoomPositionToValue(
-  position: number,
-  min: number,
-  max: number,
-) {
-  return min + position * (max - min);
-}
-
-function formatCodeFontZoomPercent(value: number) {
-  return `${Math.round(value)}%`;
-}
-
 const DEFAULT_CODE_EDITOR_VIEW_STATE: CodeEditorViewState = {
   outlineOpen: false,
   problemsOpen: false,
@@ -1638,7 +1460,6 @@ function RichCodeHtmlOutput({ html, title }: { html: string; title: string }) {
 
 /** Overleaf's compile chords, as the Run control's tooltip names them. */
 const LATEX_COMPILE_SHORTCUTS_LABEL = "Ctrl/Cmd+Enter, Ctrl/Cmd+S";
-const LATEX_COMPILE_KEY_SHORTCUTS = "Control+Enter Meta+Enter Control+S Meta+S";
 
 /** The main file's place in a LaTeX compile's input (latex-auto-compile). */
 const LATEX_MAIN_INPUT = "\u0000main";
@@ -2328,24 +2149,16 @@ export default function CodeWindow({
   ]);
   const [toolbarTab, setToolbarTab] = useState<CodeToolbarTab>("home");
   const [viewFontZoomOpen, setViewFontZoomOpen] = useState(false);
-  const viewFontZoomAnchorRef = useRef<HTMLButtonElement>(null);
-  // An embedded editor runs code only when its session grants it (the
-  // token's features.run on a Pro app; lib/embed/session-access): otherwise
-  // it has no runtime, no Run or Debug tab, and nothing a key starts runs.
-  const embedAccess = useEmbedAccess();
-  const codeRunOffered = embedAccess === null || embedAccess.permissions.run;
-  const codeRunOfferedRef = useRef(codeRunOffered);
-  codeRunOfferedRef.current = codeRunOffered;
+  const codeRunOfferedRef = useRef(false);
+  codeRunOfferedRef.current = false;
   const selectToolbarTab = useCallback((nextTab: CodeToolbarTab) => {
-    if (nextTab === "debug" && !ENABLE_CODE_DEBUG_V1) return;
-    if ((nextTab === "run" || nextTab === "debug") && !codeRunOfferedRef.current) return;
     setViewFontZoomOpen(false);
     setToolbarTab(nextTab);
   }, []);
   // A new session's grant without Run leaves its tabs.
   useEffect(() => {
-    if (!codeRunOffered) setToolbarTab((tab) => (tab === "run" || tab === "debug" ? "home" : tab));
-  }, [codeRunOffered]);
+    setToolbarTab((tab) => (tab));
+  }, [false]);
   const [statusBarHost, setStatusBarHost] = useState<HTMLDivElement | null>(null);
   const [splitViewState, setSplitViewState] = useState(
     createCodeSplitViewState,
@@ -2376,7 +2189,6 @@ export default function CodeWindow({
   );
   const [editorIntelligenceCommandRequest, setEditorIntelligenceCommandRequest] =
     useState<CodeEditorIntelligenceCommandRequest>();
-  const editorIntelligenceCommandRequestIdRef = useRef(0);
   const [editorIntelligenceState, setEditorIntelligenceState] =
     useState<CodeEditorIntelligenceState>(
       DEFAULT_CODE_EDITOR_INTELLIGENCE_STATE,
@@ -2462,11 +2274,9 @@ export default function CodeWindow({
   const [workspaceIntelligenceRevision, setWorkspaceIntelligenceRevision] =
     useState(0);
   const workspaceProblemsPanelRef = useRef<HTMLElement>(null);
-  const [currentEditorLine, setCurrentEditorLine] = useState(1);
   const [debugPausedLine, setDebugPausedLine] = useState<number | null>(null);
   const [debugConfiguration, setDebugConfiguration] =
     useState<CodeDebugConfiguration>(EMPTY_CODE_DEBUG_CONFIGURATION);
-  const debugLanguageAvailable = isDebuggableLanguage(language);
   const persistedDebugTimelineRef =
     useRef<readonly PersistedCodeDebugTimelineEntry[]>([]);
   const [debugTimeline, setDebugTimeline] =
@@ -2481,28 +2291,6 @@ export default function CodeWindow({
   const debugTimelineReplayGenerationRef = useRef(0);
   const activeDebugTimelineAuthorityRef =
     useRef<ActiveDebugTimelineAuthority | null>(null);
-  const debugBreakpointLines = useMemo(
-    () => debugConfiguration.breakpoints.map((breakpoint) => breakpoint.line),
-    [debugConfiguration],
-  );
-  // Breakpoints the debugger cannot pause at, drawn hollow in the gutter — the
-  // same answer the debug panel shows, from the same place, so the two surfaces
-  // can never disagree about which dots are armed.
-  const debugUnboundBreakpointLines = useMemo(
-    () =>
-      ENABLE_CODE_DEBUG_V1 &&
-      debugLanguageAvailable &&
-      !contentSnapshotPending
-        ? unbindableBreakpointLines(content, debugBreakpointLines, language)
-        : [],
-    [
-      content,
-      contentSnapshotPending,
-      debugBreakpointLines,
-      debugLanguageAvailable,
-      language,
-    ],
-  );
   const debugConfigurationRef = useRef<CodeDebugConfiguration>(
     EMPTY_CODE_DEBUG_CONFIGURATION,
   );
@@ -2579,11 +2367,6 @@ export default function CodeWindow({
       windowId,
     });
   }, [codeScrollPort, guestMode, pageId, windowId]);
-  const codeSynchronizedScroll = useOfficeSynchronizedScrollState(
-    windowId ?? "",
-    pageId,
-    "code",
-  );
   const codeSideBySideRunRef = useRef<OfficeSideBySideRun | null>(null);
   useEffect(() => () => codeSideBySideRunRef.current?.cancel(), []);
   // An AI source's "Locate" (lib/page-locate.ts) on this code page: the
@@ -2666,20 +2449,8 @@ export default function CodeWindow({
   }, [guestMode, language]);
   const executionProviders = useMemo(
     () =>
-      !codeRunOffered
-        ? Object.assign(new LanguageExecutionProviderRegistry(), { dispose() {} })
-        : createBuiltinExecutionProviderRegistry({
-        javaScriptSandboxOwner,
-        pageNamespace: pageId,
-        // A draft's review runs remotely through the draft's own route.
-        guest: guestMode && draftRemoteExecution === null,
-        remoteTarget: draftRemoteExecution,
-        cloudGui:
-          guestMode || draftRemoteExecution !== null || !pageId
-            ? null
-            : { pageId, message: cloudGuiMessage },
-      }),
-    [cloudGuiMessage, codeRunOffered, draftRemoteExecution, guestMode, javaScriptSandboxOwner, pageId],
+      Object.assign(new LanguageExecutionProviderRegistry(), { dispose() {} }),
+    [cloudGuiMessage, false, draftRemoteExecution, guestMode, javaScriptSandboxOwner, pageId],
   );
   const executionProviderLifecycleGenerationsRef = useRef(
     new WeakMap<object, number>(),
@@ -2779,10 +2550,6 @@ export default function CodeWindow({
     executionCapability.status === "available"
       ? executionCapability.limits.stdinBytes
       : 0;
-  const stdinCharacterLimit = Math.min(
-    CODE_PAGE_RUN_STDIN_UTF8_BYTE_LIMIT,
-    stdinByteLimit,
-  );
   const stdinOverLimit = stdinAvailable && stdinByteCount > stdinByteLimit;
   const codeImportGenerationRef = useRef(0);
   const codeImportingRef = useRef(false);
@@ -3333,74 +3100,11 @@ export default function CodeWindow({
     const active = activePageExecutionClaimRef.current;
     if (active) releasePageExecutionClaim(active);
   }, [releasePageExecutionClaim]);
-  const acquireDebugExecution = useCallback(() => {
-    const selectedTest = activeCodeTestDebugSessionRef.current;
-    const liveBufferLease = codePageBufferLeaseRef.current;
-    const liveBufferOwner =
-      liveBufferLease?.pageId === pageIdRef.current
-        ? liveBufferLease.isOwner()
-        : null;
-    if (
-      selectedTest &&
-      (!codeMayAuthorRef.current ||
-        selectedTest.authoringGeneration !==
-          codeAuthoringGenerationRef.current ||
-        selectedTest.hydrationGeneration !==
-          codeTestDebugHydrationGenerationRef.current ||
-        selectedTest.bufferBindingGeneration !==
-          bufferBindingGenerationRef.current ||
-        selectedTest.bufferOwner !== liveBufferOwner ||
-        selectedTest.bufferId !== currentCodeWindowBufferIdRef.current ||
-        selectedTest.handoff.source.pageId !== pageIdRef.current ||
-        selectedTest.handoff.source.path !== workspacePathRef.current ||
-        selectedTest.handoff.source.language !== languageRef.current ||
-        selectedTest.handoff.source.contentVersion !==
-          workspaceContentVersionRef.current ||
-        selectedTest.handoff.source.source !== contentRef.current)
-    ) {
-      return null;
-    }
-    const claim = acquirePageExecutionClaim("debug", languageRef.current);
-    if (!claim) return null;
-    const authority: ActiveDebugTimelineAuthority = {
-      pageId: pageIdRef.current,
-      language: languageRef.current,
-      source: contentRef.current,
-      viewStateKey: debugViewStateKeyRef.current,
-      authoringGeneration: codeAuthoringGenerationRef.current,
-      hydrationGeneration: codeTestDebugHydrationGenerationRef.current,
-      bufferBindingGeneration: bufferBindingGenerationRef.current,
-      bufferOwner: liveBufferOwner,
-      bufferId: currentCodeWindowBufferIdRef.current,
-      claim,
-    };
-    activeDebugTimelineAuthorityRef.current = authority;
-    return () => {
-      if (activeDebugTimelineAuthorityRef.current === authority) {
-        activeDebugTimelineAuthorityRef.current = null;
-      }
-      releasePageExecutionClaim(claim);
-    };
-  }, [acquirePageExecutionClaim, releasePageExecutionClaim]);
   // The real page title, seeded on load and threaded into EVERY save's `title`
   // field. Sending "" on each autosave wiped the page title + slug on the first
   // edit/language-change (the backend treated "" as an explicit rename); mirrors
   // NoteEditor's titleRef pattern. Also used as the cross-window registry label.
   const titleRef = useRef(draftReview?.title ?? "");
-  const openCodeNewWindow = useCallback(() => {
-    if (!windowManagerActions || !workspaceNotebookId) return;
-    openNewOfficeWindow(windowManagerActions, {
-      notebookId: workspaceNotebookId,
-      pageId,
-      pageType: "code",
-      title: titleRef.current || pageId,
-      ...(windowId ? { sourceWindowId: windowId } : {}),
-    });
-  }, [pageId, windowId, windowManagerActions, workspaceNotebookId]);
-  const arrangeAllCodeWindows = useCallback(() => {
-    if (!windowManagerActions || !windowId) return;
-    arrangeAllOfficeWindows(windowManagerActions, windowId, "code");
-  }, [windowId, windowManagerActions]);
   // On a canvas a LaTeX compile's PDF opens in a window of its own beside
   // this one (windows/CompiledPdfWindow), keyed by this window; with no
   // canvas around it the output shows the PDF inline.
@@ -3484,22 +3188,6 @@ export default function CodeWindow({
     window.addEventListener(NOTEBOOK_PAGE_RENAMED_EVENT, onRenamed);
     return () => window.removeEventListener(NOTEBOOK_PAGE_RENAMED_EVENT, onRenamed);
   }, [pageId, windowId, windowManagerActions]);
-  const startCodeSideBySide = useCallback(() => {
-    if (!windowManagerActions || !windowId || !workspaceNotebookId) return;
-    codeSideBySideRunRef.current?.cancel();
-    codeSideBySideRunRef.current = startOfficeSideBySide({
-      actions: windowManagerActions,
-      notebookId: workspaceNotebookId,
-      pageId,
-      pageType: "code",
-      sourceWindowId: windowId,
-      title: titleRef.current || pageId,
-    });
-  }, [pageId, windowId, windowManagerActions, workspaceNotebookId]);
-  const toggleCodeSynchronizedScrolling = useCallback(() => {
-    if (!windowId) return;
-    toggleOfficeSynchronizedScrolling(windowId, pageId, "code");
-  }, [pageId, windowId]);
   // A lost connection fails the authority read; the confirmed verdict holds
   // through it (as for PDF pages) so typing on keeps landing in the room. A
   // known refusal still applies at once. Without this the editor turned
@@ -3560,14 +3248,6 @@ export default function CodeWindow({
   const codePageBufferLease = codePageBufferBinding?.lease ?? null;
   const activeCodePageBufferLease =
     codePageBufferLease?.pageId === pageId ? codePageBufferLease : null;
-  const splitViewAvailable =
-    USE_CODEMIRROR_EDITOR && activeCodePageBufferLease !== null;
-  const handleToggleSplitView = useCallback(() => {
-    if (!USE_CODEMIRROR_EDITOR) return;
-    const lease = codePageBufferLeaseRef.current;
-    if (!lease || lease.pageId !== pageIdRef.current) return;
-    setSplitViewState(toggleCodeSplitView);
-  }, []);
   const handleActivateSplitPane = useCallback(
     (pane: "primary" | "secondary") => {
       setSplitViewState((current) => activateCodeSplitPane(current, pane));
@@ -4576,16 +4256,6 @@ export default function CodeWindow({
     },
     [flushPendingContentRender],
   );
-  const previewEditorFontZoomPercent = useCallback(
-    (nextPercent: number) =>
-      requestEditorViewCommand("previewFontScale", nextPercent / 100),
-    [requestEditorViewCommand],
-  );
-  const commitEditorFontZoomPercent = useCallback(
-    (nextPercent: number) =>
-      requestEditorViewCommand("commitFontScale", nextPercent / 100),
-    [requestEditorViewCommand],
-  );
 
   const handleEditorViewCommandRequestHandled = useCallback(
     (requestId: number) => {
@@ -4675,25 +4345,6 @@ export default function CodeWindow({
       setEditorEditState(next);
     },
     [],
-  );
-
-  const requestEditorIntelligenceCommand = useCallback(
-    (command: CodeEditorIntelligenceCommand) => {
-      if (
-        AUTHORING_INTELLIGENCE_COMMANDS.has(command) &&
-        !codeMayAuthorRef.current
-      ) {
-        return;
-      }
-      flushPendingContentRender();
-      editorIntelligenceCommandRequestIdRef.current += 1;
-      setEditorIntelligenceCommandRequest({
-        requestId: editorIntelligenceCommandRequestIdRef.current,
-        command,
-        viewStateKey: activeEditorViewStateKeyRef.current,
-      });
-    },
-    [flushPendingContentRender],
   );
 
   const handleEditorIntelligenceCommandRequestHandled = useCallback(
@@ -4845,7 +4496,7 @@ export default function CodeWindow({
 
   const requestDebugCommand = useCallback(
     (command: CodeDebugCommand) => {
-      if (!ENABLE_CODE_DEBUG_V1) return;
+      return;
       if (
         command === "addBreakpointCurrent" &&
         !codeMayAuthorRef.current
@@ -4861,112 +4512,6 @@ export default function CodeWindow({
       });
     },
     [flushPendingContentRender],
-  );
-
-  const handleDebugCommandRequestHandled = useCallback(
-    (requestId: number) => {
-      setDebugCommandRequest((current) =>
-        current?.requestId === requestId ? undefined : current,
-      );
-    },
-    [],
-  );
-
-  const handleDebugLineNavigationRequestHandled = useCallback(
-    (requestId: number) => {
-      setDebugLineNavigationRequest((current) =>
-        current?.requestId === requestId ? undefined : current,
-      );
-    },
-    [],
-  );
-
-  const handleDebugStateChange = useCallback((next: CodeDebugState) => {
-    debugStateRef.current = next;
-    setDebugState((previous) =>
-      previous.debuggable === next.debuggable &&
-      previous.running === next.running &&
-      previous.paused === next.paused &&
-      previous.pausedLine === next.pausedLine &&
-      previous.currentLine === next.currentLine &&
-      previous.breakpointCount === next.breakpointCount &&
-      previous.supportsDepthStepping === next.supportsDepthStepping
-        ? previous
-        : next,
-    );
-  }, []);
-
-  const handleDebugSessionSettled = useCallback(
-    (settlement: CodeDebugSessionSettlement) => {
-      const authority = activeDebugTimelineAuthorityRef.current;
-      const authorityMatchesLivePage = (requireActiveClaim: boolean) => {
-        if (!authority) return false;
-        const lease = codePageBufferLeaseRef.current;
-        const liveBufferOwner =
-          lease?.pageId === pageIdRef.current ? lease.isOwner() : null;
-        return (
-          (!requireActiveClaim ||
-            (activeDebugTimelineAuthorityRef.current === authority &&
-              authority.claim.isActive())) &&
-          codeMayAuthorRef.current &&
-          authority.pageId === pageIdRef.current &&
-          authority.language === languageRef.current &&
-          authority.source === contentRef.current &&
-          authority.viewStateKey === debugViewStateKeyRef.current &&
-          authority.authoringGeneration ===
-            codeAuthoringGenerationRef.current &&
-          authority.hydrationGeneration ===
-            codeTestDebugHydrationGenerationRef.current &&
-          authority.bufferBindingGeneration ===
-            bufferBindingGenerationRef.current &&
-          authority.bufferOwner === liveBufferOwner &&
-          authority.bufferId === currentCodeWindowBufferIdRef.current &&
-          settlement.content === authority.source &&
-          settlement.language === authority.language &&
-          settlement.viewStateKey === authority.viewStateKey
-        );
-      };
-      if (!authorityMatchesLivePage(true) || !authority) return;
-      const persistenceGeneration =
-        debugTimelinePersistenceGenerationRef.current + 1;
-      debugTimelinePersistenceGenerationRef.current = persistenceGeneration;
-      void sha256ExecutionSource(authority.source)
-        .then((sourceSha256) => {
-          if (
-            debugTimelinePersistenceGenerationRef.current !==
-              persistenceGeneration ||
-            !authorityMatchesLivePage(false)
-          ) {
-            return;
-          }
-          const entry = createCodeDebugTimelineEntry({
-            completedAt: settlement.completedAt,
-            language: authority.language,
-            outcome: settlement.outcome,
-            sourceSha256,
-            pauses: settlement.pauses,
-          });
-          if (!entry) return;
-          const next = appendCodeDebugTimelineEntry(
-            persistedDebugTimelineRef.current,
-            entry,
-          );
-          if (
-            next[0]?.completedAt !== entry.completedAt ||
-            next[0]?.sourceFingerprint !== entry.sourceFingerprint
-          ) {
-            return;
-          }
-          persistedDebugTimelineRef.current = next;
-          setDebugTimeline(next);
-          setSelectedDebugTimelineIndex(0);
-          persistRef.current(authority.language, authority.source);
-        })
-        .catch(() => {
-          // A session without a trusted source digest remains live-only.
-        });
-    },
-    [],
   );
 
   const focusCodeEditor = useCallback(() => {
@@ -5075,17 +4620,6 @@ export default function CodeWindow({
     setWorkspaceExplorerOpen(false);
     requestAnimationFrame(focusCodeEditor);
   }, [focusCodeEditor]);
-
-  const openTestExplorer = useCallback(() => {
-    if (!testExplorerAvailable) return;
-    setQuickOpenOpen(false);
-    setFifOpen(false);
-    setWorkspaceProblemsOpen(false);
-    setWorkspaceExplorerOpen(false);
-    setTestRunError(null);
-    setTestExplorerOpen(true);
-    requestAnimationFrame(() => testExplorerPanelRef.current?.focus());
-  }, [testExplorerAvailable]);
 
   const closeTestExplorer = useCallback(() => {
     setTestExplorerOpen(false);
@@ -6063,15 +5597,6 @@ export default function CodeWindow({
   const activeCodeTestDebugViewStateKey = activeCodeTestDebugSessionCurrent
     ? `page:${pageId}:test:${activeCodeTestDebugSession!.handoff.requestId}:${activeCodeTestDebugSession!.authoringGeneration}:${activeCodeTestDebugSession!.hydrationGeneration}:${activeCodeTestDebugSession!.bufferBindingGeneration ?? "plain"}`
     : `page:${pageId}`;
-  const activeCodeTestDebugExecution: CodeDebugTestExecution | undefined =
-    activeCodeTestDebugSessionCurrent
-      ? {
-          content: activeCodeTestDebugSession!.handoff.executionSource,
-          identity: activeCodeTestDebugViewStateKey,
-          testName: activeCodeTestDebugSession!.handoff.test.name,
-          stopLine: activeCodeTestDebugSession!.handoff.result.line,
-        }
-      : undefined;
 
   useLayoutEffect(() => {
     debugViewStateKeyRef.current = activeCodeTestDebugViewStateKey;
@@ -6159,7 +5684,7 @@ export default function CodeWindow({
     setActiveCodeTestDebugSession(session);
     setTestRunError(null);
     setTestExplorerOpen(false);
-    selectToolbarTab("debug");
+    void 0;
     requestDebugLineNavigation(freshHarness.result.line, true);
     debugCommandRequestIdRef.current += 1;
     setDebugCommandRequest({
@@ -6411,76 +5936,6 @@ export default function CodeWindow({
   useLayoutEffect(() => {
     persistRef.current = persist;
   }, [persist]);
-
-  const handleDebugConfigurationChange = useCallback(
-    (
-      nextConfiguration: CodeDebugConfiguration,
-      sourceOverride?: string,
-    ) => {
-      if (!codeMayAuthorRef.current) return;
-      retirePendingCodeImportAuthority();
-      const normalized = normalizeCodeDebugConfiguration(nextConfiguration);
-      debugConfigurationRef.current = normalized;
-      setDebugConfiguration(normalized);
-      persistRef.current(
-        languageRef.current,
-        sourceOverride ?? contentRef.current,
-        undefined,
-        normalized,
-      );
-    },
-    [retirePendingCodeImportAuthority],
-  );
-
-  const handleDebugBreakpointToggle = useCallback(
-    (line: number) => {
-      if (!Number.isInteger(line) || line < 1) return;
-      const current = debugConfigurationRef.current;
-      const exists = current.breakpoints.some(
-        (breakpoint) => breakpoint.line === line,
-      );
-      handleDebugConfigurationChange({
-        ...current,
-        breakpoints: exists
-          ? current.breakpoints.filter(
-              (breakpoint) => breakpoint.line !== line,
-            )
-          : [...current.breakpoints, { line }],
-      });
-    },
-    [handleDebugConfigurationChange],
-  );
-
-  const handleDebugBreakpointRebase = useCallback(
-    (moves: readonly DebugBreakpointLineMove[], source: string) => {
-      const moveByLine = new Map(
-        moves
-          .filter(
-            (move) =>
-              Number.isInteger(move.fromLine) &&
-              move.fromLine >= 1 &&
-              Number.isInteger(move.toLine) &&
-              move.toLine >= 1,
-          )
-          .map((move) => [move.fromLine, move.toLine]),
-      );
-      if (moveByLine.size === 0) return;
-      const current = debugConfigurationRef.current;
-      let changed = false;
-      const breakpoints = current.breakpoints.map((breakpoint) => {
-        const nextLine = moveByLine.get(breakpoint.line);
-        if (nextLine === undefined || nextLine === breakpoint.line) {
-          return breakpoint;
-        }
-        changed = true;
-        return { ...breakpoint, line: nextLine };
-      });
-      if (changed) {
-        handleDebugConfigurationChange({ ...current, breakpoints }, source);
-      }
-    },
-    [handleDebugConfigurationChange],
-  );
 
   // Explicit save gesture (Cmd/Ctrl+S) from the editor. The editor has already
   // formatted-then-onChange'd the buffer (when "Format on save" is on), so the
@@ -11493,128 +10948,6 @@ export default function CodeWindow({
     ],
   );
 
-  const debugCodeTestResult = useCallback(
-    async (result: CodeTestResult) => {
-      if (testRunBusyRef.current || runningRef.current || consoleBusy) return;
-      const receipt = persistedTestRunReceiptRef.current;
-      const exactRunSources = testRunExactSourcesRef.current;
-      const authoringGeneration = captureCodeAuthoringAuthority();
-      if (
-        !receipt ||
-        exactRunSources?.runId !== receipt.runId ||
-        result.status !== "failed" ||
-        authoringGeneration === null ||
-        !codeAuthoringAuthorityIsCurrent(
-          testRunReceiptAuthoringGenerationRef.current,
-        )
-      ) {
-        setTestRunError(t("code.testExplorer.debugUnavailable"));
-        return;
-      }
-      const ownerPageId = pageIdRef.current;
-      const catalogGeneration = workspaceCatalogGenerationRef.current;
-      setTestRunError(null);
-      await ensureWorkspacePageDetails();
-      if (
-        !codeAuthoringAuthorityIsCurrent(authoringGeneration) ||
-        pageIdRef.current !== ownerPageId ||
-        workspaceCatalogGenerationRef.current !== catalogGeneration
-      ) {
-        return;
-      }
-
-      const receiptPageIds = new Set(
-        receipt.sources.map((source) => source.pageId),
-      );
-      const liveSources = captureCodeTestSources();
-      const receiptSources = liveSources.filter((source) =>
-        receiptPageIds.has(source.pageId),
-      );
-      const source = liveSources.find(
-        (candidate) => candidate.pageId === result.pageId,
-      );
-      const exactReceiptSource = exactRunSources.sources.get(result.pageId);
-      const file = workspaceFilesByPageId.get(result.pageId);
-      const exactResult = receipt.results.find(
-        (candidate) => candidate.testId === result.testId,
-      );
-      if (
-        !source ||
-        !exactReceiptSource ||
-        exactReceiptSource.path !== source.path ||
-        exactReceiptSource.language !== source.language ||
-        exactReceiptSource.contentVersion !== source.contentVersion ||
-        exactReceiptSource.source !== source.source ||
-        !file ||
-        !exactResult ||
-        exactResult.pageId !== result.pageId ||
-        exactResult.status !== "failed" ||
-        exactResult.line !== result.line ||
-        !codeTestRunReceiptIsCurrent(receipt, receiptSources)
-      ) {
-        setTestRunError(t("code.testExplorer.debugUnavailable"));
-        return;
-      }
-      const targetExecution = getPageExecutionState(result.pageId);
-      if (targetExecution && targetExecution.kind !== "debug") {
-        setTestRunError(t("code.testExplorer.busy"));
-        return;
-      }
-      const harness = createCodeTestDebugHarness(
-        source,
-        receipt,
-        result.testId,
-        exactReceiptSource,
-      );
-      if (!harness) {
-        setTestRunError(t("code.testExplorer.debugUnavailable"));
-        return;
-      }
-
-      const matchingOpenTarget = getOpenCodeBuffers().find((entry) => {
-        if (entry.pageId !== source.pageId) return false;
-        try {
-          return (
-            entry.getText() === source.source &&
-            entry.getLanguage() === source.language
-          );
-        } catch {
-          return false;
-        }
-      });
-      const pendingTestDebug = pendingCodeTestDebugHandoffRef.current;
-      if (pendingTestDebug) {
-        discardCodeTestDebugHandoffRequest(pendingTestDebug.requestId);
-      }
-      const handoff = publishCodeTestDebugHandoff({
-        harness,
-        receipt,
-        ...(matchingOpenTarget
-          ? { targetBufferId: codeWindowEntryId(matchingOpenTarget) }
-          : {}),
-      });
-      pendingCodeTestDebugHandoffRef.current = {
-        requestId: handoff.requestId,
-        targetPageId: source.pageId,
-      };
-      activateWorkspaceFile(file, {
-        line: result.line,
-        column: 1,
-        contentVersion: source.contentVersion,
-      });
-    },
-    [
-      activateWorkspaceFile,
-      captureCodeAuthoringAuthority,
-      captureCodeTestSources,
-      codeAuthoringAuthorityIsCurrent,
-      consoleBusy,
-      ensureWorkspacePageDetails,
-      t,
-      workspaceFilesByPageId,
-    ],
-  );
-
   // The page is executing something, whichever surface started it. The primary
   // Run control follows this, so it never offers Run while the kernel is busy.
   // Keep the exact local registry claim authoritative through settlement. A
@@ -11631,13 +10964,6 @@ export default function CodeWindow({
   const activeExecutionCanCancel =
     testExplorerBusy ||
     (pageBusy && activeExecutionCapability?.supports.cancel === true);
-  const restartAvailable = testExplorerBusy
-    ? false
-    : pageBusy
-    ? activeExecutionCapability?.supports.restart === true
-    : executionCapability.status === "available" &&
-      executionCapability.mode !== "remote" &&
-      executionCapability.supports.restart;
   const runCommandDisabled =
     pageBusy ||
     remotePageBusy ||
@@ -11646,29 +10972,6 @@ export default function CodeWindow({
     stdinOverLimit;
   const runSelectionCommandDisabled =
     runCommandDisabled || !partialExecutionAvailable;
-  const runSelectionOrLineLabel =
-    editorExecutionState.selectedChars > 0
-      ? t("code.runSelection")
-      : t("code.runLine", { line: editorExecutionState.currentLine });
-  const runtimeActivityLabel = testExplorerBusy
-    ? t("code.testExplorer.running")
-    : running
-    ? lastRunScope?.kind === "selection"
-      ? t("code.runSelection")
-      : lastRunScope?.kind === "line"
-        ? t("code.runLine", { line: lastRunScope.lineFrom })
-        : t("code.runFile")
-    : consoleBusy
-      ? t("code.console.busy")
-      : debugState.running
-        ? t("code.debugRun")
-        : remotePageExecution?.kind === "debug"
-          ? t("code.debugRun")
-          : remotePageExecution?.kind === "console"
-            ? t("code.console.busy")
-            : remotePageExecution
-              ? t("code.runFile")
-              : null;
 
   const toggleConsole = useCallback(() => {
     setConsoleOpen((open) => !open);
@@ -12483,87 +11786,6 @@ export default function CodeWindow({
     [pageId],
   );
 
-  const selectDebugTimelineEntry = useCallback((index: number) => {
-    const entry = persistedDebugTimelineRef.current[index];
-    if (!entry) return;
-    setSelectedDebugTimelineIndex(index);
-    if (
-      codeDebugTimelineEntryIsCurrent(
-        entry,
-        debugTimelineSourceSha256Ref.current,
-        languageRef.current,
-      ) &&
-      entry.pauses[0]
-    ) {
-      requestDebugLineNavigation(entry.pauses[0].line, true);
-    }
-  }, [requestDebugLineNavigation]);
-
-  const debugTimelineEntryAgain = useCallback(
-    (index: number) => {
-      const entry = persistedDebugTimelineRef.current[index];
-      if (
-        !entry ||
-        getPageExecutionState(pageIdRef.current)
-      ) {
-        return;
-      }
-      const authoringGeneration = captureCodeAuthoringAuthority();
-      if (authoringGeneration === null) return;
-      const source = contentRef.current;
-      const language = languageRef.current;
-      const page = pageIdRef.current;
-      const replayGeneration = debugTimelineReplayGenerationRef.current + 1;
-      debugTimelineReplayGenerationRef.current = replayGeneration;
-      void sha256ExecutionSource(source)
-        .then((sourceSha256) => {
-          if (
-            debugTimelineReplayGenerationRef.current !== replayGeneration ||
-            !codeAuthoringAuthorityIsCurrent(authoringGeneration) ||
-            pageIdRef.current !== page ||
-            contentRef.current !== source ||
-            languageRef.current !== language ||
-            persistedDebugTimelineRef.current[index] !== entry ||
-            !codeDebugTimelineEntryIsCurrent(
-              entry,
-              sourceSha256,
-              language,
-            ) ||
-            getPageExecutionState(page)
-          ) {
-            return;
-          }
-          selectToolbarTab("debug");
-          setSelectedDebugTimelineIndex(index);
-          requestDebugCommand("start");
-        })
-        .catch(() => {
-          // Without a trusted digest, the historical session is read-only.
-        });
-    },
-    [
-      captureCodeAuthoringAuthority,
-      codeAuthoringAuthorityIsCurrent,
-      requestDebugCommand,
-      selectToolbarTab,
-    ],
-  );
-
-  const clearDebugTimeline = useCallback(() => {
-    if (
-      !codeMayAuthorRef.current ||
-      getPageExecutionState(pageIdRef.current)
-    ) {
-      return;
-    }
-    debugTimelinePersistenceGenerationRef.current += 1;
-    debugTimelineReplayGenerationRef.current += 1;
-    persistedDebugTimelineRef.current = [];
-    setDebugTimeline([]);
-    setSelectedDebugTimelineIndex(null);
-    persistRef.current(languageRef.current, contentRef.current);
-  }, []);
-
   const clearRunTimeline = useCallback(() => {
     if (
       !codeMayAuthorRef.current ||
@@ -13179,133 +12401,6 @@ export default function CodeWindow({
     output,
     outputLogStart,
     outputStreamFilter,
-  ]);
-
-  // Explicitly restart this page's stateful runtimes. This is the same
-  // namespace-scoped teardown used when the window closes; it never falls
-  // through to host execution or widens the sandbox. Any in-flight generation
-  // is invalidated first so a late worker result cannot repaint stale output.
-  const restartRuntime = useCallback(() => {
-    if (testRunBusyRef.current) return;
-    // Debug owns the same page runtime and has its own Stop lifecycle. A
-    // normal Run restart must never tear that authority down from underneath
-    // the debugger.
-    const execution = getPageExecutionState(pageId);
-    if (
-      debugStateRef.current.running ||
-      execution?.kind === "debug" ||
-      (execution && execution.ownerId !== executionOwnerId)
-    ) {
-      return;
-    }
-    const activeExecution = activeExecutionAuthorityRef.current;
-    const liveCapability = executionProviders.capability(languageRef.current);
-    const restartAuthority = activeExecution
-      ? activeExecution.capability.supports.restart
-        ? activeExecution
-        : null
-      : liveCapability.status === "available" &&
-          liveCapability.mode !== "remote" &&
-          liveCapability.supports.restart
-        ? {
-            kind: "run" as const,
-            generation: runGenerationRef.current,
-            pageId: pageIdRef.current,
-            language: languageRef.current,
-            source: contentRef.current,
-            capability: liveCapability,
-            controller: new AbortController(),
-          }
-        : null;
-    if (!restartAuthority) return;
-    const pendingConsoleId = consoleAbortRef.current
-      ? consoleIdRef.current
-      : null;
-    // A language-mode change does not migrate an in-flight execution. Restart
-    // the captured owner when one exists; only an idle page uses the current
-    // selector. This is the same runtime-identity rule as Stop above.
-    const runtimeLanguage = restartAuthority.language;
-    const runtimePageId = restartAuthority.pageId;
-    runGenerationRef.current += 1;
-    runningRef.current = false;
-    runningLanguageRef.current = null;
-    if (activeExecutionAuthorityRef.current === activeExecution) {
-      activeExecutionAuthorityRef.current = null;
-    }
-    restartAuthority.controller.abort();
-    abortRef.current?.abort();
-    abortRef.current = null;
-    consoleAbortRef.current?.abort();
-    consoleAbortRef.current = null;
-    consoleJavaScriptRuntimeDispatchedRef.current = false;
-    coalescerRef.current?.dispose();
-    coalescerRef.current = null;
-    if (runtimeLanguage === "python") {
-      interruptPython(runtimePageId);
-      resetPythonRuntime(runtimePageId);
-    } else if (runtimeLanguage === "sql") {
-      interruptSql(runtimePageId);
-      resetSqlRuntime(runtimePageId);
-    } else if (runtimeLanguage === "lua") {
-      interruptLua(runtimePageId);
-      resetLuaRuntime(runtimePageId);
-    } else if (runtimeLanguage === "csharp") {
-      interruptCSharp(runtimePageId);
-      resetCSharpRuntime(runtimePageId);
-    } else if (runtimeLanguage === "ruby") {
-      interruptRuby(runtimePageId);
-      resetRubyRuntime(runtimePageId);
-    } else if (runtimeLanguage === "bash") {
-      interruptShell(runtimePageId);
-      resetShellRuntime(runtimePageId);
-    } else if (
-      runtimeLanguage === "javascript" ||
-      runtimeLanguage === "typescript"
-    ) {
-      disposeSandboxRuntime(javaScriptSandboxOwner);
-    }
-    setRunning(false);
-    setConsoleBusy(false);
-    if (pendingConsoleId !== null) {
-      setConsoleEntries((previous) =>
-        previous.map((entry) =>
-          entry.id === pendingConsoleId
-            ? {
-                ...entry,
-                result: { logs: [], interrupted: true },
-                notice: t("code.console.sessionRestarted"),
-              }
-            : entry,
-        ),
-      );
-    }
-    if (codeMayAuthorRef.current) {
-      persistedOutputRef.current = null;
-      persistedOutputAuthorityRef.current = null;
-      persistedRunNavigationRef.current = null;
-      persistRef.current(languageRef.current, contentRef.current, null);
-    }
-    runAuthoringGenerationRef.current = null;
-    setOutput(null);
-    setSelectedRunTimelineIndex(null);
-    setOutputCopied(false);
-    setOutputStreamFilter("all");
-    setOutputLogStart(null);
-    setOutputSearchOpen(false);
-    setOutputSearchQuery("");
-    setOutputSearchRunEpoch((epoch) => epoch + 1);
-    setOutputSearchActiveIndex(0);
-    setOutputSearchRevealLogIndex(null);
-    setLastRunScope(null);
-    setTracebackNavigationSource(null);
-    releaseActivePageExecutionClaim();
-  }, [
-    executionOwnerId,
-    executionProviders,
-    javaScriptSandboxOwner,
-    pageId,
-    releaseActivePageExecutionClaim,
-    t,
   ]);
 
   // Closing this window stops THIS window's run and frees THIS window's stream
@@ -14707,31 +13802,7 @@ export default function CodeWindow({
     );
   }
 
-  const toolbarTabs: Array<{ id: CodeToolbarTab; label: string }> = [
-    { id: "home", label: t("toolbar.ribbonHome") },
-    ...(USE_CODEMIRROR_EDITOR
-      ? [{ id: "edit" as const, label: t("toolbar.ribbonEdit") }]
-      : []),
-    ...(USE_CODEMIRROR_EDITOR
-      ? [
-          {
-            id: "references" as const,
-            label: t("toolbar.ribbonReferences"),
-          },
-          {
-            id: "review" as const,
-            label: t("toolbar.ribbonReview"),
-          },
-        ]
-      : []),
-    ...(codeRunOffered ? [{ id: "run" as const, label: t("code.run") }] : []),
-    ...(ENABLE_CODE_DEBUG_V1 && codeRunOffered
-      ? [{ id: "debug" as const, label: t("code.debugRun") }]
-      : []),
-    ...(USE_CODEMIRROR_EDITOR
-      ? [{ id: "view" as const, label: t("toolbar.ribbonView") }]
-      : []),
-  ];
+  const toolbarTabs: Array<{ id: CodeToolbarTab; label: string }> = [{ id: "home", label: t("toolbar.ribbonHome") }];
   const sourceFileLabel = workspacePath;
   const saveStatusLabel = draftReview
     ? draftReview.statusLabel
@@ -15015,25 +14086,6 @@ export default function CodeWindow({
           : stdinOverLimit
             ? t("code.stdinExecutionTooLarge")
             : undefined;
-  const runSelectionDisabledReason =
-    runFileDisabledReason ??
-    (!partialExecutionAvailable
-      ? t("code.commandDisabled.partialExecutionUnavailable")
-      : undefined);
-  const testExplorerDisabledReason = draftReview
-    ? draftReview.readOnlyReason
-    : guestMode
-    ? t("code.testExplorer.guestUnavailable")
-    : !codeMayAuthor
-      ? t("document.capability.unavailable")
-      : !testExplorerAvailable
-        ? t("code.testExplorer.empty")
-        : undefined;
-  const refactorDisabledReason = !codeMayAuthor
-    ? t("document.capability.unavailable")
-    : !isWorkspaceLanguage(language)
-      ? t("code.refactor.none")
-      : undefined;
   const codeReadOnlyCommandReason = t("code.commandDisabled.readOnly");
   const languageSelectorDisabled =
     !codeMayAuthor || pageExecution !== null;
@@ -15122,63 +14174,11 @@ export default function CodeWindow({
     : !editorEditState.canRedo
       ? t("code.commandDisabled.noRedoHistory")
       : undefined;
-  const navigationBackDisabledReason = !editorIntelligenceState.canGoBack
-    ? t("code.commandDisabled.noNavigationHistory")
-    : undefined;
-  const navigationForwardDisabledReason = !editorIntelligenceState.canGoForward
-    ? t("code.commandDisabled.noNavigationHistory")
-    : undefined;
-  const compareDisabledReason = !editorReviewState.compareAvailable
-    ? t("code.commandDisabled.noCompareSource")
-    : undefined;
-  const reviewNavigationDisabledReason = !editorReviewState.canNavigate
-    ? t("code.commandDisabled.noReviewTarget")
-    : undefined;
-  const reviewApplyDisabledReason = !codeMayAuthor
-    ? codeReadOnlyCommandReason
-    : editorReviewState.threeWayActive
-      ? !editorReviewState.canResolve
-        ? t("code.commandDisabled.noReviewTarget")
-        : undefined
-      : !editorReviewState.canApply
-        ? t("code.commandDisabled.noReviewTarget")
-        : undefined;
   const hasCurrentOutput = Boolean(output);
-  const hasRunOutput = hasCurrentOutput || runTimeline.length > 0;
   const clearOutputDisabled = !hasCurrentOutput || outputClearBlocked;
-  const runStopDisabledReason = !pageBusy
-    ? t("code.commandDisabled.noActiveRun")
-    : !activeExecutionCanCancel
-      ? t("code.commandDisabled.runCannotCancel")
-      : undefined;
   const quickRunDisabled = pageBusy
     ? !activeExecutionCanCancel
     : runCommandDisabled;
-  const quickRunLabel = pageBusy ? t("code.debugStop") : t("code.runFile");
-  const quickRunDisabledReason = pageBusy
-    ? runStopDisabledReason
-    : runFileDisabledReason;
-  const quickRunAccessibleLabel = codeCommandAccessibleLabel({
-    disabled: quickRunDisabled,
-    disabledReason: quickRunDisabledReason,
-    label: quickRunLabel,
-  });
-  const restartRuntimeDisabledReason =
-    pageExecution?.kind === "debug" || debugState.running
-      ? t("code.runBlockedByDebug")
-      : remotePageBusy
-        ? t("code.commandDisabled.pageRunning")
-        : undefined;
-  const restartRuntimeAccessibleLabel = codeCommandAccessibleLabel({
-    disabled: restartRuntimeDisabledReason !== undefined,
-    disabledReason: restartRuntimeDisabledReason,
-    label: t("code.restartRuntime"),
-  });
-  const showOutputDisabledReason = !hasRunOutput
-    ? t("code.commandDisabled.noOutput")
-    : outputPanelVisible
-      ? t("code.commandDisabled.outputAlreadyVisible")
-      : undefined;
   const outputSearchDisabledReason = !hasCurrentOutput
     ? t("code.commandDisabled.noOutput")
     : displayedOutput.logs.length === 0
@@ -15248,44 +14248,6 @@ export default function CodeWindow({
     disabledReason: clearOutputDisabledReason,
     label: t("codeOutput.clearOutputs"),
   });
-  const noActiveDebugSessionReason = !debugState.running
-    ? t("code.commandDisabled.noActiveDebugSession")
-    : undefined;
-  const debugNotPausedReason = !debugState.paused
-    ? t("code.commandDisabled.debugNotPaused")
-    : undefined;
-  const debugStartDisabledReason = pageBusy || remotePageBusy
-    ? t("code.commandDisabled.pageRunning")
-    : debugState.running
-      ? t("code.commandDisabled.debugAlreadyActive")
-      : !debugState.debuggable
-        ? t("code.debugUnsupported")
-        : undefined;
-  const debugRunToCursorDisabledReason =
-    debugStartDisabledReason ??
-    (debugState.currentLine === null
-      ? t("code.commandDisabled.noCurrentLine")
-      : undefined);
-  const debugAddCurrentDisabledReason = !codeMayAuthor
-    ? codeReadOnlyCommandReason
-    : !debugState.debuggable
-      ? t("code.debugUnsupported")
-      : debugState.currentLine === null
-        ? t("code.commandDisabled.noCurrentLine")
-        : undefined;
-  const splitViewDisabledReason = !splitViewAvailable
-    ? t("code.commandDisabled.splitUnavailable")
-    : undefined;
-  const zoomResetDisabledReason =
-    editorViewState.fontScale === 1
-      ? t("code.commandDisabled.zoomAlreadyDefault")
-      : undefined;
-  const editorFontZoomPercent = Math.round(editorViewState.fontScale * 100);
-  // Window commands need a canvas window and its notebook.
-  const codeWindowCommandsAvailable = Boolean(
-    windowManagerActions && windowId && workspaceNotebookId && !guestMode,
-  );
-  const codeSyncScroll = windowId ? codeSynchronizedScroll : null;
   const liveRefactorTargets = captureCodeRefactorTargets();
   const refactorPreviewCurrent = Boolean(
     refactorPreviewPlan &&
@@ -15419,7 +14381,7 @@ export default function CodeWindow({
             interruptRun();
             return;
           }
-          selectToolbarTab("debug");
+          void 0;
           requestDebugCommand(debugShortcut);
           return;
         }
@@ -15716,22 +14678,7 @@ export default function CodeWindow({
                   testId: "code-copilot-toggle",
                 } : undefined,
                 // No Run in an embed session that may not run code.
-                primary: !codeRunOffered ? undefined : {
-                  kind: pageBusy ? "stop" : "run",
-                  label: quickRunLabel,
-                  onClick: toggleRun,
-                  disabled: quickRunDisabled,
-                  disabledReason: quickRunDisabledReason,
-                  ariaLabel: quickRunAccessibleLabel,
-                  title: quickRunDisabled ? quickRunAccessibleLabel : pageBusy
-                    ? `${t("code.debugStop")} (Shift+F5)` : runCapabilityTitle,
-                  testId: pageBusy ? "code-interrupt" : "code-run",
-                  keyShortcuts: pageBusy
-                    ? "Shift+F5"
-                    : language === "latex"
-                      ? LATEX_COMPILE_KEY_SHORTCUTS
-                      : "Control+Enter Meta+Enter",
-                },
+                primary: undefined,
                 // LaTeX: Overleaf's Recompile menu (the compiler, Recompile
                 // from scratch) right after Run, and its arrow to the PDF.
                 trailing: latexCompilerState ? (
@@ -16246,1377 +15193,6 @@ export default function CodeWindow({
               </OfficeHomeCommandStack>
               </CodeRibbonGroup>
             </>
-          ) : toolbarTab === "edit" ? (
-            <>
-              <CodeRibbonGroup
-                label={t("code.palette.cmd.find")}
-                testId="code-ribbon-group-search"
-                layout="hstack"
-              >
-                <CodeRibbonAction
-                  big
-                  icon={<CodeRibbonIcon name="find" />}
-                  label={t("code.palette.cmd.find")}
-                  onClick={() => requestEditorEditCommand("openFind")}
-                  pressed={editorEditState.findOpen}
-                  expanded={editorEditState.findOpen}
-                  keyShortcuts="Control+F Meta+F"
-                  testId="code-edit-find"
-                />
-              </CodeRibbonGroup>
-              <CodeRibbonGroup
-                label={t("code.palette.cmd.formatDocument")}
-                testId="code-ribbon-group-format"
-                layout="hstack"
-              >
-                <CodeRibbonAction
-                  big
-                  icon={<CodeRibbonIcon name="formatDocument" />}
-                  label={t("code.palette.cmd.formatDocument")}
-                  onClick={() => requestEditorEditCommand("formatDocument")}
-                  disabled={!codeMayAuthor || !editorEditState.canFormat}
-                  keyShortcuts="Alt+Shift+F"
-                  testId="code-edit-format-document"
-                />
-                <RibbonCol>
-                  <CodeRibbonAction
-                    icon={<CodeRibbonIcon name="formatSelection" />}
-                    label={t("code.palette.cmd.formatSelection")}
-                    onClick={() => requestEditorEditCommand("formatSelection")}
-                    disabled={!codeMayAuthor || !editorEditState.canFormat}
-                    testId="code-edit-format-selection"
-                  />
-                  <CodeRibbonAction
-                    icon={<CodeRibbonIcon name="toggleComment" />}
-                    label={t("code.contextMenu.toggleComment")}
-                    onClick={() => requestEditorEditCommand("toggleComment")}
-                    disabled={
-                      !codeMayAuthor || !editorEditState.canToggleComment
-                    }
-                    keyShortcuts="Control+/ Meta+/"
-                    testId="code-edit-toggle-comment"
-                  />
-                </RibbonCol>
-              </CodeRibbonGroup>
-              <CodeRibbonGroup
-                label={t("code.ribbon.edit.lines")}
-                testId="code-ribbon-group-lines"
-              >
-                <DropdownMenu modal={false}>
-                  <DropdownMenuTrigger asChild>
-                    <CodeRibbonMenuAction
-                      className="note-editor-office-toolbar__menu-trigger"
-                      disabled={!codeMayAuthor}
-                      hasMenuIndicator
-                      icon={<CodeRibbonIcon name="lineActions" />}
-                      label={t("code.ribbon.edit.lineActions")}
-                      testId="code-edit-lines-menu"
-                      title={t("code.ribbon.edit.lineActions")}
-                      aria-haspopup="menu"
-                    />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="note-editor-toolbar-menu"
-                    data-testid="code-edit-lines-menu-content"
-                    onCloseAutoFocus={(event) => event.preventDefault()}
-                  >
-                    <DropdownMenuLabel>
-                      {t("code.ribbon.edit.lineActions")}
-                    </DropdownMenuLabel>
-                    <DropdownMenuItem
-                      onSelect={() => requestEditorEditCommand("moveLineUp")}
-                      data-testid="code-edit-move-line-up"
-                      aria-keyshortcuts="Alt+ArrowUp"
-                    >
-                      <CodeRibbonIcon name="moveLineUp" size={14} />
-                      {t("code.ribbon.edit.moveLineUp")}
-                      <DropdownMenuShortcut>Alt+↑</DropdownMenuShortcut>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => requestEditorEditCommand("moveLineDown")}
-                      data-testid="code-edit-move-line-down"
-                      aria-keyshortcuts="Alt+ArrowDown"
-                    >
-                      <CodeRibbonIcon name="moveLineDown" size={14} />
-                      {t("code.ribbon.edit.moveLineDown")}
-                      <DropdownMenuShortcut>Alt+↓</DropdownMenuShortcut>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => requestEditorEditCommand("copyLineUp")}
-                      data-testid="code-edit-copy-line-up"
-                      aria-keyshortcuts="Alt+Shift+ArrowUp"
-                    >
-                      <CodeRibbonIcon name="copyLineUp" size={14} />
-                      {t("code.ribbon.edit.copyLineUp")}
-                      <DropdownMenuShortcut>⇧Alt+↑</DropdownMenuShortcut>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => requestEditorEditCommand("copyLineDown")}
-                      data-testid="code-edit-copy-line-down"
-                      aria-keyshortcuts="Alt+Shift+ArrowDown"
-                    >
-                      <CodeRibbonIcon name="copyLineDown" size={14} />
-                      {t("code.ribbon.edit.copyLineDown")}
-                      <DropdownMenuShortcut>⇧Alt+↓</DropdownMenuShortcut>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onSelect={() => requestEditorEditCommand("joinLines")}
-                      data-testid="code-edit-join-lines"
-                    >
-                      <CodeRibbonIcon name="joinLines" size={14} />
-                      {t("code.palette.cmd.joinLines")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() =>
-                        requestEditorEditCommand("sortLinesAscending")
-                      }
-                      data-testid="code-edit-sort-lines-ascending"
-                    >
-                      <CodeRibbonIcon name="sortAscending" size={14} />
-                      {t("code.palette.cmd.sortLinesAscending")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() =>
-                        requestEditorEditCommand("sortLinesDescending")
-                      }
-                      data-testid="code-edit-sort-lines-descending"
-                    >
-                      <CodeRibbonIcon name="sortDescending" size={14} />
-                      {t("code.palette.cmd.sortLinesDescending")}
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onSelect={() =>
-                        requestEditorEditCommand("removeDuplicateLines")
-                      }
-                      data-testid="code-edit-delete-duplicate-lines"
-                    >
-                      <CodeRibbonIcon name="removeDuplicates" size={14} />
-                      {t("code.palette.cmd.removeDuplicateLines")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() =>
-                        requestEditorEditCommand(
-                          "removeConsecutiveDuplicateLines",
-                        )
-                      }
-                      data-testid="code-edit-delete-consecutive-duplicate-lines"
-                    >
-                      <CodeRibbonIcon name="removeDuplicates" size={14} />
-                      {t("code.palette.cmd.removeConsecutiveDuplicateLines")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() =>
-                        requestEditorEditCommand("trimTrailingWhitespace")
-                      }
-                      data-testid="code-edit-trim-trailing-whitespace"
-                    >
-                      <CodeRibbonIcon name="trimWhitespace" size={14} />
-                      {t("code.palette.cmd.trimTrailingWhitespace")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </CodeRibbonGroup>
-              <CodeRibbonGroup
-                label={t("code.ribbon.edit.selection")}
-                testId="code-ribbon-group-selection"
-                layout="hstack"
-              >
-                <CodeRibbonAction
-                  big
-                  icon={<CodeRibbonIcon name="changeAllOccurrences" />}
-                  label={t("code.palette.cmd.changeAllOccurrences")}
-                  onClick={() =>
-                    requestEditorEditCommand("changeAllOccurrences")
-                  }
-                  disabled={!codeMayAuthor}
-                  pressed={editorEditState.cursorCount > 1}
-                  badge={
-                    editorEditState.cursorCount > 1
-                      ? editorEditState.cursorCount
-                      : undefined
-                  }
-                  keyShortcuts="Control+F2 Meta+F2"
-                  testId="code-edit-change-all-occurrences"
-                />
-                <RibbonCol>
-                  <CodeRibbonAction
-                    icon={<CodeRibbonIcon name="addNextOccurrence" />}
-                    label={t("code.palette.cmd.addNextOccurrence")}
-                    onClick={() =>
-                      requestEditorEditCommand("addNextOccurrence")
-                    }
-                    keyShortcuts="Control+D Meta+D"
-                    testId="code-edit-add-next-occurrence"
-                  />
-                  <CodeRibbonAction
-                    icon={<CodeRibbonIcon name="expandSelection" />}
-                    label={t("code.palette.cmd.expandSelection")}
-                    onClick={() => requestEditorEditCommand("expandSelection")}
-                    keyShortcuts="Alt+Shift+ArrowRight"
-                    testId="code-edit-expand-selection"
-                  />
-                  <CodeRibbonAction
-                    icon={<CodeRibbonIcon name="shrinkSelection" />}
-                    label={t("code.palette.cmd.shrinkSelection")}
-                    onClick={() => requestEditorEditCommand("shrinkSelection")}
-                    keyShortcuts="Alt+Shift+ArrowLeft"
-                    testId="code-edit-shrink-selection"
-                  />
-                </RibbonCol>
-                <RibbonCol>
-                  {
-}
-                  <CodeRibbonAction
-                    icon={<CodeRibbonIcon name="addCursorAbove" />}
-                    label={t("code.palette.cmd.addCursorAbove")}
-                    onClick={() => requestEditorEditCommand("addCursorAbove")}
-                    keyShortcuts="Control+Alt+ArrowUp Meta+Alt+ArrowUp"
-                    testId="code-edit-add-cursor-above"
-                  />
-                  <CodeRibbonAction
-                    icon={<CodeRibbonIcon name="addCursorBelow" />}
-                    label={t("code.palette.cmd.addCursorBelow")}
-                    onClick={() => requestEditorEditCommand("addCursorBelow")}
-                    keyShortcuts="Control+Alt+ArrowDown Meta+Alt+ArrowDown"
-                    testId="code-edit-add-cursor-below"
-                  />
-                  <CodeRibbonAction
-                    icon={<CodeRibbonIcon name="addCursors" />}
-                    label={t("code.palette.cmd.addCursorsToLineEnds")}
-                    onClick={() =>
-                      requestEditorEditCommand("addCursorsToLineEnds")
-                    }
-                    keyShortcuts="Alt+Shift+I"
-                    testId="code-edit-add-cursors-line-ends"
-                  />
-                </RibbonCol>
-              </CodeRibbonGroup>
-              <CodeRibbonGroup
-                label={t("code.ribbon.edit.transform")}
-                testId="code-ribbon-group-transform"
-              >
-                <DropdownMenu modal={false}>
-                  <DropdownMenuTrigger asChild>
-                    <CodeRibbonMenuAction
-                      className="note-editor-office-toolbar__menu-trigger"
-                      disabled={!codeMayAuthor}
-                      hasMenuIndicator
-                      icon={<CodeRibbonIcon name="transform" />}
-                      label={t("code.ribbon.edit.transform")}
-                      testId="code-edit-transform-menu"
-                      title={t("code.ribbon.edit.transform")}
-                      aria-haspopup="menu"
-                    />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="note-editor-toolbar-menu"
-                    data-testid="code-edit-transform-menu-content"
-                    onCloseAutoFocus={(event) => event.preventDefault()}
-                  >
-                    <DropdownMenuItem
-                      onSelect={() =>
-                        requestEditorEditCommand("transformUppercase")
-                      }
-                      data-testid="code-edit-transform-uppercase"
-                    >
-                      {t("code.palette.cmd.transformUppercase")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() =>
-                        requestEditorEditCommand("transformLowercase")
-                      }
-                      data-testid="code-edit-transform-lowercase"
-                    >
-                      {t("code.palette.cmd.transformLowercase")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() =>
-                        requestEditorEditCommand("transformTitlecase")
-                      }
-                      data-testid="code-edit-transform-titlecase"
-                    >
-                      {t("code.palette.cmd.transformTitlecase")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </CodeRibbonGroup>
-            </>
-          ) : toolbarTab === "references" ? (
-            <>
-              <CodeRibbonGroup
-                label={t("code.palette.cmd.goToDefinition")}
-                testId="code-ribbon-group-navigate"
-                layout="hstack"
-              >
-              <CodeRibbonAction
-                big
-                icon={<CodeRibbonIcon name="definition" />}
-                label={t("code.palette.cmd.goToDefinition")}
-                onClick={() =>
-                  requestEditorIntelligenceCommand("goToDefinition")
-                }
-                disabled={!editorIntelligenceState.symbolNavigationAvailable}
-                testId="code-references-definition"
-              />
-              <RibbonCol>
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="typeDefinition" />}
-                  label={t("code.palette.cmd.goToTypeDefinition")}
-                  onClick={() =>
-                    requestEditorIntelligenceCommand("goToTypeDefinition")
-                  }
-                  disabled={!editorIntelligenceState.typeNavigationAvailable}
-                  testId="code-references-type-definition"
-                />
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="implementation" />}
-                  label={t("code.palette.cmd.goToImplementation")}
-                  onClick={() =>
-                    requestEditorIntelligenceCommand("goToImplementation")
-                  }
-                  disabled={!editorIntelligenceState.typeNavigationAvailable}
-                  testId="code-references-implementation"
-                />
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="symbols" />}
-                  label={t("code.palette.cmd.goToSymbol")}
-                  onClick={() =>
-                    requestEditorIntelligenceCommand("openSymbols")
-                  }
-                  testId="code-references-symbols"
-                />
-              </RibbonCol>
-              <RibbonCol>
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="goToLine" />}
-                  label={t("code.palette.cmd.goToLine")}
-                  onClick={() => requestEditorIntelligenceCommand("goToLine")}
-                  keyShortcuts="Control+G"
-                  testId="code-references-go-to-line"
-                />
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="explorer" />}
-                  label={t("code.breadcrumbs.file")}
-                  onClick={() =>
-                    workspaceExplorerOpen
-                      ? closeWorkspaceExplorer()
-                      : openWorkspaceExplorer()
-                  }
-                  pressed={workspaceExplorerOpen}
-                  expanded={workspaceExplorerOpen}
-                  badge={workspaceCatalog.files.length}
-                  testId="code-view-workspace"
-                />
-              </RibbonCol>
-              <RibbonCol>
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="goBack" />}
-                  label={t("code.palette.cmd.goBack")}
-                  onClick={() => requestEditorIntelligenceCommand("goBack")}
-                  disabled={!editorIntelligenceState.canGoBack}
-                  disabledReason={navigationBackDisabledReason}
-                  keyShortcuts="Control+Alt+- Meta+Alt+-"
-                  testId="code-references-go-back"
-                />
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="goForward" />}
-                  label={t("code.palette.cmd.goForward")}
-                  onClick={() => requestEditorIntelligenceCommand("goForward")}
-                  disabled={!editorIntelligenceState.canGoForward}
-                  disabledReason={navigationForwardDisabledReason}
-                  keyShortcuts="Control+Shift+-"
-                  testId="code-references-go-forward"
-                />
-              </RibbonCol>
-              </CodeRibbonGroup>
-              <CodeRibbonGroup
-                label={t("code.palette.cmd.findReferences")}
-                testId="code-ribbon-group-inspect"
-                layout="hstack"
-              >
-              <CodeRibbonAction
-                big
-                icon={<CodeRibbonIcon name="findReferences" />}
-                label={t("code.palette.cmd.findReferences")}
-                onClick={() =>
-                  requestEditorIntelligenceCommand("findReferences")
-                }
-                disabled={
-                  !editorIntelligenceState.referencesAvailable ||
-                  editorIntelligenceState.referencesBusy
-                }
-                testId="code-references-find-all"
-              />
-              <RibbonCol>
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="peekDefinition" />}
-                  label={t("code.palette.cmd.peekDefinition")}
-                  onClick={() =>
-                    requestEditorIntelligenceCommand("peekDefinition")
-                  }
-                  disabled={
-                    !editorIntelligenceState.symbolNavigationAvailable ||
-                    editorIntelligenceState.referencesBusy
-                  }
-                  testId="code-references-peek-definition"
-                />
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="peekReferences" />}
-                  label={t("code.palette.cmd.peekReferences")}
-                  onClick={() =>
-                    requestEditorIntelligenceCommand("peekReferences")
-                  }
-                  disabled={
-                    !editorIntelligenceState.referencesAvailable ||
-                    editorIntelligenceState.referencesBusy
-                  }
-                  testId="code-references-peek-references"
-                />
-                {
-}
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="showHover" />}
-                  label={t("code.palette.cmd.showHover")}
-                  onClick={() => requestEditorIntelligenceCommand("showHover")}
-                  testId="code-references-show-hover"
-                />
-              </RibbonCol>
-              <RibbonCol>
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="incomingCalls" />}
-                  label={t("code.palette.cmd.incomingCalls")}
-                  onClick={() =>
-                    requestEditorIntelligenceCommand("showIncomingCalls")
-                  }
-                  disabled={
-                    !isWorkspaceLanguage(language) ||
-                    editorIntelligenceState.referencesBusy
-                  }
-                  testId="code-references-incoming-calls"
-                />
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="outgoingCalls" />}
-                  label={t("code.palette.cmd.outgoingCalls")}
-                  onClick={() =>
-                    requestEditorIntelligenceCommand("showOutgoingCalls")
-                  }
-                  disabled={
-                    !isWorkspaceLanguage(language) ||
-                    editorIntelligenceState.referencesBusy
-                  }
-                  testId="code-references-outgoing-calls"
-                />
-              </RibbonCol>
-              </CodeRibbonGroup>
-              <CodeRibbonGroup
-                label={t("code.palette.cmd.rename")}
-                testId="code-ribbon-group-refactor"
-                layout="hstack"
-              >
-              <CodeRibbonAction
-                big
-                icon={<CodeRibbonIcon name="rename" />}
-                label={t("code.palette.cmd.rename")}
-                onClick={() => requestEditorIntelligenceCommand("rename")}
-                disabled={
-                  !codeMayAuthor || !editorIntelligenceState.renameAvailable
-                }
-                testId="code-references-rename"
-              />
-              <RibbonCol>
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="quickFix" />}
-                  label={t("code.palette.cmd.quickFix")}
-                  onClick={() => requestEditorIntelligenceCommand("quickFix")}
-                  disabled={
-                    !codeMayAuthor ||
-                    !editorIntelligenceState.codeActionsAvailable
-                  }
-                  testId="code-references-quick-fix"
-                />
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="refactor" />}
-                  label={t("code.palette.cmd.refactor")}
-                  onClick={() => requestEditorIntelligenceCommand("refactor")}
-                  disabled={
-                    !codeMayAuthor || !isWorkspaceLanguage(language)
-                  }
-                  disabledReason={refactorDisabledReason}
-                  keyShortcuts="Control+Shift+R Meta+Shift+R"
-                  testId="code-references-refactor"
-                />
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="organizeImports" />}
-                  label={t("code.palette.cmd.organizeImports")}
-                  onClick={() =>
-                    requestEditorIntelligenceCommand("organizeImports")
-                  }
-                  disabled={
-                    !codeMayAuthor ||
-                    !editorIntelligenceState.organizeImportsAvailable
-                  }
-                  testId="code-references-organize-imports"
-                />
-              </RibbonCol>
-              <RibbonCol>
-                {refactorUndoReceipt ? (
-                  <CodeRibbonAction
-                    icon={<CodeRibbonIcon name="refactorUndo" />}
-                    label={t("code.refactor.preview.undo")}
-                    onClick={undoRefactorPreview}
-                    disabled={!refactorUndoCurrent || refactorPreviewBusy}
-                    testId="code-references-refactor-undo"
-                  />
-                ) : null}
-              </RibbonCol>
-              </CodeRibbonGroup>
-            </>
-          ) : toolbarTab === "review" ? (
-            <>
-              <CodeRibbonGroup
-                label={t("code.compare.title")}
-                testId="code-ribbon-group-compare"
-                layout="hstack"
-              >
-              <CodeRibbonAction
-                big
-                icon={<CodeRibbonIcon name="compare" />}
-                label={t("code.compare.title")}
-                onClick={() => requestEditorViewCommand("toggleCompare")}
-                pressed={editorReviewState.compareOpen}
-                expanded={editorReviewState.compareOpen}
-                disabled={!editorReviewState.compareAvailable}
-                disabledReason={compareDisabledReason}
-                badge={editorReviewState.changeCount}
-                testId="code-review-compare"
-              />
-              <RibbonCol>
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="previousChange" />}
-                  label={
-                    editorReviewState.threeWayActive
-                      ? t("code.compare.prevConflict")
-                      : t("code.compare.prevChange")
-                  }
-                  onClick={() => requestEditorReviewCommand("previousChange")}
-                  disabled={!editorReviewState.canNavigate}
-                  disabledReason={reviewNavigationDisabledReason}
-                  testId="code-review-previous"
-                />
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="nextChange" />}
-                  label={
-                    editorReviewState.threeWayActive
-                      ? t("code.compare.nextConflict")
-                      : t("code.compare.nextChange")
-                  }
-                  onClick={() => requestEditorReviewCommand("nextChange")}
-                  disabled={!editorReviewState.canNavigate}
-                  disabledReason={reviewNavigationDisabledReason}
-                  testId="code-review-next"
-                />
-              </RibbonCol>
-              </CodeRibbonGroup>
-              <CodeRibbonGroup
-                label={
-                  editorReviewState.threeWayActive
-                    ? t("code.compare.conflicts")
-                    : t("toolbar.acceptChange")
-                }
-                testId="code-ribbon-group-apply"
-                layout="hstack"
-              >
-              <CodeRibbonAction
-                big
-                icon={
-                  editorReviewState.threeWayActive ? (
-                    <CodeRibbonIcon name="acceptAllIncoming" />
-                  ) : (
-                    <CodeRibbonIcon name="acceptAll" />
-                  )
-                }
-                label={
-                  editorReviewState.threeWayActive
-                    ? t("code.compare.acceptAllIncoming")
-                    : t("toolbar.acceptAllChanges")
-                }
-                onClick={() =>
-                  requestEditorReviewCommand("acceptAllChanges")
-                }
-                disabled={
-                  !codeMayAuthor ||
-                  (editorReviewState.threeWayActive
-                    ? !editorReviewState.canResolve
-                    : !editorReviewState.canApply)
-                }
-                disabledReason={reviewApplyDisabledReason}
-                testId="code-review-accept-all"
-              />
-              <RibbonCol>
-                {editorReviewState.threeWayActive ? (
-                  <CodeRibbonAction
-                    icon={<CodeRibbonIcon name="acceptCurrent" />}
-                    label={t("code.compare.acceptCurrent")}
-                    onClick={() => requestEditorReviewCommand("acceptCurrent")}
-                    disabled={!codeMayAuthor || !editorReviewState.canResolve}
-                    testId="code-review-accept-current"
-                  />
-                ) : null}
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="accept" />}
-                  label={
-                    editorReviewState.threeWayActive
-                      ? t("code.compare.acceptIncoming")
-                      : t("toolbar.acceptChange")
-                  }
-                  onClick={() => requestEditorReviewCommand("acceptChange")}
-                  disabled={
-                    !codeMayAuthor ||
-                    (editorReviewState.threeWayActive
-                      ? !editorReviewState.canResolve
-                      : !editorReviewState.canApply)
-                  }
-                  disabledReason={reviewApplyDisabledReason}
-                  testId="code-review-accept"
-                />
-                {editorReviewState.threeWayActive ? (
-                  <CodeRibbonAction
-                    icon={<CodeRibbonIcon name="acceptBoth" />}
-                    label={t("code.compare.acceptBoth")}
-                    onClick={() => requestEditorReviewCommand("acceptBoth")}
-                    disabled={!codeMayAuthor || !editorReviewState.canResolve}
-                    testId="code-review-accept-both"
-                  />
-                ) : null}
-              </RibbonCol>
-              </CodeRibbonGroup>
-              {editorReviewState.threeWayActive ? (
-                <CodeRibbonGroup
-                  label={t("code.compare.applyMerge")}
-                  testId="code-ribbon-group-merge-complete"
-                >
-                  <CodeRibbonAction
-                    big
-                    icon={<CodeRibbonIcon name="applyMerge" />}
-                    label={t("code.compare.applyMerge")}
-                    onClick={() =>
-                      requestEditorReviewCommand("applyResolvedMerge")
-                    }
-                    disabled={
-                      !codeMayAuthor || !editorReviewState.canApplyMerge
-                    }
-                    testId="code-review-apply-merge"
-                  />
-                </CodeRibbonGroup>
-              ) : null}
-              <CodeRibbonGroup
-                label={t("toolbar.undo")}
-                testId="code-ribbon-group-review-history"
-              >
-              <CodeRibbonAction
-                icon={<CodeRibbonIcon name="undo" />}
-                label={t("toolbar.undo")}
-                onClick={() => requestEditorEditCommand("undo")}
-                disabled={!codeMayAuthor || !editorEditState.canUndo}
-                disabledReason={editUndoDisabledReason}
-                testId="code-review-undo"
-              />
-              </CodeRibbonGroup>
-            </>
-          ) : toolbarTab === "run" ? (
-            <>
-              <CodeRibbonGroup
-                label={t("code.run")}
-                testId="code-ribbon-group-runtime-context"
-              >
-              <span
-                data-testid="code-runtime-label"
-                data-execution-status={executionCapability.status}
-                title={runCapabilityTitle}
-                aria-live="polite"
-                className={workspacePanelStyles.ribbonPill}
-              >
-                {CODE_LANGUAGE_OPTIONS.find((option) => option.id === language)
-                  ?.label ?? language}
-                {lastRunScope
-                  ? ` · ${
-                      lastRunScope.kind === "selection"
-                        ? t("code.statusBar.selectedChars", {
-                            count: lastRunScope.selectedChars,
-                          })
-                        : t("code.statusBar.cursor", {
-                            line: lastRunScope.lineFrom,
-                            col: 1,
-                          })
-                    }`
-                  : ""}
-                {lastRunScope && lastRunScope.rangeCount > 1
-                  ? ` · ${t("code.statusBar.selectionCount", {
-                      count: lastRunScope.rangeCount,
-                    })}`
-                  : ""}
-                {runtimeActivityLabel ? ` · ${runtimeActivityLabel}` : ""}
-                {runCapabilityStatusLabel
-                  ? ` · ${runCapabilityStatusLabel}`
-                  : ""}
-              </span>
-              </CodeRibbonGroup>
-              <CodeRibbonGroup
-                label={t("code.run")}
-                testId="code-ribbon-group-execute"
-                layout="hstack"
-              >
-              <CodeRibbonAction
-                big
-                icon={<CodeRibbonIcon name="runFile" />}
-                label={t("code.runFile")}
-                title={
-                  htmlPreviewRunnable
-                    ? `${t("code.runFile")}: ${t("code.htmlPreviewHint")}`
-                    : language === "latex"
-                      ? `${t("code.runFile")}: ${t("code.latexCompile")} (${LATEX_COMPILE_SHORTCUTS_LABEL})`
-                      : undefined
-                }
-                onClick={() => void handleRun()}
-                disabled={runCommandDisabled}
-                disabledReason={runFileDisabledReason}
-                testId="code-run-all"
-                keyShortcuts={
-                  language === "latex"
-                    ? LATEX_COMPILE_KEY_SHORTCUTS
-                    : "Control+Enter Meta+Enter"
-                }
-              />
-              <RibbonCol>
-                {USE_CODEMIRROR_EDITOR ? (
-                  <CodeRibbonAction
-                    icon={<CodeRibbonIcon name="runSelection" />}
-                    label={runSelectionOrLineLabel}
-                    onClick={() =>
-                      requestEditorExecutionCommand("runSelectionOrLine")
-                    }
-                    disabled={runSelectionCommandDisabled}
-                    disabledReason={runSelectionDisabledReason}
-                    badge={
-                      editorExecutionState.selectionCount > 1
-                        ? editorExecutionState.selectionCount
-                        : undefined
-                    }
-                    testId="code-run-selection-or-line"
-                    keyShortcuts="Shift+Enter"
-                  />
-                ) : null}
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="stop" />}
-                  label={t("code.debugStop")}
-                  onClick={interruptRun}
-                  disabled={!pageBusy || !activeExecutionCanCancel}
-                  disabledReason={runStopDisabledReason}
-                  testId="code-run-stop"
-                  keyShortcuts="Shift+F5"
-                />
-              </RibbonCol>
-              </CodeRibbonGroup>
-              {latexCompilerState ? (
-                <CodeRibbonGroup
-                  label={t("codeOutput.latex.group")}
-                  testId="code-ribbon-group-latex"
-                >
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <CodeRibbonMenuAction
-                        className="note-editor-office-toolbar__menu-trigger"
-                        hasMenuIndicator
-                        icon={<CodeRibbonIcon name="latexCompiler" />}
-                        displayLabel={
-                          latexCompilerState.choice
-                            ? latexCompilerLabel(latexCompilerState.choice, t)
-                            : latexCompilerState.program
-                        }
-                        label={`${t("codeOutput.latex.compiler")}: ${
-                          latexCompilerState.choice
-                            ? latexCompilerLabel(latexCompilerState.choice, t)
-                            : latexCompilerState.program
-                        }`}
-                        testId="code-latex-compiler-menu"
-                        title={t("codeOutput.latex.compilerHint")}
-                        aria-haspopup="menu"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      className="note-editor-toolbar-menu"
-                      data-testid="code-latex-compiler-menu-content"
-                      onCloseAutoFocus={(event) => event.preventDefault()}
-                    >
-                      <LatexCompileMenuItems
-                        autoCompile={latexAutoCompile}
-                        onAutoCompileChange={setLatexAutoCompileEnabled}
-                        draftMode={latexDraftMode}
-                        onDraftModeChange={changeLatexDraftMode}
-                        figureCache={latexFigureCache}
-                        onFigureCacheChange={changeLatexFigureCache}
-                        choice={latexCompilerState.choice}
-                        program={latexCompilerState.program}
-                        onChoose={chooseLatexCompiler}
-                        chooseDisabledReason={
-                          codeMayAuthor ? undefined : codeReadOnlyCommandReason
-                        }
-                        modeDisabledReason={draftReview?.readOnlyReason}
-                        onRecompileFromScratch={recompileLatexFromScratch}
-                        recompileDisabledReason={
-                          runCommandDisabled
-                            ? (runFileDisabledReason ?? t("document.capability.unavailable"))
-                            : undefined
-                        }
-                        testIdPrefix="code-latex-ribbon"
-                      />
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <CodeRibbonAction
-                    icon={<CodeRibbonIcon name="recompileFromScratch" />}
-                    label={t("codeOutput.latex.recompileFromScratch")}
-                    title={t("codeOutput.latex.recompileFromScratchHint")}
-                    onClick={recompileLatexFromScratch}
-                    disabled={runCommandDisabled}
-                    disabledReason={runFileDisabledReason}
-                    testId="code-latex-recompile-from-scratch"
-                  />
-                  <CodeRibbonAction
-                    icon={<CodeRibbonIcon name="goToPdf" />}
-                    label={t("codeOutput.latex.goToPdf")}
-                    title={t("codeOutput.latex.goToPdfHint")}
-                    onClick={() => void goToPdfLocation()}
-                    testId="code-latex-go-to-pdf-ribbon"
-                  />
-                  <CodeRibbonAction
-                    icon={<CodeRibbonIcon name="compileLog" />}
-                    label={t("codeOutput.latex.showLogs")}
-                    title={t("codeOutput.latex.showLogsHint")}
-                    onClick={showLatexReport}
-                    disabled={!shownLatexLog}
-                    disabledReason={t("codeOutput.latex.noLogYet")}
-                    testId="code-latex-show-logs"
-                  />
-                </CodeRibbonGroup>
-              ) : null}
-              <CodeRibbonGroup
-                label={t("code.testExplorer.title")}
-                testId="code-ribbon-group-tests"
-                layout="hstack"
-              >
-              <CodeRibbonAction
-                big
-                icon={<CodeRibbonIcon name="testExplorer" />}
-                label={t("code.testExplorer.title")}
-                onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Test Explorer"))}
-                pressed={testExplorerOpen}
-                expanded={testExplorerOpen}
-                badge={codeTestDiscovery.totalTests}
-                testId="code-run-test-explorer"
-              />
-              <RibbonCol>
-                {false ? (
-                  <span
-                    data-testid="code-test-explorer-disabled-reason"
-                    role="status"
-                    title={testExplorerDisabledReason}
-                    className={workspacePanelStyles.ribbonReason}
-                  >
-                    {testExplorerDisabledReason}
-                  </span>
-                ) : null}
-              </RibbonCol>
-              </CodeRibbonGroup>
-              <CodeRibbonGroup
-                label={t("code.restartRuntime")}
-                testId="code-ribbon-group-runtime-tools"
-                layout="hstack"
-              >
-              <RibbonCol>
-                {stdinAvailable ? (
-                  <CodeRibbonMenuAction
-                    active={stdinOpen}
-                    className="note-editor-office-toolbar__menu-trigger"
-                    displayLabel={t("code.stdinLabel")}
-                    icon={<CodeRibbonIcon name="stdin" />}
-                    label={t("code.stdinHint")}
-                    onClick={() => setStdinOpen((value) => !value)}
-                    data-state={
-                      stdinOpen || stdinText.trim() !== "" ? "open" : undefined
-                    }
-                    testId="code-stdin-toggle"
-                    title={t("code.stdinHint")}
-                  />
-                ) : null}
-                {interactiveConsoleAvailable ? (
-                  <CodeRibbonMenuAction
-                    active={consoleOpen}
-                    className="note-editor-office-toolbar__menu-trigger"
-                    displayLabel={t("code.console.title")}
-                    icon={<CodeRibbonIcon name="console" />}
-                    label={t("code.console.toggle")}
-                    onClick={toggleConsole}
-                    data-state={consoleOpen ? "open" : undefined}
-                    testId="code-console-ribbon-toggle"
-                    title={t("code.console.toggle")}
-                  />
-                ) : null}
-                {restartAvailable ? (
-                  <CodeRibbonMenuAction
-                    className="note-editor-office-toolbar__menu-trigger"
-                    disabled={
-                      debugState.running ||
-                      remotePageBusy ||
-                      (pageBusy &&
-                        activeExecutionCapability?.supports.restart !== true)
-                    }
-                    disabledReason={restartRuntimeDisabledReason}
-                    icon={<CodeRibbonIcon name="restartRuntime" />}
-                    label={t("code.restartRuntime")}
-                    onClick={restartRuntime}
-                    testId="code-restart-runtime"
-                    title={restartRuntimeAccessibleLabel}
-                  />
-                ) : null}
-              </RibbonCol>
-              <RibbonCol>
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="showOutput" />}
-                  label={t("codeOutput.showOutput")}
-                  onClick={() => updateOutputPanelVisibility(true)}
-                  disabled={
-                    !hasRunOutput || outputPanelVisible
-                  }
-                  disabledReason={showOutputDisabledReason}
-                  testId="code-show-output"
-                  keyShortcuts="Control+J Meta+J"
-                />
-                <CodeRibbonMenuAction
-                  className="note-editor-office-toolbar__menu-trigger"
-                  onClick={clearOutput}
-                  disabled={clearOutputDisabled}
-                  disabledReason={clearOutputDisabledReason}
-                  icon={<CodeRibbonIcon name="clearOutput" />}
-                  label={t("codeOutput.clearOutputs")}
-                  testId="code-clear-output"
-                  title={clearOutputAccessibleLabel}
-                />
-              </RibbonCol>
-              </CodeRibbonGroup>
-            </>
-          ) : toolbarTab === "debug" ? (
-            <>
-              <CodeRibbonGroup
-                label={t("code.debugRun")}
-                testId="code-ribbon-group-debug-context"
-              >
-              <span
-                data-testid="code-debug-runtime-label"
-                className={workspacePanelStyles.ribbonPill}
-              >
-                {CODE_LANGUAGE_OPTIONS.find((option) => option.id === language)
-                  ?.label ?? language}
-                {debugState.pausedLine
-                  ? ` · ${t("code.debugPausedAtLine", {
-                      line: debugState.pausedLine,
-                    })}`
-                  : debugState.running
-                    ? ` · ${t("code.debugRun")}`
-                    : !debugState.debuggable
-                      ? ` · ${t("code.debugUnsupported")}`
-                      : ""}
-              </span>
-              </CodeRibbonGroup>
-              <CodeRibbonGroup
-                label={t("code.debugRun")}
-                testId="code-ribbon-group-debug-session"
-                layout="hstack"
-              >
-              <CodeRibbonAction
-                big
-                icon={<CodeRibbonIcon name="debugStart" />}
-                label={t("code.debugRun")}
-                onClick={() => requestDebugCommand("start")}
-                disabled={
-                  pageBusy ||
-                  remotePageBusy ||
-                  debugState.running ||
-                  !debugState.debuggable
-                }
-                disabledReason={debugStartDisabledReason}
-                testId="code-debug-ribbon-run"
-                keyShortcuts="F5"
-              />
-              <RibbonCol>
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="debugRestart" />}
-                  label={t("code.debugRestart")}
-                  onClick={() => requestDebugCommand("restart")}
-                  disabled={!debugState.running}
-                  disabledReason={noActiveDebugSessionReason}
-                  testId="code-debug-ribbon-restart"
-                  keyShortcuts="Control+Shift+F5 Meta+Shift+F5"
-                />
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="debugStop" />}
-                  label={t("code.debugStop")}
-                  onClick={() => requestDebugCommand("stop")}
-                  disabled={!debugState.running}
-                  disabledReason={noActiveDebugSessionReason}
-                  testId="code-debug-ribbon-stop"
-                  keyShortcuts="Shift+F5"
-                />
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="runToCursor" />}
-                  label={t("code.debugRunToCursorShort")}
-                  onClick={() => requestDebugCommand("runToCursor")}
-                  disabled={
-                    pageBusy ||
-                    remotePageBusy ||
-                    debugState.running ||
-                    !debugState.debuggable ||
-                    debugState.currentLine === null
-                  }
-                  disabledReason={debugRunToCursorDisabledReason}
-                  testId="code-debug-ribbon-run-to-cursor"
-                />
-              </RibbonCol>
-              <RibbonCol>
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="breakpoint" />}
-                  label={t("code.debugAddBreakpointCurrent", {
-                    line: debugState.currentLine ?? currentEditorLine,
-                  })}
-                  onClick={() =>
-                    requestDebugCommand("addBreakpointCurrent")
-                  }
-                  disabled={
-                    !codeMayAuthor ||
-                    !debugState.debuggable ||
-                    debugState.currentLine === null
-                  }
-                  disabledReason={debugAddCurrentDisabledReason}
-                  badge={
-                    debugState.breakpointCount > 0
-                      ? debugState.breakpointCount
-                      : undefined
-                  }
-                  testId="code-debug-ribbon-add-current"
-                />
-              </RibbonCol>
-              </CodeRibbonGroup>
-              <CodeRibbonGroup
-                label={t("code.debugStep")}
-                testId="code-ribbon-group-debug-step"
-                layout="hstack"
-              >
-              <CodeRibbonAction
-                big
-                icon={<CodeRibbonIcon name="debugContinue" />}
-                label={t("code.debugContinue")}
-                onClick={() => requestDebugCommand("continue")}
-                disabled={!debugState.paused}
-                disabledReason={debugNotPausedReason}
-                testId="code-debug-ribbon-continue"
-                keyShortcuts="F5"
-              />
-              <RibbonCol>
-                {debugState.supportsDepthStepping ? (
-                  <>
-                    <CodeRibbonAction
-                      icon={<CodeRibbonIcon name="stepOver" />}
-                      label={t("code.debugStepOver")}
-                      onClick={() => requestDebugCommand("stepOver")}
-                      disabled={!debugState.paused}
-                      disabledReason={debugNotPausedReason}
-                      testId="code-debug-ribbon-step-over"
-                      keyShortcuts="F10"
-                    />
-                    <CodeRibbonAction
-                      icon={<CodeRibbonIcon name="stepInto" />}
-                      label={t("code.debugStepInto")}
-                      onClick={() => requestDebugCommand("stepInto")}
-                      disabled={!debugState.paused}
-                      disabledReason={debugNotPausedReason}
-                      testId="code-debug-ribbon-step-into"
-                      keyShortcuts="F11"
-                    />
-                    <CodeRibbonAction
-                      icon={<CodeRibbonIcon name="stepOut" />}
-                      label={t("code.debugStepOut")}
-                      onClick={() => requestDebugCommand("stepOut")}
-                      disabled={!debugState.paused}
-                      disabledReason={debugNotPausedReason}
-                      testId="code-debug-ribbon-step-out"
-                      keyShortcuts="Shift+F11"
-                    />
-                  </>
-                ) : (
-                  <CodeRibbonAction
-                    icon={<CodeRibbonIcon name="step" />}
-                    label={t("code.debugStep")}
-                    onClick={() => requestDebugCommand("step")}
-                    disabled={!debugState.paused}
-                    disabledReason={debugNotPausedReason}
-                    testId="code-debug-ribbon-step"
-                    keyShortcuts="F10 F11"
-                  />
-                )}
-              </RibbonCol>
-              </CodeRibbonGroup>
-            </>
-          ) : toolbarTab === "view" ? (
-            <>
-              <CodeRibbonGroup
-                label={t("code.outline.title")}
-                testId="code-ribbon-group-panels"
-                layout="hstack"
-              >
-              <CodeRibbonAction
-                big
-                icon={<CodeRibbonIcon name="outline" />}
-                label={t("code.outline.title")}
-                onClick={() => requestEditorViewCommand("toggleOutline")}
-                pressed={editorViewState.outlineOpen}
-                expanded={editorViewState.outlineOpen}
-                testId="code-view-outline"
-              />
-              <RibbonCol>
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="problems" />}
-                  label={t("code.problems.title")}
-                  onClick={() =>
-                    workspaceProblemsOpen
-                      ? closeWorkspaceProblems()
-                      : openWorkspaceProblems()
-                  }
-                  pressed={workspaceProblemsOpen}
-                  expanded={workspaceProblemsOpen}
-                  badge={workspaceProblems.totalCount}
-                  testId="code-view-problems"
-                />
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="compare" />}
-                  label={t("code.compare.title")}
-                  onClick={() => requestEditorViewCommand("toggleCompare")}
-                  pressed={editorViewState.compareOpen}
-                  expanded={editorViewState.compareOpen}
-                  disabled={!editorViewState.compareAvailable}
-                  disabledReason={compareDisabledReason}
-                  testId="code-view-compare"
-                />
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="split" />}
-                  label={t("toolbar.splitView")}
-                  onClick={handleToggleSplitView}
-                  pressed={splitViewState.secondaryOpen}
-                  expanded={splitViewState.secondaryOpen}
-                  disabled={!splitViewAvailable}
-                  disabledReason={splitViewDisabledReason}
-                  testId="code-view-split"
-                />
-              </RibbonCol>
-              </CodeRibbonGroup>
-              <CodeRibbonGroup
-                label={t("toolbar.view.windowGroup")}
-                testId="code-ribbon-group-window"
-                layout="hstack"
-              >
-              <CodeRibbonAction
-                big
-                icon={<CodeRibbonIcon name="newWindow" />}
-                label={t("toolbar.newWindow")}
-                onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("New Window"))}
-                testId="code-view-new-window"
-              />
-              <RibbonCol>
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="arrangeAll" />}
-                  label={t("toolbar.arrangeAll")}
-                  onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Arrange All"))}
-                  testId="code-view-arrange-all"
-                />
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="sideBySide" />}
-                  label={t("toolbar.sideBySide")}
-                  onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("View Side by Side"))}
-                  testId="code-view-side-by-side"
-                />
-                <CodeRibbonAction
-                  icon={<CodeRibbonIcon name="synchronousScrolling" />}
-                  label={t("toolbar.synchronousScrolling")}
-                  onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Synchronous Scrolling"))}
-                  pressed={codeSyncScroll?.active === true}
-                  testId="code-view-synchronous-scrolling"
-                />
-              </RibbonCol>
-              </CodeRibbonGroup>
-              <CodeRibbonGroup
-                label={t("code.view.appearanceGroup")}
-                testId="code-ribbon-group-display"
-              >
-              <CodeRibbonAction
-                icon={<CodeRibbonIcon name="minimap" />}
-                label={t("code.settings.minimapLabel")}
-                onClick={() => requestEditorViewCommand("toggleMinimap")}
-                pressed={editorViewState.minimapOn}
-                disabled={!editorViewState.minimapAvailable}
-                testId="code-view-minimap"
-              />
-              <CodeRibbonAction
-                icon={<CodeRibbonIcon name="wordWrap" />}
-                label={t("code.settings.wordWrapLabel")}
-                onClick={() => requestEditorViewCommand("toggleWordWrap")}
-                pressed={editorViewState.wordWrapOn}
-                testId="code-view-word-wrap"
-                keyShortcuts="Alt+Z"
-              />
-              <CodeRibbonAction
-                icon={<CodeRibbonIcon name="whitespace" />}
-                label={t("code.settings.whitespaceLabel")}
-                onClick={() =>
-                  requestEditorViewCommand("toggleRenderWhitespace")
-                }
-                pressed={editorViewState.renderWhitespaceOn}
-                testId="code-view-whitespace"
-              />
-              <CodeRibbonAction
-                icon={<CodeRibbonIcon name="stickyScroll" />}
-                label={t("code.settings.stickyScrollLabel")}
-                onClick={() => requestEditorViewCommand("toggleStickyScroll")}
-                pressed={editorViewState.stickyScrollOn}
-                disabled={!editorViewState.stickyScrollAvailable}
-                testId="code-view-sticky-scroll"
-              />
-              </CodeRibbonGroup>
-              <CodeRibbonGroup
-                label={t("code.view.guidesGroup")}
-                testId="code-ribbon-group-guides"
-              >
-              <CodeRibbonAction
-                icon={<CodeRibbonIcon name="bracketColors" />}
-                label={t("code.settings.bracketColorsLabel")}
-                onClick={() => requestEditorViewCommand("toggleBracketColors")}
-                pressed={editorViewState.bracketColorsOn}
-                testId="code-view-bracket-colors"
-              />
-              <CodeRibbonAction
-                icon={<CodeRibbonIcon name="indentGuides" />}
-                label={t("code.settings.indentGuidesLabel")}
-                onClick={() => requestEditorViewCommand("toggleIndentGuides")}
-                pressed={editorViewState.indentGuidesOn}
-                testId="code-view-indent-guides"
-              />
-              <CodeRibbonAction
-                icon={<CodeRibbonIcon name="bracketPairGuides" />}
-                label={t("code.settings.bracketPairGuidesLabel")}
-                onClick={() =>
-                  requestEditorViewCommand("toggleBracketPairGuides")
-                }
-                pressed={editorViewState.bracketPairGuidesOn}
-                testId="code-view-bracket-pair-guides"
-              />
-              </CodeRibbonGroup>
-              <CodeRibbonGroup
-                label={t("code.settings.zoomLabel")}
-                testId="code-ribbon-group-zoom"
-              >
-              <ContinuousZoomDialPopover
-                open={viewFontZoomOpen}
-                onOpenChange={setViewFontZoomOpen}
-                anchorRef={viewFontZoomAnchorRef}
-                label={t("code.settings.zoomLabel")}
-                testIdPrefix="code-view"
-                trigger={
-                  <CodeRibbonMenuAction
-                    ref={viewFontZoomAnchorRef}
-                    active={viewFontZoomOpen}
-                    displayLabel={t("code.settings.zoomLabel")}
-                    hasMenuIndicator
-                    icon={
-                      <ContinuousZoomCrownGlyph
-                        position={codeFontZoomValueToPosition(
-                          editorFontZoomPercent,
-                          CODE_FONT_ZOOM_MIN_PERCENT,
-                          CODE_FONT_ZOOM_MAX_PERCENT,
-                        )}
-                        valueLabel={formatCodeFontZoomPercent(
-                          editorFontZoomPercent,
-                        )}
-                        open={viewFontZoomOpen}
-                        testId="code-view-zoom-crown"
-                      />
-                    }
-                    label={`${t(
-                      "code.settings.zoomLabel",
-                    )} ${formatCodeFontZoomPercent(
-                      editorFontZoomPercent,
-                    )}`}
-                    testId="code-view-zoom-trigger"
-                    variant="large"
-                  />
-                }
-              >
-                <ContinuousZoomDial
-                  value={editorFontZoomPercent}
-                  min={CODE_FONT_ZOOM_MIN_PERCENT}
-                  max={CODE_FONT_ZOOM_MAX_PERCENT}
-                  defaultValue={CODE_FONT_ZOOM_DEFAULT_PERCENT}
-                  valueToPosition={codeFontZoomValueToPosition}
-                  positionToValue={codeFontZoomPositionToValue}
-                  formatter={formatCodeFontZoomPercent}
-                  ariaValueText={formatCodeFontZoomPercent}
-                  label={t("code.settings.zoomLabel")}
-                  resetLabel={t("code.palette.cmd.zoomReset")}
-                  resetDisabled={
-                    editorViewState.fontScale === FONT_SCALE_DEFAULT
-                  }
-                  resetDisabledReason={zoomResetDisabledReason}
-                  testIdPrefix="code-view"
-                  onPreview={previewEditorFontZoomPercent}
-                  onChange={previewEditorFontZoomPercent}
-                  onCommit={commitEditorFontZoomPercent}
-                  keyboardPositionStep={
-                    1 /
-                    (CODE_FONT_ZOOM_MAX_PERCENT - CODE_FONT_ZOOM_MIN_PERCENT)
-                  }
-                  keyboardPagePositionStep={
-                    10 /
-                    (CODE_FONT_ZOOM_MAX_PERCENT - CODE_FONT_ZOOM_MIN_PERCENT)
-                  }
-                />
-              </ContinuousZoomDialPopover>
-              </CodeRibbonGroup>
-              <CodeRibbonGroup
-                label={t("code.settings.menuLabel")}
-                testId="code-ribbon-group-tools"
-                layout="hstack"
-              >
-              <CodeRibbonAction
-                big
-                icon={<CodeRibbonIcon name="settings" />}
-                label={t("code.settings.menuLabel")}
-                onClick={() => requestEditorViewCommand("toggleSettings")}
-                pressed={editorViewState.settingsOpen}
-                expanded={editorViewState.settingsOpen}
-                testId="code-view-settings"
-              />
-              <CodeRibbonAction
-                big
-                icon={<CodeRibbonIcon name="commandPalette" />}
-                label={t("code.palette.title")}
-                onClick={() => requestEditorViewCommand("openCommandPalette")}
-                pressed={editorViewState.commandPaletteOpen}
-                expanded={editorViewState.commandPaletteOpen}
-                testId="code-view-command-palette"
-              />
-              </CodeRibbonGroup>
-            </>
           ) : null}
         </CodeRibbonStrip>
       </div>
@@ -17637,60 +15213,7 @@ export default function CodeWindow({
           { id: "delete", label: t("pages.recoveredCopy.delete"), run: dropRecoveredCopy },
         ]}
       />
-      {(toolbarTab === "review" || toolbarTab === "view") &&
-      savedVersionCatalogState.pageId === pageId &&
-      savedVersionCatalogState.status !== "ready" ? (
-        // Loading stays an inline strip; a failure becomes the window's
-        // notice (the Docs window-issue surface), retry included.
-        <WindowNotice
-          title={t("versions.loadFailed")}
-          when={savedVersionCatalogState.status === "error"}
-          scopeKey={`code-version-catalog:${pageId}`}
-          testId="code-version-catalog-notice"
-        >
-        <div
-          role={
-            savedVersionCatalogState.status === "error" ? "alert" : "status"
-          }
-          aria-live={
-            savedVersionCatalogState.status === "error" ? "assertive" : "polite"
-          }
-          data-testid={
-            savedVersionCatalogState.status === "error"
-              ? "code-version-catalog-error"
-              : "code-version-catalog-loading"
-          }
-          // The windows' shared notice banner; while loading, its quiet form.
-          className={`page-save-conflict-banner${
-            savedVersionCatalogState.status === "error"
-              ? ""
-              : ` ${workspacePanelStyles.bannerQuiet}`
-          }`}
-        >
-          <History size={16} aria-hidden="true" />
-          <div className="page-save-conflict-banner__copy">
-            <strong>
-              {savedVersionCatalogState.status === "error"
-                ? t("versions.loadFailed")
-                : t("code.compare.loading")}
-            </strong>
-          </div>
-          {savedVersionCatalogState.status === "error" ? (
-            <div className="page-save-conflict-banner__actions">
-            <button
-              type="button"
-              data-testid="code-version-catalog-retry"
-              onClick={() => setSavedVersionNonce((nonce) => nonce + 1)}
-              className="office-ribbon-control note-editor-office-toolbar__button" data-office-control-part="button"
-            >
-              <RotateCcw size={13} aria-hidden="true" />
-              {t("tray.retry")}
-            </button>
-            </div>
-          ) : null}
-        </div>
-        </WindowNotice>
-      ) : null}
+      {null}
       {downloadError ? (
         <WindowNotice title={t("documentIssues.title")}>
           <div
@@ -17855,55 +15378,7 @@ export default function CodeWindow({
           />
         </CodeDockedPane>
       ) : null}
-      {stdinOpen && stdinAvailable ? (
-        <div
-          // The dialog chrome's fields without a card of their own.
-          className={`${officeDialogClassName({ tone: "code" })} office-dialog--embedded ${workspacePanelStyles.stdinBar}`}
-        >
-          <textarea
-            value={stdinText}
-            onChange={(event) => {
-              const nextStdin = event.target.value.slice(0, stdinCharacterLimit);
-              const retirePersistedOutput =
-                persistedOutputRef.current !== null &&
-                persistedOutputAuthorityRef.current?.stdin !== nextStdin;
-              if (retirePersistedOutput) {
-                persistedOutputRef.current = null;
-                persistedOutputAuthorityRef.current = null;
-                persistedRunNavigationRef.current = null;
-                if (codeMayAuthorRef.current) {
-                  persistRef.current(
-                    languageRef.current,
-                    contentRef.current,
-                    null,
-                  );
-                }
-              }
-              runProfileRequestGenerationRef.current += 1;
-              stdinIdentityGenerationRef.current += 1;
-              stdinTextRef.current = nextStdin;
-              setStdinSha256(null);
-              setStdinText(nextStdin);
-            }}
-            maxLength={stdinCharacterLimit}
-            placeholder={t("code.stdinPlaceholder")}
-            rows={3}
-            data-testid="code-stdin-input"
-            aria-invalid={stdinOverLimit || undefined}
-            aria-describedby="code-stdin-budget"
-            className={`${officeDialogParts.field} ${officeDialogParts.mono} ${workspacePanelStyles.stdinField}`}
-          />
-          <span
-            id="code-stdin-budget"
-            data-testid="code-stdin-budget"
-            role="status"
-            aria-live="polite"
-            className={`${stdinOverLimit ? officeDialogParts.error : officeDialogParts.hint} ${workspacePanelStyles.stdinBudget}`}
-          >
-            {stdinByteCount}/{stdinByteLimit} B
-          </span>
-        </div>
-      ) : null}
+      {null}
       <div
         data-testid="code-workspace-body"
         style={{
@@ -17977,9 +15452,7 @@ export default function CodeWindow({
             }}
             onNavigateResult={(result) => void navigateCodeTestResult(result)}
             onDebugTest={
-              ENABLE_CODE_DEBUG_V1
-                ? (result) => void debugCodeTestResult(result)
-                : undefined
+              undefined
             }
             onSelectHistory={selectCodeTestRunTimelineEntry}
             onRerunHistory={rerunCodeTestTimelineEntry}
@@ -18330,41 +15803,28 @@ export default function CodeWindow({
             paneIsActive ? handleProblemsChange : undefined
           }
           onCursorLineChange={
-            paneIsActive && ENABLE_CODE_DEBUG_V1
-              ? setCurrentEditorLine
-              : undefined
+            undefined
           }
           lineNavigationRequest={
-            paneIsActive && ENABLE_CODE_DEBUG_V1
-              ? debugLineNavigationRequest
-              : undefined
+            undefined
           }
           onLineNavigationRequestHandled={
-            paneIsActive && ENABLE_CODE_DEBUG_V1
-              ? handleDebugLineNavigationRequestHandled
-              : undefined
+            undefined
           }
           debugBreakpointLines={
-            ENABLE_CODE_DEBUG_V1 ? debugBreakpointLines : undefined
+            undefined
           }
           debugUnboundBreakpointLines={
-            ENABLE_CODE_DEBUG_V1 ? debugUnboundBreakpointLines : undefined
+            undefined
           }
           onToggleDebugBreakpoint={
-            paneIsActive &&
-            ENABLE_CODE_DEBUG_V1 &&
-            debugLanguageAvailable &&
-            codeMayAuthor
-              ? handleDebugBreakpointToggle
-              : undefined
+            undefined
           }
           onRebaseDebugBreakpoints={
-            paneIsActive && ENABLE_CODE_DEBUG_V1
-              ? handleDebugBreakpointRebase
-              : undefined
+            undefined
           }
           debugPausedLine={
-            ENABLE_CODE_DEBUG_V1 ? debugPausedLine : undefined
+            undefined
           }
         />
           </div>
@@ -18397,45 +15857,7 @@ export default function CodeWindow({
           breakpoints survive Home/Run/Debug ribbon navigation. `hidden`
           removes inactive debug controls from layout and the accessibility
           tree; no worker starts until the user explicitly presses Debug. */}
-      {ENABLE_CODE_DEBUG_V1 ? (
-        <div hidden={toolbarTab !== "debug"} data-testid="code-debug-host">
-          <CodeDebugPanel
-            content={contentRef.current}
-            testExecution={activeCodeTestDebugExecution}
-            language={language}
-            viewStateKey={activeCodeTestDebugViewStateKey}
-            currentLine={
-              USE_CODEMIRROR_EDITOR ? currentEditorLine : undefined
-            }
-            pythonNamespace={pageId}
-            sandboxOwner={javaScriptSandboxOwner}
-            stdin={stdinText.trim() !== "" ? stdinText : undefined}
-            onNavigateToLine={
-              USE_CODEMIRROR_EDITOR
-                ? requestDebugLineNavigation
-                : undefined
-            }
-            onPausedLineChange={
-              USE_CODEMIRROR_EDITOR ? setDebugPausedLine : undefined
-            }
-            configuration={debugConfiguration}
-            onConfigurationChange={handleDebugConfigurationChange}
-            configurationReadOnly={!codeMayAuthor}
-            commandRequest={debugCommandRequest}
-            onCommandRequestHandled={handleDebugCommandRequestHandled}
-            onStateChange={handleDebugStateChange}
-            persistedTimeline={debugTimeline}
-            currentSourceFingerprint={debugTimelineSourceSha256}
-            selectedTimelineIndex={selectedDebugTimelineIndex}
-            onTimelineSelect={selectDebugTimelineEntry}
-            onTimelineDebugAgain={debugTimelineEntryAgain}
-            onTimelineClear={clearDebugTimeline}
-            onSessionSettled={handleDebugSessionSettled}
-            hostBusy={pageBusy || remotePageBusy}
-            acquireExecution={acquireDebugExecution}
-          />
-        </div>
-      ) : null}
+      {null}
       {consoleOpen && interactiveConsoleAvailable ? (
         <div
           data-testid="code-console-host"

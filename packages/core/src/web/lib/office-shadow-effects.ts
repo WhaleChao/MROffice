@@ -273,6 +273,14 @@ export const POWERPOINT_SHADOW_BLUR_DEVIATION = 1 / (2 * Math.SQRT2);
 export interface OfficeShadowCssOptions {
   /** The Gaussian deviation an outer shadow's blur radius draws, per unit of it (default 1/2: CSS's own reading of a blur radius). */
   readonly blurDeviation?: number;
+  /**
+   * An evenly scaled shadow (sx = sy, no skew) is a layer under the box
+   * scaled about its alignment point, as an uneven one is (a slide's
+   * picture: PowerPoint grows a 150 % shadow about `tl` to the right and
+   * down, probe lf13-shscale). Unstated, it is a box shadow whose spread
+   * grows every side by the scale of the box's shorter side, as before.
+   */
+  readonly evenScaleUnder?: boolean;
 }
 
 export function officeShadowCss(
@@ -301,7 +309,7 @@ export function officeShadowCss(
   const sy = (shadow.sy ?? 100_000) / 100_000;
   const kx = (shadow.kx ?? 0) / 60_000;
   const ky = (shadow.ky ?? 0) / 60_000;
-  if (sx === sy && sx > 0 && !kx && !ky) {
+  if (sx === sy && sx > 0 && !kx && !ky && !(options.evenScaleUnder && sx !== 1)) {
     const spread = Math.round((((sx - 1) * Math.min(size.width, size.height)) / 2) * 100) / 100;
     return { boxShadow: `${x}px ${y}px ${outerBlur}px ${spread}px ${color}` };
   }

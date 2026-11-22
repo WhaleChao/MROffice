@@ -24,7 +24,7 @@ import {
   Maximize2,
 } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import { OfficeSemanticIcon } from "@mrnote/core/web/components/office-ribbon/icons/OfficeSemanticIcon.tsx";
-import { IconSlideShowFromCurrent } from "@mrnote/core/web/components/notebook/contents/PresentationRibbonIcons.tsx";
+import { IconSlideShowFromCurrent } from "../PresentationRibbonIcons";
 import { OfficeStatusProgress, type OfficeStatusPhase } from "@mrnote/core/web/components/office-ribbon/OfficeStatusBar.tsx";
 import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import type { PresentationLiveView, PresentationViewportZoomMode } from "../../../../lib/presentation/view-zoom";

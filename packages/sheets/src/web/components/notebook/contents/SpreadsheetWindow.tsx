@@ -4,6 +4,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { onlyofficeInitialZoom } from "@mrnote/core/web/lib/embed/onlyoffice-frame.ts";
 import { stackPrimaryFamily } from "@mrnote/core/web/lib/office-fonts/hangul-em.ts";
 import { styleStatesAFormat } from "../../../lib/spreadsheet/style-source-xf";
 import { useDraftCommitOnLeave } from "@mrnote/core/web/lib/draft-commit-on-leave.ts";
@@ -13,17 +14,10 @@ import { ptToPx, ptToPxRounded } from "@mrnote/core/web/lib/office-units.ts";
 import { planSelectionPaneReorder, type OfficeSelectionPaneMove } from "@mrnote/core/web/components/office-ribbon/officeSelectionPaneReorder.ts";
 import { officePictureGeometryClipPath } from "@mrnote/core/web/lib/office-picture-geometry.ts";
 import { officeObjectHasImportIdentity } from "@mrnote/core/web/lib/office-object-provenance.ts";
-import { useInkArmedFocusRelease } from "@mrnote/ink/web/lib/ink-armed-focus.ts";
-import { officeGalleryMenuStyles } from "@mrnote/core/web/components/office-ribbon/OfficeGalleryMenu.tsx";
+import { useInkArmedFocusRelease } from "@mrnote/core/web/lib/ink-armed-focus.ts";
 import type { SmartArtColorTheme } from "@mrnote/core/web/lib/office-smartart/colors.ts";
 import { OfficeSmartArtGraphicFrame } from "@mrnote/core/web/components/office-ribbon/OfficeSmartArtGraphicFrame.tsx";
-import {
-  readSmartArtGraphicEffect,
-  readSmartArtGraphicFormat,
-  sheetSmartArtBackgroundStyle,
-  smartArtGraphicFormatRecord,
-  type SmartArtGraphicFormatChange,
-} from "@mrnote/core/web/lib/spreadsheet/smartart-background.ts";
+import { readSmartArtGraphicEffect, sheetSmartArtBackgroundStyle, smartArtGraphicFormatRecord, type SmartArtGraphicFormatChange } from "@mrnote/core/web/lib/spreadsheet/smartart-background.ts";
 import { STRUCTURAL_SAVE_CALCULATION_WAIT_MS, structuralSaveBarrier } from "../../../lib/spreadsheet/structural-save-wait";
 import {
   smartArtCommandItemId,
@@ -105,23 +99,16 @@ import {
 import { installPenInkTouchGuard, useDeviceHasTouch, useDrawWithTouch } from "@mrnote/core/web/lib/draw-with-touch.ts";
 import { usePenFirstDraw } from "@mrnote/core/web/lib/pen-first-draw.ts";
 import { OfficePenPalette } from "@mrnote/core/web/components/office-ribbon/OfficePenPalette.tsx";
-import { useInkTouchShield } from "@mrnote/ink/web/lib/ink-touch-shield.ts";
-import { useInkPenHover } from "@mrnote/ink/web/lib/office-ink-hover.ts";
-import { useInkFingerTaps } from "@mrnote/ink/web/lib/ink-finger-taps.ts";
-import { InkLiveCanvas } from "@mrnote/ink/web/lib/office-ink-live.ts";
+import { useInkTouchShield } from "@mrnote/core/web/lib/ink-touch-shield.ts";
+import { useInkPenHover } from "@mrnote/core/web/lib/office-ink-hover.ts";
+import { useInkFingerTaps } from "@mrnote/core/web/lib/ink-finger-taps.ts";
+import { InkLiveCanvas } from "@mrnote/core/web/lib/office-ink-live.ts";
 import { inkLandsAtLift, WetInkBatcher } from "@mrnote/core/web/lib/office-wet-ink.ts";
-import { useWetInkLayer } from "@mrnote/ink/web/lib/office-wet-ink-layer.ts";
+import { useWetInkLayer } from "@mrnote/core/web/lib/office-wet-ink-layer.ts";
 import { createInkPresencePublisher, type InkPresenceStroke } from "@mrnote/core/web/lib/collab/ink-presence.ts";
 import { InkPresenceSvgLayer } from "@mrnote/core/web/components/notebook/InkPresenceSvgLayer.tsx";
 import type { InkRulerState } from "@mrnote/core/web/lib/office-ink-ruler.ts";
-import { OfficeInkRuler } from "@mrnote/core/web/components/office-ribbon/OfficeInkRuler.tsx";
-import { IconInkRuler } from "@mrnote/core/web/components/notebook/contents/PresentationRibbonIcons.tsx";
-import {
-  inkCornerDegreesForTool,
-  inkPressuresVary,
-  inkStrokePathData,
-  inkVariableWidthOutlinePathData,
-} from "@mrnote/core/web/lib/office-ink-smooth.ts";
+import { inkCornerDegreesForTool, inkPressuresVary, inkVariableWidthOutlinePathData } from "@mrnote/core/web/lib/office-ink-smooth.ts";
 import { isAgentMotionActiveFor } from "@mrnote/core/web/__cut__/md1c55ca47c.ts";
 import { stageAiBlockTransition } from "@mrnote/core/web/__cut__/m39a24b3ce5.ts";
 import {
@@ -193,17 +180,7 @@ import {
 
 
 import { SpreadsheetPdfViewError, type SpreadsheetPdfExportView } from "@mrnote/core/web/lib/spreadsheet/pdf-export-view.ts";
-import {
-  arrangeAllOfficeWindows,
-  officeWindowChoices,
-  openNewOfficeWindow,
-  readOfficeSideBySideLayout,
-  registerOfficeScrollPort,
-  startOfficeSideBySide,
-  switchToOfficeWindow,
-  toggleOfficeSynchronizedScrolling,
-  useOfficeSynchronizedScrollState,
-} from "@mrnote/core/web/lib/office-window-commands/index.ts";
+import { openNewOfficeWindow, registerOfficeScrollPort } from "@mrnote/core/web/lib/office-window-commands/index.ts";
 import {
   useSpreadsheetBorderDraw,
   type SpreadsheetBorderDrawMode,
@@ -223,138 +200,7 @@ import { SpreadsheetPivotTimeline, type SpreadsheetPivotTimelineLabels } from ".
 import { applyPivotTimelineChange, DEFAULT_PIVOT_TIMELINE_HEIGHT, DEFAULT_PIVOT_TIMELINE_WIDTH, normalizePivotTimelines, pivotTimelineBlock, type PivotTimelineChange } from "../../../lib/spreadsheet/pivot-timeline";
 
 import { nativeOfficeOwnsFocus } from "@mrnote/core/web/lib/native-office-focus.ts";
-import {
-  canAuthorNativeXlsxChart,
-  chartAxesButton,
-  chartAxisTitleDepthButton,
-  chartAxisTitleXButton,
-  chartAxisTitleYButton,
-  chartColorsButton,
-  chartDataLabelPositionButton,
-  chartDataLabelsButton,
-  chartDataTableButton,
-  chartDesignTypeSupportsSource as chartDesignTypeSupportsSourceLib,
-  chartDisplayBlanksButton,
-  chartHistogramBinsButton,
-  chartErrorBarsButton,
-  chartGridlinesButton,
-  chartLegendButton,
-  chartLegendPositionButton,
-  chartLinesButton,
-  chartMatrixSupportsType,
-  chartQuickLayoutButton,
-  chartSelectDataButton,
-  chartSelectDataSourceButton,
-  insertChartTypeTakesLabelRule as selectDataLabelRuleType,
-  insertChartGateMatrix,
-  nativeChartGateMatrix,
-  selectDataRangeLabelFields,
-  type SheetChartSettledField,
-  chartStyleButton,
-  chartSwitchRowColumnButton,
-  chartTitleButton,
-  chartTrendlineButton,
-  chartTypeButton,
-  chartSecondaryAxisButton,
-  chartUpDownBarsButton,
-  EXTENDED_XLSX_CHART_TYPES,
-  insertChartSelectionLayout as insertChartSelectionLayoutLib,
-  plannedSheetChart,
-  sheetChartDataLiteral,
-  sheetChartModelEdited,
-  sheetChartModelOf as sheetChartModelOfLib,
-  sheetChartReadingOf as sheetChartReadingOfLib,
-  nativeChartAsSeriesBoundObject,
-  sheetChartWithChangedColors,
-  sheetWithChartModel,
-  sheetWithoutChart,
-  sheetWithSparklines,
-  sparklineCopiedBy,
-  sparklineGroupPatched,
-  sparklinesGrouped,
-  sparklinesUngrouped,
-  SPARKLINE_COLOR_TARGET_FIELDS,
-  type SparklineColorTarget,
-  sparklineMemberRangeRefusal,
-  sparklinePatched,
-  sparklinesCleared,
-  sparklinesInserted,
-  anchorForObjectBounds,
-  anchorPointColumn,
-  anchorPointRow,
-  anchorWithDefaults,
-  cssPixelsToEmu,
-  EMU_PER_CSS_PIXEL,
-  insertedShapeObject,
-  insertedWordArtObject,
-  MAX_PICTURE_ALT_TEXT_LENGTH,
-  MAX_PICTURE_NAME_LENGTH,
-  normalizedTableAltTextInput,
-  objectBoundsPixels,
-  sheetSmartArtLayoutFrame,
-  objectFlipPatch,
-  objectAspectLocked,
-  objectLockAspectPatch,
-  objectPrintObjectPatch,
-  objectPlacementPatch,
-  objectRotateStepPatch,
-  objectRotationPatch,
-  objectShadowColorPatch,
-  objectShadowPresetPatch,
-  objectSizePixels,
-  objectsWithout,
-  objectsWithShapeAltText,
-  pictureAltTextPatch,
-  pictureCroppedObject,
-  pictureSizePatch,
-  pictureStylePatch,
-  shapeChangePatch,
-  shapeEffectPresetPatch,
-  shapeFillColorPatch,
-  shapeLineEndsPatch,
-  shapeOutlineDashPatch,
-  shapeOutlineSketchPatch,
-  shapeTextTransformPatch,
-  shapeLineDetailPatch,
-  shapeFillLinePatch,
-  shapeOutlineColorPatch,
-  shapeOutlineWeightPatch,
-  shapeQuickStylePatch,
-  shapeSizePatch,
-  shapeTextColorPatch,
-  shapeTextPaintPatch,
-  shapeTextPatch,
-  shapeTextSizePatch,
-  objectsAfterBoxEdit,
-  pictureCropFrameBounds,
-  pictureCropHandleRequest,
-  pictureCropStart,
-  sheetArrangedForDrawing,
-  sheetArrangedForPaneUnits,
-  sheetDrawingPaneUnits,
-  sheetDrawingsArrangeable,
-  sheetWithGroupGathered,
-  sheetWithDrawingStack,
-  sheetSmartArtGroupAt as sheetSmartArtGroupAtLib,
-  spreadsheetLineShapeTakesNoText,
-  spreadsheetObjectHasPatchbackTransformIdentity,
-  spreadsheetObjectInsertedByPage,
-  spreadsheetObjectCollapsedByCells,
-  readSmartArtFrame,
-  smartArtFrameBounds,
-  smartArtFrameForBounds,
-  smartArtFramesSettled,
-  smartArtMembersInFrame,
-  spreadsheetObjectRotation,
-  spreadsheetObjectBoundsFloor,
-  type ChartQuickLayoutId,
-  type DrawingGrid,
-  type DrawingObjectPatch,
-  type SheetChartButton,
-  type SheetChartData,
-  type SpreadsheetObjectAnchor,
-  type SpreadsheetObjectBounds,
-} from "../../../lib/spreadsheet/drawing-buttons";
+import { canAuthorNativeXlsxChart, chartAxesButton, chartAxisTitleDepthButton, chartAxisTitleXButton, chartAxisTitleYButton, chartColorsButton, chartDataLabelPositionButton, chartDataLabelsButton, chartDataTableButton, chartDesignTypeSupportsSource as chartDesignTypeSupportsSourceLib, chartDisplayBlanksButton, chartHistogramBinsButton, chartErrorBarsButton, chartGridlinesButton, chartLegendButton, chartLegendPositionButton, chartLinesButton, chartMatrixSupportsType, chartQuickLayoutButton, chartSelectDataButton, chartSelectDataSourceButton, insertChartTypeTakesLabelRule as selectDataLabelRuleType, insertChartGateMatrix, nativeChartGateMatrix, selectDataRangeLabelFields, type SheetChartSettledField, chartStyleButton, chartSwitchRowColumnButton, chartTitleButton, chartTrendlineButton, chartTypeButton, chartSecondaryAxisButton, chartUpDownBarsButton, insertChartSelectionLayout as insertChartSelectionLayoutLib, plannedSheetChart, sheetChartDataLiteral, sheetChartModelEdited, sheetChartModelOf as sheetChartModelOfLib, sheetChartReadingOf as sheetChartReadingOfLib, nativeChartAsSeriesBoundObject, sheetChartWithChangedColors, sheetWithChartModel, sheetWithoutChart, sheetWithSparklines, sparklineCopiedBy, sparklineGroupPatched, sparklinesGrouped, sparklinesUngrouped, SPARKLINE_COLOR_TARGET_FIELDS, type SparklineColorTarget, sparklinePatched, sparklinesCleared, sparklinesInserted, anchorForObjectBounds, anchorPointColumn, anchorPointRow, anchorWithDefaults, cssPixelsToEmu, EMU_PER_CSS_PIXEL, insertedShapeObject, insertedWordArtObject, MAX_PICTURE_ALT_TEXT_LENGTH, MAX_PICTURE_NAME_LENGTH, normalizedTableAltTextInput, objectBoundsPixels, sheetSmartArtLayoutFrame, objectFlipPatch, objectAspectLocked, objectLockAspectPatch, objectPrintObjectPatch, objectPlacementPatch, objectRotateStepPatch, objectRotationPatch, objectShadowColorPatch, objectShadowPresetPatch, objectSizePixels, objectsWithout, objectsWithShapeAltText, pictureAltTextPatch, pictureCroppedObject, pictureSizePatch, pictureStylePatch, shapeChangePatch, shapeEffectPresetPatch, shapeFillColorPatch, shapeLineEndsPatch, shapeOutlineDashPatch, shapeOutlineSketchPatch, shapeTextTransformPatch, shapeLineDetailPatch, shapeFillLinePatch, shapeOutlineColorPatch, shapeOutlineWeightPatch, shapeQuickStylePatch, shapeSizePatch, shapeTextColorPatch, shapeTextPaintPatch, shapeTextPatch, shapeTextSizePatch, objectsAfterBoxEdit, pictureCropFrameBounds, pictureCropHandleRequest, pictureCropStart, sheetArrangedForDrawing, sheetArrangedForPaneUnits, sheetDrawingPaneUnits, sheetDrawingsArrangeable, sheetWithGroupGathered, sheetSmartArtGroupAt as sheetSmartArtGroupAtLib, spreadsheetLineShapeTakesNoText, spreadsheetObjectHasPatchbackTransformIdentity, spreadsheetObjectInsertedByPage, spreadsheetObjectCollapsedByCells, readSmartArtFrame, smartArtFrameBounds, smartArtFrameForBounds, smartArtFramesSettled, smartArtMembersInFrame, spreadsheetObjectRotation, spreadsheetObjectBoundsFloor, type ChartQuickLayoutId, type DrawingGrid, type DrawingObjectPatch, type SheetChartButton, type SheetChartData, type SpreadsheetObjectAnchor, type SpreadsheetObjectBounds } from "../../../lib/spreadsheet/drawing-buttons";
 import {
   cellRunsAfterFontPatch,
   copyCellMap,
@@ -373,12 +219,14 @@ import {
   type SpreadsheetCell,
 } from "@mrnote/core/web/lib/spreadsheet/cell-buttons.ts";
 import { cellShiftedSheet, columnWidthsSheet, defaultColumnWidthSheet, deletedLinesSheet, insertedLinesSheet, lineFormatProtected as lineFormatProtectedFor, manualHiddenSpanSheet, pivotSourcesFollowLines, resolveSpreadsheetNativeGrid, sizeMapsEqual } from "../../../lib/spreadsheet/row-column-buttons";
-import { OFFICE_PRINT_IDENTITY, officeEastAsianFamily, officePrintAnchorKind, officePrintedDrawingFrame, officePrintedDrawingReach, officePrintedFontPx, officePrintedRowDots, officePrintedTextInsetDots, officePrintsInApplicationStandardFont } from "../../../lib/spreadsheet/office-print-metrics";
+import { chartRecordFramePrintedReachPx } from "../../../lib/spreadsheet/chart-print-input";
+import { anchorBoxTurned } from "@mrnote/core/web/lib/spreadsheet/drawing-rotation-box.ts";
+import { OFFICE_PRINT_IDENTITY, officeEastAsianFamily, officeMarkedDrawingSize, officePrintAnchorKind, officePrintedDrawingFrame, officePrintedDrawingReach, officePrintedFontPx, officePrintedRowDots, officePrintedTextInsetDots, officePrintsInApplicationStandardFont, officeShapeOutlineReachPx } from "../../../lib/spreadsheet/office-print-metrics";
 import { printedStripEdges } from "../../../lib/spreadsheet/printed-cell-borders";
 import { forecastOutputSheet, type ForecastOutputRequest } from "../../../lib/spreadsheet/forecast-sheet-output";
 import { activeSheetAfterDelete, copiedSheetWorkbook, deletedSheetWorkbook, MAX_SHEETS, movedSheetIndex, movedSheetWorkbook, newWorksheetFor, renamedSheetWorkbook, sheetHiddenWorkbook, sheetUnhideable, tabColoredWorkbook, unhiddenSheet, visibleSheetAfterHiding, workbookNameMirrorsForNewSheet } from "../../../lib/spreadsheet/sheet-buttons";
 import { frozenSheet, splitLinesSheet, splitPlacedSheet, splitRemovedSheet } from "../../../lib/spreadsheet/view-buttons";
-import { galleryCellsWithoutHyperlinks, galleryCountEmptyRows, galleryFreezeAtCell, galleryUsedRange, galleryValueUsedRange } from "../../../lib/spreadsheet/automate-gallery";
+import { galleryCountEmptyRows, galleryUsedRange, galleryValueUsedRange } from "../../../lib/spreadsheet/automate-gallery";
 import {
   backgroundInputContexts,
   buildSpillOverlay,
@@ -390,18 +238,7 @@ import {
 } from "@mrnote/core/web/lib/spreadsheet/display-cache.ts";
 import { clearedSheetForRange } from "../../../lib/spreadsheet/clear-buttons";
 import { fillAcrossCells, justifyLines, type FillAcrossMode } from "../../../lib/spreadsheet/fill-extras";
-import {
-  advanceCreateNames,
-  answerCreateNamesReplace,
-  defaultCreateNamesSides,
-  namesFromSelection,
-  readRecentFunctions,
-  withRecentFunction,
-  writeRecentFunctions,
-  type CreatedNamePlan,
-  type CreateNamesProgress,
-  type CreateNamesSides,
-} from "../../../lib/spreadsheet/formulas-ribbon-extras";
+import { advanceCreateNames, answerCreateNamesReplace, namesFromSelection, type CreatedNamePlan, type CreateNamesProgress, type CreateNamesSides } from "../../../lib/spreadsheet/formulas-ribbon-extras";
 import { defineNamePlan, definedNameMutation, deletedNameMutation, nameManagerSheets, namesMutatedSheets, workbookNamedRangeCatalog,
   renameCapturesReferences,
   renameCapturedByFormulaLocals,
@@ -428,11 +265,11 @@ import {
   type HeldWhatIfSheet,
   type HeldWhatIfTables,
 } from "../../../lib/spreadsheet/what-if-table-hold";
-import { consolidatePlan, parseConsolidateSource, type ConsolidateSourceParseResult } from "../../../lib/spreadsheet/consolidate-buttons";
+import { parseConsolidateSource, type ConsolidateSourceParseResult } from "../../../lib/spreadsheet/consolidate-buttons";
 import { advancedFilterCriteriaFormulas, advancedFilterPlan } from "../../../lib/spreadsheet/advanced-filter-buttons";
-import { MAX_PIVOT_SOURCE_CELLS, pivotSourceReference, pivotSourceRefusal, NEW_PIVOT_LAYOUT_DEFAULTS, pivotClearedAll, pivotNewWorksheet, pivotLiveSource, pivotRefreshPlan, pivotSourceSheetOf, type PivotLiveSource, newPivotChartRecord as newPivotChartRecordFor, nextPivotWorksheetIdentity, pivotCommitPlan, pivotConfigForNewSheet, pivotConfigWithSafeOutput as pivotConfigWithSafeOutputOn, PIVOT_NEW_SHEET_ANCHOR, pivotSourceSnapshot, sheetWithPivotColumnsFitted } from "../../../lib/spreadsheet/pivot-buttons";
+import { MAX_PIVOT_SOURCE_CELLS, pivotSourceReference, pivotSourceRefusal, NEW_PIVOT_LAYOUT_DEFAULTS, pivotNewWorksheet, pivotLiveSource, pivotSourceSheetOf, type PivotLiveSource, newPivotChartRecord as newPivotChartRecordFor, nextPivotWorksheetIdentity, pivotCommitPlan, pivotConfigForNewSheet, pivotConfigWithSafeOutput as pivotConfigWithSafeOutputOn, PIVOT_NEW_SHEET_ANCHOR, pivotSourceSnapshot, sheetWithPivotColumnsFitted } from "../../../lib/spreadsheet/pivot-buttons";
 import { autoFilledSheet, cellForFill, edgeFillRequest, edgeFillRulePlans, resolveCellClipboardScalar, seriesAutoFillPlan, seriesFillRequest, textToColumnsRequest } from "../../../lib/spreadsheet/fill-buttons";
-import { autoOutlinedGroups, outlineGroupsSheet, removeDuplicatesSheet, removeSubtotalsSheet, subtotaledSheet } from "../../../lib/spreadsheet/data-tool-buttons";
+import { outlineGroupsSheet, removeDuplicatesSheet, removeSubtotalsSheet, subtotaledSheet } from "../../../lib/spreadsheet/data-tool-buttons";
 import {
   viewOptionsWithWorkbookTheme,
   workbookThemeFromViewOptions,
@@ -444,7 +281,7 @@ import {
   mergeLockedByProtection,
   sheetAfterMergeButton,
 } from "../../../lib/spreadsheet/merge-buttons";
-import { fitPagesScaling, manualBreaksInsertedAt, manualBreaksRemovedAt, pageMarginSelectionFromPrintSettings, printSettingsClearedByPageSetup, printSettingsFromPageSetupDraft, printSettingsWithManualBreaks, printSettingsWithMarginPreset, printSettingsWithPrintArea, printSettingsWithPrintOptionToggled, printSettingsWithQuickSetting, workbookThemeChange } from "../../../lib/spreadsheet/page-layout-buttons";
+import { manualBreaksInsertedAt, manualBreaksRemovedAt, pageMarginSelectionFromPrintSettings, printSettingsClearedByPageSetup, printSettingsFromPageSetupDraft, printSettingsWithManualBreaks, printSettingsWithMarginPreset, printSettingsWithPrintArea, printSettingsWithPrintOptionToggled, printSettingsWithQuickSetting, workbookThemeChange } from "../../../lib/spreadsheet/page-layout-buttons";
 import { applyCellCommentChange, sheetWithCellNote, sheetWithNoteVisibilityToggled, sheetWithoutProtection, sheetWithProtection } from "../../../lib/spreadsheet/review-buttons";
 import { normalizeNativeFontSize } from "@mrnote/core/web/lib/spreadsheet/native-font-size.ts";
 import { useSpreadsheetTextEngineEpoch } from "./spreadsheet/useSpreadsheetTextEngineEpoch";
@@ -464,20 +301,8 @@ import type { OfficeFontFace } from "@mrnote/core/web/components/office-ribbon/o
 import { officePrimaryFontFamily } from "@mrnote/core/web/components/office-ribbon/officeTypographyCatalog.ts";
 import { measureAutoRowsNow, officeKnownStyleFace, officeScriptMarks, useSpreadsheetAutoRowHeights, type AutoRowMeasurement } from "./spreadsheet/useSpreadsheetAutoRowHeights";
 import {OfficeShapeStyleGallery} from "@mrnote/core/web/components/office-ribbon/OfficeShapeStyleGallery.tsx";
-import { OfficePaperSizePreview } from "@mrnote/core/web/components/office-ribbon/OfficePageSetupMenu.tsx";
-import { OfficePictureMenuIcon } from "@mrnote/core/web/components/office-ribbon/icons/OfficePictureMenuIcon.tsx";
 import { OfficePictureStyleGraphic } from "@mrnote/core/web/components/office-ribbon/OfficePictureStyleGraphic.tsx";
-import {
-  SPREADSHEET_PICTURE_EFFECT_MENU_KINDS,
-  SPREADSHEET_PICTURE_EFFECT_MENU_KINDS_WITH_SHADOW,
-  spreadsheetPictureShadowInEffects,
-  spreadsheetPictureEffectFromParameter,
-  spreadsheetPictureEffectParameter,
-  spreadsheetPictureEffectPatch,
-  spreadsheetPictureEffectsBlocker,
-} from "../../../lib/spreadsheet/picture-effects";
-import { OfficePictureEffectsMenu } from "@mrnote/core/web/components/office-ribbon/OfficePictureEffectsMenu.tsx";
-import { presentationEffectsMenuLabels } from "@mrnote/core/web/components/notebook/contents/presentation/presentationEffectsLabels.ts";
+import { spreadsheetPictureEffectFromParameter, spreadsheetPictureEffectPatch } from "../../../lib/spreadsheet/picture-effects";
 import { OfficePictureEffectsFrame } from "@mrnote/core/web/components/office-ribbon/OfficePictureEffectsFrame.tsx";
 import {
   type OfficePictureStyleId,
@@ -539,63 +364,7 @@ import {
 } from "react";
 import { subscribeWorkbookWarmupProgress, workbookWarmupProgress } from "@mrnote/core/web/lib/collab/workbook-shard-warmup.ts";
 import { skipDevOwnerStacksForThisRender } from "@mrnote/core/web/lib/react/dev-owner-stacks.ts";
-import {
-  AlignVerticalJustifyCenter,
-  AlignVerticalJustifyEnd,
-  AlignVerticalJustifyStart,
-  ArrowDownAZ,
-  ArrowUpAZ,
-  BookOpen,
-  CircleDollarSign,
-  CircleDot,
-  CornerDownLeft,
-  Download,
-  Eraser,
-  Eye,
-  Grid3X3,
-  Pencil,
-  Filter,
-  FilterX,
-  FilePlus2,
-  History,
-  ImageIcon,
-  Link as LinkIcon,
-  MessageSquare,
-  MoreHorizontal,
-  PaintBucket,
-  PanelLeft,
-  PanelRight,
-  Plus,
-  RotateCcw,
-  Undo2,
-  Redo2,
-  SquareSigma,
-  SquareSplitHorizontal,
-  TableProperties,
-  WandSparkles,
-  TableCellsMerge,
-  Target,
-  Upload,
-  Trash2,
-  Wand2,
-  X,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Rows3,
-  Columns3,
-  ListTree,
-  Activity,
-  StickyNote,
-  TrendingUp,
-  AlertTriangle as ValidationWarningIcon,
-  Info as ValidationInformationIcon,
-  XCircle as ValidationStopIcon,
-  CircleAlert,
-  Printer,
-  Group as SparklineGroupIcon,
-  Ungroup as SparklineUngroupIcon,
-} from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
+import { AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart, ArrowDownAZ, ArrowUpAZ, CornerDownLeft, Download, Eraser, Eye, Grid3X3, Filter, History, ImageIcon, Link as LinkIcon, MessageSquare, PaintBucket, Plus, RotateCcw, Undo2, Redo2, TableProperties, WandSparkles, TableCellsMerge, Upload, Wand2, X, Check, ChevronDown, ChevronRight, ListTree, StickyNote, AlertTriangle as ValidationWarningIcon, Info as ValidationInformationIcon, XCircle as ValidationStopIcon, CircleAlert, Printer } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import { useLocale, useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import { createPortal, flushSync } from "react-dom";
 import { hiddenRowSpansPastEnd, rowsShownPastEndOf, sheetCoveringRanges } from "../../../lib/spreadsheet/sheet-extent";
@@ -623,7 +392,6 @@ import {
   type PageExportFormat,
   type PageExportLastGoodCopy,
 } from "@mrnote/core/web/lib/page-export.ts";
-import { askOfficePassword, setDocumentOpenPassword } from "@mrnote/core/web/lib/office/office-encryption.ts";
 import { isApiRequestError } from "@mrnote/core/web/lib/api.ts";
 import PageExportLossConfirmDialog from "@mrnote/core/web/components/ui/PageExportLossConfirmDialog.tsx";
 import { printPdfBlob } from "@mrnote/core/web/lib/print-pdf.ts";
@@ -649,7 +417,7 @@ import {
   conditionalRulesWithNewRule,
   type ConditionalFormatMutationAction,
 } from "../../../lib/spreadsheet/conditional-buttons";
-import { areaLinkSourceOf, linkOverPlace, printedLinkOverPlace, sheetWithoutHyperlinkAreasOver } from "@mrnote/core/web/lib/spreadsheet/hyperlink-areas.ts";
+import { areaLinkSourceOf, linkOverPlace, printedLinkOverPlace } from "@mrnote/core/web/lib/spreadsheet/hyperlink-areas.ts";
 import {
   hyperlinkTargetFor,
   sheetAfterAutoSum,
@@ -701,21 +469,8 @@ import {
 // two editors that feel unrelated. native-page-window.css retints the accent
 // parts teal for this surface — the geometry has one home, not two.
 import { DocsHomeIcon } from "@mrnote/core/web/components/console/editor/DocumentHomeRibbonIcons.tsx";
-import {
-  OfficeRibbonButton,
-  RibbonCol,
-  RibbonRow,
-} from "@mrnote/core/web/components/office-ribbon/OfficeRibbonChassis.tsx";
-import {
-  OfficeHomeClipboardComposite,
-  OfficeHomeCommand,
-  OfficeHomeCommandRow,
-  OfficeHomeCommandStack,
-  OfficeHomeRibbonGroup,
-  OfficeHomeGallery,
-  OfficeHomeLargeSplitLayout,
-  OfficeHomeSplitLayout,
-} from "@mrnote/core/web/components/office-ribbon/OfficeHomeRibbon.tsx";
+import { OfficeRibbonButton, RibbonRow } from "@mrnote/core/web/components/office-ribbon/OfficeRibbonChassis.tsx";
+import { OfficeHomeClipboardComposite, OfficeHomeCommandRow, OfficeHomeCommandStack, OfficeHomeGallery, OfficeHomeSplitLayout } from "@mrnote/core/web/components/office-ribbon/OfficeHomeRibbon.tsx";
 import {
   loadOfficeImageNaturalSize,
   officeInsertedPictureSize,
@@ -768,7 +523,6 @@ import {
   SpreadsheetCollapseDialogButton,
   SpreadsheetRangePickerBar,
 } from "./spreadsheet/SpreadsheetRangePicker";
-import { OfficeRibbonNumberField } from "@mrnote/core/web/components/office-ribbon/OfficeRibbonNumberField.tsx";
 import {
   OfficeStyleGallery,
   type OfficeStyleGalleryGroup,
@@ -807,6 +561,11 @@ import {
   type ScreenClippingRect,
 } from "@mrnote/core/web/lib/display-media-screenshot.ts";
 import { OfficeAltTextPane } from "@mrnote/core/web/components/office-ribbon/OfficeAltTextPane.tsx";
+import { OfficeTaskPane } from "@mrnote/core/web/components/office-ribbon/OfficeTaskPane.tsx";
+import {
+  OfficeThesaurusPane,
+  type OfficeThesaurusEntry,
+} from "@mrnote/core/web/components/office-ribbon/OfficeThesaurusPane.tsx";
 import {
   OfficeDockedPane,
   OfficeTaskPaneDockHost,
@@ -818,44 +577,14 @@ import {
   readOfficeTaskPaneCover,
   useOfficeTaskPaneCover,
 } from "@mrnote/core/web/components/office-ribbon/officeTaskPaneOverlay.ts";
-import {
-  OfficeInkAddPenMenuItems,
-  OfficeInkEraserMenuItems,
-  OfficeInkPenGallery,
-  OfficeInkHideRibbonCommand,
-  OfficeInkTouchDrawCommand,
-  useInkDrawTools,
-  OfficeInkTrackpadSwitch,
-} from "@mrnote/core/web/components/office-ribbon/OfficeInkRibbon.tsx";
-import { OfficeColorPalettePopover } from "@mrnote/core/web/components/office-ribbon/OfficeColorPalettePopover.tsx";
 import DocumentInkTrackpad from "@mrnote/docs/web/components/console/editor/native-document/DocumentInkTrackpad.tsx";
-import {
-  DOCUMENT_INK_MAX_PENS,
-  documentInkEraserRadiusPx,
-  type DocumentInkEraser,
-  type DocumentInkPoint,
-  type DocumentInkTool,
-} from "@mrnote/core/web/lib/document-ink.ts";
-import {
-  officeInkPenById,
-  officeInkPenProfileFromStorage,
-  serializeOfficeInkPenProfile,
-  withOfficeInkPen,
-  withOfficeInkPenAdded,
-  withOfficeInkPenRemoved,
-  type OfficeInkPenProfile,
-} from "@mrnote/ink/web/lib/office-ink-pens.ts";
+import { documentInkEraserRadiusPx, type DocumentInkEraser, type DocumentInkPoint, type DocumentInkTool } from "@mrnote/core/web/lib/document-ink.ts";
+import { officeInkPenById, officeInkPenProfileFromStorage, serializeOfficeInkPenProfile, withOfficeInkPen, withOfficeInkPenRemoved, type OfficeInkPenProfile } from "@mrnote/core/web/lib/office-ink-pens.ts";
 import {
   spreadsheetInkStrokePoints,
   spreadsheetInkObjectBoxPx,
 } from "../../../lib/spreadsheet/ink-erase";
-import {
-  SPREADSHEET_INK_DEFAULT_PEN_CONTROL_IDS,
-  SPREADSHEET_INK_PEN_PROFILE_STORAGE_KEY,
-  SPREADSHEET_INK_PEN_SPEC,
-  spreadsheetInkWidthPx,
-} from "../../../lib/spreadsheet/ink-pens";
-import { OFFICE_PAGE_ORIENTATION_ICON_IDS } from "@mrnote/core/web/components/office-ribbon/icons/officeIconRegistry.ts";
+import { SPREADSHEET_INK_PEN_PROFILE_STORAGE_KEY, SPREADSHEET_INK_PEN_SPEC, spreadsheetInkWidthPx } from "../../../lib/spreadsheet/ink-pens";
 import {
   ribbonFontFamilyLabel,
 } from "@mrnote/core/web/components/office-ribbon/RibbonFontFamilyPicker.tsx";
@@ -897,32 +626,13 @@ import {
   inkReplayFrame,
   inkReplayTimeline,
   type InkReplayTimeline,
-} from "@mrnote/ink/web/lib/office-ink-replay.ts";
-import { SpreadsheetPageLayoutIcon } from "./spreadsheet/SpreadsheetPageLayoutRibbonIcons";
-import {
-  SpreadsheetThemeColorGallery,
-  SpreadsheetThemeFontGallery,
-} from "./spreadsheet/SpreadsheetThemeAxisGallery";
-import spreadsheetThemeAxisStyles from "./spreadsheet/SpreadsheetThemeAxisGallery.module.css";
-import {
-  nextCustomThemeFontsName,
-  OfficeCreateThemeFontsDialog,
-  type OfficeThemeFontsDraft,
-} from "@mrnote/core/web/components/office-ribbon/OfficeCreateThemeFontsDialog.tsx";
-import {
-  SpreadsheetThemeEffectGallery,
-  SpreadsheetThemeGallery,
-} from "./spreadsheet/SpreadsheetThemeGallery";
-import { SpreadsheetViewModeIcon } from "./spreadsheet/SpreadsheetViewModeIcons";
+} from "@mrnote/core/web/lib/office-ink-replay.ts";
+import { type OfficeThemeFontsDraft } from "@/components/office-ribbon/OfficeCreateThemeFontsDialog";
 import SpreadsheetPageLayoutView, { type PageLayoutDrawingTransaction } from "./spreadsheet/SpreadsheetPageLayoutView";
 import type { DocumentChartAreaStyleKey } from "@mrnote/core/web/components/console/editor/native-document/DocumentChartFormatRibbon.tsx";
 import { normalizeChartNativeLook } from "@mrnote/core/web/lib/office-chart-native-look.ts";
-import { documentChartStyleAttrs, DOCUMENT_CHART_STYLES, type DocumentChartStyleId, type DocumentChartStylePaint } from "@mrnote/core/web/components/console/editor/native-document/documentChartStyles.ts";
-import {
-  hiddenCategoriesAmongSource,
-  spreadsheetChartTypeForLeaf,
-  spreadsheetChartV2Drawn,
-} from "@mrnote/core/web/lib/spreadsheet/chart-v2-binding.ts";
+import { DOCUMENT_CHART_STYLES, type DocumentChartStyleId, type DocumentChartStylePaint } from "@mrnote/core/web/components/console/editor/native-document/documentChartStyles.ts";
+import { spreadsheetChartTypeForLeaf, spreadsheetChartV2Drawn } from "@mrnote/core/web/lib/spreadsheet/chart-v2-binding.ts";
 import { spreadsheetChartTitle } from "@mrnote/core/web/lib/spreadsheet/chart-title.ts";
 import { chartPointCellValue, spreadsheetChartFamily, spreadsheetChartLeafOf } from "@mrnote/core/web/lib/spreadsheet/chart-v2-binding.ts";
 import { spreadsheetChartPreserveReasonKey } from "../../../lib/spreadsheet/chart-preserve-reasons";
@@ -943,30 +653,14 @@ import {
   type SpreadsheetChartLike,
   type SpreadsheetChartV2Live,
 } from "@mrnote/core/web/lib/spreadsheet/chart-v2-model.ts";
-import { officeChartActiveQuickLayout, officeChartQuickLayoutAvailable, officeChartWithQuickLayout } from "@mrnote/core/web/lib/office-charts/quick-layout.ts";
+import { officeChartWithQuickLayout } from "@mrnote/core/web/lib/office-charts/quick-layout.ts";
 import { CHART_STYLE_PRESET_FOR_C_STYLE } from "@mrnote/core/web/lib/office-charts/chart-style-presets.generated.ts";
-import {
-  presentationChartAreaStyle,
-  presentationChartEffectStyle,
-  presentationChartPaintStyle,
-  presentationChartTitleTextStyle,
-  setPresentationChartAreaStyle,
-} from "@mrnote/core/web/lib/presentation-chart-desktop.ts";
 import {
   SHEET_NAME_PROBLEM_MESSAGE_KEYS,
   nextDefaultSheetNumber,
   sheetNameProblem,
 } from "../../../lib/spreadsheet/sheet-name-rules";
-import {
-  CHART_ELEMENT_TRENDLINES,
-  CHART_TRENDLINE_NAMES,
-  chartDataLabelPlacementName,
-  chartFormatWithDataLabelContents,
-  chartWithElementIntent,
-  type ChartDataLabelOverridePatch,
-  type ChartDataLabelTarget,
-  chartWithSeriesMarker,
-} from "@mrnote/core/web/lib/office-charts/chart-elements.ts";
+import { CHART_ELEMENT_TRENDLINES, CHART_TRENDLINE_NAMES, chartDataLabelPlacementName, chartWithElementIntent, type ChartDataLabelOverridePatch, type ChartDataLabelTarget, chartWithSeriesMarker } from "@mrnote/core/web/lib/office-charts/chart-elements.ts";
 // Office ships ONE chart catalog and ONE SmartArt catalog for Word, Excel and
 // PowerPoint (docs/office-graphics/UNIFICATION-PLAN.md §1). The worksheet reads
 // those shared modules instead of keeping its own gallery of kinds.
@@ -996,10 +690,7 @@ import {
 } from "@mrnote/core/web/lib/office-charts/chart-font-dialog.ts";
 import { primaryOfficeFontFace } from "@mrnote/core/web/components/office-ribbon/officeFontFace.ts";
 import { OfficeChartTitleInput } from "@mrnote/core/web/components/office-ribbon/OfficeChartTitleInput.tsx";
-import {
-  officeChartElementView,
-  type OfficeChartLegendPosition,
-} from "@mrnote/core/web/components/office-ribbon/OfficeChartDesignRibbon.tsx";
+import { type OfficeChartLegendPosition } from "@mrnote/core/web/components/office-ribbon/OfficeChartDesignRibbon.tsx";
 // A preserved native diagram draws through the SAME native-geometry renderer
 // the slide editor uses; the worksheet does not own a second DrawingML painter.
 import {
@@ -1042,11 +733,7 @@ import { registerSmartArtDefinitionPage } from "@mrnote/core/web/lib/office-smar
 // host-neutral logic. The worksheet computes nothing of its own here — it reads
 // the diagram, hands it to these, and writes what comes back through
 // `replaceActiveSheet` in one undo step, the same seam Presentation uses.
-import {
-  OfficeSmartArtDesignTab,
-  type OfficeSmartArtDesignTabDiagram,
-  type OfficeSmartArtDesignTabDiagramState,
-} from "@mrnote/core/web/components/office-ribbon/OfficeSmartArtDesignTab.tsx";
+import { type OfficeSmartArtDesignTabDiagram, type OfficeSmartArtDesignTabDiagramState } from "@mrnote/core/web/components/office-ribbon/OfficeSmartArtDesignTab.tsx";
 import {
   OfficeSmartArtContextMenu,
   openOfficeSmartArtLayoutGallery,
@@ -1093,22 +780,12 @@ import { type SmartArtStyleId } from "@mrnote/core/web/lib/office-smartart/style
 import {
   smartArtCameraCss,
 } from "@mrnote/core/web/lib/office-smartart/canvas-3d.ts";
-import {
-  smartArtEditIn2dKey,
-  smartArtEditingIn2d,
-  smartArtFlat2d,
-  smartArtGraphicHasScene,
-  smartArtMemberHasScene,
-  smartArtShapesLockedIn3d,
-  toggleSmartArtEditingIn2d,
-  useSmartArtEditIn2dVersion,
-} from "@mrnote/core/web/lib/office-smartart/edit-in-2d.ts";
+import { smartArtEditIn2dKey, smartArtEditingIn2d, smartArtFlat2d, smartArtGraphicHasScene, smartArtMemberHasScene, smartArtShapesLockedIn3d, useSmartArtEditIn2dVersion } from "@mrnote/core/web/lib/office-smartart/edit-in-2d.ts";
 import { normalizeSpreadsheetChartFormat, spreadsheetChartLegacyDisplay, synchronizeSpreadsheetChartFormat, type SpreadsheetChartFormat } from "@mrnote/core/web/lib/spreadsheet/chart-format.ts";
 import type { ChartBlockAttrsV2 } from "@mrnote/core/web/components/console/editor/extensions/chartBlockShared.ts";
 import { CHART_SUBTYPES_BY_FAMILY, type ChartFamily, type ChartSubtype } from "@mrnote/core/web/components/console/editor/extensions/chartBlockShared.ts";
 import { parseChartRefAreas, parseChartRefRange } from "@mrnote/core/web/lib/spreadsheet/chart.ts";
-import { chartDrawingBounds, chartDrawingGroupId, selectedChartDrawings, groupChartDrawings, ungroupChartDrawings, transformChartDrawingGroup, type ChartDrawingFrame } from "../../../lib/spreadsheet/chart-groups";
-import { applyMultiRotate, selectionBoundingBox } from "@mrnote/core/web/lib/presentation-multi-transform.ts";
+import { chartDrawingBounds, chartDrawingGroupId, selectedChartDrawings, transformChartDrawingGroup, type ChartDrawingFrame } from "../../../lib/spreadsheet/chart-groups";
 import { type SpreadsheetDesktopChartTypeChoice } from "./spreadsheet/SpreadsheetChartTypeMenu";
 import { OfficeChartComboDialog } from "@mrnote/core/web/components/office-ribbon/OfficeChartComboDialog.tsx";
 import { OfficeAllChartsDialog, OfficeChartTemplateSaveDialog } from "@mrnote/core/web/components/office-ribbon/OfficeAllChartsDialog.tsx";
@@ -1155,13 +832,7 @@ import {
 import {
   SpreadsheetFormulaIcon,
 } from "@mrnote/core/web/components/notebook/contents/spreadsheet/SpreadsheetFormulaRibbonIcons.tsx";
-import {
-  SpreadsheetFunctionDialogs, FormulaEvaluationDialog, ErrorCheckPanel,
-  SpreadsheetDialogLoading, preloadSpreadsheetFunctionDialogs,
-  preloadFormulaEvaluationDialog, preloadErrorCheckPanel,
-  registerSpreadsheetLazyRecovery,
-  secureEveryWriter,
-} from "./spreadsheet/SpreadsheetLazyDialogs";
+import { SpreadsheetFunctionDialogs, FormulaEvaluationDialog, ErrorCheckPanel, SpreadsheetDialogLoading, preloadSpreadsheetFunctionDialogs, registerSpreadsheetLazyRecovery, secureEveryWriter } from "./spreadsheet/SpreadsheetLazyDialogs";
 import {
   attachSpreadsheetFacade,
   createSpreadsheetFacade,
@@ -1199,7 +870,7 @@ import {
   spreadsheetCellControlWritable,
 } from "../../../lib/spreadsheet/visible-command-authority";
 import { SPREADSHEET_COPILOT_RESUME_HOSTS } from "@mrnote/core/web/__cut__/m3985607fbf.ts";
-import { SpreadsheetChartFontDialog, SpreadsheetChartFormatRibbon, SpreadsheetCopilotPartsPanel, SpreadsheetEditorCopilotSurface, SpreadsheetImmersiveReader, SpreadsheetSelectionCopilotPanel, useWarmSpreadsheetLazyPanels } from "./spreadsheet/SpreadsheetLazyPanels";
+import { SpreadsheetChartFontDialog, SpreadsheetCopilotPartsPanel, SpreadsheetEditorCopilotSurface, SpreadsheetImmersiveReader, SpreadsheetSelectionCopilotPanel, useWarmSpreadsheetLazyPanels } from "./spreadsheet/SpreadsheetLazyPanels";
 import { resumedCopilotSelection, usePendingCopilotResume } from "@mrnote/core/web/__cut__/m2da8b6d223.ts";
 import { applySpreadsheetNativeWorksheetCopy } from "@mrnote/core/web/lib/spreadsheet-native-copy-host.ts";
 import { applySpreadsheetNativeObjectCopy, applySpreadsheetNativeObjectCopyHistory, reconcileSpreadsheetObjectCopyView, spreadsheetNativeObjectCopyAvailable } from "@mrnote/core/web/lib/spreadsheet-native-object-copy-host.ts";
@@ -1242,6 +913,10 @@ const EMPTY_PIVOT_AREA_ROWS = 18;
 const EMPTY_PIVOT_FRAME_COLOR = "#999999";
 /** How long after the last key a tiled sheet's arriving tiles wait to be merged (applyTiledModel). */
 const TILED_APPLY_AFTER_KEYS_MS = 600;
+// The tallest custom default (15.75 pt, Google Sheets' own) under which a cell
+// in Excel's opening view fits the rows below it (viewHeldRows; the API's
+// _CUSTOM_DEFAULT_VIEW_CELL_MAX_DEFAULT_PX).
+const CUSTOM_DEFAULT_VIEW_CELL_MAX_DEFAULT_PX = 21;
 const TILED_WHOLE_RANGE_RULES = new Set(["colorScale", "dataBar", "iconSet", "topBottom", "aboveBelowAverage", "duplicateValues"]);
 import {
   applySpreadsheetPageCommandWithResult,
@@ -1333,26 +1008,7 @@ import {
 import {
   ForecastSheetDialog,
 } from "../../../lib/spreadsheet/ForecastSheetDialog";
-import {
-  advanceWorksheetCalculationAuthority,
-  worksheetCalculationLedgerLineEdit,
-  type WorksheetCalculationLinesDropped,
-  DEFAULT_CALCULATION_STATE,
-  MAX_WORKSHEET_CALCULATION_FORMULAS,
-  afterEdit,
-  calculationStatusText,
-  normalizeCalculationMode,
-  recalculationScopeForKey,
-  resetWorksheetCalculationAuthority,
-  worksheetCalculationSeedSnapshot,
-  worksheetCalculationTokenIsCurrent,
-  worksheetFormulaResultKey,
-  withMode,
-  type CalculationMode,
-  type WorksheetCalculationAuthority,
-  type WorksheetCalculationLedger,
-  type WorksheetCalculationToken,
-} from "@mrnote/core/web/lib/spreadsheet/calculation-mode.ts";
+import { advanceWorksheetCalculationAuthority, worksheetCalculationLedgerLineEdit, type WorksheetCalculationLinesDropped, DEFAULT_CALCULATION_STATE, MAX_WORKSHEET_CALCULATION_FORMULAS, afterEdit, normalizeCalculationMode, recalculationScopeForKey, resetWorksheetCalculationAuthority, worksheetCalculationSeedSnapshot, worksheetCalculationTokenIsCurrent, worksheetFormulaResultKey, withMode, type CalculationMode, type WorksheetCalculationAuthority, type WorksheetCalculationLedger, type WorksheetCalculationToken } from "@mrnote/core/web/lib/spreadsheet/calculation-mode.ts";
 import {
   calculatedColumnFormulaAt,
   errorCheckCellFrom,
@@ -1620,7 +1276,6 @@ import { latexToReversibleWordLinear } from "@mrnote/core/web/lib/unicode-math/i
 // the Docs MathBlock's in-place field and contextual Equation tab, on the
 // worksheet's equation text boxes (useSpreadsheetEquations).
 import { OfficeEquationInsertSplitButton } from "@mrnote/core/web/components/office-equation/OfficeEquationInsertSplitButton.tsx";
-import { SpreadsheetEquationContextRibbon } from "./spreadsheet/SpreadsheetEquationContextRibbon";
 import { useSpreadsheetEquations } from "./spreadsheet/useSpreadsheetEquations";
 import {
   fitSpreadsheetEquationBox,
@@ -1687,6 +1342,7 @@ import {
   coveredCells,
   expandRangeToMergeClosure,
   mergeAcrossSpans,
+  mergeAnchorCells,
   mergeAwareJump,
   mergeAwareMoveTarget,
   mergeContentCarry,
@@ -1706,29 +1362,10 @@ import {
   type DrawingStackKind,
   type DrawingStackMove,
 } from "../../../lib/spreadsheet/drawing-stack";
-import {
-  drawingStackKey,
-  spreadsheetDrawingReorderLayers,
-  spreadsheetDrawingStackReordered,
-  spreadsheetReorderLayerBox,
-  type SpreadsheetDrawingReorderLayer,
-  type SpreadsheetReorderDrawing,
-} from "../../../lib/spreadsheet/drawing-reorder";
-import { rerouteSpreadsheetConnectors, spreadsheetConnectorIsGlued } from "../../../lib/spreadsheet/connector-glue";
-import {
-  regroupRecordFor,
-  rememberUngroup,
-  type RegroupRecord,
-} from "@mrnote/slides/web/lib/presentation-regroup.ts";
-import {
-  officeShapesMergeable,
-  requestOfficeShapeMerge,
-  type OfficeMergeShapesOperation,
-} from "@mrnote/core/web/lib/office-shape-merge-client.ts";
-import { spreadsheetMergeableShape, spreadsheetObjectsAfterMerge } from "../../../lib/spreadsheet/shape-merge";
+import { type SpreadsheetDrawingReorderLayer, type SpreadsheetReorderDrawing } from "@/lib/spreadsheet/drawing-reorder";
+import { type RegroupRecord } from "@mrnote/slides/web/lib/presentation-regroup.ts";
+import { type OfficeMergeShapesOperation } from "@mrnote/core/web/lib/office-shape-merge-client.ts";
 import { engineErrorMessageKey, isEngineAbort } from "@mrnote/core/web/lib/engine-host/client.ts";
-import { PresentationReorderObjectsDialog } from "@mrnote/slides/web/lib/presentation/PresentationReorderObjectsDialog.tsx";
-import { OfficeReorderLayerPreview } from "@mrnote/core/web/components/office-ribbon/OfficeReorderLayerPreview.tsx";
 import {
   SHEET_DRAWING_PANES,
   sheetDrawingPaneOrigin,
@@ -1861,32 +1498,7 @@ import {
   MAX_SCENARIO_SUMMARY_RESULT_CELLS,
 } from "../../../lib/spreadsheet/scenario-summary";
 import { buildScenarioPivotRecipe } from "../../../lib/spreadsheet/scenario-pivot";
-import {
-  dependentOptionsForCell,
-  listRuleOptions,
-  normalizeRules,
-  rangeHasRule,
-  resolveInputMessage,
-  ruleForCell,
-  validationRuleAreas,
-  scanInvalidCells,
-  shouldBlockInvalidEntry,
-  snapshotRulesForValidationPaste,
-  validateValue,
-  validationCandidateText,
-  validationAlertButtons,
-  type ErrorStyle,
-  type InvalidCellCoord,
-  type ValidationAlertDecision,
-  type ValidationContext,
-  type ValidationOperator,
-  type ValidationRange,
-  type ValidationResult,
-  type ValidationRule,
-  rebaseValidationRule,
-  snapshotRulesForKeptRowsPaste,
-  keptRowRuns,
-} from "@mrnote/core/web/lib/spreadsheet/data-validation.ts";
+import { dependentOptionsForCell, listRuleOptions, normalizeRules, rangeHasRule, resolveInputMessage, ruleForCell, validationRuleAreas, shouldBlockInvalidEntry, snapshotRulesForValidationPaste, validateValue, validationCandidateText, validationAlertButtons, type ErrorStyle, type InvalidCellCoord, type ValidationAlertDecision, type ValidationContext, type ValidationOperator, type ValidationRange, type ValidationResult, type ValidationRule, rebaseValidationRule, snapshotRulesForKeptRowsPaste, keptRowRuns } from "@mrnote/core/web/lib/spreadsheet/data-validation.ts";
 import {
   type ClearVariant,
 } from "../../../lib/spreadsheet/block-clear";
@@ -1914,55 +1526,8 @@ import {
   type Sparkline,
   type SparklineType,
 } from "@mrnote/core/web/lib/spreadsheet/sparkline.ts";
-import {
-  DEFAULT_SLICER_BUTTON_HEIGHT,
-  DEFAULT_SLICER_COLUMNS,
-  DEFAULT_SLICER_HEIGHT,
-  DEFAULT_SLICER_WIDTH,
-  distinctColumnValues as slicerDistinctValues,
-  MAX_SLICER_BUTTON_HEIGHT,
-  MAX_SLICER_COLUMNS,
-  MAX_SLICER_HEIGHT,
-  MAX_SLICER_TITLE_LENGTH,
-  MAX_SLICER_WIDTH,
-  MAX_SLICERS,
-  MIN_SLICER_BUTTON_HEIGHT,
-  MIN_SLICER_HEIGHT,
-  MIN_SLICER_WIDTH,
-  normalizeSlicer,
-  normalizeSlicers,
-  pivotSlicerFieldValues,
-  resolvePivotSlicerField,
-  SLICER_STYLE_IDS,
-  type Slicer,
-  type SlicerStyleId,
-} from "../../../lib/spreadsheet/slicer";
-import {
-  defaultTableColumnName,
-  MAX_DATA_TABLES,
-  MAX_TABLE_ALT_TEXT_LENGTH,
-  MAX_TABLE_ALT_TEXT_SUMMARY_LENGTH,
-  normalizeDataTableColumnFilter,
-  normalizeDataTableFilterColor,
-  isDataTableIconSetName,
-  normalizeDataTables,
-  TABLE_STYLE_PRESETS,
-  tableCellRole,
-  tableStyleCellPaint,
-  tableNativeStructureBlocked,
-  tableStyleChoiceOf,
-  nativeTableStyleChoice,
-  TABLE_TOTAL_KINDS,
-  type DataTable,
-  type DataTableColumnFilter,
-  type DataTableIconFilter,
-  type DataTableSortCondition,
-  type DataTableSortState,
-  type TableCellRole,
-  type TableStyleChoice,
-  DEFAULT_NEW_TABLE_STYLE_ID,
-  type TableTotalKind,
-} from "@mrnote/core/web/lib/spreadsheet/data-table.ts";
+import { DEFAULT_SLICER_HEIGHT, DEFAULT_SLICER_WIDTH, distinctColumnValues as slicerDistinctValues, MAX_SLICER_BUTTON_HEIGHT, MAX_SLICER_COLUMNS, MAX_SLICER_HEIGHT, MAX_SLICER_TITLE_LENGTH, MAX_SLICER_WIDTH, MAX_SLICERS, MIN_SLICER_BUTTON_HEIGHT, MIN_SLICER_HEIGHT, MIN_SLICER_WIDTH, normalizeSlicer, normalizeSlicers, pivotSlicerFieldValues, resolvePivotSlicerField, SLICER_STYLE_IDS, type Slicer, type SlicerStyleId } from "../../../lib/spreadsheet/slicer";
+import { defaultTableColumnName, MAX_DATA_TABLES, MAX_TABLE_ALT_TEXT_LENGTH, MAX_TABLE_ALT_TEXT_SUMMARY_LENGTH, normalizeDataTableColumnFilter, normalizeDataTableFilterColor, isDataTableIconSetName, normalizeDataTables, TABLE_STYLE_PRESETS, tableCellRole, tableStyleCellPaint, tableNativeStructureBlocked, tableStyleChoiceOf, nativeTableStyleChoice, type DataTable, type DataTableColumnFilter, type DataTableIconFilter, type DataTableSortCondition, type DataTableSortState, type TableCellRole, type TableStyleChoice, DEFAULT_NEW_TABLE_STYLE_ID, type TableTotalKind } from "@mrnote/core/web/lib/spreadsheet/data-table.ts";
 import { deletableLineCount, inheritInsertedLineFormats, mapCellThroughLineEdit, mapCellKeyThroughLineEdit, type SheetLineEdit, MAX_STRUCTURAL_INSERT_LINES, arrayPartEditRefused, arrayFormulaBlocks, arrayPartEntryBlockedAt, type StructuralInsertRefusal } from "@mrnote/core/web/lib/spreadsheet/structural.ts";
 import { announceWorkbookLineEdit, takeRemoteWorkbookLineEdits, workbookLineEditsShownBy, type WorkbookLineEdit } from "@mrnote/core/web/lib/collab/workbook-line-edits.ts";
 import {
@@ -2004,6 +1569,8 @@ import {
   checkProtectionPasswordHash,
   createProtectionPasswordHash,
 } from "@mrnote/core/web/lib/spreadsheet/protection-password.ts";
+import { useEmbedAccess } from "@mrnote/core/web/lib/embed/use-embed-access.ts";
+import { embedAllowsManagingComment } from "@mrnote/core/web/lib/embed/session-access.ts";
 import {
   commentSummary,
   hasComment,
@@ -2045,6 +1612,7 @@ import {
   officeCombinedRowParts,
   officeDigitWidth,
   officeRowHeight,
+  officeRowParts,
   stackedTextLetterSpacing,
 } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
 import {
@@ -2054,21 +1622,7 @@ import {
   gridAriaColCount,
   gridAriaRowCount,
 } from "../../../lib/spreadsheet/grid-aria";
-import {
-  groupBracketsForGutter,
-  groupLines,
-  hiddenColsFromGroups,
-  hiddenRowsFromGroups,
-  maxOutlineLevel,
-  normalizeOutlineGroups,
-  sameOutlineGroups,
-  setOutlineLevel,
-  ungroupLines,
-  toggleCollapse as toggleGroupCollapse,
-  outlineDetailTarget,
-  type OutlineAxis,
-  type OutlineGroup,
-} from "@mrnote/core/web/lib/spreadsheet/outline-groups.ts";
+import { groupBracketsForGutter, groupLines, hiddenColsFromGroups, hiddenRowsFromGroups, maxOutlineLevel, normalizeOutlineGroups, sameOutlineGroups, setOutlineLevel, ungroupLines, toggleCollapse as toggleGroupCollapse, type OutlineAxis, type OutlineGroup } from "@mrnote/core/web/lib/spreadsheet/outline-groups.ts";
 import {
   normalizeManualHidden,
   spanHasHidden,
@@ -2098,96 +1652,10 @@ import {
   presentationChartSeriesColorCss,
   presentationChartSliceColorCss,
 } from "@mrnote/core/web/lib/presentation-chart-area-style.ts";
-import {
-  chartRangeSheetName,
-  chartRangeToA1,
-  chartSourceRangeToA1,
-  normalizeChartConfig,
-  normalizeChartRange,
-} from "@mrnote/core/web/lib/spreadsheet/chart-config.ts";
-import {
-  buildChartSeries,
-  nativeChartHeaderRow,
-  nativeChartRangeLayout,
-  nativeChartStatesLabelLines,
-  buildChartSeriesFromRefs,
-  chartCategoryLevelsForRows,
-  chartCategoryLevelsFromRefs,
-  nativeChartOuterCategoryCells,
-  buildChartXYSeriesFromRefs,
-  clampChartSize,
-  DEFAULT_SPREADSHEET_CHART_STYLE_GALLERY_ID,
-  MAX_CHART_SERIES_REFS,
-  MAX_CHARTS,
-  normalizeCharts,
-  normalizeChartLineSeriesStyles,
-  normalizeChartValueAxisNumberFormat,
-  normalizeChartSeriesRefs,
-  normalizeSpreadsheetChartColorPalette,
-  normalizeSpreadsheetChartStyle,
-  normalizeSpreadsheetChartType,
-  resolveLinkedSeriesNumberFormats,
-  resolveLinkedValueAxisNumberFormat,
-  SPREADSHEET_LINE_MARKER_SYMBOLS,
-  SPREADSHEET_CHART_STYLE_GALLERY,
-  normalizeSpreadsheetPivotChartSource,
-  type SpreadsheetChart,
-  type SpreadsheetPivotChartSource,
-  type SpreadsheetChartColorPaletteId,
-  type SpreadsheetChartType,
-  type SpreadsheetLineMarkerSymbol,
-} from "@mrnote/core/web/lib/spreadsheet/chart.ts";
-import { chartAnchorForFrame, chartDrawnOnGrid, chartsLanded, chartsWithAnchors } from "../../../lib/spreadsheet/chart-anchor";
-import {
-  aggLabel,
-  buildDefaultPivotConfig,
-  buildRecommendedPivotConfigs,
-  computePivot,
-  markPivotTextCells,
-  createPivotCacheSnapshot,
-  type PivotCacheSnapshot,
-  headerLabel,
-  isPercentShowValuesAs,
-  isPivotConfigComputable,
-  normalizePivotConfig,
-  normalizePivotCollapsed,
-  pivotPlanKey,
-  sheetPivotAt,
-  sheetPivots,
-  sheetWithPivotAt,
-  normalizePivotRange,
-  pivotLiveSourceRange,
-  MAX_PIVOT_VALUE_CAPTION,
-  MAX_PIVOT_VALUE_NUMBER_FORMAT,
-  pivotComputationMatrix,
-  pivotNativeRecipeIsPatchable,
-  pivotIsScenarioReport,
-  pivotPreservedReasonKey,
-  rebasePivotNativeSnapshot,
-  pivotNativeSourceIsDirty,
-  pivotRangeToA1,
-  newPivotValueField,
-  profilePivotFieldsFromRange,
-  showValuesAsNeedsBaseField,
-  showValuesAsNeedsBaseItem,
-  isPivotAggDivideByZero,
-  PIVOT_AGGS,
-  PIVOT_SHOW_AS_DIVIDE_BY_ZERO,
-  valueFieldLabel,
-  type PivotAgg,
-  type PivotCalculatedField,
-  type PivotConfig,
-  type PivotFieldProfile,
-  type PivotMatrix,
-  type PivotRange,
-  type PivotShowValuesAs,
-  type PivotValueField,
-  type PivotFilterField,
-  pivotFieldMenuItems,
-  pivotFieldMenuModel,
-  pivotWithCollapsedItems,
-  pivotFieldItemCaption,
-} from "@mrnote/core/web/lib/spreadsheet/pivot.ts";
+import { chartRangeSheetName, chartRangeToA1, chartSourceRangeToA1, normalizeChartRange } from "@mrnote/core/web/lib/spreadsheet/chart-config.ts";
+import { buildChartSeries, nativeChartHeaderRow, nativeChartRangeLayout, nativeChartStatesLabelLines, buildChartSeriesFromRefs, chartCategoryLevelsForRows, chartCategoryLevelsFromRefs, nativeChartOuterCategoryCells, buildChartXYSeriesFromRefs, clampChartSize, DEFAULT_SPREADSHEET_CHART_STYLE_GALLERY_ID, MAX_CHART_SERIES_REFS, MAX_CHARTS, normalizeCharts, normalizeChartLineSeriesStyles, normalizeChartValueAxisNumberFormat, normalizeChartSeriesRefs, normalizeSpreadsheetChartStyle, normalizeSpreadsheetChartType, resolveLinkedSeriesNumberFormats, resolveLinkedValueAxisNumberFormat, SPREADSHEET_LINE_MARKER_SYMBOLS, SPREADSHEET_CHART_STYLE_GALLERY, normalizeSpreadsheetPivotChartSource, type SpreadsheetChart, type SpreadsheetPivotChartSource, type SpreadsheetChartColorPaletteId, type SpreadsheetChartType, type SpreadsheetLineMarkerSymbol } from "@mrnote/core/web/lib/spreadsheet/chart.ts";
+import { chartDrawnOnGrid, chartsLanded, chartsWithAnchors } from "../../../lib/spreadsheet/chart-anchor";
+import { aggLabel, buildDefaultPivotConfig, buildRecommendedPivotConfigs, computePivot, markPivotTextCells, createPivotCacheSnapshot, type PivotCacheSnapshot, headerLabel, isPercentShowValuesAs, isPivotConfigComputable, normalizePivotConfig, normalizePivotCollapsed, pivotPlanKey, sheetPivotAt, sheetPivots, sheetWithPivotAt, normalizePivotRange, MAX_PIVOT_VALUE_CAPTION, MAX_PIVOT_VALUE_NUMBER_FORMAT, pivotComputationMatrix, pivotNativeRecipeIsPatchable, pivotIsScenarioReport, pivotPreservedReasonKey, rebasePivotNativeSnapshot, pivotRangeToA1, newPivotValueField, profilePivotFieldsFromRange, showValuesAsNeedsBaseField, showValuesAsNeedsBaseItem, isPivotAggDivideByZero, PIVOT_AGGS, PIVOT_SHOW_AS_DIVIDE_BY_ZERO, valueFieldLabel, type PivotAgg, type PivotCalculatedField, type PivotConfig, type PivotFieldProfile, type PivotMatrix, type PivotRange, type PivotShowValuesAs, type PivotValueField, type PivotFilterField, pivotFieldMenuItems, pivotFieldMenuModel, pivotWithCollapsedItems, pivotFieldItemCaption } from "@mrnote/core/web/lib/spreadsheet/pivot.ts";
 import type { PivotRefreshRefusal } from "@mrnote/core/web/lib/spreadsheet/pivot.ts";
 import {
   builtInPivotCellPaint,
@@ -2241,39 +1709,8 @@ import {
   selectedValuesForDateGroups,
   type FilterDateAuthority,
 } from "@mrnote/core/web/lib/spreadsheet/date-filter-tree.ts";
-import {
-  addPrintAreaRange,
-  headerFooterNativeLength,
-  headerFooterSectionRoom,
-  isRangeInsidePrintArea,
-  MARGIN_PRESETS,
-  PAPER_SIZE_NATIVE_IDS,
-  PAPER_SIZE_POINTS,
-  moveManualBreak,
-  normalizePrintSettings,
-  parseA1Range,
-  resolveMargins,
-  spreadsheetPaperSizeLabels,
-  spreadsheetPaperSizeOptions,
-  toggleManualBreak,
-  type MarginPreset,
-  type PrintHeaderFooter,
-  type PrintMargins,
-  type PrintPaperSize,
-  type PrintSettings,
-} from "@mrnote/core/web/lib/spreadsheet/print-settings.ts";
-import {
-  resolveSpreadsheetPageBreakPreviewRegions,
-  resolveSpreadsheetPageLayoutBreakLines,
-  resolveSpreadsheetPageLayoutGeometry,
-  resolveSpreadsheetPageLayoutRenderPlan,
-  createPageLayoutRowMap,
-  pageLayoutEdgeScrollStep,
-  pageLayoutDataAreaWidth,
-  pageLayoutWideColumnLimitPx,
-  printedCellWidensRange, printedFormatExtentKeys, printedMergeHoldsAt, printedOccupiedLineBlanks, printedTailUsedColumnEdge, printedWideTailColumnEdge,
-  pageLayoutSpansKeepPage,
-} from "../../../lib/spreadsheet/page-layout-view";
+import { addPrintAreaRange, headerFooterNativeLength, headerFooterSectionRoom, isRangeInsidePrintArea, moveManualBreak, normalizePrintSettings, parseA1Range, toggleManualBreak, type MarginPreset, type PrintHeaderFooter, type PrintMargins, type PrintPaperSize, type PrintSettings } from "@mrnote/core/web/lib/spreadsheet/print-settings.ts";
+import { resolveSpreadsheetPageBreakPreviewRegions, resolveSpreadsheetPageLayoutBreakLines, resolveSpreadsheetPageLayoutGeometry, createPageLayoutRowMap, pageLayoutEdgeScrollStep, pageLayoutDataAreaWidth, pageLayoutWideColumnLimitPx, printedCellWidensRange, printedFormatExtentKeys, printedMergeHoldsAt, printedOccupiedLineBlanks, printedTailUsedColumnEdge, printedWideTailColumnEdge, pageLayoutSpansKeepPage } from "../../../lib/spreadsheet/page-layout-view";
 import {
   hasManualLineBreak,
   cellLineShown,
@@ -2286,13 +1723,7 @@ import {
   clippedCellLineAnchorCss,
 } from "../../../lib/spreadsheet/cell-text";
 import { insertSymbolAt, SYMBOL_CATEGORIES } from "../../../lib/spreadsheet/symbols";
-import {
-  buildImageObject,
-  embeddedSheetPictureSource,
-  sanitizeImageSource,
-  sanitizeSheetPictureSource,
-  SPREADSHEET_IMAGE_FILE_MIME_TYPES,
-} from "@mrnote/core/web/lib/spreadsheet/sheet-image.ts";
+import { buildImageObject, embeddedSheetPictureSource, SPREADSHEET_IMAGE_FILE_MIME_TYPES } from "@mrnote/core/web/lib/spreadsheet/sheet-image.ts";
 import {
   pictureObjectDisplaySrc,
   pictureObjectTokenSha,
@@ -2372,30 +1803,7 @@ import {
   SpreadsheetAngledBand,
   type AngledCellEdges,
 } from "./spreadsheet/SpreadsheetAngledCell";
-import {
-  createSpreadsheetCustomShapeObject,
-  createSpreadsheetInkShapeObject,
-  createSpreadsheetShapeFromInkFit,
-  parseSpreadsheetInkTimes,
-  spreadsheetInkOpacityForTool,
-  createSpreadsheetShapeObject,
-  DEFAULT_SHAPE_FILL,
-  DEFAULT_SHAPE_KIND,
-  DEFAULT_SHAPE_STROKE,
-  isSpreadsheetLineLikeShapeKind,
-  normalizeShapeStyle,
-  spreadsheetShapeKindFromOfficePreset,
-  SPREADSHEET_HIGHLIGHTER_OPACITY,
-  SPREADSHEET_SHAPE_RECENT_STORAGE_KEY,
-  MAX_SHAPE_TEXT_LENGTH,
-  MAX_SHAPE_TEXT_SIZE,
-  MIN_SHAPE_TEXT_SIZE,
-  spreadsheetEquationFits,
-  spreadsheetShapeSceneCamera,
-  type SpreadsheetInkPoint,
-  type SpreadsheetPresetShapeKind,
-  type SpreadsheetShapeStyle,
-} from "@mrnote/core/web/lib/spreadsheet/shapes.ts";
+import { createSpreadsheetCustomShapeObject, createSpreadsheetInkShapeObject, createSpreadsheetShapeFromInkFit, parseSpreadsheetInkTimes, spreadsheetInkOpacityForTool, createSpreadsheetShapeObject, DEFAULT_SHAPE_FILL, DEFAULT_SHAPE_STROKE, isSpreadsheetLineLikeShapeKind, normalizeShapeStyle, spreadsheetShapeKindFromOfficePreset, SPREADSHEET_HIGHLIGHTER_OPACITY, SPREADSHEET_SHAPE_RECENT_STORAGE_KEY, MAX_SHAPE_TEXT_LENGTH, MAX_SHAPE_TEXT_SIZE, MIN_SHAPE_TEXT_SIZE, spreadsheetEquationFits, spreadsheetShapeSceneCamera, type SpreadsheetInkPoint, type SpreadsheetPresetShapeKind, type SpreadsheetShapeStyle } from "@mrnote/core/web/lib/spreadsheet/shapes.ts";
 import { normalizeSpreadsheetObjectHyperlink } from "../../../lib/spreadsheet/object-hyperlink";
 import { spreadsheetNameFold } from "@mrnote/core/web/lib/spreadsheet/name-fold.ts";
 import {
@@ -2436,11 +1844,7 @@ import {
   spreadsheetShapeTakesLineEnds,
 } from "../../../lib/spreadsheet/shape-line-ends";
 import { OfficeLineEndsPicker } from "@mrnote/core/web/components/office-ribbon/OfficeLineEndsPicker.tsx";
-import {
-  OfficeShapeFormatTab,
-  type OfficeShapeAlignAction,
-} from "@mrnote/core/web/components/office-ribbon/OfficeShapeFormatTab.tsx";
-import { alignBlocks, distributeBlocks } from "@mrnote/core/web/lib/presentation-align.ts";
+import { type OfficeShapeAlignAction } from "@/components/office-ribbon/OfficeShapeFormatTab";
 import {
   OfficeShapeContextMenu,
   useOfficeShapeContextMenuLabels,
@@ -2460,10 +1864,7 @@ import { formatOfficeShortcut, officeShortcut } from "@mrnote/core/web/lib/offic
 import {
   OfficeShapeFormatPane,
 } from "@mrnote/core/web/components/office-ribbon/OfficeShapeFormatPane.tsx";
-import {
-  patchOfficeTextPaint,
-  type OfficeTextPaint,
-} from "@mrnote/core/web/lib/office-text-paint.ts";
+import { type OfficeTextPaint } from "@mrnote/core/web/lib/office-text-paint.ts";
 import type { OfficeWordArtRecipe } from "@mrnote/core/web/lib/office-wordart-style-catalog.ts";
 import { OfficeWordArtInsertGallery } from "@mrnote/core/web/components/office-ribbon/OfficeWordArtStyleGallery.tsx";
 import { officeWordArtRecipe } from "@mrnote/core/web/lib/office-wordart-gallery.ts";
@@ -2490,10 +1891,7 @@ import {
   type SheetChartClipboardItem,
 } from "../../../lib/spreadsheet/chart-clipboard";
 import { clipboardImageBlobFromBlock } from "@mrnote/slides/web/lib/presentation-clipboard-image.ts";
-import {
-  withOfficeChartAxisOptions, type OfficeChartAxisKey,
-  type OfficeChartAxisOptions,
-} from "@mrnote/core/web/lib/office-charts/axis-options.ts";
+import { type OfficeChartAxisKey, type OfficeChartAxisOptions } from "@mrnote/core/web/lib/office-charts/axis-options.ts";
 import {
   officeOutlinePtToPx,
   officeOutlinePxToPt,
@@ -2552,16 +1950,9 @@ import {
 import {
   spreadsheetFillPatternCss,
 } from "@mrnote/core/web/lib/spreadsheet/fill-pattern.ts";
-import {
-  planCellTransform,
-  type CellTransformChange,
-  type CellTransformId,
-} from "../../../lib/spreadsheet/cell-transforms";
+import { type CellTransformChange, type CellTransformId } from "@/lib/spreadsheet/cell-transforms";
 import { ColorPalettePopover } from "../../../lib/spreadsheet/ColorPalettePopover";
-import {
-  OfficeColorPalettePanel,
-  type OfficeColorNames,
-} from "@mrnote/core/web/components/office-ribbon/OfficeColorPalettePanel.tsx";
+import { type OfficeColorNames } from "@mrnote/core/web/components/office-ribbon/OfficeColorPalettePanel.tsx";
 import { OFFICE_STANDARD_COLOR_NAME_KEYS } from "@mrnote/core/web/components/office-ribbon/officeColorCatalog.ts";
 import {
   ALL_GO_TO_SPECIAL_VALUE_TYPES,
@@ -2598,14 +1989,7 @@ import {
   type SpreadsheetChangeEntry,
   type SpreadsheetStructuralStep,
 } from "@mrnote/core/web/lib/spreadsheet/change-log.ts";
-import {
-  SPREADSHEET_THEME_COLOR_GALLERY,
-  normalizeHexColor,
-  pushRecentColor,
-  readableInkFor,
-  spreadsheetThemePalettesEqual,
-  tintColor,
-} from "@mrnote/core/web/lib/spreadsheet/color-palette.ts";
+import { normalizeHexColor, pushRecentColor, readableInkFor, tintColor } from "@mrnote/core/web/lib/spreadsheet/color-palette.ts";
 import {
   dataFormWrites,
   deleteDataFormRecordCells,
@@ -2614,65 +1998,9 @@ import {
   readDataFormRecord,
   readDataFormShape,
 } from "../../../lib/spreadsheet/data-form";
-import {
-  defaultViewOptions,
-  calculationIterationOption,
-  DEFAULT_CALCULATION_ITERATION,
-  DEFAULT_FOCUS_CELL_COLOR,
-  focusCellTintChannels,
-  isOnReadingCrosshair,
-  normalizeViewOptions,
-  resolveFocusCellColor,
-  sheetsWithViewSwitch,
-  sheetViewModeOf,
-  spreadsheetViewThemeAccents,
-  shouldShowFormulaText,
-  type SpreadsheetSheetViewSwitch,
-  type SpreadsheetViewMode,
-  type SpreadsheetViewOptions,
-} from "../../../lib/spreadsheet/view-options";
-import {
-  MAX_NAMED_SHEET_VIEWS,
-  MAX_NAMED_SHEET_VIEW_NAME,
-  applySheetViewFilters,
-  buildSheetViewSortState,
-  createNamedSheetViewId,
-  defaultNamedSheetViewRef,
-  sheetViewRefForRange,
-  ensureSheetViewSessionTables,
-  nextDefaultNamedSheetViewName,
-  persistedSheetsForSheetViewSession,
-  reprojectSheetViewSession,
-  rebuildNamedSheetViewState,
-  sheetViewAuthoringBlocker,
-  sheetViewRefOverlapsTable,
-  sheetViewRegionsRowOrder,
-  sheetViewSortRegionConflict,
-  sheetViewSortRegions,
-  sheetViewStateHasFilters,
-  sheetViewStateOfSheet,
-  sheetViewTableFilterId,
-  sheetViewVisibleRowOrder,
-  type SheetViewSortKeyInput,
-  sheetViewsWithDuplicate,
-  sheetWithoutSheetView,
-} from "../../../lib/spreadsheet/sheet-views";
-import {
-  SPREADSHEET_THEME_FONT_GALLERY,
-  customizedSpreadsheetNativeThemeFonts,
-  parseSpreadsheetWorkbookThemeFile,
-  serializeSpreadsheetWorkbookThemeFile,
-  spreadsheetThemeFontSetsEqual,
-  spreadsheetThemeShapeVisual,
-  spreadsheetWorkbookThemeFontKey,
-  spreadsheetThemeFontSetForLocale,
-  spreadsheetWorkbookThemeFontSet,
-  nativeGridFontForLocale,
-  spreadsheetWorkbookThemePaletteId,
-  spreadsheetWorkbookThemePreset,
-  spreadsheetWorkbookThemePresetFor,
-  type SpreadsheetWorkbookThemeSelection,
-} from "@mrnote/core/web/lib/spreadsheet/workbook-theme.ts";
+import { defaultViewOptions, calculationIterationOption, DEFAULT_CALCULATION_ITERATION, focusCellTintChannels, isOnReadingCrosshair, normalizeViewOptions, sheetsWithViewSwitch, sheetViewModeOf, spreadsheetViewThemeAccents, shouldShowFormulaText, type SpreadsheetSheetViewSwitch, type SpreadsheetViewMode, type SpreadsheetViewOptions } from "../../../lib/spreadsheet/view-options";
+import { MAX_NAMED_SHEET_VIEWS, applySheetViewFilters, buildSheetViewSortState, createNamedSheetViewId, defaultNamedSheetViewRef, sheetViewRefForRange, ensureSheetViewSessionTables, nextDefaultNamedSheetViewName, persistedSheetsForSheetViewSession, reprojectSheetViewSession, rebuildNamedSheetViewState, sheetViewAuthoringBlocker, sheetViewRefOverlapsTable, sheetViewRegionsRowOrder, sheetViewSortRegionConflict, sheetViewSortRegions, sheetViewStateHasFilters, sheetViewStateOfSheet, sheetViewTableFilterId, sheetViewVisibleRowOrder, type SheetViewSortKeyInput, sheetViewsWithDuplicate, sheetWithoutSheetView } from "../../../lib/spreadsheet/sheet-views";
+import { parseSpreadsheetWorkbookThemeFile, spreadsheetThemeShapeVisual, spreadsheetWorkbookThemeFontKey, spreadsheetThemeFontSetForLocale, spreadsheetWorkbookThemeFontSet, nativeGridFontForLocale, spreadsheetWorkbookThemePaletteId, type SpreadsheetWorkbookThemeSelection } from "@mrnote/core/web/lib/spreadsheet/workbook-theme.ts";
 import {
   checkboxSeedValue,
   isCheckboxCell,
@@ -2731,7 +2059,7 @@ import {
   type NavDirection,
 } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
 import { gridCellWithDefaultLook, xlsxDefaultLookEnabled, type DefaultLookSheet } from "@mrnote/core/web/lib/spreadsheet/default-look.ts";
-import { compactLineStyleCells, deferredLineStyleBudget, expandLineStyleRuns, lineBlankAt, lineStyleAt, newCellsTakeLineFormats, writeLineBlanksIn, materializeLineStyles, type LineStyleMap } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
+import { compactLineStyleCells, deferredLineStyleBudget, expandLineStyleRuns, lineBlankAt, lineStyleAt, newCellsTakeLineFormats, writeLineBlanksIn, materializeLineStyles, printedLineBlanksSheet, type LineStyleMap } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
 import {
   entryWalkAnchor,
   nextCellInReorderedSelection,
@@ -2761,18 +2089,7 @@ import {
 import {
   type ConsolidateFunction,
 } from "../../../lib/spreadsheet/consolidate";
-import {
-  buildExportCellMap,
-  computeRangeLayout,
-  copyRangeAsPictureToClipboard,
-  exportChartSvgToPng,
-  exportRangeToPng,
-  findChartSvg,
-  type ExportCellPicture,
-  type RangeLayout,
-  type RangeLayoutInput,
-  type RangePictureDrawing,
-} from "../../../lib/spreadsheet/image-export";
+import { buildExportCellMap, computeRangeLayout, copyRangeAsPictureToClipboard, exportRangeToPng, findChartSvg, type ExportCellPicture, type RangeLayout, type RangeLayoutInput, type RangePictureDrawing } from "../../../lib/spreadsheet/image-export";
 import {
   clampZoom,
   EDITOR_ZOOM_BOUNDS,
@@ -2797,7 +2114,7 @@ import {
 import { OfficeRailButton } from "@mrnote/core/web/components/office-ribbon/OfficeEditorActionRail.tsx";
 import { holdOfficeTextBoxForChrome, retainOfficeInactiveSelection } from "@mrnote/core/web/lib/office-inactive-selection.ts";
 import { FilterMenu } from "./spreadsheet/SpreadsheetFilterMenu";
-import { SLICER_STYLE_RECIPES, slicerMultiSelectKey, SlicerPanel } from "./spreadsheet/SpreadsheetSlicerPanel";
+import { slicerMultiSelectKey, SlicerPanel } from "./spreadsheet/SpreadsheetSlicerPanel";
 import { type ChartInlineTextEdit, type ChartInlineTextField, ChartPanel, type ChartPivotButtons, type ChartStyleGalleryId, CJK_AXIS_TITLE_RE, IMPORTED_CHART_AXIS_TITLE_Y_WIDTH, IMPORTED_CHART_TITLE_INPUT_STYLE, importedChartOnSharedModel, PivotChartButtonBand, pivotChartButtonBands, SHEET_CHART_VALUE_AXIS_NUMBER_FORMAT_TYPES, sheetChartWithStyleRecipe, SheetDrawingLiveBox, spreadsheetChartHasValueAxisNumberFormatBlocker, spreadsheetChartStyleCss, spreadsheetChartTypeLabel } from "./spreadsheet/SpreadsheetChartPanel";
 import {
   handleOfficeShapeTextKey,
@@ -2829,18 +2146,18 @@ import {
   spreadsheetSmartArtTextBoxOf,
 } from "@mrnote/core/web/lib/spreadsheet/smart-art.ts";
 import { spreadsheetSmartArtMembersAsShapes } from "../../../lib/spreadsheet/smartart-convert";
-import { SPARKLINE_DEFAULT_COLOR, SPARKLINE_DEFAULT_NEGATIVE, SparklineGlyph, sparklineLayerInset } from "./spreadsheet/SpreadsheetSparklineGlyph";
+import { SparklineGlyph, sparklineLayerInset } from "./spreadsheet/SpreadsheetSparklineGlyph";
 import { CELL_BASE_PADDING_X_PX, tableCellPaintCss, cellDisplayTextCss, cellEditorStyle, cellEditorVerticalAlign, cellInlineFormulaEditorCss, cellInputExtraCss, cellStyleCss, cellTextLayerInsetY, cellVerticalAlignCss, conditionalIconBoxCss, effectiveVerticalAlign, EXCEL_CELL_TEXT_MARGINS_PX, fittedCellNumberText, fittedCellNumberWidthPx, shrinkToFitFontSizePx, spillTextWidthPx, excelAutoFitTextWidthPx, SPREADSHEET_DEFAULT_FONT_SIZE, SPREADSHEET_WRAP_LINE_HEIGHT, spreadsheetWrapMetrics, withoutBorderCss } from "./spreadsheet/spreadsheetCellCss";
 import { type SheetModel, type SpreadsheetObject } from "./spreadsheet/spreadsheetSheetModel";
 import { useSpreadsheetPictureObjects } from "./spreadsheet/useSpreadsheetPictureObjects";
 import { registerSpreadsheetGridEventScope, spreadsheetInertCellHandlers, selectSpreadsheetCellEntryText, spreadsheetGridAutoFilterHandlers, spreadsheetGridAuxHandlers, spreadsheetGridControlHandlers, spreadsheetGridDraftHandlers, spreadsheetGridFillHandlers, spreadsheetGridLinkHandlers, spreadsheetGridRowHandlers, spreadsheetGridTableHandlers, spreadsheetRowHeaderHandlers } from "./spreadsheet/spreadsheetGridEventHandlers";
-import { DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioItem, DropdownMenuSubTrigger, isSpreadsheetFormulaLibraryOccurrenceId, OfficeHomeCheckbox, OfficeHomeMenuTrigger, renderedSpreadsheetControlId, RibbonFontFamilyPicker, RibbonValueCombobox, SPREADSHEET_FORMULA_LIBRARY_CATEGORY_BY_OCCURRENCE, SPREADSHEET_FORMULA_LIBRARY_CONTROL_OCCURRENCES, SPREADSHEET_FORMULA_LIBRARY_ICON_BY_OCCURRENCE, SPREADSHEET_MORE_FUNCTION_CATEGORIES, SPREADSHEET_MORE_FUNCTION_ICON_BY_CATEGORY, SpreadsheetFormulaFunctionMenuItems, type SpreadsheetFormulaLibraryOccurrenceId, spreadsheetPageSetupPrintActionProps, spreadsheetPageSetupPrintDomProps, SpreadsheetRibbonAction, SpreadsheetRibbonMenuAction } from "./spreadsheet/SpreadsheetRibbonControls";
+import { DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioItem, DropdownMenuSubTrigger, OfficeHomeMenuTrigger, renderedSpreadsheetControlId, RibbonFontFamilyPicker, RibbonValueCombobox, type SpreadsheetFormulaLibraryOccurrenceId, spreadsheetPageSetupPrintDomProps, SpreadsheetRibbonAction, SpreadsheetRibbonMenuAction } from "./spreadsheet/SpreadsheetRibbonControls";
 import { CHART_FORMAT_VIEWPORT_GUTTER_PX, DEFAULT_SHEET_COLUMNS, DEFAULT_SHEET_ROWS, MAX_SHEET_COLS, MAX_SHEET_ROWS, SPREADSHEET_VIEWPORT_ROW_GROWTH, SPREADSHEET_CELL_HEIGHT_PX, SPREADSHEET_CELL_WIDTH_PX, SPREADSHEET_COLUMN_OUTLINE_BAND_PX, SPREADSHEET_GRID_AXIS_CORNER_LAYER, SPREADSHEET_GRID_AXIS_LAYER, SPREADSHEET_GRID_AXIS_PINNED_LAYER, SPREADSHEET_GRID_BODY_DRAWINGS_LAYER, SPREADSHEET_GRID_CORNER_CELL_ACTIVE_LAYER, SPREADSHEET_GRID_CORNER_CELL_LAYER, SPREADSHEET_GRID_CORNER_DRAWINGS_LAYER, SPREADSHEET_GRID_FROZEN_BAND_DRAWINGS_LAYER, SPREADSHEET_GRID_FROZEN_CELL_ACTIVE_LAYER, SPREADSHEET_GRID_FROZEN_CELL_LAYER, SPREADSHEET_GRID_PAGE_BREAK_LAYER, SPREADSHEET_GRID_UNRENDERED_AXIS_LAYER, SPREADSHEET_HEADER_HEIGHT_PX, SPREADSHEET_HEADER_WIDTH_PX, SPREADSHEET_NO_SCROLL_REACH, SPREADSHEET_RENDER_COL_BUDGET, SPREADSHEET_RENDER_COL_OVERSCAN, SPREADSHEET_RENDER_ROW_BUDGET, SPREADSHEET_RENDER_ROW_OVERSCAN, SPREADSHEET_SMARTART_FRAME_PAD_PX, SPREADSHEET_GRID_ROWS_PER_FRAME,
 } from "./spreadsheet/spreadsheetGridConstants";
 import { columnLabel, spreadsheetRangeA1 } from "./spreadsheet/spreadsheetRangeA1";
 import { fetchDeferredChartObjects, pendingChartIds, pendingCharts, withDeferredChartsFilled } from "../../../lib/spreadsheet/deferred-charts";
 import { fetchDeferredSheetBodies, pendingSheetIds, rememberPlaceholderSheet, sheetsStillLoading, storedContentWithSheetsFilled, storedPlaceholderSheet } from "../../../lib/spreadsheet/deferred-sheets";
-import { registerLiveEditor, type LiveSpreadsheetEditor } from "@mrnote/core/web/lib/live-editor-registry.ts";
+import { registerLiveEditor, type LiveContent, type LiveSpreadsheetEditor } from "@mrnote/core/web/lib/live-editor-registry.ts";
 import { emptySheet, hasPersistedContentVersion, normalizeObjects, normalizeSheets, type NormalizeSheetsOutcome, normalizeSpreadsheetAdvancedFilterState, restoreSetAsideValues, type SpreadsheetSetAsideValue } from "./spreadsheet/spreadsheetNormalizeSheets";
 import { sheetAfterCheckboxDelete } from "../../../lib/spreadsheet/checkbox-delete";
 import { filterCriteriaMovedFrom, filterCriteriaSignature, filtersToApply, storedFilterHiddenRows, withFilterResult } from "@mrnote/core/web/lib/spreadsheet/filter-result.ts";
@@ -2850,7 +2167,7 @@ import { planSpreadsheetCellValue, planTableAutoExpansion, type SpreadsheetAutoF
 import { type CopilotWorkbookValues, fetchCopilotWorkbookResults, planSpreadsheetCopilotChart, planSpreadsheetCopilotSortFilter, planSpreadsheetCopilotValues, resolveCellChartValue } from "./spreadsheet/spreadsheetWorkbookValuePlans";
 import { buildContent, dataSourceInventoryHasEntries, normalizeDataSourceInventory, type SpreadsheetDataSourceInventoryState } from "./spreadsheet/spreadsheetBuildContent";
 import { chartGroupEntriesWithMemberFrames, frameGestureMembers, inkObjectPlacementStyle, nextGridLineAtPixels, objectPositionStyle, releaseObjectMoveCapture, type SpreadsheetInkGesture, type SpreadsheetInkInteractionMode, type SpreadsheetInkPreset, type SpreadsheetObjectFrameGesture, type SpreadsheetObjectResizeHandle, type SpreadsheetObjectTransformGesture, type SpreadsheetObjectTransformPreview, type SpreadsheetPictureCropGesture, type SpreadsheetPictureCropPreview } from "./spreadsheet/spreadsheetObjectGestures";
-import { DRAWING_LAYER_CHROME_Z, isSpreadsheetInkObject, isSpreadsheetLassoObject, MAX_SHEET_OBJECTS, sheetObjectsWithOpenedSmartArt, spreadsheetInkReplayShape, spreadsheetInkToShapeObject, spreadsheetLassoObjectScaled, spreadsheetLassoObjectTurned, spreadsheetLineFollowsBox, spreadsheetObjectContext, spreadsheetObjectHasPatchbackVisibilityIdentity, spreadsheetObjectPlainText, spreadsheetDrawingDisplayName, spreadsheetPictureDisplayName, spreadsheetPictureOrdinalMap, spreadsheetSheetDrawingNamer } from "./spreadsheet/spreadsheetObjectContext";
+import { DRAWING_LAYER_CHROME_Z, isSpreadsheetInkObject, isSpreadsheetLassoObject, MAX_SHEET_OBJECTS, sheetObjectsWithOpenedSmartArt, spreadsheetInkReplayShape, spreadsheetInkToShapeObject, spreadsheetLassoObjectScaled, spreadsheetLineFollowsBox, spreadsheetObjectContext, spreadsheetObjectHasPatchbackVisibilityIdentity, spreadsheetObjectPlainText, spreadsheetDrawingDisplayName, spreadsheetPictureDisplayName, spreadsheetPictureOrdinalMap, spreadsheetSheetDrawingNamer } from "./spreadsheet/spreadsheetObjectContext";
 /** A stroke the lasso scales stays clear of the row and column headers. */
 const INK_LASSO_SCALE_MIN = { left: SPREADSHEET_HEADER_WIDTH_PX, top: SPREADSHEET_HEADER_HEIGHT_PX } as const;
 import { type ChartDesignDialogAuthority, type ChartDesignMutationReceipt, type ConditionalFormatMutationReceipt, type DataFromPictureDialogAuthority, type DataValidationDialogAuthority, type InsertMutationReceipt, type LiveReviewCommentPageAuthority, PAGE_SETUP_FOCUS_TEST_ID, type PageSetupDialogAuthority, type PageSetupFocusTarget, type PageSetupMutationReceipt, type PageSetupReturnFocus, type PageSetupReturnFocusTestId, type PageSetupSelectionSnapshot, type PageSetupSourceAuthority, pageSetupTabForFocusTarget, type PictureFormatMutationReceipt, type PictureFormatWriterControlId, type PictureMetadataMutationReceipt, type PictureMetadataWriterControlId, type PictureRotationDialogAuthority, type PivotChartCreateReceipt, type PivotContextMutationReceipt, type PivotContextWriterControlId, type PivotCreationDraft, type PivotCreationFieldArea, type PivotCreationMutationReceipt, pivotCreationSourceA1, type PivotMoveDialogDraft, type PivotSlicerInsertMutationReceipt, type PivotSourceDialogAuthority, type PivotValueFieldSettingsDraft, type RecommendedInsertConfirmReceipt, type ReviewCommentDialogAuthority, type ReviewCommentMutationReceipt, type ShapeFormatMutationReceipt, type ShapeFormatWriterControlId, type ShapeRotationDialogAuthority, type SlicerDesignMutationReceipt, type SlicerDesignWriterControlId, type SparklineDesignMutationReceipt, type SparklineDesignWriterControlId, type TableAltTextMutationReceipt, type TableNameMutationReceipt, type TableResizeMutationReceipt, type TableSlicerInsertMutationReceipt, type TableStyleMutationReceipt, type TableStyleOption, type TableStyleOptionControlId, type TableStyleOptionMutationReceipt, type WorkbookProtectionDialogAuthority, type WorkbookProtectionMutationReceipt } from "./spreadsheet/spreadsheetMutationReceipts";
@@ -2861,20 +2178,11 @@ import { spreadsheetWorkbookAiContext } from "../../../__m__/m73cdf325db";
 import { FUNCTION_ARGUMENT_RANGE_RE, functionArgumentGridText, functionArgumentValueText, spreadsheetRelativeRangeRef, withFunctionArgumentValue, worksheetCalculationDescriptors, worksheetHistoryContentSheetId } from "./spreadsheet/spreadsheetFormulaHelpers";
 import { CELL_SHIFT_DIALOG_OPTIONS, type CellShiftChoice, type CreateTableDraft, type CreateTableError, defaultCellShiftChoice, initialNoteDraft, parseSolverCells, type RecommendedChartDraft, type ValidationDialogKind } from "./spreadsheet/spreadsheetDialogDrafts";
 import { buildPivotRecommendationPreview, CHART_SELECTION_CHUNK_ROWS, CHART_SELECTION_DEFER_MS, CHART_SELECTION_SYNC_CELLS, chartMatrixProfiles, chartProfileFor, type PivotRecommendationDraft, RECOMMENDED_CHART_ROUNDTRIP_TYPES, recommendSafeChartTypes, SPREADSHEET_CHART_MENU_TYPES, spreadsheetAllChartsFamilies, spreadsheetChartMenuControlId, spreadsheetChartMenuFamilies, spreadsheetChartMenuForFamily, type SpreadsheetChartMenuId } from "./spreadsheet/spreadsheetChartInsertMenus";
-import { announceCommandResult, conditionalFormatKindIsClassicNativeEditable, formulaIntelPlacement, hasValidPageSetupSheetAuthority, type MoveCopySheetDialogAuthority, type MoveCopySheetLiveAuthority, nextReviewCommentPageAuthorityGeneration, noZoomCommitSideEffect, orderSpreadsheetReviewGroups, orderSpreadsheetViewGroups, personalMacroStorage, pivotSourceTableByName, type ProjectedWorkbookLinkReference, projectedWorkbookLinkReferences, quietClipboardWrite, readSpreadsheetPictureFile, rebaseLocalSheetEdits, spreadsheetAltTextPaneKey, spreadsheetCellPictureAltTextKey, spreadsheetEditFailureMessage, spreadsheetPxToPt, spreadsheetWorkbookFolder, spreadsheetZoomPercentFromPosition, spreadsheetZoomPositionFromPercent, systemSpreadsheetCalendarClock, type TraceArrowEndpoint, type TraceMode, type TraceSession, type WorkbookImportAuthority } from "./spreadsheet/spreadsheetWindowHelpers";
+import { announceCommandResult, conditionalFormatKindIsClassicNativeEditable, formulaIntelPlacement, hasValidPageSetupSheetAuthority, type MoveCopySheetDialogAuthority, type MoveCopySheetLiveAuthority, nextReviewCommentPageAuthorityGeneration, noZoomCommitSideEffect, personalMacroStorage, pivotSourceTableByName, type ProjectedWorkbookLinkReference, projectedWorkbookLinkReferences, quietClipboardWrite, readSpreadsheetPictureFile, rebaseLocalSheetEdits, spreadsheetAltTextPaneKey, spreadsheetCellPictureAltTextKey, spreadsheetEditFailureMessage, spreadsheetPxToPt, spreadsheetWorkbookFolder, spreadsheetZoomPercentFromPosition, spreadsheetZoomPositionFromPercent, systemSpreadsheetCalendarClock, type TraceArrowEndpoint, type TraceMode, type TraceSession, type WorkbookImportAuthority } from "./spreadsheet/spreadsheetWindowHelpers";
 import { DATA_CONVERSION_OPTIONS_SEARCH_ID } from "./spreadsheet/spreadsheetWindowConstants";
-import { SpreadsheetSparklineStyleSwatch } from "./spreadsheet/SpreadsheetSparklineStyleSwatch";
-import {
-  DEFAULT_SPARKLINE_STYLE_ID,
-  SPARKLINE_STYLES,
-  sparklineInThemeCached,
-  sparklineStyleById,
-  sparklineStyleIdOf,
-  sparklineStylePatch,
-  type SparklineStyle,
-} from "../../../lib/spreadsheet/sparkline-styles";
+import { DEFAULT_SPARKLINE_STYLE_ID, sparklineInThemeCached, sparklineStyleById, sparklineStylePatch, type SparklineStyle } from "../../../lib/spreadsheet/sparkline-styles";
 import { openDataConversionOptions } from "../../../lib/spreadsheet/csv-conversion-notice-registry";
-import { ALT_TEXT_PANE_WRITE_DELAY_MS, AUTO_SUM_MENU_FUNCTIONS, createSpreadsheetWindowCaches, CELLS_A_COMMIT_NAMES, AutoGrowRows, cellShiftFormulaCandidateCache, CUSTOM_LISTS_SEARCH_ID, EDIT_RANGE_PASSWORD_KEPT, EMPTY_PIVOT_RANGES, EMPTY_PIVOT_REPORTS, ERROR_CHECKING_OPTIONS_SEARCH_ID, EYE_CARE_SEARCH_ID, FILL_BLANKS_SEARCH_ID, HOME_BORDER_PRESETS, type HomeBorderMenuPreset, importedChartRenderCache, literalEditSources, MARQUEE_EDGE, MAX_SPREADSHEET_THEME_FILE_BYTES, MAX_TRACE_RELATIONSHIPS, nativeChartViewCache, PAGE_WRITE_REASON_CODES, pivotBodyCellStyle, pivotHeaderCellStyle, preparedCellShiftFormulas, SHOW_DESKTOP_WATCH_WINDOW, SHOW_LEGACY_TABLE_DESIGN_CONTROLS, SHOW_SPREADSHEET_DESKTOP_ANALYSIS, SHOW_SPREADSHEET_DESKTOP_DATA_EXTRAS, SHOW_SPREADSHEET_DESKTOP_FORMULAS_EXTRAS, SHOW_SPREADSHEET_DESKTOP_PAGE_LAYOUT_EXTRAS, SPELL_CHECK_WHILE_TYPING_SEARCH_ID, SPREADSHEET_COPILOT_V1_ENABLED, SPREADSHEET_DROP_IMPORT_FILE, SPREADSHEET_EXPORT_STATUS_LINGER_MS, SPREADSHEET_EYEDROPPER_CURSOR, SPREADSHEET_PRINT_STATUS_FORMAT, SPREADSHEET_FONT_SIZE_OPTIONS, SPREADSHEET_FONT_SIZES_PT, SPREADSHEET_TASK_PANE_EDGES, SPREADSHEET_ZOOM_DIALOG_PRESETS, spreadsheetTaskPaneTabTestId, TIMELINE_SEARCH_ID } from "./spreadsheet/spreadsheetWindowConstants";
+import { ALT_TEXT_PANE_WRITE_DELAY_MS, AUTO_SUM_MENU_FUNCTIONS, createSpreadsheetWindowCaches, CELLS_A_COMMIT_NAMES, AutoGrowRows, cellShiftFormulaCandidateCache, CUSTOM_LISTS_SEARCH_ID, EDIT_RANGE_PASSWORD_KEPT, EMPTY_PIVOT_RANGES, EMPTY_PIVOT_REPORTS, ERROR_CHECKING_OPTIONS_SEARCH_ID, EYE_CARE_SEARCH_ID, FILL_BLANKS_SEARCH_ID, HOME_BORDER_PRESETS, type HomeBorderMenuPreset, importedChartRenderCache, literalEditSources, MARQUEE_EDGE, MAX_SPREADSHEET_THEME_FILE_BYTES, MAX_TRACE_RELATIONSHIPS, nativeChartViewCache, PAGE_WRITE_REASON_CODES, pivotBodyCellStyle, pivotHeaderCellStyle, preparedCellShiftFormulas, SHOW_DESKTOP_WATCH_WINDOW, SHOW_SPREADSHEET_DESKTOP_FORMULAS_EXTRAS, SPELL_CHECK_WHILE_TYPING_SEARCH_ID, SPREADSHEET_COPILOT_V1_ENABLED, SPREADSHEET_DROP_IMPORT_FILE, SPREADSHEET_EXPORT_STATUS_LINGER_MS, SPREADSHEET_EYEDROPPER_CURSOR, SPREADSHEET_PRINT_STATUS_FORMAT, SPREADSHEET_FONT_SIZE_OPTIONS, SPREADSHEET_FONT_SIZES_PT, SPREADSHEET_TASK_PANE_EDGES, type SPREADSHEET_ZOOM_DIALOG_PRESETS, spreadsheetTaskPaneTabTestId, TIMELINE_SEARCH_ID } from "./spreadsheet/spreadsheetWindowConstants";
 import { SpreadsheetGridRows, SpreadsheetWindowContent } from "./spreadsheet/SpreadsheetWindowFrame";
 import { SpreadsheetGridBand, SpreadsheetGridBandStore, type SpreadsheetGridBandState } from "./spreadsheet/SpreadsheetGridBand";
 import { GRID_MOTION_ARMED_MS, GRID_MOTION_SETTLE_MS, SpreadsheetGridMotion, type GridMotionRowCells, gridMotionCanvasEnabled, gridMotionKeptCells } from "./spreadsheet/SpreadsheetGridMotion";
@@ -2897,19 +2205,10 @@ import { gridCanvasCellText } from "./spreadsheet/gridCanvasCellText";
 import { gridCanvasTextEnabled } from "../../../lib/spreadsheet/grid-canvas-text";
 import { separateTaskPanes, useSpreadsheetTaskPaneLayout } from "./spreadsheet/useSpreadsheetTaskPaneLayout";
 import { shownOfficeTaskPane, useOfficeTaskPaneLayout } from "@mrnote/core/web/components/office-ribbon/officeTaskPaneLayout.tsx";
-import { spreadsheetChartPaneOptionsRenderer } from "./spreadsheet/spreadsheetChartPaneOptionsRenderer";
-import { spreadsheetChartDesignRibbonGroups } from "./spreadsheet/spreadsheetChartDesignRibbonGroups";
 import { useSpreadsheetNavigationSheets } from "./spreadsheet/useSpreadsheetNavigationSheets";
-import { spreadsheetPictureFormatRibbonGroups } from "./spreadsheet/spreadsheetPictureFormatRibbonGroups";
 import { withSheetSmartArtAuthorMarks } from "../../../lib/spreadsheet/smartart-author-marks";
-import { spreadsheetSmartArtPictureRibbonGroups } from "./spreadsheet/spreadsheetSmartArtPictureRibbonGroups";
-import {
-  smartArtSlotPictureFormatAfter,
-  smartArtSlotPictureFormatOf,
-  type SmartArtSlotPictureCommand,
-} from "@mrnote/core/web/lib/office-smartart/slot-picture-format.ts";
-import { spreadsheetFormatPaneTabs, spreadsheetObjectPropertiesSection } from "./spreadsheet/spreadsheetFormatPaneTabs";
-import { spreadsheetPivotAnalyzeRibbonGroups } from "./spreadsheet/spreadsheetPivotAnalyzeRibbonGroups";
+import { smartArtSlotPictureFormatOf, type SmartArtSlotPictureCommand } from "@mrnote/core/web/lib/office-smartart/slot-picture-format.ts";
+import { spreadsheetFormatPaneTabs } from "./spreadsheet/spreadsheetFormatPaneTabs";
 import { spreadsheetHomeCellsFormatMenuItems } from "./spreadsheet/spreadsheetHomeCellsFormatMenuItems";
 import { useSpreadsheetSortByActiveColumn } from "./spreadsheet/useSpreadsheetSortByActiveColumn";
 import { useSpreadsheetRunSolver } from "./spreadsheet/useSpreadsheetRunSolver";
@@ -2932,11 +2231,7 @@ import { useSpreadsheetSheetViewSwitching } from "./spreadsheet/useSpreadsheetSh
 import { useSpreadsheetNameManagerRows } from "./spreadsheet/useSpreadsheetNameManagerRows";
 import { spreadsheetSheetTabContextMenuItems } from "./spreadsheet/spreadsheetSheetTabContextMenuItems";
 import { spreadsheetChartDesignControlState } from "./spreadsheet/spreadsheetChartDesignControlState";
-import {
-  spreadsheetFormatPaneAt,
-  spreadsheetShapeFormatAdapter,
-  type SpreadsheetFormatPaneOpening,
-} from "./spreadsheet/spreadsheetShapeFormatAdapter";
+import { type SpreadsheetFormatPaneOpening } from "./spreadsheet/spreadsheetShapeFormatAdapter";
 import { spreadsheetTableReceiptWriters } from "./spreadsheet/spreadsheetTableReceiptWriters";
 import { useSpreadsheetPrimarySelections } from "./spreadsheet/useSpreadsheetPrimarySelections";
 import { useSpreadsheetFilterAnswerAndPopupPlacement } from "./spreadsheet/useSpreadsheetFilterAnswerAndPopupPlacement";
@@ -2957,7 +2252,6 @@ import { smartArtShownOutline, useSmartArtPendingOutline } from "@mrnote/core/we
 import { useSpreadsheetSmartArtInsert } from "./spreadsheet/useSpreadsheetSmartArtInsert";
 import { useSpreadsheetSmartArtDiagramCommands } from "./spreadsheet/useSpreadsheetSmartArtDiagramCommands";
 import { useSpreadsheetLineSizeCommits } from "./spreadsheet/useSpreadsheetLineSizeCommits";
-import { spreadsheetObjectArrangeRibbonControls } from "./spreadsheet/spreadsheetObjectArrangeRibbonControls";
 import { useSpreadsheetPivotCreationDraft } from "./spreadsheet/useSpreadsheetPivotCreationDraft";
 import { useSpreadsheetSetCellStyleForSelection } from "./spreadsheet/useSpreadsheetSetCellStyleForSelection";
 import { useSpreadsheetFormulaSource } from "./spreadsheet/useSpreadsheetFormulaSource";
@@ -2991,7 +2285,6 @@ import { findBackgroundRuleRequests, useSpreadsheetFindReplace } from "./spreads
 import { useSpreadsheetLocateNavigation } from "./spreadsheet/useSpreadsheetLocateNavigation";
 import { useSpreadsheetSplitPaneView } from "./spreadsheet/useSpreadsheetSplitPaneView";
 import { useSpreadsheetReviewCommentCommands } from "./spreadsheet/useSpreadsheetReviewCommentCommands";
-import { useSpreadsheetPivotDesignState } from "./spreadsheet/useSpreadsheetPivotDesignState";
 import { useSpreadsheetClipboardPaste } from "./spreadsheet/useSpreadsheetClipboardPaste";
 import { useSpreadsheetApplyPivotValueFieldSettings } from "./spreadsheet/useSpreadsheetApplyPivotValueFieldSettings";
 import { spreadsheetSavedPagePdfViews } from "./spreadsheet/spreadsheetSavedPagePdfViews";
@@ -3044,7 +2337,6 @@ import { renderSpreadsheetFillSeriesDialog } from "./spreadsheet/renderSpreadshe
 import { renderSpreadsheetWorkbookProtectionDialog } from "./spreadsheet/renderSpreadsheetWorkbookProtectionDialog";
 import { renderSpreadsheetSheetViewOptionsDialog } from "./spreadsheet/renderSpreadsheetSheetViewOptionsDialog";
 import { renderSpreadsheetAccessibilityDialog } from "./spreadsheet/renderSpreadsheetAccessibilityDialog";
-import { renderSpreadsheetConsolidateDialog } from "./spreadsheet/renderSpreadsheetConsolidateDialog";
 import { renderSpreadsheetRemoveDuplicatesDialog } from "./spreadsheet/renderSpreadsheetRemoveDuplicatesDialog";
 import { renderSpreadsheetSubtotalDialog } from "./spreadsheet/renderSpreadsheetSubtotalDialog";
 import { renderSpreadsheetSolverOptionsDialog } from "./spreadsheet/renderSpreadsheetSolverOptionsDialog";
@@ -3102,19 +2394,9 @@ import { renderSpreadsheetMergeStylesDialog } from "./spreadsheet/renderSpreadsh
 import { SpreadsheetTouchSelectionLayer } from "./spreadsheet/SpreadsheetTouchSelectionLayer";
 import { syntheticHandleEvent, useSpreadsheetTouchGestures } from "./spreadsheet/useSpreadsheetTouchGestures";
 import { OfficeTouchCommandBar } from "@mrnote/core/web/components/office-ribbon/OfficeTouchCommandBar.tsx";
-import { OfficeInkLassoSelection } from "@mrnote/core/web/components/office-ribbon/OfficeInkLassoSelection.tsx";
-import { OfficeInkCircleSelect } from "@mrnote/core/web/components/office-ribbon/OfficeInkCircleSelect.tsx";
-import {
-  INK_LASSO_MEMBER_ATTRIBUTE,
-  followInkLassoPointer,
-  inkLassoUnionBox,
-  placeInkLassoLoop,
-  sameInkLassoIds,
-  translateInkLassoBox,
-  type InkLassoHandle,
-} from "@mrnote/core/web/lib/office-ink-lasso-selection.ts";
-import { applyMultiResize } from "@mrnote/core/web/lib/presentation-multi-transform.ts";
+import { INK_LASSO_MEMBER_ATTRIBUTE, placeInkLassoLoop, translateInkLassoBox, type InkLassoHandle } from "@mrnote/core/web/lib/office-ink-lasso-selection.ts";
 import { OfficeSoftKeyboardLayer } from "@mrnote/core/web/components/office-ribbon/OfficeSoftKeyboardLayer.tsx";
+import { softKeyboardCover, softKeyboardInset } from "@mrnote/core/web/lib/soft-keyboard.ts";
 import { reorderIds, useTouchReorder } from "@mrnote/core/web/lib/use-touch-reorder.ts";
 import { useTouchInputMode, type TouchFlickDirection } from "@mrnote/core/web/lib/touch-gestures.ts";
 import { registerSpreadsheetCellMaterializer, spreadsheetCellEditorAt, spreadsheetCellNodeAt, spreadsheetGhostCellHandler } from "./spreadsheet/spreadsheetCellLookup";
@@ -3739,7 +3021,6 @@ function SpreadsheetWindow({
       live = false;
     };
   }, [locale]);
-  const pageMarginMenuId = useId();
   const homeZh = locale.toLowerCase().startsWith("zh");
   const currentCalendarDay = localFilterDateToday(calendarClock());
   const relativeFilterTodayKey = `${currentCalendarDay.year}-${currentCalendarDay.month}-${currentCalendarDay.day}`;
@@ -4813,7 +4094,10 @@ function SpreadsheetWindow({
   const sheetZoom =
     (embeddedWorkbook?.viewportZoom !== undefined && Number.isFinite(embeddedWorkbook.viewportZoom) && embeddedWorkbook.viewportZoom > 0
       ? embeddedWorkbook.viewportZoom : undefined) ??
-    (zoomSheetId ? zoomBySheet[zoomSheetId] : undefined) ?? storedZoomLevel;
+    (zoomSheetId ? zoomBySheet[zoomSheetId] : undefined) ??
+    // An embedded editor's integration may name the zoom it opens at (lib/embed/onlyoffice-frame).
+    (onlyofficeInitialZoom() !== null ? clampZoom(onlyofficeInitialZoom()!) : undefined) ??
+    storedZoomLevel;
   const setSheetZoom = useCallback(
     (next: number | ((current: number) => number)) => {
       if (!zoomSheetId) return;
@@ -4923,23 +4207,11 @@ function SpreadsheetWindow({
     ? undefined : spreadsheetWorkbookThemePaletteId(workbookTheme);
   // Color pickers and galleries draw in the workbook's colors, its own included.
   const workbookThemePaletteId = workbookThemeColorId ?? viewOptions.themeId;
-  const workbookThemeColumns = useMemo(() => themeColorGrid(workbookThemePaletteId), [workbookThemePaletteId]);
   const workbookThemeFontSet = useMemo(
     () => spreadsheetThemeFontSetForLocale(spreadsheetWorkbookThemeFontSet(workbookTheme), locale),
     [workbookTheme, locale],
   );
   const workbookThemeFontKey = spreadsheetWorkbookThemeFontKey(workbookTheme);
-  // The gallery entries that are the workbook's schemes ("" for its own).
-  const workbookThemeColorGalleryValue = workbookTheme.nativeColors
-    ? ""
-    : SPREADSHEET_THEME_COLOR_GALLERY.find((palette) =>
-        spreadsheetThemePalettesEqual(palette.id, workbookTheme.colorId),
-      )?.id ?? "";
-  const workbookThemeFontGalleryValue = workbookTheme.nativeFonts
-    ? "custom:workbook"
-    : SPREADSHEET_THEME_FONT_GALLERY.find((font) =>
-        spreadsheetThemeFontSetsEqual(font.id, workbookTheme.fontId),
-      )?.id ?? "";
   // Excel's swatch tooltips: "Dark Red"; "Accent 1, Lighter 80%" (the slot,
   // then the tint or shade of that column's own ladder).
   const officeColorNames = useMemo<OfficeColorNames>(() => {
@@ -5018,10 +4290,6 @@ function SpreadsheetWindow({
   smartArtThemeAccentsRef.current = workbookThemeAccentColors;
   // The workbook's own table styles (the gallery's Custom section).
   const workbookNativeTableStyles = viewOptions.nativeTableStyles;
-  const workbookThemePreset = useMemo(
-    () => spreadsheetWorkbookThemePresetFor(workbookTheme),
-    [workbookTheme],
-  );
   const workbookThemeFontFamily = workbookThemeFontSet.bodyFamily;
   const workbookThemeHeadingFontFamily = workbookThemeFontSet.headingFamily;
   // Page Setup coordinate writers must distinguish a selection that React has
@@ -5511,7 +4779,6 @@ function SpreadsheetWindow({
   const [smartArtPreparedRevealed, setSmartArtPreparedRevealed] = useChangedState<
     readonly SpreadsheetObject[] | null
   >(null);
-  const [chartGroupChoices, setChartGroupChoices] = useChangedState<{ sheet: SheetModel; ids: string[] } | null>(null);
   const keyboardRotateSelectedObjectRef = useRef<(key: string, degrees: number) => boolean>(() => false);
   // A selected group's turn (null: no group selected), and its rotation
   // handle's gesture, assigned beside the group writers.
@@ -5541,7 +4808,6 @@ function SpreadsheetWindow({
   useEffect(() => retainOfficeInactiveSelection(), []);
   const chartGroupDeleteRef = useRef<(id: string) => boolean | undefined>(() => undefined);
   const chartGroupWriteRef = useRef<SheetModel | null>(null);
-  const chartPictureInFlightRef = useRef(false);
   const setSelectedObjectId = useCallback<
     React.Dispatch<React.SetStateAction<string | null>>
   >((next) => {
@@ -5631,14 +4897,6 @@ function SpreadsheetWindow({
   const pictureCropEditingIdRef = useRef<string | null>(null);
   const [pictureCropPreview, setPictureCropPreview] =
     useChangedState<SpreadsheetPictureCropPreview | null>(null);
-  // Picture Styles live preview: the style the gallery is hovering/focusing,
-  // drawn on the selected picture only. Never written to the workbook; the
-  // shared gallery clears it before a commit and on leave/Escape.
-  const [pictureStylePreview, setPictureStylePreview] = useState<{
-    readonly sheetId: string;
-    readonly objectId: string;
-    readonly style: OfficePictureStyleId;
-  } | null>(null);
   const pictureCropGestureRef = useRef<SpreadsheetPictureCropGesture | null>(
     null,
   );
@@ -5665,10 +4923,9 @@ function SpreadsheetWindow({
   // Lasso and Eraser never erase the user's chosen pen/highlighter preset.
   const [inkInteractionMode, setInkInteractionMode] =
     useChangedState<SpreadsheetInkInteractionMode | null>(null);
-  const inkDrawTools = useInkDrawTools(inkInteractionMode === "draw");
   // While a Draw tool is armed no cell or field holds the text focus: the
   // browser scrolled a focused cell back into view as ink landed.
-  useInkArmedFocusRelease(ribbonTab === "draw" && inkInteractionMode !== null, () => gridWrapRef.current);
+  useInkArmedFocusRelease(false, () => gridWrapRef.current);
   const inkInteractionModeRef = useRef<SpreadsheetInkInteractionMode | null>(
     null,
   );
@@ -5759,7 +5016,6 @@ function SpreadsheetWindow({
   const inkCorrectionTapRef = useRef<(clientX: number, clientY: number) => boolean>(() => false);
   const [inkReplay, setInkReplay] = useChangedState<{ position: number; playing: boolean } | null>(null);
   const [inkMoreColorsPenId, setInkMoreColorsPenId] = useState<string | null>(null);
-  const inkPenRefs = useRef(new Map<string, HTMLButtonElement | null>());
   // The pen palette's pens: More Colors opens from there while the ribbon is folded.
   const palettePenRefs = useRef(new Map<string, HTMLButtonElement | null>());
   const [selectedInkIds, setSelectedInkIds] = useState<ReadonlySet<string>>(
@@ -5786,15 +5042,6 @@ function SpreadsheetWindow({
   // Lasso Select's result while it is the ink selection: one frame around
   // the strokes, the loop drawn around it (OfficeInkLassoSelection).
   const [inkLasso, setInkLasso] = useState<SpreadsheetInkLasso | null>(null);
-  // The strokes' boxes while the frame's corner grip scales them (sheet px).
-  const [inkLassoScalePreview, setInkLassoScalePreview] = useState<
-    ReadonlyMap<string, { left: number; top: number; width: number; height: number }> | null
-  >(null);
-  // The turn the lasso frame's rotation grip shows (sheet px centre, degrees).
-  const [inkLassoTurn, setInkLassoTurn] = useState<{
-    readonly center: { readonly x: number; readonly y: number };
-    readonly degrees: number;
-  } | null>(null);
   const [inkGesturePreview, setInkGesturePreview] = useState<
     readonly SpreadsheetInkPoint[] | null
   >(null);
@@ -5808,8 +5055,6 @@ function SpreadsheetWindow({
   // Each drawn once, outside React (lib/office-wet-ink-layer): a lift no
   // longer renders this window.
   const inkWet = useWetInkLayer<SpreadsheetWetStroke>(paintSpreadsheetWetStroke);
-  const inkWetLayer = inkWet.layer;
-  const inkWetMount = useCallback((node: SVGSVGElement | null) => inkWetLayer.mount(node), [inkWetLayer]);
   const landWetInkRef = useRef<(strokes: readonly SpreadsheetWetStroke[]) => void>(() => {});
   const inkWetRef = useRef<WetInkBatcher<SpreadsheetWetStroke> | null>(null);
   // Live ink: the strokes in hand go to the others in the room as they are
@@ -5871,18 +5116,6 @@ function SpreadsheetWindow({
   // authorities. They never write the worksheet model or content history.
   const [objectSelectionMode, setObjectSelectionMode] = useState(false);
   const [selectionPaneOpen, setSelectionPaneOpen] = useState(false);
-  // Shape Format > Group > Regroup: the groups Ungroup took apart this
-  // session (the deck's `presentation-regroup` memory, per sheet).
-  const drawingRegroupMemoryRef = useRef<RegroupRecord[]>([]);
-  // Shape Format > Reorder Objects: the drawings the dialog lists, as the
-  // sheet stood when it opened.
-  const [drawingReorderSession, setDrawingReorderSession] = useState<{
-    readonly key: number;
-    readonly sheetId: string;
-    readonly stack: readonly DrawingStackEntry[];
-    readonly layers: readonly SpreadsheetDrawingReorderLayer[];
-  } | null>(null);
-  const drawingReorderReturnFocusRef = useRef<HTMLElement | null>(null);
   /** The Selection Pane row being renamed (F2 / double-click), and its draft. */
   const [selectionPaneRename, setSelectionPaneRename] = useState<{
     id: string;
@@ -5923,6 +5156,23 @@ function SpreadsheetWindow({
   }, []);
   const selectionPaneRef = useRef<HTMLElement>(null);
   const [navigationPaneOpen, setNavigationPaneOpen] = useState(false);
+  // Review > Thesaurus: the shared pane (PowerPoint's own), docked with the
+  // workbook's other panes. The seed's nonce re-opens it on a new word; the
+  // target is the cell text Insert replaces.
+  const [thesaurusOpen, setThesaurusOpen] = useState(false);
+  const [thesaurusSeed, setThesaurusSeed] = useState<{ word: string; nonce: number }>({
+    word: "",
+    nonce: 0,
+  });
+  const thesaurusTargetRef = useRef<{
+    sheetId: string;
+    row: number;
+    col: number;
+    word: string;
+    from: number;
+    value: string;
+  } | null>(null);
+  const [thesaurusTargetCell, setThesaurusTargetCell] = useState<string | null>(null);
   const navigationTriggerRef = useRef<HTMLButtonElement>(null);
   const navigationActionReturnFocusRef = useRef<HTMLButtonElement>(null);
   const navigationRenameInputRef = useRef<HTMLInputElement>(null);
@@ -6340,14 +5590,6 @@ function SpreadsheetWindow({
   } | null>(null);
   const [commandSearchOpen, setCommandSearchOpen] = useState(false);
   const commandSearchTriggerRef = useRef<HTMLButtonElement | null>(null);
-  // Page Layout's Orientation / Size / Print Area are one menu button each in
-  // Excel: the face opens the same gallery as the chevron.
-  const [pageLayoutSplitMenuOpen, setPageLayoutSplitMenuOpen] = useState<
-    "orientation" | "size" | "print-area" | null
-  >(null);
-  // The ribbon's Focus Cell menu is controlled so a colour picked inside its
-  // palette submenu (plain buttons, not menu items) can close the whole menu.
-  const [focusCellMenuOpen, setFocusCellMenuOpen] = useState(false);
   // Insert ▸ SmartArt: the gallery is controlled so the split button's PRIMARY
   // click opens it, the way Office's own SmartArt entry behaves.
   const [smartArtMenuOpen, setSmartArtMenuOpen] = useState(false);
@@ -6421,9 +5663,6 @@ function SpreadsheetWindow({
   const [automationCatalogOpen, setAutomationCatalogOpen] = useState(false);
   const scriptEditorRef = useRef<HTMLTextAreaElement>(null);
   const automationDialogReturnFocusRef = useRef<HTMLElement | null>(null);
-  const automateNewScriptTriggerRef = useRef<HTMLButtonElement>(null);
-  const automateViewScriptsTriggerRef = useRef<HTMLButtonElement>(null);
-  const viewMacrosTriggerRef = useRef<HTMLButtonElement>(null);
   const rememberAutomationTrigger = useCallback(() => {
     if (
       typeof document !== "undefined" &&
@@ -6826,18 +6065,6 @@ function SpreadsheetWindow({
     choice: (typeof SPREADSHEET_ZOOM_DIALOG_PRESETS)[number] | "fit" | "custom";
     custom: string;
   } | null>(null);
-  // Formulas ▸ Recently Used (XLS-A023): the last ten functions inserted,
-  // newest first, a per-user setting as in Excel.
-  const [recentFunctionNames, setRecentFunctionNames] = useState<string[]>(
-    () => readRecentFunctions(),
-  );
-  const rememberRecentFunction = useCallback((name: string) => {
-    setRecentFunctionNames((current) => {
-      const next = withRecentFunction(current, name);
-      writeRecentFunctions(next);
-      return next;
-    });
-  }, []);
   // Formulas ▸ Create from Selection: the four label sides being chosen.
   const [createNamesDraft, setCreateNamesDraft] = useState<CreateNamesSides | null>(null);
   // XLS-A023: Excel's "Replace existing definition of 'name'?", per name.
@@ -7043,17 +6270,6 @@ function SpreadsheetWindow({
   const [consolidateAuthority, setConsolidateAuthority] = useState<{
     readonly sheetId: string;
   } | null>(null);
-  const consolidateTriggerRef = useRef<HTMLButtonElement>(null);
-  const [consolidateSources, setConsolidateSources] = useState("");
-  const [consolidateFn, setConsolidateFn] =
-    useState<ConsolidateFunction>("Sum");
-  const [consolidateMode, setConsolidateMode] = useState<
-    "position" | "category"
-  >("position");
-  const [consolidateTopRow, setConsolidateTopRow] = useState(false);
-  const [consolidateLeftCol, setConsolidateLeftCol] = useState(false);
-  const [consolidateCreateLinks, setConsolidateCreateLinks] = useState(false);
-  const [consolidateDest, setConsolidateDest] = useState("");
   const [consolidateStatus, setConsolidateStatus] = useState<{
     kind: "success" | "error";
     text: string;
@@ -7299,7 +6515,7 @@ function SpreadsheetWindow({
   const cellStylesMenuRef = useRef<HTMLSpanElement>(null);
   // Close the cell-styles gallery on an outside click or Escape.
   useEffect(() => {
-    if (!cellStylesMenuOpen) return;
+    return;
     const onPointerDown = (event: MouseEvent) => {
       if (
         cellStylesMenuRef.current &&
@@ -7317,7 +6533,7 @@ function SpreadsheetWindow({
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [cellStylesMenuOpen]);
+  }, [false]);
   // Find & Replace (Ctrl/Cmd+H) modal state.
   const [findReplaceOpen, setFindReplaceOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
@@ -7432,7 +6648,7 @@ function SpreadsheetWindow({
       setChartElementHit({ hit: detail.hit, open: detail.open, token });
       if (detail.open) {
         chartElementOpenedAtRef.current = performance.now();
-        setRibbonTab("chartFormat");
+        void 0;
       }
       // The click selects the element it landed on (Office's Current
       // Selection), which Home's Font group formats and the picture frames.
@@ -7949,14 +7165,6 @@ function SpreadsheetWindow({
   const executeFormulaAutoSumCommandRef = useRef<
     (fn: AutoSumFn) => Promise<boolean>
   >(async () => false);
-  const cellTransformTriggerRef = useRef<HTMLButtonElement>(null);
-  const [cellTransformPreview, setCellTransformPreview] = useState<{
-    label: string;
-    sheetId: string;
-    range: { r1: number; c1: number; r2: number; c2: number };
-    sourceCells: SheetModel["cells"];
-    changes: CellTransformChange[];
-  } | null>(null);
   // Data form (Excel / WPS 记录单): one record at a time over the selected list.
   // Colour dropdowns (Excel / WPS): which one is open, and the workbook's
   // most-recently-used colours, which both share.
@@ -7966,8 +7174,6 @@ function SpreadsheetWindow({
   const [openObjectColorPicker, setOpenObjectColorPicker] = useState<
     "fill" | "stroke" | "text" | "shadow" | null
   >(null);
-  const [shapeLastKind, setShapeLastKind] =
-    useState<SpreadsheetPresetShapeKind>(DEFAULT_SHAPE_KIND);
   const [shapeLastFillColor, setShapeLastFillColor] =
     useState(DEFAULT_SHAPE_FILL);
   // Format Shape > Fill & Line: the stop each gradient editor has selected.
@@ -8209,7 +7415,7 @@ function SpreadsheetWindow({
     };
   }, [openObjectColorPicker]);
   useEffect(() => {
-    if (!openSparklineColorPicker) return;
+    return;
     const onPointerDown = (event: MouseEvent) => {
       // The palette is portalled out of the ribbon group: a press on a
       // swatch is inside it, or the palette closes before the click picks.
@@ -8231,7 +7437,7 @@ function SpreadsheetWindow({
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [openSparklineColorPicker]);
+  }, [null]);
   // Drag-to-fill (Excel/WPS parity): the in-progress fill drag — the source
   // selection rectangle (captured at drag start) and the current hovered target
   // cell. Null when no fill is in flight, so the steady-state render is
@@ -9053,6 +8259,25 @@ function SpreadsheetWindow({
       reviewCommentActorId &&
       reviewCommentActorName,
   );
+  // An embed comment session (lib/embed/session-access embedCommentsMediated)
+  // reads the page only, yet comments on it: each comment gesture goes to the
+  // session's comment route, which writes that one change, so threaded
+  // comments may be authored on the read-only page and nothing else may.
+  // `reviewCommentMayAuthor` keeps answering for the page's other writers.
+  const embedAccess = useEmbedAccess();
+  const reviewCommentsMediated = Boolean(
+    embedAccess?.mediated && embedAccess.effectiveMode === "comment",
+  );
+  const reviewCommentThreadMayAuthor =
+    reviewCommentMayAuthor ||
+    Boolean(
+      reviewCommentsMediated &&
+        !guestMode &&
+        pageId &&
+        reviewCommentLoadedPageId === pageId &&
+        reviewCommentActorId &&
+        reviewCommentActorName,
+    );
   const dataQueryImportOwnerRef = useRef({ pageId, notebookId: autosave.page?.notebook_id ?? "", actorId: reviewCommentActorId, allowed: reviewCommentMayAuthor });
   dataQueryImportOwnerRef.current = { pageId, notebookId: autosave.page?.notebook_id ?? "", actorId: reviewCommentActorId, allowed: reviewCommentMayAuthor };
   const reviewCommentPageAuthorityRef =
@@ -9071,7 +8296,7 @@ function SpreadsheetWindow({
       reviewCommentLockedByName ||
     previousReviewCommentPageAuthority.actorId !== reviewCommentActorId ||
     previousReviewCommentPageAuthority.actorName !== reviewCommentActorName ||
-    previousReviewCommentPageAuthority.allowed !== reviewCommentMayAuthor
+    previousReviewCommentPageAuthority.allowed !== reviewCommentThreadMayAuthor
   ) {
     reviewCommentPageAuthorityRef.current = {
       pageId,
@@ -9082,7 +8307,7 @@ function SpreadsheetWindow({
       generation: nextReviewCommentPageAuthorityGeneration(),
       actorId: reviewCommentActorId,
       actorName: reviewCommentActorName,
-      allowed: reviewCommentMayAuthor,
+      allowed: reviewCommentThreadMayAuthor,
     };
   }
   useLayoutEffect(
@@ -9327,42 +8552,7 @@ function SpreadsheetWindow({
   const canOpenWorkbookWindow = Boolean(
     windowManager && autosave.page?.notebook_id && pageId,
   );
-  // View > New Window (Excel, Word): a second window on this workbook,
-  // beside the first. A plain open would only focus the window already
-  // showing the page.
-  // XLS-A030 — View ▸ Window: the shared Office window commands Docs uses
-  // (lib/office-window-commands), bound to spreadsheet windows.
-  const sheetSynchronizedScroll = useOfficeSynchronizedScrollState(
-    windowId ?? "",
-    pageId,
-    "spreadsheet",
-  );
-  const sheetWindowCommandsAvailable = Boolean(
-    !guestMode && windowId && windowManager && autosave.page?.notebook_id,
-  );
-  const sheetWindowChoices = () =>
-    windowManager && windowId
-      ? officeWindowChoices(windowManager.readWindows(), windowId, "spreadsheet")
-      : [];
-  const arrangeAllSheetWindows = () => {
-    if (!windowManager || !windowId) return;
-    arrangeAllOfficeWindows(windowManager, windowId, "spreadsheet");
-  };
   const sheetSideBySideCancelRef = useRef<(() => void) | null>(null);
-  const viewSheetSideBySide = () => {
-    const notebookId = autosave.page?.notebook_id;
-    if (!windowManager || !windowId || !notebookId) return;
-    sheetSideBySideCancelRef.current?.();
-    const run = startOfficeSideBySide({
-      actions: windowManager,
-      notebookId,
-      pageId,
-      pageType: "spreadsheet",
-      sourceWindowId: windowId,
-      title: title || t("pages.untitled"),
-    });
-    sheetSideBySideCancelRef.current = run.accepted ? run.cancel : null;
-  };
   useEffect(() => () => {
     sheetSideBySideCancelRef.current?.();
     sheetSideBySideCancelRef.current = null;
@@ -10063,35 +9253,6 @@ function SpreadsheetWindow({
     setMoveCopySheetDialogAuthority(null);
     setMoveCopySheetOpen(false);
   }, []);
-  const workbookThemeEditable = useMemo(() => {
-    const active = sheets[activeSheetIndex];
-    return Boolean(
-      active &&
-      !autosave.readOnly && !autosave.loading &&
-      active.id === sheet.id &&
-      sheets.filter((candidate) => candidate.id === active.id).length === 1,
-    );
-  }, [activeSheetIndex, sheet.id, sheets, autosave.readOnly, autosave.loading]);
-  // A theme part MRAI cannot read keeps its single schemes; a whole theme
-  // (Page Layout > Themes) replaces it as Excel does, when the workbook names
-  // that part unambiguously.
-  const workbookThemeMutationAvailable =
-    workbookThemeEditable && viewOptions.nativeThemeDisposition !== "preserve-only";
-  const workbookWholeThemeMutationAvailable =
-    workbookThemeEditable &&
-    (viewOptions.nativeThemeDisposition !== "preserve-only" ||
-      viewOptions.nativeThemeReplaceable === true);
-  const workbookThemeDisabledReason =
-    autosave.readOnly
-      ? readOnlyReasonText
-      : viewOptions.nativeThemeDisposition === "preserve-only"
-      ? viewOptions.nativeThemeReplaceable
-        ? t("spreadsheet.uiCopy.thisWorkbookThemeCanOnlyBeReplacedAsAWhole")
-        : t("spreadsheet.uiCopy.thisWorkbookThemePartCannotBeLocatedSafely")
-      : undefined;
-  const workbookWholeThemeDisabledReason = workbookWholeThemeMutationAvailable
-    ? undefined
-    : workbookThemeDisabledReason;
   // A right-to-left sheet: column A on the RIGHT. The grid is a real <table>,
   // so `dir` reverses the column order for free — but a frozen column pins with
   // an inline offset, and in RTL that offset belongs to the other edge.
@@ -10104,11 +9265,6 @@ function SpreadsheetWindow({
   // formula bar while either holds the draft (Excel echoes every keystroke).
   const [cellLiveEdit] = useState(createSpreadsheetLiveEdit);
   const formulaFunctionTriggerRef = useRef<HTMLButtonElement>(null);
-  const formulaCategoryTriggerRefs = useRef<
-    Partial<Record<SpreadsheetFormulaLibraryOccurrenceId, HTMLButtonElement>>
-  >({});
-  const formulaMoreTriggerRef = useRef<HTMLButtonElement>(null);
-  const formulaFunctionMenuDialogHandoffRef = useRef(false);
   // A large sheet's line-format blanks are not in its cell map until they are
   // selected: what reads and writes the selection's cells finds them there.
   writeLineBlanksIn(sheet as unknown as Parameters<typeof writeLineBlanksIn>[0], {
@@ -10304,7 +9460,6 @@ function SpreadsheetWindow({
       (prior?.isConnected ? prior : fallback)?.focus({ preventScroll: true });
     });
   }, []);
-  const advancedFilterLabel = t("spreadsheet.uiCopy.advancedFilter");
   const reapplyFilterLabel = t("spreadsheet.uiCopy.reapply");
   const sortDialogInvalidOptionLabel = t("spreadsheet.uiCopy.theSortOptionIsInvalidChooseAnAvailableOption");
   const sortDialogCoordinateBlockedLabel = t("spreadsheet.uiCopy.canTSortLeftToRightAcrossFiltersSlicers");
@@ -10324,8 +9479,6 @@ function SpreadsheetWindow({
 
   const [forecastOpen, setForecastOpen] = useState(false);
   const forecastTriggerRef = useRef<HTMLButtonElement>(null);
-  const forecastLabel = t("spreadsheet.uiCopy.forecastSheet");
-  const forecastSheetLimitReason = t("spreadsheet.uiCopy.theWorkbookHasReachedItsSheetLimit_cef1da");
   const closeForecast = useCallback(() => {
     setForecastOpen(false);
     window.requestAnimationFrame(() => {
@@ -10342,9 +9495,6 @@ function SpreadsheetWindow({
   const hideSheetLabel = t("spreadsheet.uiCopy.hideSheet");
   const unhideSheetLabel = t("spreadsheet.uiCopy.unhideSheet");
   const [errorCheckOpen, setErrorCheckOpen] = useState(false);
-  const errorCheckLabel = t("spreadsheet.uiCopy.errorChecking");
-
-  const evaluateFormulaLabel = t("spreadsheet.uiCopy.evaluateFormula");
   const evaluateFormulaSource = useMemo(() => {
     const raw = sheet.cells[activeKey]?.value;
     if (typeof raw !== "string" || !raw.startsWith("=")) return null;
@@ -10634,7 +9784,7 @@ function SpreadsheetWindow({
   useEffect(() => {
     cancelSpreadsheetInkGesture();
     writeSelectedInkIds(new Set());
-    if (ribbonTab !== "draw") {
+    {
       inkInteractionModeRef.current = null;
       setInkInteractionMode(null);
     }
@@ -10901,10 +10051,6 @@ function SpreadsheetWindow({
   // without re-creating its callback or re-rendering on every keystroke.
   const macros = useMemo(() => normalizeMacros(sheet.macros), [sheet.macros]);
   const [macroRecording, setMacroRecording] = useState(false);
-  // View > Macros > Use Relative References. Excel records with absolute
-  // references unless this is on; the toggle names the mode of the NEXT
-  // recording and stays as set for the session.
-  const [macroRelativeReferences, setMacroRelativeReferences] = useState(false);
   const macroRecordingRef = useRef(false);
   const macroAnchorRef = useRef<{ row: number; col: number }>({
     row: 0,
@@ -10955,27 +10101,6 @@ function SpreadsheetWindow({
   );
   const activeSparklineKey = `${activeCell.row}:${activeCell.col}`;
   const activeSparkline = sparklines[activeSparklineKey] ?? null;
-  // Sparkline > Style gallery items, named as Excel names them
-  // ("Sparkline Style Accent 1, Darker 50%").
-  const sparklineStyleName = useCallback(
-    (style: SparklineStyle): string =>
-      style.row === "dark"
-        ? t("spreadsheet.sparklineStyles.dark", { n: style.index })
-        : style.row === "colorful"
-          ? t("spreadsheet.sparklineStyles.colorful", { n: style.index })
-          : style.row === "accent"
-            ? t("spreadsheet.sparklineStyles.accent", { n: style.index })
-            : t(style.row === "lighter40" ? "spreadsheet.sparklineStyles.accentLighter" : "spreadsheet.sparklineStyles.accentDarker", {
-                n: style.index,
-                percent: style.row === "darker50" ? 50 : style.row === "darker25" ? 25 : 40,
-              }),
-    [t],
-  );
-  const sparklineStyleQuickIds = useMemo(() => SPARKLINE_STYLES.map((style) => style.id), []);
-  const sparklineStyleItems = useMemo(
-    () => SPARKLINE_STYLES.map((style) => ({ id: style.id, label: sparklineStyleName(style) })),
-    [sparklineStyleName],
-  );
   const activeSparklineSelectionKey =
     activeSparkline && !selectedObject
       ? `${sheet.id}:${activeSparklineKey}`
@@ -11202,9 +10327,6 @@ function SpreadsheetWindow({
           slicer.source.tableId === activeTable.id,
       ),
   );
-  const activeTableSlicerStructureReason = activeTableHasConnectedSlicer
-    ? t("spreadsheet.uiCopy.thisTableIsConnectedToASlicerRemoveThe")
-    : undefined;
   // Both write routes author table slicers natively now: the from-scratch
   // exporter always did, and the original-package route reconciles them after
   // its other patches (table_slicer.reconcile_table_slicers), re-authenticating
@@ -12382,26 +11504,6 @@ function SpreadsheetWindow({
     }, 1500);
     return () => window.clearTimeout(timer);
   }, [classicWorkbookReady, pageId]);
-
-  // Guest observers: the workbook as seeded, through this same builder, once.
-  const saveWorkbookEncryptionMark = useCallback((encrypted: boolean) => {
-    workbookEncryptedRef.current = encrypted;
-    setWorkbookEncrypted(encrypted);
-    autosave.queueSave({ title, content_json: buildPersistedContent(liveSheetsRef.current, referenceStyle, viewOptions, sheet.id) });
-  }, [autosave, buildPersistedContent, referenceStyle, sheet.id, title, viewOptions]);
-  const encryptWorkbookWithPassword = useCallback(async () => {
-    const change = workbookEncryptedRef.current;
-    const password = await askOfficePassword({ mode: "set", change }).catch(() => null);
-    if (!password) return;
-    setDocumentOpenPassword(pageId, password);
-    if (!change) saveWorkbookEncryptionMark(true);
-    toast({ title: t(change ? "spreadsheet.encryption.changed" : "spreadsheet.encryption.encrypted") });
-  }, [pageId, saveWorkbookEncryptionMark, t]);
-  const removeWorkbookPassword = useCallback(() => {
-    setDocumentOpenPassword(pageId, null);
-    saveWorkbookEncryptionMark(false);
-    toast({ title: t("spreadsheet.encryption.removed") });
-  }, [pageId, saveWorkbookEncryptionMark, t]);
   guestBaseBuilderRef.current = (sheets) => buildPersistedContent(sheets) as Record<string, unknown>;
   useEffect(() => {
     if (!guestMode || !guestBaseDue || guestContentBaseRef.current) return;
@@ -13435,14 +12537,6 @@ function SpreadsheetWindow({
         verticalAlign: { value: "middle", mixed: false },
       }
     : null;
-  
-  // Each write replaces the chart object, and the pane (with the worksheet's
-  // options on it) stays open across the edits made from it, as Office's does;
-  // every write still captures its own authority when it commits.
-  const chartFormatPaneAuthority = useMemo(
-    () => ({ chart: selectedChartDesignKey, route: spreadsheetNativeWriteRoute }),
-    [selectedChartDesignKey, spreadsheetNativeWriteRoute],
-  );
   const selectedChartDesignType = selectedDrawingChart
     ? normalizeSpreadsheetChartType(selectedDrawingChart.chartType)
     : selectedNativeChart?.type;
@@ -13487,37 +12581,6 @@ function SpreadsheetWindow({
     selectedChartMarkerSeriesIndices.every(
       (index) => index >= 0 && index < selectedChartMarkerSeriesCount,
     );
-  const selectedChartDesignTitle = selectedDrawingChart
-    ? spreadsheetChartTitle(selectedDrawingChart)
-    : (selectedNativeChart?.title ?? "");
-  const selectedChartDesignRange = selectedDrawingChart
-    ? (normalizeChartConfig(selectedDrawingChart).range ?? "")
-    : selectedNativeChart
-      ? chartSourceRangeToA1(selectedNativeChart)
-      : "";
-  const selectedChartPaintFormat=selectedChartDesignTarget?.chart.chartFormat;
-  const selectedChartDesignShowLegend = selectedChartPaintFormat?.legend!==undefined?selectedChartPaintFormat.legend!=="none":selectedDrawingChart
-    ? normalizeChartConfig(selectedDrawingChart).showLegend
-    : selectedNativeChart?.showLegend !== false;
-  const selectedChartDesignLegendPosition = selectedChartPaintFormat?.legend&&selectedChartPaintFormat.legend!=="none"?selectedChartPaintFormat.legend:selectedDrawingChart
-    ? normalizeChartConfig(selectedDrawingChart).legendPosition
-    : selectedNativeChart?.legendPosition ?? "top";
-  const selectedChartDesignShowAxisLabels = selectedChartPaintFormat?.axisX!==undefined||selectedChartPaintFormat?.axisY!==undefined?selectedChartPaintFormat.axisX!==false||selectedChartPaintFormat.axisY!==false:selectedDrawingChart
-    ? normalizeChartConfig(selectedDrawingChart).showAxisLabels
-    : selectedNativeChart?.showAxisLabels !== false;
-  const selectedChartDesignShowDataLabels = selectedChartPaintFormat?.dataLabels!==undefined?selectedChartPaintFormat.dataLabels:selectedDrawingChart
-    ? selectedDrawingChart.showDataLabels === true
-    : selectedNativeChart?.showDataLabels === true;
-  const selectedChartDesignShowGridlines = selectedChartPaintFormat?.gridlinesX!==undefined||selectedChartPaintFormat?.gridlinesY!==undefined?selectedChartPaintFormat.gridlinesX===true||selectedChartPaintFormat.gridlinesY===true:selectedDrawingChart
-    ? selectedDrawingChart.showGridlines !== false
-    : selectedNativeChart?.showGridlines !== false;
-  const selectedChartDesignShowDataTable = selectedDrawingChart
-    ? selectedDrawingChart.showDataTable === true
-    : selectedNativeChart?.showDataTable === true;
-  const selectedChartValueAxisNumberFormat =
-    normalizeChartValueAxisNumberFormat(
-      selectedChartDesignTarget?.chart.valueAxisNumberFormat,
-    ) ?? { formatCode: "General", sourceLinked: true };
   // Format Axis > Number on the primary value axis: every kind with one (a
   // bar chart's runs across, an XY chart's is its vertical axis), written as
   // the model's value-axis options on either route.
@@ -13589,35 +12652,6 @@ function SpreadsheetWindow({
       }),
     [sheets],
   );
-  const selectedChartLinkedNumberFormatResolution = selectedChartDesignTarget
-    ? resolveWorkbookChartLinkedNumberFormat(
-        selectedChartDesignTarget.chart,
-        sheet.name,
-      )
-    : {
-        state: "indeterminate" as const,
-        reason: "reference" as const,
-        formatCode: "General" as const,
-      };
-  const selectedChartEffectiveValueAxisNumberFormat =
-    selectedChartValueAxisNumberFormat.sourceLinked
-      ? selectedChartLinkedNumberFormatResolution.formatCode
-      : selectedChartValueAxisNumberFormat.formatCode;
-  const selectedChartLinkedNumberFormatReason =
-    selectedChartLinkedNumberFormatResolution.state === "resolved"
-      ? null
-      : t(
-          selectedChartLinkedNumberFormatResolution.reason === "missing"
-            ? "spreadsheet.chartValueAxisNumberFormatReasonMissing"
-            : selectedChartLinkedNumberFormatResolution.reason === "mixed"
-              ? "spreadsheet.chartValueAxisNumberFormatReasonMixed"
-              : selectedChartLinkedNumberFormatResolution.reason === "invalid"
-                ? "spreadsheet.chartValueAxisNumberFormatReasonInvalid"
-                : selectedChartLinkedNumberFormatResolution.reason ===
-                    "unsupported"
-                  ? "spreadsheet.chartValueAxisNumberFormatReasonUnsupported"
-                  : "spreadsheet.chartValueAxisNumberFormatReasonReference",
-        );
   const selectedChartDesignStyle = normalizeSpreadsheetChartStyle(
     selectedChartDesignTarget?.chart.chartStyle,
   ) ?? DEFAULT_SPREADSHEET_CHART_STYLE_GALLERY_ID;
@@ -13626,9 +12660,6 @@ function SpreadsheetWindow({
   )
     ? (String(selectedChartDesignStyle) as ChartStyleGalleryId)
     : null;
-  const selectedChartColorPaletteId = normalizeSpreadsheetChartColorPalette(
-    selectedChartDesignTarget?.chart.chartColorPalette,
-  );
   // Quick Layout on the chart's model (the one catalogue): the layout it shows.
   const selectedChartModel = selectedChartDesignTarget
     ? ((selectedChartDesignTarget.chart as unknown as SpreadsheetChartLike).chartV2 as ChartBlockAttrsV2 | undefined)
@@ -13646,21 +12677,13 @@ function SpreadsheetWindow({
     ...(workbookThemeAccentColors.length ? { accents: workbookThemeAccentColors } : {}),
     ...(sheetChartStyleLook ? { look: sheetChartStyleLook } : {}),
   };
-  const selectedChartQuickLayoutId = useMemo(() => {
-    if (!selectedChartModel) return null;
-    try {
-      return officeChartActiveQuickLayout(selectedChartModel);
-    } catch {
-      return null;
-    }
-  }, [selectedChartModel]);
   const selectedChartStylePreviewId =
-    chartStylePreview?.chartKey === selectedChartDesignKey
-      ? chartStylePreview.styleId
+    null?.chartKey === selectedChartDesignKey
+      ? null.styleId
       : null;
   const selectedChartColorPalettePreviewId =
-    chartColorPalettePreview?.chartKey === selectedChartDesignKey
-      ? chartColorPalettePreview.paletteId
+    null?.chartKey === selectedChartDesignKey
+      ? null.paletteId
       : null;
   // A gallery hover (Quick Layout, Chart Styles, Change Colors) on the
   // selected chart: its stored model with the hovered pick applied by the
@@ -13670,14 +12693,14 @@ function SpreadsheetWindow({
     if (!selectedChartModel || !selectedChartDesignKey) return null;
     let next: ChartBlockAttrsV2 = selectedChartModel;
     try {
-      if (chartQuickLayoutPreview?.chartKey === selectedChartDesignKey) {
-        next = officeChartWithQuickLayout(next, chartQuickLayoutPreview.layoutId, {
+      if (null?.chartKey === selectedChartDesignKey) {
+        next = officeChartWithQuickLayout(next, null.layoutId, {
           chartTitle: t("spreadsheet.uiCopy.chartTitle"),
           axisTitle: t("spreadsheet.uiCopy.axisTitle"),
         }) ?? next;
       }
-      if (chartDesktopPreview?.key === selectedChartDesignKey) {
-        next = sheetChartWithStyleRecipe(next, chartDesktopPreview.styleId, sheetChartStylePaint) ?? next;
+      if (null?.key === selectedChartDesignKey) {
+        next = sheetChartWithStyleRecipe(next, null.styleId, sheetChartStylePaint) ?? next;
       }
       const preset = selectedChartStylePreviewId === null ? undefined : CHART_STYLE_PRESET_FOR_C_STYLE[String(selectedChartStylePreviewId)];
       if (preset && next.stylePreset !== preset) next = { ...next, stylePreset: preset };
@@ -13688,7 +12711,7 @@ function SpreadsheetWindow({
       return null;
     }
     return next === selectedChartModel ? null : next;
-  }, [selectedChartModel, selectedChartDesignKey, chartQuickLayoutPreview, chartDesktopPreview, selectedChartStylePreviewId, selectedChartColorPalettePreviewId, workbookThemeAccentColors, t]);
+  }, [selectedChartModel, selectedChartDesignKey, null, null, selectedChartStylePreviewId, selectedChartColorPalettePreviewId, workbookThemeAccentColors, t]);
   // The chart record a surface draws: the record itself, or -- the selected
   // chart under a gallery hover -- the record with the previewed model and
   // the flat fields it derives to (so the frame and the titles show the pick
@@ -13706,7 +12729,7 @@ function SpreadsheetWindow({
           next = withSpreadsheetChartV2(like, selectedChartPreviewModel) as unknown as T;
         } else if (!like.chartV2) {
           // A record not on the model yet: the pick overlays its flat fields.
-          const style=chartDesktopPreview?.key===selectedChartDesignKey&&chartDesktopPreview.source===value?chartDesktopPreview.format:undefined;
+          const style=null?.key===selectedChartDesignKey&&null.source===value?null.format:undefined;
           if(style||selectedChartStylePreviewId!==null||selectedChartColorPalettePreviewId!==null){
             next=synchronizeSpreadsheetChartFormat(value as unknown as Record<string,unknown>,{...value,...(style?{chartFormat:style}:{}),
               ...(selectedChartStylePreviewId!==null?{chartStyle:selectedChartStylePreviewId}:{}),
@@ -13728,7 +12751,7 @@ function SpreadsheetWindow({
       drawn.set(value, shown);
       return shown;
     };
-  },[selectedChartModel,selectedChartDesignKey,selectedChartPreviewModel,chartDesktopPreview,selectedChartStylePreviewId,selectedChartColorPalettePreviewId, t]);
+  },[selectedChartModel,selectedChartDesignKey,selectedChartPreviewModel,null,selectedChartStylePreviewId,selectedChartColorPalettePreviewId, t]);
   useEffect(() => {
     setChartSharedFormatPaneOpen(false);
     setChartMarkerSeriesIndex(0);
@@ -13889,7 +12912,7 @@ function SpreadsheetWindow({
       setSelectedObjectId(shapeObject.id);
       // The new box's equation is what the person is working on: the
       // Equation tab comes forward (after Shape Format), as Office shows it.
-      if (equation) setRibbonTabState("equation");
+      if (equation) void 0;
       else contextualTabActivationRef.current = { contextual: "object" };
       return shapeObject.id;
     },
@@ -14094,11 +13117,11 @@ function SpreadsheetWindow({
       if (
         !isSpreadsheetWebBaseRibbonTabId(ribbonTab) &&
         ribbonTab !== contextualSelection.tab &&
-        !(contextualSelection.tab === "chartDesign" && ribbonTab === "chartFormat") &&
-        !(contextualSelection.tab === "chartDesign" && ribbonTab === "pivotChartAnalyze") &&
-        !(contextualSelection.tab === "smartArtDesign" && ribbonTab === "objectFormat") &&
-        !(contextualSelection.tab === "smartArtDesign" && ribbonTab === "smartArtPicture") &&
-        !(contextualSelection.tab === "objectFormat" && ribbonTab === "equation")
+        true &&
+        true &&
+        true &&
+        true &&
+        true
       ) {
         setRibbonTabState(lastBaseRibbonTabRef.current);
       }
@@ -15057,53 +14080,12 @@ function SpreadsheetWindow({
     const tabs = [
       ...spreadsheetRibbonTabs(t),
     ];
-    if (contextualSelection) {
-      if (contextualSelection.tab === "chartDesign" && selectedPivotChartSource) {
-        tabs.push({
-          id: "pivotChartAnalyze",
-          label: t("spreadsheet.pivotChartAnalyzeTab"),
-          contextual: "chart",
-        });
-      }
-      tabs.push({
-        id: contextualSelection.tab,
-        label: contextualSelection.label,
-        contextual: contextualSelection.contextual,
-      });
-      if (contextualSelection.tab === "chartDesign") tabs.push({ id:"chartFormat",label:t("spreadsheet.cellsFormatMenu"),contextual:"chart" });
-      // Office pairs SmartArt Design with the selected member's Format tab, so
-      // a member stays formattable while the diagram's own tab is contextual.
-      if (
-        contextualSelection.tab === "smartArtDesign" &&
-        selectedRibbonObject?.type === "shape"
-      ) {
-        tabs.push({
-          id: "objectFormat",
-          label: t("document.shape.label"),
-          contextual: "object",
-        });
-      }
-      // …and Picture Format while that member is a picture slot holding a
-      // picture, as Excel shows it for a SmartArt picture.
-      if (contextualSelection.tab === "smartArtDesign" && selectedSmartArtSlotPicture) {
-        tabs.push({
-          id: "smartArtPicture",
-          label: t("presentation.home.ribbonPictureFormat"),
-          contextual: "object",
-        });
-      }
-    }
-    // Office's Equation tab after Shape Format while an equation text box is
-    // selected or its equation is open in place (XLS-A016), as a slide's
-    // equation box shows it.
-    if (spreadsheetEquations.activeEquation) {
-      tabs.push({ id: "equation", label: t("equation.ribbon.tab"), contextual: "object" });
-    }
     return tabs;
   }, [contextualSelection, homeZh, selectedPivotChartSource, selectedRibbonObject, selectedSmartArtSlotPicture, spreadsheetEquations.activeEquation, t]);
-  const visibleRibbonTab = webRibbonTabs.some((tab) => tab.id === ribbonTab)
+  const visibleRibbonTabUnchecked = webRibbonTabs.some((tab) => tab.id === ribbonTab)
     ? ribbonTab
     : lastBaseRibbonTabRef.current;
+  const visibleRibbonTab = (["home","insert"] as readonly unknown[]).includes(visibleRibbonTabUnchecked) ? visibleRibbonTabUnchecked : "home";
   useEffect(() => {
     if (!pendingContextFocusRestoreRef.current) return;
     pendingContextFocusRestoreRef.current = false;
@@ -15155,18 +14137,6 @@ function SpreadsheetWindow({
     if (!pivotConfig || !pivotLiveSourceMatrix) return null;
     return pivotComputationMatrix(pivotConfig, pivotLiveSourceMatrix);
   }, [pivotConfig, pivotLiveSourceMatrix]);
-  // Fingerprinting the whole live source range costs as much as a render of
-  // the grid; the answer only changes with the recipe or the source cells,
-  // not with every selection move that re-renders the window.
-  const pivotNativeSourceDirty = useMemo(
-    () =>
-      Boolean(
-        pivotConfig &&
-          pivotLiveSourceScalarMatrix &&
-          pivotNativeSourceIsDirty(pivotConfig, pivotLiveSourceScalarMatrix),
-      ),
-    [pivotConfig, pivotLiveSourceScalarMatrix],
-  );
 
   // The computed read-only pivot grid (recipe + current data), or null when the
   // recipe has no value field / there is no source data.
@@ -15508,17 +14478,6 @@ function SpreadsheetWindow({
     shortDate: t("spreadsheet.localCopy.numberFormat.shortDate"),
     longDate: t("spreadsheet.localCopy.numberFormat.longDate"),
     more: t("spreadsheet.localCopy.numberFormat.more"),
-  };
-  const pageMarginMenuLabels = {
-    normal: t("spreadsheet.localCopy.pageMargins.normal"),
-    wide: t("spreadsheet.localCopy.pageMargins.wide"),
-    narrow: t("spreadsheet.localCopy.pageMargins.narrow"),
-    top: t("spreadsheet.localCopy.pageMargins.top"),
-    bottom: t("spreadsheet.localCopy.pageMargins.bottom"),
-    left: t("spreadsheet.localCopy.pageMargins.left"),
-    right: t("spreadsheet.localCopy.pageMargins.right"),
-    custom: t("spreadsheet.localCopy.pageMargins.custom"),
-    current: t("spreadsheet.localCopy.pageMargins.current"),
   };
   const numberFormatMenuLabel = (
     preset: (typeof numberFormatGallery)[number],
@@ -16447,116 +15406,6 @@ function SpreadsheetWindow({
     if (outcome.kind === "done") replaceActiveSheet(outcome.sheet);
   };
 
-  // Clear submenu (Excel/WPS "Home > Clear"): apply one Clear VARIANT
-  // (contents / formats / all / comments / hyperlinks) across the selection as a
-  // single undo step, via the tested clearRangeBy helper with the SAME
-  // blank-prune predicate (hasCellMetadata). Protection guard mirrors
-  // clearSelectionContents (a protected selection with a locked cell refuses).
-  // A no-op variant (the facet was already clear) skips the commit (byte-stable).
-  // Smart toolbox (MRAI Data-cell extension): prepare a bounded, read-only
-  // preview first. Confirm applies the complete plan as ONE sheet replacement;
-  // Cancel/Escape writes nothing. Formula/blank/no-op cells are omitted by the
-  // shared pure planner.
-  const previewCellTransform = (
-    transform: CellTransformId,
-    label: string,
-  ) => {
-    const range = {
-      r1: selRect.r1,
-      c1: selRect.c1,
-      r2: selRect.r2,
-      c2: selRect.c2,
-    };
-    if (rangeHasLockedCellRef.current(sheet, range)) {
-      showProtectNotice();
-      return;
-    }
-    const entries: Array<{
-      key: string;
-      value: unknown;
-      row: number;
-      col: number;
-    }> = [];
-    // Walk only sparse, existing cells: Ctrl+A can represent ten million blank
-    // cells, but a text conversion has no work there.
-    for (const key of Object.keys(sheet.cells)) {
-      const separator = key.indexOf(":");
-      if (separator < 0) continue;
-      const row = Number(key.slice(0, separator));
-      const col = Number(key.slice(separator + 1));
-      if (!Number.isFinite(row) || !Number.isFinite(col)) continue;
-      if (row < range.r1 || row > range.r2) continue;
-      if (col < range.c1 || col > range.c2) continue;
-      entries.push({ key, value: sheet.cells[key]?.value, row, col });
-    }
-    entries.sort((left, right) => left.row - right.row || left.col - right.col);
-    const changes = planCellTransform(entries, transform);
-    if (changes.length === 0) {
-      toast({
-        title: t("spreadsheet.uiCopy.nothingToConvert"),
-        description: t("spreadsheet.uiCopy.noTextInTheSelectionThatThisConversionChanges"),
-      });
-      return;
-    }
-    setCellTransformPreview({
-      label,
-      sheetId: sheet.id,
-      range,
-      sourceCells: sheet.cells,
-      changes,
-    });
-  };
-
-  const closeCellTransformPreview = () => {
-    setCellTransformPreview(null);
-    window.requestAnimationFrame(() =>
-      cellTransformTriggerRef.current?.focus({ preventScroll: true }),
-    );
-  };
-
-  const confirmCellTransformPreview = () => {
-    const preview = cellTransformPreview;
-    if (!preview) return;
-    const selectionUnchanged =
-      selRect.r1 === preview.range.r1 &&
-      selRect.c1 === preview.range.c1 &&
-      selRect.r2 === preview.range.r2 &&
-      selRect.c2 === preview.range.c2;
-    const cellsUnchanged =
-      sheet.cells === preview.sourceCells &&
-      preview.changes.every(
-        (change) => sheet.cells[change.key]?.value === change.before,
-      );
-    if (
-      sheet.id !== preview.sheetId ||
-      !selectionUnchanged ||
-      !cellsUnchanged
-    ) {
-      closeCellTransformPreview();
-      toast({
-        title: t("spreadsheet.uiCopy.theSelectionChanged"),
-        description: t("spreadsheet.uiCopy.previewTheConversionAgainBeforeApplyingIt"),
-      });
-      return;
-    }
-    if (rangeHasLockedCellRef.current(sheet, preview.range)) {
-      closeCellTransformPreview();
-      showProtectNotice();
-      return;
-    }
-    const nextCells = copyCellMap(sheet.cells);
-    for (const change of preview.changes) {
-      const cell = nextCells[change.key];
-      const { display: _display, ...rest } = cell ?? {};
-      nextCells[change.key] = { ...rest, value: change.after };
-    }
-    setCellTransformPreview(null);
-    replaceActiveSheet({ ...sheet, cells: nextCells });
-    window.requestAnimationFrame(() =>
-      cellTransformTriggerRef.current?.focus({ preventScroll: true }),
-    );
-  };
-
   // Review > Spelling (F7), as Excel scopes it (Microsoft Support, "Check
   // spelling in a worksheet"): one cell selected checks the whole sheet from
   // the active cell, several cells check just those, and a cell in edit mode
@@ -16604,6 +15453,119 @@ function SpreadsheetWindow({
       skipCellKeys: spillOverlay.spilled,
     });
   };
+
+  // Review > Thesaurus (Shift+F7; Microsoft Support "Look up words in the
+  // thesaurus": select the word, Review > Thesaurus, then a synonym's
+  // Insert replaces it). In Edit mode the pane opens on the entry's selected
+  // words; otherwise on the active cell's text when it is a word or a short
+  // phrase, else its first word. A formula, a number or an empty cell opens
+  // the pane on its search box.
+  const openThesaurus = (payload?: unknown) => {
+    let target: NonNullable<typeof thesaurusTargetRef.current> | null = null;
+    const row = editingCell?.sheetId === sheet.id ? editingCell.row : activeCell.row;
+    const col = editingCell?.sheetId === sheet.id ? editingCell.col : activeCell.col;
+    const committed = sheet.cells[`${row}:${col}`]?.value;
+    const value = typeof committed === "string" ? committed : "";
+    if (value && !value.startsWith("=")) {
+      let from = -1;
+      let word = "";
+      if (editingCell?.sheetId === sheet.id) {
+        const event =
+          payload && typeof payload === "object"
+            ? (payload as { currentTarget?: unknown; target?: unknown })
+            : {};
+        const input =
+          [event.currentTarget, event.target].find(
+            (candidate): candidate is HTMLInputElement | HTMLTextAreaElement =>
+              candidate instanceof HTMLInputElement || candidate instanceof HTMLTextAreaElement,
+          ) ??
+          gridWrapRef.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+            `[data-cell="${row}:${col}"]`,
+          ) ??
+          null;
+        const start = input?.selectionStart ?? 0;
+        const end = input?.selectionEnd ?? 0;
+        // The entry's selection names words of the committed text only while
+        // the entry still holds that text.
+        if (input && input.value === value && end > start) {
+          const raw = value.slice(start, end);
+          word = raw.trim();
+          from = start + (raw.length - raw.trimStart().length);
+        }
+      }
+      if (from < 0) {
+        const whole = value.trim();
+        if (whole && whole.length <= 80 && !/\s{2,}|\n/.test(whole) && whole.split(/\s+/).length <= 4) {
+          word = whole;
+          from = value.indexOf(whole);
+        } else {
+          const first = /[\p{L}\p{M}][\p{L}\p{M}'\u2019-]*/u.exec(value);
+          if (first) {
+            word = first[0];
+            from = first.index;
+          }
+        }
+      }
+      if (word && from >= 0 && word.length <= 80 && !word.includes("\n")) {
+        target = { sheetId: sheet.id, row, col, word, from, value };
+      }
+    }
+    thesaurusTargetRef.current = target;
+    setThesaurusTargetCell(target ? `${target.sheetId}:${target.row}:${target.col}` : null);
+    setThesaurusSeed((seed) => ({ word: target?.word ?? "", nonce: seed.nonce + 1 }));
+    if (thesaurusOpen) sheetTaskPaneDock.bringForward("thesaurus");
+    // The Comments pane takes the dock's column while it is open.
+    setCommentsPaneOpen(false);
+    setThesaurusOpen(true);
+  };
+  const lookupThesaurus = useCallback(
+    async (word: string): Promise<OfficeThesaurusEntry> => {
+      const target = thesaurusTargetRef.current;
+      const { apiPost } = await import("@mrnote/core/web/lib/api.ts");
+      return apiPost<OfficeThesaurusEntry>("/api/v1/ai/notebook/thesaurus", {
+        page_id: pageId,
+        word,
+        context: target && target.word === word ? target.value.slice(0, 600) : null,
+      });
+    },
+    [pageId],
+  );
+  // Insert: the synonym in place of the word the pane was opened on, as one
+  // ordinary (undoable) cell edit; a cell changed since, locked, spilled or
+  // on another sheet is left alone.
+  const insertThesaurusWord = (synonym: string) => {
+    const target = thesaurusTargetRef.current;
+    const key = target ? `${target.row}:${target.col}` : "";
+    const cell = target ? sheet.cells[key] : undefined;
+    const fail = (message: string) => toast({ title: message, variant: "destructive" });
+    if (!target || target.sheetId !== sheet.id || cell?.value !== target.value ||
+        target.value.slice(target.from, target.from + target.word.length) !== target.word) {
+      fail(t("presentation.review.thesaurusInsertFailed"));
+      return;
+    }
+    if (!dataDialogWriteAllowedRef.current) {
+      showProtectNotice(autosave.readOnlyReason ?? undefined);
+      return;
+    }
+    if (spillOverlay.spilled.has(key)) {
+      fail(t("spreadsheet.spillEditBlocked"));
+      return;
+    }
+    if (!isEditableCell(target.row, target.col)) {
+      showProtectNotice();
+      return;
+    }
+    const nextValue =
+      target.value.slice(0, target.from) + synonym + target.value.slice(target.from + target.word.length);
+    const nextCells = copyCellMap(sheet.cells);
+    const { display: _display, ...rest } = cell ?? {};
+    nextCells[key] = { ...rest, value: nextValue };
+    knownCellChangeRef.current = { before: sheet.cells, after: nextCells, keys: [key] };
+    replaceActiveSheet({ ...sheet, cells: nextCells });
+    // The inserted word is what a second Insert replaces.
+    thesaurusTargetRef.current = { ...target, word: synonym, value: nextValue };
+  };
+  const closeThesaurus = () => setThesaurusOpen(false);
 
   // What the Spelling dialog asks of the window. Built at render, so each
   // call sees the sheet on screen and the commit boundaries of this render.
@@ -17105,7 +16067,7 @@ function SpreadsheetWindow({
   const listRegionRef = useRef<ListRegionMemo | null>(null);
   const oneCellListRegion = useMemo(() => {
     if (hasMultiSelection) return null;
-    if (ribbonTab !== "data" && !commandSearchOpen && !subtotalOpen && !dataFormOpen) return null;
+    if (!commandSearchOpen && !subtotalOpen && !dataFormOpen) return null;
     return listRegionAtReusing(listRegionRef, sheet.cells, selRect.r1, selRect.c1, sheet.rowCount, sheet.columnCount, mergeSpans, MAX_INFERRED_DATA_REGION_CELLS);
   }, [commandSearchOpen, dataFormOpen, hasMultiSelection, mergeSpans, ribbonTab, selRect.r1, selRect.c1, sheet.cells, sheet.rowCount, sheet.columnCount, subtotalOpen]);
   const listSourceR1 = oneCellListRegion ? oneCellListRegion.r1 : Math.min(selRect.r1, selRect.r2);
@@ -20483,12 +19445,17 @@ function SpreadsheetWindow({
   // that font's Latin face's digit and column, whatever face it names
   // (lookwin p249-lw: 宋体 11 over a Calibri theme wraps Calibri cells in a
   // 148 px column where its grid is 169; R464-X87). The API's
-  // normal_wrap_family / screen_wrap_px.
+  // normal_wrap_family / screen_wrap_px. The grid's columns are counted in
+  // the digit it resolved them in (nativeGrid.digitWidth): a Western UI
+  // already counts them in that Latin face, and they wrap as they stand
+  // (R466-X78: 宋体 11 over Calibri, a 120.375 column of 843 px wrapped
+  // again as if it were 宋体's 963, at 738 px: three lines of Times New
+  // Roman 14 where Excel fits two, a ninth band of pages).
   const officeWrapFace = useMemo(() => {
     const font = nativeGrid?.grid.font;
     const body = font?.bodyFamily?.trim();
     if (nativeGrid?.dpi !== 96 || !font || font.themeRole !== "minor" || !body || body.toLowerCase() === font.family.trim().toLowerCase()) return undefined;
-    const gridDigit = officeDigitWidth({ family: font.family, sizePt: font.sizePt, record: font.record });
+    const gridDigit = nativeGrid.digitWidth;
     const wrapDigit = officeDigitWidth({ family: body, sizePt: font.sizePt });
     return { family: body, gridDigit, wrapDigit };
   }, [nativeGrid]);
@@ -20580,16 +19547,31 @@ function SpreadsheetWindow({
     if (held === undefined || !font?.bodyFamily || font.family.trim().toLowerCase() !== font.bodyFamily.trim().toLowerCase() || heightPt === undefined) return held;
     // Where the Normal font is the theme's body face (a Google Sheets export,
     // Arial over Arial) every row keeps the default, unless a cell in the
-    // opening view is set in a face whose one line is as tall as the default
-    // or taller (lookwin p233-lw, R461-X32: a bold Arial 12 cell, 21 px under
-    // a 15.75 pt default, in row 5 fits the rows below the view, in row 100
-    // nothing). Only a cell on the row's baseline counts, bottom-aligned as
+    // opening view is set in a face whose line reaches deeper below its
+    // baseline than the Normal font's, however tall (lookwin p233-lw,
+    // R461-X32: a bold Arial 12 cell, 4 px below where Arial 10 is 3, in row 5
+    // fits the rows below the view, in row 100 nothing; x58 probes, R470-X58:
+    // Calibri 11, 20 px under a 15.75 pt default, 4 px below, fits them, and
+    // MS Gothic 14, 23 px, 3 px below, holds). Under a default of 22 px or
+    // more no cell does. Only a cell on the row's baseline counts, bottom-aligned as
     // a format stating nothing is, empty or merged alike; a top, centred,
     // justified or distributed one does not (p271-lw / p272-lw, R467-X51:
     // centred and top-aligned Times New Roman 11 cells, 20 px like the
     // default, hold all 66 pages).
+    // A default no taller than the Normal font's own line takes no cell at
+    // all: every row is held (p285-lw, R470-X55's second sheet: Normal
+    // Calibri 12, 21 px, under a 15 pt default, 20 px).
     // The API's _custom_default_view_rows is the same.
     const defaultPx = Math.floor(heightPt / .75 + .5);
+    const normalPx = officeRowHeight({ family: font.family, sizePt: font.sizePt, record: font.record });
+    if (normalPx >= defaultPx) return undefined;
+    // A Normal Calibri whose own line is 17 px or less (Calibri 10 or
+    // smaller) fits the rows below the view whatever the view holds (p287-lw:
+    // R470-X55's second sheet under Calibri 9 or 10, R461-X32 under Calibri 10;
+    // Calibri 10.5 or larger and Arial over Arial keep the rule above).
+    if (font.family.trim().toLowerCase() === "calibri" && normalPx <= 17) return held;
+    const normalParts = officeRowParts({ family: font.family, sizePt: font.sizePt, record: font.record });
+    if (defaultPx > CUSTOM_DEFAULT_VIEW_CELL_MAX_DEFAULT_PX || !normalParts) return undefined;
     for (const [key, cell] of Object.entries(sheet.cells)) {
       const [row, col] = key.split(":").map(Number);
       if (!cell || !Number.isInteger(row) || !Number.isInteger(col) || row >= held) continue;
@@ -20597,7 +19579,8 @@ function SpreadsheetWindow({
         : sheet.defaultStyle as { verticalAlign?: unknown; verticalJustify?: unknown } | undefined;
       if (standingAlign(aligned?.verticalAlign) || aligned?.verticalJustify !== undefined) continue;
       const face = officeKnownStyleFace(cellDisplayTextCss(pageLayoutCellStyle(row, col, cell)));
-      if (face && officeRowHeight(face) >= defaultPx) return held;
+      const parts = face ? officeRowParts(face) : undefined;
+      if (parts && parts.descent > normalParts.descent) return held;
     }
     return undefined;
   }, [sheet.nativeGrid?.rowMetrics, sheet.nativeGrid?.font, sheet.cells, sheet.defaultStyle, fileHidesRows, sheetZoomScale, sheet.freezeRows, sheetOpeningTopRow, pageLayoutCellStyle]);
@@ -20992,6 +19975,12 @@ function SpreadsheetWindow({
     }
     if (floors.size === 0 && !customFit) return undefined;
     const dropped = new Set<string>();
+    // A merge more than one row high fits no row: neither its text nor its
+    // empty cells stand one (the API's in_merge / in_tall_merge; R467-X73's
+    // empty bold A21:A26 under A20:A26 left rows of 20 px where Excel fits
+    // their Arial 11 cells to 19).
+    const tallMerges = mergeSpans.filter((span) => span.rowSpan > 1);
+    const inTallMerge = tallMerges.length ? new Set([...coveredCells(tallMerges), ...mergeAnchorCells(tallMerges)]) : undefined;
     for (const key of Object.keys(sheet.cells)) {
       const separator = key.indexOf(":");
       const rowKey = key.slice(0, separator);
@@ -21014,7 +20003,7 @@ function SpreadsheetWindow({
       // keeps its 20 px row in an Arial 11 sheet).
       if (!cell || ((cell.value ?? "") === "" && !cell.style)) continue;
       const row = Number(rowKey), col = Number(key.slice(separator + 1));
-      if (customFit && (spanAt(row, col, mergeSpans)?.rowSpan ?? 1) > 1) continue;
+      if (inTallMerge?.has(key)) continue;
       if (cell.style?.textRotation || cell.style?.verticalText) {
         floors.delete(rowKey);
         dropped.add(rowKey);
@@ -21437,8 +20426,14 @@ function SpreadsheetWindow({
     // screen pixels. Compare in content space, then write back in screen space.
     // A right-to-left sheet scrolls negative from its right edge.
     const horizontalSign = gridRtl ? -1 : 1;
+    // An on-screen keyboard up over the grid hides its bottom rows: the cell
+    // being typed in must clear it (and the Hide keyboard bar on its edge).
+    const keyboardCoverPx = Math.min(
+      Math.max(0, wrap.clientHeight - toScreenPx(rowHeight(visualRow))),
+      softKeyboardCover(wrap),
+    );
     const viewTop = toContentPx(wrap.scrollTop);
-    const viewBottom = viewTop + toContentPx(wrap.clientHeight);
+    const viewBottom = viewTop + toContentPx(wrap.clientHeight - keyboardCoverPx);
     const viewLeft = toContentPx(Math.abs(wrap.scrollLeft));
     // A task pane floating over the grid's edge hides what is under it: the
     // cell must clear the card (screen px; a right-to-left sheet starts at
@@ -21480,7 +20475,7 @@ function SpreadsheetWindow({
       if (cellTop < viewTop + topInset) {
         wrap.scrollTop = toScreenPx(Math.max(0, cellTop - topInset));
       } else if (cellBottom > viewBottom) {
-        wrap.scrollTop = toScreenPx(cellBottom) - wrap.clientHeight;
+        wrap.scrollTop = toScreenPx(cellBottom) - (wrap.clientHeight - keyboardCoverPx);
       }
     }
     if (!colPinned) {
@@ -21494,6 +20489,37 @@ function SpreadsheetWindow({
       }
     }
   };
+  // Excel on a phone: tapping into a cell brings up the keyboard and the
+  // grid scrolls that cell above it. The keyboard rises after the cell opens
+  // for editing (and grows when its suggestion bar appears), so the cell is
+  // brought clear of it each time the keyboard covers more.
+  const editingSheetId = editingCell?.sheetId;
+  const editingRow = editingCell?.row;
+  const editingCol = editingCell?.col;
+  useEffect(() => {
+    if (editingSheetId === undefined || editingSheetId !== sheet?.id) return;
+    if (editingRow === undefined || editingCol === undefined) return;
+    const viewport = typeof window === "undefined" ? null : window.visualViewport;
+    if (!viewport) return;
+    let frame = 0;
+    let lastInset = 0;
+    const follow = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const inset = softKeyboardInset();
+        const rose = inset > lastInset;
+        lastInset = inset;
+        if (inset > 0 && rose) gridPageJumpLandRef.current(editingRow, editingCol);
+      });
+    };
+    follow();
+    viewport.addEventListener("resize", follow);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      viewport.removeEventListener("resize", follow);
+    };
+  }, [editingSheetId, editingRow, editingCol, sheet?.id]);
   // A window restored from minimized shows the cell it left from (S-111),
   // once its sheet is the one on screen.
   useEffect(() => {
@@ -25274,6 +24300,24 @@ function SpreadsheetWindow({
       return materializeLineStyles(candidate, undefined, deferredLineStyleBudget(candidate.cells));
     }));
   }, [sheet.id, sheet.cells, sheetGroup, applyTiledModel]);
+  // Printed, a sheet shown writes its line formats' blanks however many
+  // (within the API print's budget, then its occupied range): its unwritten
+  // rows stand at their empty positions' faces and a row format's fill runs
+  // across them, as the API's print paints them (printedLineBlanksSheet;
+  // R13-X27, R38-X05).
+  const printsLineBlanks = embeddedWorkbook?.presentation === "print";
+  useLayoutEffect(() => {
+    if (!printsLineBlanks) return;
+    const showing = sheetGroup ?? [sheet.id];
+    const printed = new Map<SheetModel, SheetModel>();
+    for (const candidate of liveSheetsRef.current) {
+      if (!showing.includes(candidate.id) || deferredLineStyleBudget(candidate.cells) !== undefined) continue;
+      const next = printedLineBlanksSheet(candidate);
+      if (next !== candidate) printed.set(candidate, next);
+    }
+    if (printed.size === 0) return;
+    applyTiledModel((previous) => previous.map((candidate) => printed.get(candidate) ?? candidate));
+  }, [printsLineBlanks, sheet.id, sheet.cells, sheetGroup, applyTiledModel]);
 
   // The Print dialog (Ctrl+P, the rail's Print, Page Setup's Print…): what
   // it prints is fixed where the user stood when it opened. The last choice
@@ -29762,92 +28806,6 @@ function SpreadsheetWindow({
       writeSheets,
     ],
   );
-
-  // Freeze panes (Excel parity): resolve the chosen menu action to freeze
-  // counts and persist them on the sheet through the shared replaceActiveSheet
-  // path so undo/redo and autosave behave like any other edit.
-  // The Freeze Panes menu as Excel for the web lays it out: FIVE commands in
-  // three groups separated by rules —
-  //   Freeze at selection
-  //   ---
-  //   Top row            (fixed: row 1)
-  //   Up to row N        (follows the active cell)
-  //   ---
-  //   First column       (fixed: column A)
-  //   Up to column X     (follows the active cell)
-  // "Top row"/"First column" carry an icon; the two "Up to …" commands are
-  // separate, icon-less entries indented to the same text column as Excel's,
-  // and their number/letter re-reads the active cell on every render.
-  const freezeMenuEntries = useMemo(
-    () =>
-      [
-        {
-          action: "freezePanes" as FreezeAction,
-          controlId: "XLSCTL.VIEW.WINDOW.FREEZE",
-          icon: "freezeAtSelection" as const,
-          title: t("spreadsheet.freezePanes"),
-          testid: "freeze-panes",
-          separatorBefore: false,
-        },
-        {
-          action: "freezeTopRow" as FreezeAction,
-          controlId: "XLSCTL.VIEW.WINDOW.FREEZE_TOP_ROW",
-          icon: "freezeRows" as const,
-          title: t("spreadsheet.freezeTopRow"),
-          testid: "freeze-top-row",
-          separatorBefore: true,
-        },
-        {
-          action: "freezeRowsToActive" as FreezeAction,
-          controlId: "XLSCTL.VIEW.WINDOW.FREEZE_ROWS_TO_ACTIVE",
-          icon: null,
-          title: t("spreadsheet.freezeUpToRow", {
-            row: Math.max(0, activeCell.row) + 1,
-          }),
-          testid: "freeze-rows-to-active",
-          separatorBefore: false,
-        },
-        {
-          action: "freezeFirstColumn" as FreezeAction,
-          controlId: "XLSCTL.VIEW.WINDOW.FREEZE_FIRST_COLUMN",
-          icon: "freezeColumns" as const,
-          title: t("spreadsheet.freezeFirstColumn"),
-          testid: "freeze-first-column",
-          separatorBefore: true,
-        },
-        {
-          action: "freezeColumnsToActive" as FreezeAction,
-          controlId: "XLSCTL.VIEW.WINDOW.FREEZE_COLUMNS_TO_ACTIVE",
-          icon: null,
-          title: t("spreadsheet.freezeUpToColumn", {
-            column: columnToLetters(Math.max(0, activeCell.col)),
-          }),
-          testid: "freeze-columns-to-active",
-          separatorBefore: false,
-        },
-      ] as const,
-    [activeCell.col, activeCell.row, t],
-  );
-  const renderRibbonMenuLabel = (entry: {
-    icon: SpreadsheetDataIconName | null;
-    title: string;
-  }) => (
-    <span className="spreadsheet-window__freeze-menu-label">
-      {entry.icon ? (
-        <SpreadsheetDataIcon name={entry.icon} size={20} />
-      ) : (
-        // Excel indents the "Up to …" commands to the text column of the
-        // icon-bearing command above them rather than giving them an icon.
-        <span
-          aria-hidden="true"
-          className="spreadsheet-window__freeze-menu-indent"
-        />
-      )}
-      <span className="spreadsheet-window__freeze-menu-title">
-        {entry.title}
-      </span>
-    </span>
-  );
   const applyFreezeAction = useCallback(
     (action: FreezeAction, anchor?: { row: number; col: number }) => {
       // Freeze and split are mutually exclusive: applying a freeze removes any
@@ -30119,69 +29077,6 @@ function SpreadsheetWindow({
       viewOptions,
     ],
   );
-
-  /**
-   * Page Layout > Themes > Fonts > Customize Fonts... (Create New Theme
-   * Fonts, Microsoft Support "Change theme fonts"): the workbook theme's own
-   * font scheme, its heading and body faces for Latin and Asian text, under
-   * the name it is saved as -- the Fonts gallery's Custom entry. Like a
-   * Fonts pick it is the theme's scheme: cells set in the theme's fonts
-   * follow, and the file states the faces and the name.
-   */
-  const [workbookThemeFontsDialogOpen, setWorkbookThemeFontsDialogOpen] = useState(false);
-  const workbookThemeCustomFonts = useMemo(() => {
-    const own = workbookTheme.nativeFonts;
-    if (!own) return [];
-    const asian = (collection: { ea: string; scripts: Partial<Record<string, string>> }) =>
-      collection.scripts.Hans || collection.ea || undefined;
-    return [
-      {
-        id: "workbook",
-        name: own.name,
-        headingLatin: own.major.latin,
-        bodyLatin: own.minor.latin,
-        ...(asian(own.major) ? { headingEastAsia: asian(own.major) } : {}),
-        ...(asian(own.minor) ? { bodyEastAsia: asian(own.minor) } : {}),
-      },
-    ];
-  }, [workbookTheme.nativeFonts]);
-  const workbookThemeFontsDialogInitial = useMemo<OfficeThemeFontsDraft>(() => {
-    const start = workbookTheme.nativeFonts ?? spreadsheetWorkbookThemeFontSet(workbookTheme);
-    const asian = (collection: { ea: string; scripts: Partial<Record<string, string>> }) =>
-      collection.scripts.Hans || collection.ea || undefined;
-    return {
-      headingLatin: start.major.latin,
-      bodyLatin: start.minor.latin,
-      ...(asian(start.major) ? { headingEastAsian: asian(start.major) } : {}),
-      ...(asian(start.minor) ? { bodyEastAsian: asian(start.minor) } : {}),
-      name: nextCustomThemeFontsName(t("officeThemeFonts.customPrefix"), [workbookTheme.nativeFonts?.name]),
-    };
-  }, [workbookTheme, t]);
-  const applyWorkbookCustomThemeFonts = useCallback(
-    (draft: OfficeThemeFontsDraft) => {
-      const nativeFonts = customizedSpreadsheetNativeThemeFonts(
-        workbookTheme.nativeFonts ?? spreadsheetWorkbookThemeFontSet(workbookTheme),
-        draft,
-      );
-      if (!nativeFonts) return;
-      setWorkbookThemeFontsDialogOpen(false);
-      commitWorkbookTheme({ ...workbookTheme, nativeFonts });
-    },
-    [commitWorkbookTheme, workbookTheme],
-  );
-  const saveCurrentWorkbookTheme = useCallback(() => {
-    const safeBaseName =
-      title
-        .trim()
-        .replace(/[\\/:*?"<>|]+/g, "-")
-        .replace(/\.+$/g, "")
-        .slice(0, 120) || t("pages.defaultSpreadsheetTitle");
-    downloadTextFile(
-      `${safeBaseName}.mrtheme.json`,
-      serializeSpreadsheetWorkbookThemeFile(workbookTheme),
-      "application/json;charset=utf-8",
-    );
-  }, [t, title, workbookTheme]);
   const handleWorkbookThemeFile = useCallback(
     async (event: ReactChangeEvent<HTMLInputElement>) => {
       const input = event.currentTarget;
@@ -30286,23 +29181,6 @@ function SpreadsheetWindow({
       readingMode: !current.readingMode,
     }));
   }, [commitViewOptions]);
-  // View > Focus Cell > Focus Cell Color, picked from the shared palette.
-  // Picking a colour also switches the highlight on, so the choice is seen at
-  // once instead of waiting for the next toggle; the default colour is stored
-  // as absence so an untouched workbook's JSON is unchanged.
-  const setFocusCellColor = useCallback(
-    (color: string) => {
-      const hex = resolveFocusCellColor(color);
-      setRecentColors((current) => pushRecentColor(current, hex));
-      commitViewOptions((current) => {
-        const next = { ...current, readingMode: true };
-        if (hex === DEFAULT_FOCUS_CELL_COLOR) delete next.focusCellColor;
-        else next.focusCellColor = hex;
-        return next;
-      });
-    },
-    [commitViewOptions],
-  );
   // View > Eye-care mode (WPS 护眼模式): swap the white paper for a
   // low-saturation green, the setting people leave on for long sessions.
   const toggleEyeCare = useCallback(() => {
@@ -30311,46 +29189,6 @@ function SpreadsheetWindow({
       eyeCare: !current.eyeCare,
     }));
   }, [commitViewOptions]);
-  // Edit-time spell check (the browser dictionary's squiggle on cell editors),
-  // separate from the batch review that scans the sheet.
-  // The smart-toolbox conversions, named once. Two surfaces render them (the
-  // drawer's menu and the Data-tab select); a second copy would drift.
-  const cellTransformChoices = useMemo(
-    () =>
-      [
-        ["collapseSpaces", t("spreadsheet.transformCollapseSpaces")],
-        ["trimSpaces", t("spreadsheet.transformTrimSpaces")],
-        ["upperCase", t("spreadsheet.transformUpperCase")],
-        ["lowerCase", t("spreadsheet.transformLowerCase")],
-        ["properCase", t("spreadsheet.transformProperCase")],
-        ["halfWidth", t("spreadsheet.transformHalfWidth")],
-        ["fullWidth", t("spreadsheet.transformFullWidth")],
-        ["chineseAmount", t("spreadsheet.transformChineseAmount")],
-        ["digitsOnly", t("spreadsheet.transformDigitsOnly")],
-        ["stripDigits", t("spreadsheet.transformStripDigits")],
-      ] as Array<[CellTransformId, string]>,
-    [t],
-  );
-  const cellTransformPreviewBody = useMemo(() => {
-    if (!cellTransformPreview) return "";
-
-    const compact = (value: string) => {
-      const normalized = value.replace(/\s+/g, " ").trim();
-      return normalized.length > 24
-        ? `${normalized.slice(0, 23)}…`
-        : normalized;
-    };
-    const examples = cellTransformPreview.changes
-      .slice(0, 3)
-      .map((change) => {
-        const [row, col] = change.key.split(":").map(Number);
-        const address = `${columnHeaderLabel(col, "a1")}${row + 1}`;
-        return `${address}: ${compact(change.before)} → ${compact(change.after)}`;
-      })
-      .join("; ");
-    const count = cellTransformPreview.changes.length;
-    return t("spreadsheet.dynamicCopy.transformPreview", { count, examples });
-  }, [cellTransformPreview, t]);
   const toggleSpellCheck = useCallback(() => {
     commitViewOptions((current) => ({
       ...current,
@@ -30912,15 +29750,6 @@ function SpreadsheetWindow({
     },
     [commitOutlineGroups, outlineGroups, selRect],
   );
-
-  // Ungroup the selected lines on `axis`: Excel lowers them one level, so
-  // ungrouping part of a group splits it.
-  // Excel's Clear Outline (Data > Ungroup): removes every outline group of
-  // the sheet; lines a group had hidden stay hidden, as in Excel.
-  const clearOutline = useCallback(() => {
-    if (outlineGroups.length === 0) return;
-    commitOutlineGroups([]);
-  }, [commitOutlineGroups, outlineGroups]);
   const ungroupSelection = useCallback(
     (axis: OutlineAxis) => {
       const start = axis === "row" ? selRect.r1 : selRect.c1;
@@ -30940,29 +29769,6 @@ function SpreadsheetWindow({
     [commitOutlineGroups, outlineGroups],
   );
 
-  // XLS-A027 — Data ▸ Outline ▸ Show Detail / Hide Detail on the active
-  // cell: its row groups first, then its column groups, as Excel does.
-  const applyOutlineDetail = useCallback(
-    (mode: "show" | "hide") => {
-      for (const axis of ["row", "col"] as const) {
-        const target = outlineDetailTarget(
-          outlineGroups,
-          axis,
-          axis === "row" ? activeCell.row : activeCell.col,
-          axis === "row"
-            ? sheet.outlineSummaryBelow !== false
-            : sheet.outlineSummaryRight !== false,
-          mode,
-        );
-        if (target) {
-          commitOutlineGroups(toggleGroupCollapse(outlineGroups, target, axis, mode === "hide"));
-          return;
-        }
-      }
-    },
-    [activeCell.col, activeCell.row, commitOutlineGroups, outlineGroups, sheet.outlineSummaryBelow, sheet.outlineSummaryRight],
-  );
-
   // Apply an outline LEVEL button (corner 1/2/3…): collapse groups at level
   // >= depth, expand the rest, on the given axis.
   const applyOutlineLevel = useCallback(
@@ -30971,17 +29777,6 @@ function SpreadsheetWindow({
     },
     [commitOutlineGroups, outlineGroups],
   );
-
-  // Auto Outline (Excel/WPS "数据 → 分级显示 → 自动建立分级显示"): derive groups
-  // from SUM/SUBTOTAL summary cells that sit directly below a vertical block or
-  // right of a horizontal block, then fold each detected range through
-  // createGroup so it merges with any existing manual groups and obeys the same
-  // nesting rules. No-ops silently when nothing new is found.
-  const autoOutline = useCallback(() => {
-    const next = autoOutlinedGroups(sheet, outlineGroups);
-    if (!next) return; // nothing new found
-    commitOutlineGroups(next);
-  }, [commitOutlineGroups, outlineGroups, sheet]);
 
   // Manual Hide / Unhide (Excel header right-click). Persist the next hidden-line
   // set on the sheet model through replaceActiveSheet so undo/redo + autosave
@@ -31664,21 +30459,6 @@ function SpreadsheetWindow({
     [scenarios, replaceActiveSheet, sheet],
   );
 
-  // Toggle the Scenario Manager dialog. On open, clear stale status and any
-  // sub-dialog left from an earlier session; on close, just hide.
-  const toggleScenario = useCallback(() => {
-    setScenarioOpen((open) => {
-      if (open) return false;
-      setScenarioStatus(null);
-      setScenarioForm(null);
-      setScenarioValuesDraft(null);
-      setScenarioCellsPicking(null);
-      setScenarioMergeDraft(null);
-      setScenarioSummaryDraft(null);
-      return true;
-    });
-  }, []);
-
   // Merge… (Excel's Merge Scenarios): pick a worksheet of this workbook; its
   // scenarios are copied onto the active sheet, at the same cell addresses,
   // with their comments and protection. A name already taken gets a number
@@ -32089,23 +30869,6 @@ function SpreadsheetWindow({
     t,
   ]);
 
-  // Toggle the Goal Seek dialog. On open, prefill "Set cell" with the active cell
-  // (the common case: the user selected the formula cell to solve) and clear any
-  // stale status; the other two fields are left for the user. On close, just hide.
-  const toggleGoalSeek = useCallback(() => {
-    setGoalSeekOpen((open) => {
-      if (open) {
-        setGoalSeekPending(null);
-        setGoalSeekStatus(null);
-        return false;
-      }
-      setGoalSeekSetCell(`${columnLabel(activeCell.col)}${activeCell.row + 1}`);
-      setGoalSeekPending(null);
-      setGoalSeekStatus(null);
-      return true;
-    });
-  }, [activeCell.col, activeCell.row]);
-
   const {
     runSolver,
   } = useSpreadsheetRunSolver({
@@ -32169,25 +30932,6 @@ function SpreadsheetWindow({
     solverPending,
     t,
   ]);
-
-  // Toggle the Solver dialog. On open, prefill the objective with the active cell
-  // (the common case: the user selected the formula to optimize) and clear stale
-  // status; on close, just hide. Constraint rows persist across toggles in state.
-  const toggleSolver = useCallback(() => {
-    setSolverOpen((open) => {
-      if (open) {
-        setSolverPending(null);
-        setSolverStatus(null);
-        return false;
-      }
-      setSolverObjectiveCell(
-        `${columnLabel(activeCell.col)}${activeCell.row + 1}`,
-      );
-      setSolverPending(null);
-      setSolverStatus(null);
-      return true;
-    });
-  }, [activeCell.col, activeCell.row]);
 
   // Remove a constraint row (the Solver dialog's Delete).
   const removeSolverConstraint = useCallback((index: number) => {
@@ -32343,16 +31087,6 @@ function SpreadsheetWindow({
     setSolverConstraintError(null);
     setSolverSubDialog(null);
   }, [sheet.cells, solverSubDialog, t]);
-
-  // Toggle the What-If Data Table dialog. On open, prefill the column-input cell
-  // with the active cell and clear stale status; on close, just hide.
-  const toggleWhatIf = useCallback(() => {
-    setWhatIfOpen((open) => {
-      if (open) return false;
-      setWhatIfStatus(null);
-      return true;
-    });
-  }, []);
 
   // Excel permits several delimiter switches at once. Keep authored order
   // stable so preview and commit consume the same parser contract.
@@ -32723,57 +31457,6 @@ function SpreadsheetWindow({
     },
     [openInsertFunctionGallery],
   );
-  const openFunctionArgsFromRibbon = useCallback(
-    (name: string, returnFocus?: HTMLElement | null) => {
-      if (
-        sheets.filter((candidate) => candidate.id === sheet.id).length !== 1 ||
-        activeCell.row < 0 ||
-        activeCell.col < 0 ||
-        activeCell.row >= MAX_SHEET_ROWS ||
-        activeCell.col >= MAX_SHEET_COLS
-      ) {
-        return false;
-      }
-      const signature = signatureFor(name);
-      if (!signature) return false;
-      rememberRecentFunction(name);
-      const fields = argFieldsFor(signature);
-      functionDialogReturnFocusRef.current =
-        returnFocus ?? formulaFunctionTriggerRef.current;
-      formulaFunctionMenuDialogHandoffRef.current = true;
-      setQuickActionsOpen(false);
-      setInsertFunctionOpen(false);
-      setInsertFunctionSelected(null);
-      setFunctionDialogAuthority({
-        pageId,
-        workbook: sheets,
-        sheet,
-        sheetId: sheet.id,
-        row: activeCell.row,
-        col: activeCell.col,
-        rawValue:
-          sheet.cells[`${activeCell.row}:${activeCell.col}`]?.value ?? "",
-      });
-      setFuncArgsName(signature.name);
-      setFuncArgsFields(fields);
-      setFuncArgsValues(fields.map(() => ""));
-      return true;
-    },
-    [activeCell.col, activeCell.row, pageId, rememberRecentFunction, sheet, sheets],
-  );
-  const openFunctionCategoryFromMenu = useCallback(
-    (category: FunctionCategory, returnFocus?: HTMLElement | null) => {
-      const opened = openFunctionCategoryGallery(category, returnFocus);
-      formulaFunctionMenuDialogHandoffRef.current = opened;
-      return opened;
-    },
-    [openFunctionCategoryGallery],
-  );
-  const keepFunctionDialogFocus = useCallback((event: Event) => {
-    if (!formulaFunctionMenuDialogHandoffRef.current) return;
-    formulaFunctionMenuDialogHandoffRef.current = false;
-    event.preventDefault();
-  }, []);
   // Custom Lists manager (File > Options > Custom Lists). Add the draft (one
   // member per line) as a new custom list, or remove an existing one. The lists
   // live in workbook view options and feed drag-fill via computeFillValues.
@@ -32925,17 +31608,6 @@ function SpreadsheetWindow({
     setSheetZoom(clampZoom(percent / 100));
     setZoomDialogDraft(null);
   };
-  // X-001 — Enable iterative calculation, Maximum Iterations, Maximum
-  // Change: a workbook setting saved with it (calcPr). A change recalculates
-  // every formula, as a new date system does: it is a topology change.
-  const openIterationDialog = () => {
-    const setting = viewOptions.calculationIteration ?? DEFAULT_CALCULATION_ITERATION;
-    setIterationDialogDraft({
-      enabled: setting.enabled,
-      maxIterations: String(setting.maxIterations),
-      maxChange: String(setting.maxChange),
-    });
-  };
   const confirmIterationDialog = () => {
     const draft = iterationDialogDraft;
     if (!draft) return;
@@ -32956,32 +31628,6 @@ function SpreadsheetWindow({
     }));
     recordWorksheetCalculationMutation(liveSheetsRef.current, { kind: "topology" });
   };
-  // Set precision as displayed (Excel: Options > Advanced > When calculating
-  // this workbook; calcPr@fullPrecision="0"), a workbook setting. Turned on,
-  // after Excel's warning, every number a cell holds becomes the number its
-  // format shows, for good: the digits cut cannot be had back, by Undo
-  // either (Microsoft Learn, "Floating-point arithmetic may give inaccurate
-  // result in Excel"), so the steps before it go. Turned off, the numbers
-  // stay as they are and calculation reads them whole again.
-  const togglePrecisionAsDisplayed = () => {
-    if (viewOptions.precisionAsDisplayed) {
-      commitViewOptions((current) => {
-        const { precisionAsDisplayed: _off, ...rest } = current;
-        return rest;
-      });
-      recordWorksheetCalculationMutation(liveSheetsRef.current, { kind: "topology" });
-      return;
-    }
-    // Every cell must be here to be rounded: a sheet still loading, or a
-    // large sheet whose cells the browser holds only in part, is not.
-    const live = liveSheetsRef.current;
-    const tiled = tiledRef.current;
-    if (sheetsStillLoading(live) || live.some((model) => tiled?.isTiledSheet(model.id) && !tiled.isWhollyResident(model.id))) {
-      showProtectNotice(t("spreadsheet.formulas.precisionAsDisplayedUnavailable"));
-      return;
-    }
-    setPrecisionWarningOpen(true);
-  };
   const confirmPrecisionAsDisplayed = () => {
     setPrecisionWarningOpen(false);
     const live = liveSheetsRef.current;
@@ -32998,27 +31644,6 @@ function SpreadsheetWindow({
     }
     undoHistoryRef.current = { past: [], future: [] };
     syncHistoryAvailability();
-  };
-  // XLS-A025 — Calculation Options. Excel's calcMode is one of auto,
-  // autoNoTable and manual; the window's calculation state machine runs Auto
-  // and Manual, and the workbook records "except data tables" beside Auto.
-  // What-If data tables here hold computed values that only Data Table…
-  // rewrites, so they are never recalculated by Automatic either way.
-  const setCalculationOption = (option: "auto" | "autoNoTable" | "manual") => {
-    void executeVisibleCommand(
-      option === "manual"
-        ? "XLSCTL.FORMULAS.CALC.OPTIONS.MANUAL"
-        : "XLSCTL.FORMULAS.CALC.OPTIONS.AUTOMATIC",
-    );
-    const exceptTables = option === "autoNoTable";
-    if (Boolean(viewOptions.calculationExceptDataTables) !== exceptTables) {
-      commitViewOptions((current) => {
-        const next = { ...current };
-        if (exceptTables) next.calculationExceptDataTables = true;
-        else delete next.calculationExceptDataTables;
-        return next;
-      });
-    }
   };
   // XLS-A023 — Defined Names ▸ Use in Formula: Excel types the name into the
   // entry being edited, or starts "=Name" in the active cell.
@@ -33101,22 +31726,6 @@ function SpreadsheetWindow({
     replaceActiveSheet(next);
     setPasteNamesDraft(null);
   };
-  // Defined Names ▸ Create from Selection (Excel's Create Names from
-  // Selection dialog): names from the labels on the checked sides.
-  const openCreateNamesDialog = () => {
-    const range = {
-      r1: Math.min(selRect.r1, selRect.r2),
-      c1: Math.min(selRect.c1, selRect.c2),
-      r2: Math.max(selRect.r1, selRect.r2),
-      c2: Math.max(selRect.c1, selRect.c2),
-    };
-    setCreateNamesDraft(
-      defaultCreateNamesSides(range, (row, col) => {
-        const value = sheet.cells[`${row}:${col}`]?.value ?? "";
-        return value.trim() !== "" && !/^[-+]?[\d.,]+$/.test(value.trim()) && !value.startsWith("=");
-      }),
-    );
-  };
   const confirmCreateNames = () => {
     if (!createNamesDraft) return;
     if (isSheetProtectionEffectiveRef.current(sheet)) {
@@ -33172,43 +31781,6 @@ function SpreadsheetWindow({
       }
     }
     if (workbook !== liveSheetsRef.current) commitSheets(workbook);
-  };
-  // Error Checking ▸ Trace Error: from an error cell, the arrows to every
-  // precedent level, as far as they go (Excel traces back to the source).
-  const traceErrorFromActiveCell = () => {
-    let computed: unknown;
-    try {
-      computed = formulaEvaluator.getComputed(activeCell.row, activeCell.col);
-    } catch {
-      computed = null;
-    }
-    if (!isFormulaError(computed)) {
-      showProtectNotice(t("spreadsheet.traceErrorNoError"));
-      return;
-    }
-    for (let level = 0; level < 12; level += 1) {
-      if (!traceFromActiveCell("precedents")) break;
-    }
-  };
-  // Error Checking ▸ Circular References: the sheet's cells caught in a loop.
-  // Read only while the Formulas tab is drawn (its group factory calls it).
-  const findCircularReferenceCells = () => {
-    const found: Array<{ row: number; col: number }> = [];
-    let scanned = 0;
-    for (const key of cellIndex.formulaKeys) {
-      if (found.length >= 20 || (scanned += 1) > 5000) break;
-      const [rawRow, rawCol] = key.split(":");
-      const row = Number(rawRow);
-      const col = Number(rawCol);
-      let computed: unknown;
-      try {
-        computed = formulaEvaluator.getComputed(row, col);
-      } catch {
-        continue;
-      }
-      if (isFormulaError(computed) && computed.code === "#CIRCULAR!") found.push({ row, col });
-    }
-    return found;
   };
   // XLS-A016 — Insert ▸ Screenshot. The capture is a picture like any other:
   // it goes through the same receipt-guarded insert as Pictures ▸ This Device.
@@ -33333,7 +31905,6 @@ function SpreadsheetWindow({
   // view's sheets, display options, active sheet and selection back, as one
   // write.
   const workbookCustomViews = viewOptions.customViews ?? [];
-  const customViewsBlockedByTable = sheets.some((candidate) => (candidate.dataTables?.length ?? 0) > 0);
   const addCustomView = () => {
     const draft = customViewsDialog?.adding;
     if (!draft) return;
@@ -33699,43 +32270,6 @@ function SpreadsheetWindow({
     [cellDisplayValue, listSourceRange.r1, sheet.cells, subtotalHasHeader, t],
   );
 
-  const subtotalSeedKeyRef = useRef<string | null>(null);
-  const toggleSubtotal = useCallback(() => {
-    if (subtotalOpen) {
-      setSubtotalOpen(false);
-      return;
-    }
-    if (refuseListCommandFromIsolatedBlankRef.current()) return;
-    // The dialog is a window-level modal: the quick-actions flyout shuts
-    // first, as Sort's launchers do, so its native popover never floats over
-    // the modal dim.
-    setQuickActionsOpen(false);
-    setSubtotalStatus(null);
-    // Excel's defaults for a list: at each change in its leftmost column, a
-    // subtotal added to its rightmost column only, with Sum -- Count when
-    // that column holds text. The choices made stay for the same list; a
-    // different list starts from its own defaults, never from another list's
-    // column numbers.
-    const seedKey = `${sheet.id}:${listSourceRange.r1}:${listSourceRange.c1}:${listSourceRange.r2}:${listSourceRange.c2}`;
-    if (subtotalSeedKeyRef.current !== seedKey) {
-      subtotalSeedKeyRef.current = seedKey;
-      const last = listSourceRange.c2;
-      let lastHoldsText = false;
-      for (let row = listSourceRange.r1 + (subtotalHasHeader ? 1 : 0); row <= listSourceRange.r2; row += 1) {
-        const cell = sheet.cells[`${row}:${last}`];
-        if (!cell || String(cell.value ?? "") === "") continue;
-        lastHoldsText = cell.formula
-          ? typeof formulaEvaluator.getComputed(row, last) === "string"
-          : spreadsheetCellIsText(cell) || typeof readLiteralCellValue(String(cell.value)) === "string";
-        break;
-      }
-      setSubtotalGroupCol(listSourceRange.c1);
-      setSubtotalValueCols(last !== listSourceRange.c1 ? [last] : []);
-      setSubtotalFunction(lastHoldsText ? "count" : "sum");
-    }
-    setSubtotalOpen(true);
-  }, [formulaEvaluator, listSourceRange, setSubtotalGroupCol, setSubtotalValueCols, sheet.cells, sheet.id, subtotalHasHeader, subtotalOpen]);
-
   const removeDuplicatesSourceRange = useMemo(() => {
     if (sheetViewProjectionActive) return null;
     if (hasMultiSelection) return { r1: selRect.r1, c1: selRect.c1, r2: selRect.r2, c2: selRect.c2 };
@@ -33759,7 +32293,7 @@ function SpreadsheetWindow({
     // Do not scan a large connected region on unrelated Home-tab keystrokes:
     // the current region is inferred only while the Data tab or a launcher
     // that needs it is open.
-    if (ribbonTab !== "data" && !removeDuplicatesOpen) return null;
+    if (!removeDuplicatesOpen) return null;
     // One selected cell: Excel's current region around it, merges whole, as
     // Sort takes it (oneCellSortRegion), from a blank cell too.
     return listRegionAtReusing(listRegionRef, sheet.cells, selRect.r1, selRect.c1, sheet.rowCount, sheet.columnCount, mergeSpans, MAX_INFERRED_DATA_REGION_CELLS);
@@ -34563,38 +33097,6 @@ function SpreadsheetWindow({
     });
   }, [formulaEvaluator, gridColumnCount, gridRowCount, sheet.cells, t]);
 
-  // Freeze Selected Cells: the selection becomes the frozen top-left pane.
-  const runAutomationFreezeSelection = () => {
-    const anchor = galleryFreezeAtCell(selRect, gridRowCount, gridColumnCount);
-    if (anchor) applyFreezeAction("freezePanes", anchor);
-  };
-
-  // Remove Hyperlinks from Sheet: every link of the sheet goes, its value
-  // stays, and its text turns plain (no underline, black).
-  const runAutomationRemoveHyperlinks = () => {
-    const { cells, cleared } = galleryCellsWithoutHyperlinks(sheet.cells);
-    if (cleared.length > 0 && isSheetProtectionEffectiveRef.current(sheet)) {
-      const lockedLink = cleared.some((key) => {
-        const [row, col] = key.split(":").map(Number);
-        return rangeHasLockedCellRef.current(sheet, { r1: row, r2: row, c1: col, c2: col });
-      });
-      if (lockedLink || !sheetProtectionAllowsRef.current(sheet, "insertHyperlinks")) {
-        showProtectNotice();
-        return;
-      }
-    }
-    // The links the sheet holds over large areas go too, each one a link.
-    const wholeSheet = { r1: 0, c1: 0, r2: Number.MAX_SAFE_INTEGER, c2: Number.MAX_SAFE_INTEGER };
-    const withoutAreas = sheetWithoutHyperlinkAreasOver(sheet, wholeSheet);
-    const areaCount = withoutAreas === sheet || !Array.isArray(sheetHyperlinkAreas) ? 0 : sheetHyperlinkAreas.length;
-    if (areaCount > 0 && !sheetProtectionAllowsRef.current(sheet, "insertHyperlinks")) {
-      showProtectNotice();
-      return;
-    }
-    if (cleared.length > 0 || areaCount > 0) replaceActiveSheet({ ...withoutAreas, cells: cleared.length > 0 ? cells : sheet.cells });
-    toast({ description: t("spreadsheet.automate.clearHyperlinksResult", { count: cleared.length + areaCount }) });
-  };
-
   // LOCATE / SELECT BLANKS: find every empty cell in the op range and move the
   // cursor to the FIRST one (the rect-only selection model can't represent a
   // discontiguous set of all blanks — true multi-blank selection is deferred), and
@@ -34693,129 +33195,6 @@ function SpreadsheetWindow({
     });
   }, []);
 
-  // Consolidate (Excel "Data > Consolidate"): parse the textarea sources (one
-  // A1-range per non-blank line), run the pure consolidate() helper over the
-  // resolved display values of each source range, and write the result grid into
-  // the sheet starting at the destination cell. Mirrors the fill-blanks / remove-
-  // duplicates pattern: read display values via cellDisplayValue, write back via
-  // writeCellValueInto + replaceActiveSheet (undo + autosave + protection).
-  const runConsolidate = useCallback(() => {
-    if (
-      consolidateAuthority === null ||
-      consolidateAuthority.sheetId !== sheet.id
-    ) {
-      setConsolidateStatus({
-        kind: "error",
-        text: t("spreadsheet.uiCopy.theWorksheetChangedReopenConsolidate"),
-      });
-      return;
-    }
-    // The sources, values, block and refusals are the shared plan
-    // (lib/spreadsheet/consolidate-buttons); a refusal changes nothing.
-    const plan = consolidatePlan(
-      sheets,
-      sheet,
-      {
-        destination: consolidateDest,
-        sources: consolidateSources.split("\n"),
-        fn: consolidateFn,
-        mode: consolidateMode,
-        topRow: consolidateTopRow,
-        leftColumn: consolidateLeftCol,
-        createLinks: consolidateCreateLinks,
-      },
-      {
-        evaluatorFor: (candidate) =>
-          candidate.id === sheet.id
-            ? formulaEvaluator
-            : formulaWorkbook.evaluatorFor(candidate.name || candidate.id),
-        overlayFor: (candidate, evaluator) =>
-          candidate.id === sheet.id
-            ? spillOverlay
-            : buildSpillOverlay(
-                candidate.cells,
-                coveredCells(normalizeMerges(candidate.merges)),
-                evaluator,
-              ),
-        isEditable: isEditableCell,
-      },
-    );
-    if (!plan.ok) {
-      if (plan.error === "locked") showProtectNotice();
-      const messages = {
-        "bad-dest": "spreadsheet.consolidateBadDest",
-        "need-label": "spreadsheet.consolidateNeedLabel",
-        "bad-source": "spreadsheet.consolidateBadSource",
-        external: "spreadsheet.uiCopy.externalWorkbookConsolidationNeedsAConnectedWorkbookProvider",
-        "no-room": "spreadsheet.uiCopy.theDestinationDoesNotHaveEnoughRoomForThe",
-        overlap: "spreadsheet.uiCopy.theDestinationCannotOverlapASourceRange",
-        "links-same-sheet": "spreadsheet.uiCopy.createLinksRequiresEverySourceRangeToBeOn",
-        merged: "spreadsheet.uiCopy.theDestinationContainsMergedCells",
-        "link-too-long": "spreadsheet.uiCopy.theLinkedConsolidationFormulaWouldExceedExcelSLimit",
-        spill: "spreadsheet.spillEditBlocked",
-        locked: "spreadsheet.consolidateDestLocked",
-      } as const;
-      setConsolidateStatus({ kind: "error", text: t(messages[plan.error]) });
-      return;
-    }
-    replaceActiveSheet(plan.sheet);
-    // Excel's OK writes the result and closes the dialog; the sheet has the
-    // keyboard again.
-    setConsolidateOpen(false);
-    setConsolidateAuthority(null);
-    setConsolidateStatus(null);
-    window.requestAnimationFrame(() => gridActiveCellFocusTarget()?.focus({ preventScroll: true }));
-  }, [
-    consolidateAuthority,
-    consolidateCreateLinks,
-    consolidateDest,
-    consolidateFn,
-    consolidateLeftCol,
-    consolidateMode,
-    consolidateSources,
-    consolidateTopRow,
-    formulaEvaluator,
-    formulaWorkbook,
-    gridActiveCellFocusTarget,
-    isEditableCell,
-    locale,
-    replaceActiveSheet,
-    sheet,
-    sheets,
-    showProtectNotice,
-    spillOverlay.spilled,
-    t,
-  ]);
-
-  const closeConsolidate = useCallback(() => {
-    setConsolidateOpen(false);
-    setConsolidateAuthority(null);
-    setConsolidateStatus(null);
-    window.requestAnimationFrame(() =>
-      consolidateTriggerRef.current?.focus({ preventScroll: true }),
-    );
-  }, []);
-
-  // Toggle the Consolidate dialog. On open, prefill destination with the active
-  // cell and clear stale status; keep source/function drafts from the last run.
-  const toggleConsolidate = useCallback(() => {
-    if (consolidateOpen) {
-      closeConsolidate();
-      return;
-    }
-    if (typeof sheet.id !== "string" || sheet.id.length === 0) return;
-    setConsolidateAuthority({ sheetId: sheet.id });
-    setConsolidateDest(`${columnLabel(activeCell.col)}${activeCell.row + 1}`);
-    setConsolidateStatus(null);
-    setConsolidateOpen(true);
-  }, [
-    activeCell.col,
-    activeCell.row,
-    closeConsolidate,
-    consolidateOpen,
-    sheet.id,
-  ]);
-
   const pageSetupWorkbookIdentity = pageSetupWorkbookIdentityRef.current;
   const pageSetupWriteAllowedRef = useRef(false);
   pageSetupWriteAllowedRef.current = !autosave.readOnly && !autosave.loading;
@@ -34866,22 +33245,6 @@ function SpreadsheetWindow({
       (activeCell.col > 0 && !manualPageColBreaks.includes(activeCell.col)));
   const hasAnyManualPageBreak =
     manualPageRowBreaks.length > 0 || manualPageColBreaks.length > 0;
-  const pageSetupScale = normalizedPageSetupSettings.scaling;
-  const pageSetupAutomaticLabel = t("spreadsheet.formulas.calculationAutomatic");
-  const pageSetupScaleWidthValue =
-    pageSetupScale?.kind === "fitToWidth"
-      ? t("spreadsheet.dynamicCopy.pageCount", { count: pageSetupScale.pages })
-      : pageSetupScale?.kind === "fitToPages" &&
-          !("pages" in pageSetupScale) &&
-          pageSetupScale.widthPages > 0
-        ? t("spreadsheet.dynamicCopy.pageCount", { count: pageSetupScale.widthPages })
-        : pageSetupAutomaticLabel;
-  const pageSetupScaleHeightValue =
-    pageSetupScale?.kind === "fitToPages" &&
-    !("pages" in pageSetupScale) &&
-    pageSetupScale.heightPages > 0
-      ? t("spreadsheet.dynamicCopy.pageCount", { count: pageSetupScale.heightPages })
-      : pageSetupAutomaticLabel;
   const resolveLivePageSetupSheet = useCallback(
     (
       requireUnlocked = true,
@@ -35059,7 +33422,7 @@ function SpreadsheetWindow({
         pageSetupReturnFocusRef.current = null;
       }
       pageSetupFocusTargetRef.current = target;
-      setRibbonTab("pageLayout");
+      void 0;
       if (pageSetupOpen) {
         setPageSetupTab(pageSetupTabForFocusTarget(target));
         if (target === "scalingWidth" || target === "scalingHeight") {
@@ -35849,13 +34212,6 @@ function SpreadsheetWindow({
   // Sparkline > Group / Ungroup (Excel): on the sparklines in the selection.
   const newSparklineGroupId = () =>
     `sparkline-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  const sparklineGroupingAvailable = useMemo(
-    () => ({
-      group: sparklinesGrouped(sparklines, selectedSparklineKeys, activeSparklineKey, () => "probe") !== null,
-      ungroup: sparklinesUngrouped(sparklines, selectedSparklineKeys, () => "probe") !== null,
-    }),
-    [activeSparklineKey, selectedSparklineKeys, sparklines],
-  );
   const regroupSparklinesForSelection = (mode: "group" | "ungroup"): boolean => {
     if (isSheetProtectionEffectiveRef.current(sheet)) {
       showProtectNotice();
@@ -35869,27 +34225,6 @@ function SpreadsheetWindow({
     replaceActiveSheet(sheetWithSparklines(sheet, next));
     return true;
   };
-
-
-  // Circle Invalid Data (Excel/WPS): scan every validation rule's range for
-  // cells whose CURRENT value violates the rule and ring them red. The scan
-  // reuses the same reader + context the in-cell red-ring marker and commit
-  // validation use, so a circled cell is exactly one the editor flags invalid.
-  // The result is held in transient state (not persisted) and drawn as an
-  // overlay; an empty scan clears any existing circles.
-  const circleInvalidData = useCallback(() => {
-    const coords = scanInvalidCells(
-      validations,
-      validationCellText,
-      validationContextAt,
-    );
-    setInvalidCircles(coords.length > 0 ? coords : null);
-  }, [validationCellText, validations, validationContextAt]);
-
-  // Clear Validation Circles (Excel/WPS): drop the transient red rings.
-  const clearInvalidCircles = useCallback(() => {
-    setInvalidCircles((prev) => (prev ? null : prev));
-  }, []);
 
   // The circles are a stale snapshot once the data or the rules change (Excel
   // drops a cell's circle the moment it is corrected), so clear them whenever
@@ -36881,10 +35216,6 @@ function SpreadsheetWindow({
     },
     [dispatchSheetViewScopedAction, runActionInOwnSheetView, sheetViewScopePrompt],
   );
-  const askSheetViewScopeAgain = useCallback(() => {
-    writeSheetViewScopePreference("ask");
-    setSheetViewScopePreference("ask");
-  }, []);
 
   const {
     commitSheetViewName,
@@ -37812,16 +36143,6 @@ function SpreadsheetWindow({
     [chooseSpreadsheetInkPreset, inkPens, persistInkPens],
   );
 
-  /** Add Pen: a new pen at the end of the gallery, picked. */
-  const addInkPen = useCallback(
-    (tool: DocumentInkTool) => {
-      const { profile, id } = withOfficeInkPenAdded(inkPens, tool, SPREADSHEET_INK_PEN_SPEC);
-      persistInkPens(profile);
-      chooseSpreadsheetInkPreset(officeInkPenById(profile, id));
-    },
-    [chooseSpreadsheetInkPreset, inkPens, persistInkPens],
-  );
-
   /** Delete: the pen leaves the gallery; the last one stays. */
   const removeInkPen = useCallback(
     (id: string) => {
@@ -38026,7 +36347,7 @@ function SpreadsheetWindow({
     return () => window.cancelAnimationFrame(frame);
   }, [inkReplayDuration, inkReplayPlaying]);
   // The replay belongs to the sheet and the Draw tab it was started on.
-  const onDrawTab = ribbonTab === "draw";
+  const onDrawTab = false;
   useEffect(() => {
     setInkReplay(null);
   }, [sheet.id, onDrawTab]);
@@ -38082,7 +36403,7 @@ function SpreadsheetWindow({
   // A hovering Apple Pencil shows where its ink, or the eraser, would land
   // (lib/office-ink-hover), at the grid's zoom on screen.
   useInkPenHover(inkSurfaceNode, {
-    active: ribbonTab === "draw" && (inkInteractionMode === "draw" || inkInteractionMode === "eraser"),
+    active: false,
     look: () => {
       if (inkInteractionModeRef.current === "eraser") {
         return { diameterPx: documentInkEraserRadiusPx(inkEraserRef.current) * 2, color: "", eraser: true };
@@ -38114,7 +36435,7 @@ function SpreadsheetWindow({
   }, [activeCell.col, activeCell.row, scheduleRaf]);
 
   useEffect(() => {
-    if (ribbonTab !== "draw") return;
+    return;
     const handleDrawKeyDown = (event: KeyboardEvent) => {
       // A key pressed inside an open pen menu, the Eraser's kinds or a
       // colour palette belongs to that surface: Escape closes it and leaves
@@ -38165,14 +36486,7 @@ function SpreadsheetWindow({
   ]);
 
   useEffect(() => {
-    if (
-      ribbonTab !== "draw" ||
-      inkInteractionMode === null ||
-      (sheetProtectionAllowsRef.current(sheet, "editObjects") &&
-        (inkInteractionMode === "draw"
-          ? sheetObjects.length < MAX_SHEET_OBJECTS
-          : sheetHasLassoObjects))
-    ) {
+    {
       return;
     }
     writeInkInteractionMode(null);
@@ -38400,7 +36714,7 @@ function SpreadsheetWindow({
   }, [shapeTextEdit, sheetObjects]);
   // The Equation tab opens with the draft, as PowerPoint's does.
   useEffect(() => {
-    if (spreadsheetEquations.equationObjectId) setRibbonTabState("equation");
+    if (spreadsheetEquations.equationObjectId) void 0;
   }, [spreadsheetEquations.equationObjectId]);
   // Office's equation box resizes to fit its text while it is typed: the box
   // (and its selection frame) is drawn at the draft's size through the live
@@ -38758,126 +37072,15 @@ function SpreadsheetWindow({
   // sheet with Lasso Select still picked: their frame (as a move or a scale
   // previews it) in the draw surface's pixels, and the loop around it.
   const inkLassoView = (() => {
-    if (
-      !inkLasso ||
-      inkLasso.sheetId !== sheet.id ||
-      ribbonTab !== "draw" ||
-      inkInteractionMode !== "lasso" ||
-      !sameInkLassoIds(inkLasso.ids, selectedInkIds)
-    ) {
+    {
       return null;
     }
-    const frame = inkLassoScalePreview
-      ? inkLassoUnionBox([...inkLassoScalePreview.values()])
-      : spreadsheetInkLassoBox(sheetObjects, inkLasso.ids);
+    const frame = spreadsheetInkLassoBox(sheetObjects, inkLasso.ids);
     if (!frame) return null;
     const moved = inkMovePreview ? translateInkLassoBox(frame, inkMovePreview.dx, inkMovePreview.dy) : frame;
     const box = translateInkLassoBox(moved, -SPREADSHEET_HEADER_WIDTH_PX, -SPREADSHEET_HEADER_HEIGHT_PX);
     return { ids: inkLasso.ids, box, loop: placeInkLassoLoop(inkLasso.loop, box) };
   })();
-  /**
-   * The lasso frame's corner grip: every stroke it took scales about the
-   * opposite corner (the deck's multi-selection resize), one Undo step.
-   */
-  const scaleInkLasso = (handle: InkLassoHandle, event: ReactPointerEvent<HTMLElement>) => {
-    if (!inkLasso || !sheetProtectionAllowsRef.current(sheet, "editObjects")) return;
-    const zoom = sheetZoom > 0 ? sheetZoom : 1;
-    const members = sheetObjects.flatMap((object) => {
-      if (!inkLasso.ids.has(object.id) || !isSpreadsheetLassoObject(object)) return [];
-      return [
-        {
-          blockId: object.id,
-          startGeom: {
-            left: Number(object.anchor.xEmu) / EMU_PER_CSS_PIXEL,
-            top: Number(object.anchor.yEmu) / EMU_PER_CSS_PIXEL,
-            width: Math.max(1, Number(object.anchor.widthEmu) / EMU_PER_CSS_PIXEL),
-            height: Math.max(1, Number(object.anchor.heightEmu) / EMU_PER_CSS_PIXEL),
-          },
-        },
-      ];
-    });
-    if (members.length === 0) return;
-    const sheetBounds = { width: gridStageSize.totalWidth, height: gridStageSize.totalHeight };
-    let latest: Map<string, { left: number; top: number; width: number; height: number }> | null = null;
-    followInkLassoPointer(event, {
-      onMove: (dx, dy, moveEvent) => {
-        const scaled = applyMultiResize(members, handle, dx / zoom, dy / zoom, sheetBounds, {
-          maintainAspect: moveEvent.shiftKey,
-          minSize: 4,
-        });
-        latest = scaled;
-        setInkLassoScalePreview(scaled);
-      },
-      onEnd: (_dx, _dy, cancelled) => {
-        setInkLassoScalePreview(null);
-        const scaled = latest;
-        if (cancelled || !scaled) return;
-        const liveSheet = liveSheetsRef.current[liveActiveSheetIndexRef.current];
-        if (!liveSheet || liveSheet.id !== sheet.id) return;
-        let changed = false;
-        const nextObjects = (liveSheet.objects ?? []).map((object) => {
-          const next = scaled.get(object.id);
-          if (!next) return object;
-          const moved = spreadsheetLassoObjectScaled(object, next, INK_LASSO_SCALE_MIN);
-          if (moved !== object) changed = true;
-          return moved;
-        });
-        if (changed) replaceActiveSheet({ ...liveSheet, objects: nextObjects });
-      },
-    });
-  };
-  /**
-   * The lasso frame's rotation grip: every stroke it took turns about the
-   * frame's centre, each about its own centre by as much (a group's turn),
-   * one Undo step.
-   */
-  const rotateInkLasso = (event: ReactPointerEvent<HTMLElement>) => {
-    if (!inkLasso || !sheetProtectionAllowsRef.current(sheet, "editObjects")) return;
-    const frame = event.currentTarget.parentElement?.getBoundingClientRect();
-    if (!frame) return;
-    const members = sheetObjects.flatMap((object) => {
-      if (!inkLasso.ids.has(object.id) || !isSpreadsheetLassoObject(object)) return [];
-      const left = Number(object.anchor.xEmu) / EMU_PER_CSS_PIXEL;
-      const top = Number(object.anchor.yEmu) / EMU_PER_CSS_PIXEL;
-      const width = Math.max(1, Number(object.anchor.widthEmu) / EMU_PER_CSS_PIXEL);
-      const height = Math.max(1, Number(object.anchor.heightEmu) / EMU_PER_CSS_PIXEL);
-      return [{ id: object.id, left, top, width, height }];
-    });
-    const union = inkLassoUnionBox(members);
-    if (!union) return;
-    const center = { x: union.left + union.width / 2, y: union.top + union.height / 2 };
-    // The pointer's angle about the frame's centre on screen (the zoom is the same both ways).
-    const screenX = frame.left + frame.width / 2;
-    const screenY = frame.top + frame.height / 2;
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const startAngle = Math.atan2(startY - screenY, startX - screenX);
-    let degrees = 0;
-    followInkLassoPointer(event, {
-      onMove: (dx, dy, moveEvent) => {
-        let next = ((Math.atan2(startY + dy - screenY, startX + dx - screenX) - startAngle) * 180) / Math.PI;
-        next = ((next + 540) % 360) - 180;
-        if (moveEvent.shiftKey) next = Math.round(next / 15) * 15;
-        degrees = Math.round(next * 10) / 10;
-        setInkLassoTurn({ center, degrees });
-      },
-      onEnd: (_dx, _dy, cancelled) => {
-        setInkLassoTurn(null);
-        if (cancelled || Math.abs(degrees) < 0.05) return;
-        const liveSheet = liveSheetsRef.current[liveActiveSheetIndexRef.current];
-        if (!liveSheet || liveSheet.id !== sheet.id) return;
-        const byId = new Set(members.map((member) => member.id));
-        let changed = false;
-        const nextObjects = (liveSheet.objects ?? []).map((object) => {
-          if (!byId.has(object.id)) return object;
-          const turned = spreadsheetLassoObjectTurned(object, center, degrees);
-          if (turned !== object) changed = true;
-          return turned;
-        });
-        if (changed) replaceActiveSheet({ ...liveSheet, objects: nextObjects });
-      },
-    });
-  };
   const runInkConvert = (mode: OfficeInkConversionMode) => {
     pressOfficeInkConvert<string>(mode, {
       selectedInk: selectedSpreadsheetInkIds,
@@ -40251,67 +38454,6 @@ function SpreadsheetWindow({
     [charts, replaceActiveSheet, sheet],
   );
 
-  // Prefer the visible shared engine; the legacy SVG remains only the fallback
-  // for a chart actually rendered by MiniChart, never a different type/style.
-  const exportChartAsImage = useCallback(
-    async (
-      id: string,
-      label: string,
-      kind: "native" | "drawing",
-    ): Promise<boolean> => {
-      // handled (the account gate is open): no failure to report
-      if (guestNeedsAccount(onGuestExportRequestRef)) return true;
-      const sourceWorkbook = liveSheetsRef.current;
-      const sourceIndex = liveActiveSheetIndexRef.current;
-      const root = rootRef.current;
-      const container=kind==="native"?root?.querySelector(`[data-chart-id="${CSS.escape(id)}"]`)??root?.querySelector(`[data-page-layout-drawing="chart:${CSS.escape(id)}"]`):root?.querySelector(`[data-spreadsheet-object-id="${CSS.escape(id)}"]`)??root?.querySelector(`[data-page-layout-drawing="${CSS.escape(id)}"]`);
-      const snapshot=await prepareSpreadsheetChartPngSnapshot(container ?? null);
-      if (sourceWorkbook !== liveSheetsRef.current || sourceIndex !== liveActiveSheetIndexRef.current || root !== rootRef.current || !container?.isConnected) return false;
-      if(snapshot?.startsWith("data:image/png;base64,")){
-        try{
-          const [{downloadBlobFile},{toPngFilename}]=await Promise.all([import("@mrnote/core/web/lib/download-file.ts"),import("@mrnote/core/web/lib/export/svg-to-png.ts")]);
-          const bytes=Uint8Array.from(atob(snapshot.slice("data:image/png;base64,".length)),character=>character.charCodeAt(0));
-          return downloadBlobFile(toPngFilename(label,"chart"),new Blob([bytes],{type:"image/png"}));
-        }catch{
-          toast({variant:"destructive",description:t("spreadsheet.exportChartImageFailed")});
-          return false;
-        }
-      }
-      const selected=selectedChartDesignTarget?.chart;
-      const exactEngineRequired=Boolean(selected?.chartFormat||selected?.chartSubtype||EXTENDED_XLSX_CHART_TYPES.has(normalizeSpreadsheetChartType(selectedChartDesignType)));
-      if(exactEngineRequired||container?.querySelector('[data-chart-export-engine-required="true"], [data-chart-render-status="ready"]')){
-        toast({variant:"destructive",description:t("spreadsheet.exportChartImageFailed")});
-        return false;
-      }
-      const svgEl =
-        kind === "native"
-          ? findChartSvg(id)
-          : document
-              .querySelector<HTMLElement>(
-                `[data-spreadsheet-object-id="${CSS.escape(id)}"]`,
-              )
-              ?.querySelector<SVGSVGElement>(
-                '[data-chart-export-source="legacy-svg"] svg',
-              ) ?? null;
-      if (!svgEl) {
-        toast({
-          variant: "destructive",
-          description: t("spreadsheet.exportChartImageFailed"),
-        });
-        return false;
-      }
-      const ok = await exportChartSvgToPng(svgEl, label);
-      if (!ok) {
-        toast({
-          variant: "destructive",
-          description: t("spreadsheet.exportChartImageFailed"),
-        });
-      }
-      return ok;
-    },
-    [t,selectedChartDesignTarget,selectedChartDesignType],
-  );
-
   /**
    * The live data of a range-bound chart as this sheet reads it now (the
    * same reading `chartViews` draws), for the write paths below: a write
@@ -41078,9 +39220,10 @@ function SpreadsheetWindow({
           // Each series' source format: its labels Linked to source show it.
           seriesNumberFormats: nativeReference ? resolveWorkbookChartSeriesNumberFormats(object, sheet.name) : undefined,
           // The format the category cells are written in: a date axis Linked
-          // to source writes its labels in it (C11_tdf134118: d-mmm).
+          // to source writes its labels in it (C11_tdf134118: d-mmm); an X Y
+          // chart's horizontal axis its X cells' (R452-X04).
           categoryNumberFormat: (() => {
-            const range = parseChartRefRange(refs?.[0]?.categories);
+            const range = parseChartRefRange(refs?.[0]?.categories ?? refs?.[0]?.xValues);
             if (!range) return undefined;
             const owner = range.sheetName
               ? sheets.find((candidate) => candidate.name.toLowerCase() === range.sheetName!.toLowerCase())
@@ -41199,6 +39342,27 @@ function SpreadsheetWindow({
     } };
   };
   const pageLayoutDrawings = useMemo(() => {
+    // The sheet's own grid, as the workbook states it (the API's
+    // drawing_rotation_box._axes): the widths and heights a drawing's
+    // markers were measured on, before Windows Excel's own fit.
+    const fileRowMetrics = sheet.nativeGrid?.rowMetrics;
+    const fileGrid = {
+      columnWidth: (column: number) => {
+        const width = sheet.columnWidths?.[String(column)] ?? sheet.defaultColumnWidth;
+        return typeof width === "number" && Number.isFinite(width) && width > 0 ? width : 80;
+      },
+      rowHeight: (row: number) => {
+        const stated = sheet.rowHeights?.[String(row)];
+        const metric = fileRowMetrics?.rows[String(row)];
+        if (typeof stated === "number" && Number.isFinite(stated) && stated > 0)
+          return metric && metric.heightPt > 0 && metric.pixels === stated ? metric.heightPt / .75 : stated;
+        const fallback = sheet.defaultRowHeight;
+        const defaultMetric = fileRowMetrics?.default;
+        if (typeof fallback === "number" && Number.isFinite(fallback) && fallback > 0)
+          return defaultMetric && defaultMetric.heightPt > 0 && defaultMetric.pixels === fallback ? defaultMetric.heightPt / .75 : fallback;
+        return 20;
+      },
+    };
     const layoutColWidth = (col: number) => groupHiddenCols.has(col) || manualHiddenCols.has(col) ? 0 : intrinsicColWidth(col);
     const layoutRowHeight = (row: number) => hiddenRows.has(row) || groupHiddenRows.has(row) || manualHiddenRows.has(row) ? 0 : intrinsicRowHeight(row);
     const imported = sheetObjects.flatMap((original) => {
@@ -41206,12 +39370,15 @@ function SpreadsheetWindow({
       // …nor a SmartArt item its layout does not draw (Office's unused text).
       if (object.hidden || isSmartArtHiddenMember(object)) return [];
       const bounds = objectBoundsPixels(object, layoutColWidth, layoutRowHeight);
-      const sheetWidth = Math.max(1, bounds.width);
-      const sheetHeight = Math.max(1, bounds.height);
       // Drawn at the size the printer gives it (the page places it by its
       // anchor): a two-cell anchor spans its cells at the grid's print scale.
-      // One the file places by two markers prints by them (officePrintAnchorKind).
+      // One the file places by two markers prints by them (officePrintAnchorKind),
+      // the far one where the sheet's own grid puts it (officeMarkedDrawingSize).
       const printAnchor = officePrintAnchorKind(object.anchor);
+      const markedSize = printPresentation && printAnchor === "twoCell" && !anchorBoxTurned(spreadsheetObjectRotation(object.anchor))
+        ? officeMarkedDrawingSize(object.anchor, fileGrid, { columnWidth: layoutColWidth, rowHeight: layoutRowHeight }) : null;
+      const sheetWidth = Math.max(1, markedSize?.width ?? bounds.width);
+      const sheetHeight = Math.max(1, markedSize?.height ?? bounds.height);
       const [, , width, height] = officePrintedDrawingFrame([0, 0, sheetWidth, sheetHeight], printAnchor, nativeGrid?.printScale ?? OFFICE_PRINT_IDENTITY);
       // A worksheet-origin absolute position is measured past the headings
       // (objectBoundsPixels), as a cell anchor is: the page takes them off
@@ -41338,6 +39505,8 @@ function SpreadsheetWindow({
             // view (the third page across) never asked for its picture and
             // the sheet printed the old way (A_charts_pies, still drawing).
             forceRender={embeddedWorkbook?.presentation === "print"}
+            // Printed, the area line stands on the frame's edge (R457-X21).
+            frameOnEdge={embeddedWorkbook?.presentation === "print"}
             selected={selectedObjectId === object.id}
             selectionKey={selectedObjectId === object.id ? sheetChartSelectionKey : null}
             key={object.id}
@@ -41377,7 +39546,9 @@ function SpreadsheetWindow({
           [left - (sheetRotatedWidth - sheetWidth) / 2, top - (sheetRotatedHeight - sheetHeight) / 2, sheetRotatedWidth, sheetRotatedHeight] as const,
           label,
           <div key={object.id} data-page-layout-object-paint={object.id} style={{ position: "absolute", left: (rotatedWidth - width) / 2, top: (rotatedHeight - height) / 2, width, height, transform: rotation ? `rotate(${rotation}deg)` : undefined, ...(object.type === "shape" ? (object.shapeEffects ? {} : officeShapeEffectStyle(object.effect, shadowFilterCss(object.shadow))) : { filter: shadowFilterCss(object.shadow) }) }}>{content}</div>,
-          { frame: { left, top, width: sheetWidth, height: sheetHeight }, rotation, selectionType: object.type === "chart" || object.type === "shape" ? object.type : undefined, groupId: object.groupId, disabledReason: pageLayoutDrawingDisabledReason(object), aspectLocked: objectAspectLocked(object), printAnchor },
+          { frame: { left, top, width: sheetWidth, height: sheetHeight }, rotation, selectionType: object.type === "chart" || object.type === "shape" ? object.type : undefined, groupId: object.groupId, disabledReason: pageLayoutDrawingDisabledReason(object), aspectLocked: objectAspectLocked(object), printAnchor,
+            ...(embeddedWorkbook?.presentation === "print" && object.type === "chart" ? { printLineReach: chartRecordFramePrintedReachPx(object) } : {}),
+            ...(embeddedWorkbook?.presentation === "print" && object.type === "shape" ? { printLineReach: officeShapeOutlineReachPx(object.shape as { stroke?: unknown; strokeWidth?: unknown } | undefined) } : {}) },
         ] as const,
       ];
     });
@@ -41403,6 +39574,7 @@ function SpreadsheetWindow({
             <SpreadsheetChartCanvas date1904={workbookDate1904}
               key={chart.id}
               forceRender={embeddedWorkbook?.presentation === "print"}
+              frameOnEdge={embeddedWorkbook?.presentation === "print"}
               selected={selectedNativeChart?.id === chart.id}
               selectionKey={selectedNativeChart?.id === chart.id ? sheetChartSelectionKey : null}
               record={previewChart(chart,"native") as unknown as SpreadsheetChartLike}
@@ -41418,17 +39590,18 @@ function SpreadsheetWindow({
               extendedTypes
               ariaLabel={chart.title || chartSourceRangeToA1(chart)}
             />,
-            { frame: { left: chart.x !== undefined ? Math.max(0, chart.x - SPREADSHEET_HEADER_WIDTH_PX) : offsetOfLine(chart.anchor.col, sheet.columnCount, layoutColWidth), top: pageLayoutRowMap.toVisual(chart.y !== undefined ? Math.max(0, chart.y - SPREADSHEET_HEADER_HEIGHT_PX) : offsetOfLine(chart.anchor.row, sheet.rowCount, layoutRowHeight)), width: chart.width, height: chart.height }, rotation: 0, selectionType: chart.type !== "camera" ? "chart" as const : undefined, groupId: chart.groupId, disabledReason: pageLayoutDrawingDisabledReason(undefined, chart.type !== "camera"), constrainSize: clampChartSize, printAnchor: "twoCell" as const },
+            { frame: { left: chart.x !== undefined ? Math.max(0, chart.x - SPREADSHEET_HEADER_WIDTH_PX) : offsetOfLine(chart.anchor.col, sheet.columnCount, layoutColWidth), top: pageLayoutRowMap.toVisual(chart.y !== undefined ? Math.max(0, chart.y - SPREADSHEET_HEADER_HEIGHT_PX) : offsetOfLine(chart.anchor.row, sheet.rowCount, layoutRowHeight)), width: chart.width, height: chart.height }, rotation: 0, selectionType: chart.type !== "camera" ? "chart" as const : undefined, groupId: chart.groupId, disabledReason: pageLayoutDrawingDisabledReason(undefined, chart.type !== "camera"), constrainSize: clampChartSize, printAnchor: "twoCell" as const,
+              ...(embeddedWorkbook?.presentation === "print" && chart.type !== "camera" ? { printLineReach: chartRecordFramePrintedReachPx(chart) } : {}) },
           ] as const,
       );
     // Page Layout paints in the same sheet-wide order as Normal view.
     const levels = drawingStackLevels(sheetDrawingStack(sheetObjects, chartViews.map(({ chart }) => chart)));
     const level = (id: string) => levels.get(id.startsWith("chart:") ? id : `object:${id}`) ?? 0;
     return [...imported, ...floating].sort((a, b) => level(a[0]) - level(b[0]));
-  }, [chartViews, colWidth, rowHeight, sheet, sheetObjects, importedChartRenderData, t, hiddenRows, groupHiddenRows, groupHiddenCols, manualHiddenRows, manualHiddenCols, pageLayoutDrawingDisabledReason, pageLayoutRowMap,workbookThemeAccentColors,previewChart,selectedObjectId,selectedNativeChart?.id,webImageRevision,embeddedWorkbook?.presentation,nativeGrid?.printScale]);
+  }, [chartViews, colWidth, rowHeight, sheet, sheetObjects, importedChartRenderData, t, hiddenRows, groupHiddenRows, groupHiddenCols, manualHiddenRows, manualHiddenCols, pageLayoutDrawingDisabledReason, pageLayoutRowMap,workbookThemeAccentColors,previewChart,selectedObjectId,selectedNativeChart?.id,webImageRevision,embeddedWorkbook?.presentation,nativeGrid?.printScale,printPresentation]);
   // On the unscaled grid, as the page view counts them (officePrintedDrawingReach).
   const pageLayoutDrawingBounds = useMemo(() => [
-    ...pageLayoutDrawings.map((drawing) => officePrintedDrawingReach(drawing[1], drawing[4]?.printAnchor, nativeGrid?.printScale)),
+    ...pageLayoutDrawings.map((drawing) => officePrintedDrawingReach(drawing[1], drawing[4]?.printAnchor, nativeGrid?.printScale, drawing[4]?.printLineReach)),
     ...slicers.map((slicer, index) => [slicer.x ?? 12 + index * 184, slicer.y ?? 12,
       slicer.width ?? DEFAULT_SLICER_WIDTH, slicer.height ?? DEFAULT_SLICER_HEIGHT] as const),
   ], [nativeGrid?.printScale, pageLayoutDrawings, slicers]);
@@ -42192,15 +40365,6 @@ function SpreadsheetWindow({
       return true;
     },
     [replaceActiveSheet, sheet, showProtectNotice],
-  );
-
-  const toggleTableStyleOption = useCallback(
-    (id: string, option: TableStyleOption) => {
-      const current = dataTables.find((table) => table.id === id);
-      if (!current) return false;
-      return setTableStyleOption(id, option, !Boolean(current[option]));
-    },
-    [dataTables, setTableStyleOption],
   );
 
   const setTableStyle = useCallback(
@@ -43517,18 +41681,6 @@ function SpreadsheetWindow({
     if (openObjectColorPicker === "stroke") return object.shape?.stroke;
     return object.shape?.textColor;
   })();
-  const activeShapeQuickStyleId = selectedShapeObject
-    ? (shapeQuickStyleRecipes.find(
-        (recipe) =>
-          recipe.fill === selectedShapeStyle?.fill &&
-          recipe.stroke === selectedShapeStyle?.stroke &&
-          Math.abs(recipe.strokeWidth-(selectedShapeStyle?.strokeWidth??0))<.001 &&
-          JSON.stringify(recipe.fillGradient)===JSON.stringify(selectedShapeStyle?.fillGradient) &&
-          Boolean(recipe.shadow)===Boolean(selectedShapeObject.shadow) &&
-          (!selectedShapeStyle?.text ||
-            recipe.textColor === selectedShapeStyle.textColor),
-      )?.id ?? null)
-    : null;
   // Excel's 排列 ▸ 上移一层 / 下移一层 / 置于顶层 / 置于底层. Objects paint in
   // array order, so stacking IS the order — but nothing could change it, and
   // two overlapping shapes were stuck however they happened to be inserted.
@@ -43646,20 +41798,6 @@ function SpreadsheetWindow({
   
   const drawingsArrangeable = useMemo(() => sheetDrawingsArrangeable(sheet), [sheet]);
   const selectedObjectArrangeDisabled = selectedObjectStackIndex < 0 || !drawingsArrangeable;
-  const {
-    objectArrangeRibbonControls,
-  } = spreadsheetObjectArrangeRibbonControls({
-    drawingStack,
-    drawingsArrangeable,
-    reorderSheetObject,
-    reorderSheetChart,
-    selectedNativeChartId: selectedObject ? null : (selectedNativeChart?.id ?? null),
-    selectedObject,
-    selectedObjectStackIndex,
-    sheet,
-    sheetProtectionAllowsRef,
-    t,
-  });
 
   const commitObjectTransformPreview = useCallback(
     (
@@ -45162,46 +43300,6 @@ function SpreadsheetWindow({
     });
   }, [activePivot]);
 
-  const clearPivotFilters = useCallback(() => {
-    if (
-      !pivotConfig ||
-      (!pivotConfig.filters.some((filter) => filter.selected.length > 0) &&
-        !pivotConfig.itemFilters?.length)
-    ) {
-      return Promise.resolve(false);
-    }
-    const cleared: PivotConfig = {
-      ...pivotConfig,
-      filters: pivotConfig.filters.map((filter) => ({
-        ...filter,
-        selected: [],
-      })),
-    };
-    delete cleared.itemFilters;
-    return pivotContextMutationExecutorRef.current(
-      "XLSCTL.CONTEXT.PIVOT.CLEAR_FILTERS.MRAI.APPLY",
-      cleared,
-    );
-  }, [pivotConfig]);
-
-  const clearPivotAll = useCallback(() => {
-    const cleared = pivotConfig ? pivotClearedAll(pivotConfig) : null;
-    if (!cleared) return Promise.resolve(false);
-    return pivotContextMutationExecutorRef.current(
-      "XLSCTL.CONTEXT.PIVOT.CLEAR_ALL.MRAI.APPLY",
-      cleared,
-    ).then((executed) => {
-      if (!executed) return false;
-      setPivotPanelOpen(true);
-      setPivotChartOpen(false);
-      setPivotSourceDraft(cleared.source);
-      setPivotOutputDraft(cleared.output ?? "");
-      // The selection moved to the report's first cell with the commit (the
-      // receipt writer), so the PivotTable tab stays.
-      return true;
-    });
-  }, [pivotConfig, setActiveCell, setSelectionAnchor]);
-
   const deleteDrawingChartFromKeyboard = useCallback(
     (sourceObject: SpreadsheetObject) => {
       const liveWorkbook = liveSheetsRef.current;
@@ -45587,6 +43685,41 @@ function SpreadsheetWindow({
     setNotesShownAll((shown) => !shown);
   }, [notedCellCount, notesShownAll]);
 
+  // The thread an embed comment session's route answered goes into its cell
+  // on screen as the page now holds it (null: deleted). The server already
+  // wrote it, so nothing is saved, nothing waits to be saved and there is no
+  // Undo step: the window takes it as it takes a page loaded from the server,
+  // with the calculation and the cell-map lineage told which one cell changed.
+  const applyMediatedReviewComment = useCallback(
+    (sheetId: string, cellKey: string, comment: ThreadComment | null): boolean => {
+      const position = /^(0|[1-9]\d*):(0|[1-9]\d*)$/.exec(cellKey);
+      const live = liveSheetsRef.current;
+      const index = live.findIndex((candidate) => candidate.id === sheetId);
+      const target = live[index];
+      if (!position || !target) return false;
+      const next = applyCellCommentChange(
+        target,
+        Number(position[1]),
+        Number(position[2]),
+        () => comment ?? undefined,
+      );
+      recordCellMapEdit(target.cells, next.cells, [cellKey]);
+      calculationChangeJournalRef.current.record({
+        sheetId,
+        beforeCells: target.cells,
+        afterCells: next.cells,
+        knownKeys: [cellKey],
+      });
+      // The autosave holds what the server holds: a workbook that had
+      // nothing waiting still has nothing waiting.
+      const settled = handedOffSheetsRef.current === live;
+      writeSheets(live.map((candidate, at) => (at === index ? next : candidate)));
+      if (settled) handedOffSheetsRef.current = liveSheetsRef.current;
+      return true;
+    },
+    [writeSheets],
+  );
+
   const {
     deleteReviewCommentReply,
     executeReviewCommentReceiptWriter,
@@ -45611,6 +43744,9 @@ function SpreadsheetWindow({
     setCommentDraft,
     setCommentEditDraft,
     setCommentEditingIndex,
+    reviewCommentsMediated,
+    applyMediatedReviewComment,
+    mediatedReviewCommentRefusedText: t("spreadsheet.uiCopy.thisCommentCanTBeChangedNow"),
   });
 
   const copyActiveReviewCommentLink = useCallback(
@@ -48061,7 +46197,7 @@ function SpreadsheetWindow({
   // column (or row) is the timeline, the next the values. One cell inside a
   // list takes the list around it, as the other data tools do.
   const forecastDefaultRanges = useMemo(() => {
-    if (!forecastOpen) return { timeline: "", values: "" };
+    return { timeline: "", values: "" };
     const area = hasMultiSelection
       ? { r1: selRect.r1, c1: selRect.c1, r2: selRect.r2, c2: selRect.c2 }
       : listRegionAt(sheet.cells, selRect.r1, selRect.c1, sheet.rowCount, sheet.columnCount, mergeSpans);
@@ -48077,7 +46213,7 @@ function SpreadsheetWindow({
     }
     if (r2 > r1) return { timeline: spreadsheetRangeA1({ r1, c1, r2: r1, c2 }), values: spreadsheetRangeA1({ r1: r1 + 1, c1, r2: r1 + 1, c2 }) };
     return { timeline: "", values: "" };
-  }, [forecastOpen, hasMultiSelection, mergeSpans, selRect.r1, selRect.c1, selRect.r2, selRect.c2, sheet.cells, sheet.rowCount, sheet.columnCount]);
+  }, [false, hasMultiSelection, mergeSpans, selRect.r1, selRect.c1, selRect.r2, selRect.c2, sheet.cells, sheet.rowCount, sheet.columnCount]);
   const {
     runForecastSheet,
   } = useSpreadsheetRunForecastSheet({
@@ -48240,7 +46376,7 @@ function SpreadsheetWindow({
     (request: RecordMacroRequest) => {
       // An absolute recording names the cells themselves: its steps count
       // from the sheet origin, so the recorded cell IS the step.
-      const relative = macroRelativeReferences;
+      const relative = false;
       macroRecordingMetaRef.current = { ...request, mode: relative ? "relative" : "absolute" };
       macroAnchorRef.current = relative
         ? { row: activeCell.row, col: activeCell.col }
@@ -48253,7 +46389,7 @@ function SpreadsheetWindow({
       setMacroRecordDialog(null);
       toast({ description: t("spreadsheet.automate.recordingStarted") });
     },
-    [activeCell.col, activeCell.row, macroRelativeReferences, t],
+    [activeCell.col, activeCell.row, false, t],
   );
   const stopMacroRecording = useCallback(() => {
     if (!macroRecordingRef.current) return;
@@ -48332,21 +46468,6 @@ function SpreadsheetWindow({
     viewOptions,
     windowManager,
   ]);
-  // The Automate tab's names for the same two commands.
-  // Automate > Record Actions records at once, as Excel's Action Recorder
-  // does: no naming first, the recording is kept in the workbook under the
-  // next free name (View > Macros > Record Macro still asks).
-  const startAutomationRecording = useCallback(() => {
-    if (macroRecordingRef.current) return;
-    rememberAutomationTrigger();
-    startMacroRecording({
-      name: nextDefaultMacroName(macroEntries.map((entry) => entry.macro.name)),
-      shortcut: undefined,
-      store: "workbook",
-      description: "",
-    });
-  }, [macroEntries, rememberAutomationTrigger, startMacroRecording]);
-  const requestAutomationRecordingStop = stopMacroRecording;
   const openMacroDialog = useCallback(() => {
     rememberAutomationTrigger();
     setMacroDialogOpen(true);
@@ -51333,17 +49454,7 @@ function SpreadsheetWindow({
   const spreadsheetPictureStyleShown = (
     object: SpreadsheetObject,
   ): OfficePictureStyleId | undefined =>
-    pictureStylePreview &&
-    pictureStylePreview.sheetId === sheet.id &&
-    pictureStylePreview.objectId === object.id &&
-    selectedObjectId === object.id
-      ? pictureStylePreview.style
-      : object.pictureStyle;
-  const pictureStyleDisabledReason =
-    pictureTransformDisabledReason ??
-    (selectedPictureObject?.nativePictureStyleBlocker
-      ? t("spreadsheet.uiCopy.pictureShapeHasNoNativePictureToStyle")
-      : undefined);
+    object.pictureStyle;
   const pictureCropDisabledReason =
     pictureTransformDisabledReason ??
     (selectedPictureObject?.nativeImageCropBlocker
@@ -52415,6 +50526,7 @@ function SpreadsheetWindow({
     // The window has rendered what was last committed (commitSheets writes
     // the live array at once; this render's ``sheets`` are the next one's).
     settled: () => sheets === liveSheetsRef.current,
+    calculated: () => backgroundCalculation.settledView().then((view) => view.ok, () => false),
     writable: () =>
       pageTakesEditsRef.current && !autosave.readOnly && !autosave.loading && sheetViewSessionRef.current?.sheetId !== sheet.id,
     computed: (sheetId, row, col) => {
@@ -52454,6 +50566,85 @@ function SpreadsheetWindow({
       const made = nextSheets[nextSheets.length - 1]!;
       return { id: made.id, name: made.name };
     },
+    // The workbook as the spreadsheet commands read it (the Automation API's
+    // object model, lib/embed/automation/excel-model): the sheets' models as
+    // this render holds them, and what the window keeps beside them.
+    commandWorkbook: () => {
+      if (autosave.loading) return null;
+      const tiled = tiledRef.current;
+      return {
+        sheets: sheets as unknown as LiveContent[],
+        activeSheetId: sheet.id ?? null,
+        viewOptions: viewOptions as unknown as LiveContent,
+        calculationMode: calcState.mode === "manual" ? "manual" : "automatic",
+        ...(workbookDateSystemRef.current ? { dateSystem: workbookDateSystemRef.current } : {}),
+        ...(workbookStructureProtection ? { workbookStructureProtection: workbookStructureProtection as unknown as LiveContent } : {}),
+        imported: spreadsheetNativeWriteRoute === "patchback",
+        partialSheetIds: sheets
+          .filter((candidate) => candidate.sheetPending || (tiled?.isTiledSheet(candidate.id) && !tiled.isWhollyResident(candidate.id)))
+          .map((candidate) => candidate.id),
+        tiledSheetIds: tiled ? sheets.filter((candidate) => tiled.isTiledSheet(candidate.id)).map((candidate) => candidate.id) : [],
+        commentAuthor: { name: reviewCommentActorName, id: reviewCommentActorId || null },
+      };
+    },
+    // One command's sheets as one step of this window's commit; a whole-line
+    // edit travels to collaborators as the ribbon's does (replaceActiveSheet).
+    commitWorkbook: (nextSheets, lineEdit) => {
+      if (!liveAutomationRef.current.writable() || sheetViewProjectionActiveRef.current) return "read_only";
+      if (nextSheets.length !== sheets.length || nextSheets.some((candidate, at) => candidate.id !== sheets[at]?.id)) return "not_found";
+      const next = nextSheets as unknown as SheetModel[];
+      if (commitSheets(next) !== next) return "read_only";
+      const edited = lineEdit ? next.find((candidate) => candidate.id === lineEdit.sheetId) : undefined;
+      if (lineEdit && edited && pageId) {
+        announceWorkbookLineEdit(pageId, { ...lineEdit }, { rowCount: edited.rowCount, columnCount: edited.columnCount });
+      }
+      return "written";
+    },
+    // The tab menu's own commands: each refuses (and says why in the window)
+    // under Protect Workbook, a read-only page or charts still loading.
+    renameSheet: (sheetId, name) => {
+      const index = sheets.findIndex((candidate) => candidate.id === sheetId);
+      if (index < 0) return "not_found";
+      if (!liveAutomationRef.current.writable()) return "read_only";
+      const before = liveSheetsRef.current;
+      renameSheet(index, name);
+      return liveSheetsRef.current !== before ? "written" : "read_only";
+    },
+    deleteSheet: (sheetId) => {
+      const index = sheets.findIndex((candidate) => candidate.id === sheetId);
+      if (index < 0) return "not_found";
+      // A tiled sheet's deletion asks first (its cells leave past Undo).
+      if (!liveAutomationRef.current.writable() || tiledRef.current?.isTiledSheet(sheetId)) return "read_only";
+      const before = liveSheetsRef.current;
+      deleteSheet(index);
+      return liveSheetsRef.current !== before ? "written" : "read_only";
+    },
+    setSheetHidden: (sheetId, hidden) => {
+      const index = sheets.findIndex((candidate) => candidate.id === sheetId);
+      if (index < 0) return "not_found";
+      if (!liveAutomationRef.current.writable()) return "read_only";
+      const before = liveSheetsRef.current;
+      setSheetHidden(index, hidden);
+      return liveSheetsRef.current !== before ? "written" : "read_only";
+    },
+    activateSheet: (sheetId) => {
+      const index = sheets.findIndex((candidate) => candidate.id === sheetId);
+      const target = sheets[index];
+      if (!target || target.hidden || target.sheetPending) return false;
+      if (index !== activeSheetIndex) activateSheetTab(index);
+      return true;
+    },
+    // Go To's selection (navigateToSheetRange): the sheet opened, the range
+    // selected and scrolled into view; a cell protection keeps unselectable
+    // is refused there with the window's notice.
+    select: (sheetId, rect) => {
+      const index = sheets.findIndex((candidate) => candidate.id === sheetId);
+      const target = sheets[index];
+      if (!target || target.hidden || target.sheetPending) return false;
+      if (!isCellSelectableRef.current(target, rect.r1, rect.c1)) return false;
+      navigateToSheetRange(index, rect);
+      return true;
+    },
   };
   // Registered once the workbook's sheets are in (what the loading state
   // waits for): a caller reads the workbook, never the one shown while it opens.
@@ -52467,9 +50658,20 @@ function SpreadsheetWindow({
       settled: () => liveAutomationRef.current.settled(),
       writable: () => liveAutomationRef.current.writable(),
       computed: (sheetId, row, col) => liveAutomationRef.current.computed(sheetId, row, col),
+      calculated: () => liveAutomationRef.current.calculated?.() ?? Promise.resolve(true),
       writeCells: (sheetId, writes, asTyped) => liveAutomationRef.current.writeCells(sheetId, writes, asTyped),
       addSheet: (name) => liveAutomationRef.current.addSheet(name),
       selection: () => liveAutomationRef.current.selection?.() ?? null,
+      commandWorkbook: () => liveAutomationRef.current.commandWorkbook?.() ?? null,
+      commitWorkbook: (sheets, lineEdit) => liveAutomationRef.current.commitWorkbook?.(sheets, lineEdit) ?? "read_only",
+      renameSheet: (sheetId, name) => liveAutomationRef.current.renameSheet?.(sheetId, name) ?? "read_only",
+      deleteSheet: (sheetId) => liveAutomationRef.current.deleteSheet?.(sheetId) ?? "read_only",
+      setSheetHidden: (sheetId, hidden) => liveAutomationRef.current.setSheetHidden?.(sheetId, hidden) ?? "read_only",
+      activateSheet: (sheetId) => liveAutomationRef.current.activateSheet?.(sheetId) ?? false,
+      select: (sheetId, rect) => liveAutomationRef.current.select?.(sheetId, rect) ?? false,
+      // Insert > Pictures > This Device's own path (its receipt, authority and
+      // placement over the selected cell): an integration's insertImage.
+      insertPicture: (file) => pastePictureFileRef.current?.(file) ?? false,
     });
   }, [embeddedWorkbook, guestMode, liveWorkbookIn, pageId]);
 
@@ -52744,17 +50946,12 @@ function SpreadsheetWindow({
     : sheetObjects.length >= MAX_SHEET_OBJECTS
       ? drawLabels.objectLimit
       : undefined;
-  const drawExistingInkDisabledReason = !sheetProtectionAllowsRef.current(sheet, "editObjects")
-    ? drawLabels.protected
-    : !sheetHasLassoObjects
-      ? drawLabels.noInk
-      : undefined;
   // Pen-first drawing (lib/pen-first-draw): with a pen on a touch device the
   // Draw tab folds the ribbon away and the floating palette stands in for it.
   const penDrawDisabledReason = !sheetProtectionAllowsRef.current(sheet, "editObjects")
     ? drawLabels.protected
     : undefined;
-  const penFirst = usePenFirstDraw(visibleRibbonTab === "draw" && !penDrawDisabledReason, visibleRibbonTab === "draw", () =>
+  const penFirst = usePenFirstDraw(false, false, () =>
     Array.from(rootRef.current?.querySelectorAll('[data-testid="spreadsheet-grid-viewport"]') ?? []),
   );
   const penCompactRef = useRef(false);
@@ -54065,22 +52262,14 @@ function SpreadsheetWindow({
   const [sheetViewNameError, setSheetViewNameError] = useState<
     "invalid" | "duplicate" | "blocked" | null
   >(null);
-  const sheetViewNameErrorText =
-    sheetViewNameError === "duplicate"
-      ? t("spreadsheet.uiCopy.viewNamesMustBeUniqueWithinTheWorksheet")
-      : sheetViewNameError === "blocked"
-        ? webDataReviewViewLabels.sheetViewUnsupported
-        : sheetViewNameError
-          ? t("spreadsheet.uiCopy.enterAValidViewName")
-          : undefined;
   const resetSheetViewNameBox = () => {
     setSheetViewNameDraft(null);
     setSheetViewNameError(null);
   };
   const sheetViewNameDraftPending =
-    sheetViewNameDraft !== null && sheetViewNameDraft !== currentSheetViewLabel;
+    false;
   const submitSheetViewNameBox = (): boolean => {
-    const typed = sheetViewNameDraft;
+    const typed = null;
     if (typed === null) return false;
     // Unchanged name: nothing to write, just leave edit mode.
     if (sheetViewMode === "named" && typed === currentSheetViewLabel) {
@@ -54347,7 +52536,10 @@ function SpreadsheetWindow({
     if (
       !source ||
       !dataFromPictureCapability.available ||
+      // The page authority also lets an embed comment session comment on
+      // a read-only page; only a writable page takes a picture's data.
       !pageAuthority?.allowed ||
+      pageAuthority.readOnly ||
       !selection ||
       !liveSheet ||
       isSheetProtectionEffectiveRef.current(liveSheet) ||
@@ -55995,9 +54187,6 @@ function SpreadsheetWindow({
       ...(imported?.sourcePointIndices ? { sourcePointIndices: imported.sourcePointIndices } : {}),
       themeAccents:workbookThemeAccentColors });
   })();
-  const desktopChartSourcePoints = selectedChartDesignTarget?.kind === "drawing"
-    ? importedChartRenderData(selectedChartDesignTarget.chart)?.sourcePointIndices
-    : undefined;
   const desktopChartAttrs = desktopChartPlan ? {...desktopChartPlan.attrs,
     title:selectedChartDesignTarget ? spreadsheetChartTitle(selectedChartDesignTarget.chart) : "",
   } : null;
@@ -56006,7 +54195,6 @@ function SpreadsheetWindow({
     ? { ...desktopChartAttrs, data:{...desktopChartAttrs.data, series:desktopChartAttrs.data.series.slice(0,10)},
         format:{...desktopChartAttrs.format, seriesStyles:desktopChartAttrs.format?.seriesStyles?.filter(item=>item.seriesIndex<10)} } as ChartBlockAttrsV2
     : desktopChartAttrs;
-  const rememberDesktopChart = () => { chartDesktopAuthorityRef.current=captureChartDesignAuthority(); };
   const desktopAuthorityCurrent = (authority: ChartDesignDialogAuthority | null): authority is ChartDesignDialogAuthority => Boolean(authority &&
     authority.workbook===liveSheetsRef.current && authority.activeSheetIndex===liveActiveSheetIndexRef.current &&
     authority.sheet===liveSheetsRef.current[liveActiveSheetIndexRef.current] && !isSheetProtectionEffectiveRef.current(authority.sheet) &&
@@ -57098,66 +55286,6 @@ function SpreadsheetWindow({
       : null;
     return commitChartGroupSheet(gathered ?? grouped);
   };
-  /**
-   * Align / Distribute the selected drawings (Excel's Shape Format > Align):
-   * a group moves as one object, and every object keeps its size. Two or
-   * more objects align to the edge or centre of their union box; three or
-   * more distribute with even gaps (the deck's pure `presentation-align`
-   * math). `dryRun` answers whether the command applies, for the menu.
-   */
-  const alignDrawingSelection = (action: OfficeShapeAlignAction, dryRun = false): boolean => {
-    if (chartGroupReason || !chartGroupSelection.every(chartEntryFrameWritable)) return false;
-    const units = new Map<string, typeof chartGroupSelection>();
-    for (const entry of chartGroupSelection) {
-      if (entry.smartArt) return false;
-      const key = entry.groupId ? `group:${entry.groupId}` : entry.id;
-      units.set(key, [...(units.get(key) ?? []), entry]);
-    }
-    const distribute = action === "distributeHorizontal" || action === "distributeVertical";
-    if (units.size < (distribute ? 3 : 2)) return false;
-    if (dryRun) return true;
-    const members = [...units.values()];
-    const boxes = members.map((unit) => {
-      const left = Math.min(...unit.map((entry) => entry.frame.left));
-      const top = Math.min(...unit.map((entry) => entry.frame.top));
-      return {
-        left,
-        top,
-        width: Math.max(...unit.map((entry) => entry.frame.left + entry.frame.width)) - left,
-        height: Math.max(...unit.map((entry) => entry.frame.top + entry.frame.height)) - top,
-      };
-    });
-    const placed = distribute
-      ? distributeBlocks(boxes, action === "distributeHorizontal" ? "horizontal" : "vertical")
-      : alignBlocks(
-          boxes,
-          ({ left: "left", center: "hcenter", right: "right", top: "top", middle: "vcenter", bottom: "bottom" } as const)[
-            action as "left" | "center" | "right" | "top" | "middle" | "bottom"
-          ],
-        );
-    const moved = new Map<string, (typeof chartGroupEntries)[number]["frame"]>();
-    members.forEach((unit, index) => {
-      const dx = placed[index].left - boxes[index].left;
-      const dy = placed[index].top - boxes[index].top;
-      if (dx === 0 && dy === 0) return;
-      for (const entry of unit) {
-        moved.set(entry.id, {
-          ...entry.frame,
-          left: Math.max(0, entry.frame.left + dx),
-          top: Math.max(0, entry.frame.top + dy),
-        });
-      }
-    });
-    if (moved.size === 0) return true;
-    return commitChartGroupSheet(
-      chartGroupSheetFromEntries(
-        chartGroupEntries.map((entry) => {
-          const frame = moved.get(entry.id);
-          return frame ? { ...entry, frame } : entry;
-        }),
-      ),
-    );
-  };
   const groupDrawingSelection = (): boolean =>
     canGroupSelection ? writeSelectionGroupId(`group-${Date.now().toString(36)}-${groupableSelection.length}`) : false;
   const ungroupDrawingSelection = (): boolean => (canUngroupSelection ? writeSelectionGroupId(undefined) : false);
@@ -57180,182 +55308,6 @@ function SpreadsheetWindow({
             ? t("presentation.groupImportedUnavailable")
             : t("presentation.groupObjectUnavailable")
           : undefined;
-  // ---- PowerPoint's Shape Format commands on the sheet's drawings --------
-  // Group ▸ Regroup (Excel has it too): the group the last Ungroup took
-  // apart comes back while one of its former members is selected.
-  const ungroupDrawingSelectionRemembered = (): boolean => {
-    const groupId = selectionIsGroup ? groupableSelection[0]?.groupId : undefined;
-    const memberIds = groupableSelection.map((entry) => entry.id);
-    if (!ungroupDrawingSelection()) return false;
-    if (groupId) {
-      drawingRegroupMemoryRef.current = rememberUngroup(drawingRegroupMemoryRef.current, [
-        { slideId: sheet.id, groupId, memberIds },
-      ]);
-    }
-    return true;
-  };
-  const drawingRegroupBlocks = chartGroupEntries.map((entry) => ({
-    id: entry.id,
-    ...(entry.groupId ? { groupId: entry.groupId } : {}),
-  }));
-  const drawingRegroupRecord = regroupRecordFor(
-    drawingRegroupMemoryRef.current,
-    sheet.id,
-    drawingRegroupBlocks,
-    chartGroupSelection.map((entry) => entry.id),
-  );
-  const canRegroupSelection =
-    drawingRegroupRecord !== null &&
-    !chartGroupReason &&
-    sheetProtectionAllowsRef.current(sheet, "editObjects") &&
-    drawingRegroupRecord.memberIds.every((id) => {
-      const entry = chartGroupEntries.find((candidate) => candidate.id === id);
-      return entry !== undefined && chartGroupEntryWritable(entry);
-    });
-  const regroupDrawingSelection = (): boolean => {
-    if (!drawingRegroupRecord || !canRegroupSelection) return false;
-    const taken = chartGroupEntries.some(
-      (entry) => entry.groupId === drawingRegroupRecord.groupId && !drawingRegroupRecord.memberIds.includes(entry.id),
-    );
-    return writeDrawingGroupId(
-      new Set(drawingRegroupRecord.memberIds),
-      taken ? `group-${Date.now().toString(36)}-${drawingRegroupRecord.memberIds.length}` : drawingRegroupRecord.groupId,
-    );
-  };
-  // Edit Shape ▸ Reroute Connectors: the selected connectors glued at both
-  // ends move to the closest connection sites of the shapes they join.
-  const drawingGrid = { rowCount: sheet.rowCount, columnCount: sheet.columnCount, colWidth, rowHeight };
-  const selectedDrawingObjectIds = new Set(
-    [
-      ...chartGroupSelection.filter((entry) => entry.kind === "drawing").map((entry) => entry.id.slice(8)),
-      ...(selectedObjectId ? [selectedObjectId] : []),
-    ],
-  );
-  const selectedGluedConnectorIds = new Set(
-    (sheet.objects ?? [])
-      .filter((object) => selectedDrawingObjectIds.has(object.id) && spreadsheetConnectorIsGlued(object))
-      .map((object) => object.id),
-  );
-  const canRerouteSelection =
-    selectedGluedConnectorIds.size > 0 &&
-    !chartGroupReason &&
-    sheetProtectionAllowsRef.current(sheet, "editObjects");
-  const rerouteSelectedConnectors = (): boolean => {
-    if (!canRerouteSelection || !sheet.objects) return false;
-    const next = rerouteSpreadsheetConnectors(
-      sheet.objects,
-      selectedGluedConnectorIds,
-      (object) => objectBoundsPixels(object, colWidth, rowHeight),
-      (connector, box, flipH, flipV) => ({
-        ...connector,
-        anchor: {
-          ...anchorForObjectBounds(anchorWithDefaults(connector.anchor), box, drawingGrid.rowCount, drawingGrid.columnCount, colWidth, rowHeight),
-          ...(flipH ? { flipH: true } : { flipH: undefined }),
-          ...(flipV ? { flipV: true } : { flipV: undefined }),
-        },
-      }),
-    );
-    return next ? commitChartGroupSheet({ ...sheet, objects: [...next] }) : false;
-  };
-  // Insert Shapes ▸ Merge Shapes: two selected shapes, the first one picked
-  // first (its paint stays), through the deck's server boolean.
-  const mergeEntries = chartGroupSelection.length === 2 && selectedObjectId
-    ? [
-        chartGroupSelection.find((entry) => entry.id !== `drawing:${selectedObjectId}`),
-        chartGroupSelection.find((entry) => entry.id === `drawing:${selectedObjectId}`),
-      ]
-    : [];
-  const mergeInputs = mergeEntries.length === 2 && mergeEntries.every((entry) => entry?.kind === "drawing" && !entry.smartArt && chartGroupEntryWritable(entry))
-    ? mergeEntries.map((entry) => spreadsheetMergeableShape(entry!.value as SpreadsheetObject, entry!.frame))
-    : [];
-  const canMergeSelection =
-    !chartGroupReason &&
-    mergeInputs.length === 2 &&
-    officeShapesMergeable(mergeInputs[0], mergeInputs[1]);
-  const mergeSelectedDrawings = (op: OfficeMergeShapesOperation) => {
-    if (!canMergeSelection) return;
-    const [first, second] = mergeEntries as NonNullable<(typeof mergeEntries)[number]>[];
-    const sheetId = sheet.id;
-    void requestOfficeShapeMerge(op, mergeInputs[0]!, mergeInputs[1]!).then(
-      (results) => {
-        if (results.length === 0) {
-          toast({ description: t("presentation.mergeShapes.noResult") });
-          return;
-        }
-        const live = liveSheetsRef.current[liveActiveSheetIndexRef.current];
-        if (!live || live.id !== sheetId || live !== sheet) return;
-        const stamp = Date.now().toString(36);
-        const next = spreadsheetObjectsAfterMerge(
-          live.objects ?? [],
-          first.id.slice(8),
-          second.id.slice(8),
-          results,
-          (index) => `shape-merge-${stamp}-${index + 1}`,
-          (object, frame) => {
-            const anchor = anchorForObjectBounds(anchorWithDefaults(object.anchor), frame, live.rowCount, live.columnCount, colWidth, rowHeight);
-            delete anchor.rotation;
-            delete anchor.flipH;
-            delete anchor.flipV;
-            return anchor;
-          },
-        );
-        if (!next || !commitChartGroupSheet({ ...live, objects: next })) {
-          toast({ description: t("presentation.ui.contextMenu.shapesCannotMerge") });
-          return;
-        }
-        setSelectedObjectId(next.find((object) => object.id.startsWith(`shape-merge-${stamp}-`))?.id ?? null);
-      },
-      (error: unknown) => {
-        if (isEngineAbort(error)) return;
-        toast({ variant: "destructive", description: t(engineErrorMessageKey(error)) });
-      },
-    );
-  };
-  // Reorder Objects ▾: the deck's dialog over the sheet's drawing stack.
-  const drawingReorderItems = new Map<string, SpreadsheetReorderDrawing>(
-    chartGroupEntries.map((entry) => [
-      entry.kind === "native" ? `chart:${entry.id.slice(7)}` : `object:${entry.id.slice(8)}`,
-      {
-        label: entry.name,
-        hidden: Boolean(entry.value.hidden),
-        locked: !chartEntryFrameWritable(entry) && !entry.value.hidden,
-        ...(entry.groupId ? { groupId: entry.groupId } : {}),
-        box: entry.frame,
-      },
-    ]),
-  );
-  const drawingReorderSelectedKeys = new Set(
-    chartGroupSelection.map((entry) =>
-      entry.kind === "native" ? `chart:${entry.id.slice(7)}` : `object:${entry.id.slice(8)}`,
-    ),
-  );
-  const canReorderDrawings =
-    !chartGroupReason &&
-    spreadsheetDrawingReorderLayers(drawingStack, drawingReorderItems, drawingReorderSelectedKeys) !== null;
-  const canReorderOverlappingDrawings =
-    canReorderDrawings &&
-    spreadsheetDrawingReorderLayers(drawingStack, drawingReorderItems, drawingReorderSelectedKeys, true) !== null;
-  const openDrawingReorder = (overlappingOnly: boolean) => {
-    const layers = spreadsheetDrawingReorderLayers(drawingStack, drawingReorderItems, drawingReorderSelectedKeys, overlappingOnly);
-    if (!layers) return;
-    drawingReorderReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setDrawingReorderSession((current) => ({ key: (current?.key ?? 0) + 1, sheetId: sheet.id, stack: drawingStack, layers }));
-  };
-  const applyDrawingReorder = (order: readonly string[]) => {
-    const session = drawingReorderSession;
-    setDrawingReorderSession(null);
-    if (!session || session.sheetId !== sheet.id) return;
-    const sameStack = session.stack.length === drawingStack.length &&
-      session.stack.every((entry, index) => drawingStackKey(entry) === drawingStackKey(drawingStack[index]));
-    const nextStack = sameStack
-      ? spreadsheetDrawingStackReordered(drawingStack, drawingReorderItems, session.layers, order)
-      : null;
-    if (!nextStack) return;
-    commitChartGroupSheet(
-      sheetWithDrawingStack(sheet, nextStack, (chart, ordinal) =>
-        stableChartPosition(chart as unknown as SpreadsheetChart, ordinal)),
-    );
-  };
   // Where Excel sends the keys after an object operation. The drawing object
   // that last held them is noted; when a render takes it off the page
   // (Delete, Ctrl+X, a context-menu Delete, a SmartArt rebuild) the keys go to
@@ -57458,7 +55410,6 @@ function SpreadsheetWindow({
       objectElement(selectedObjectIdRef.current)?.focus({ preventScroll: true });
     });
   }, [editingCell, focusSpreadsheetGridAfterDrawExit, selectedObjectId, sheet.id, sheetObjects]);
-  const drawingSelectionCount = Math.max(chartGroupSelection.length, selectedObjectId ? 1 : 0);
   drawingKeyRef.current = (key, event) => {
     if (event.key === "Escape") {
       event.preventDefault();event.stopPropagation();
@@ -57824,115 +55775,6 @@ function SpreadsheetWindow({
     return commitChartGroupSheet({ ...sheet, ...(sheet.charts ? { charts: sheet.charts.filter(c => !keys.has(`native:${c.id}`)) } : {}),
       ...(sheet.objects ? { objects: sheet.objects.filter(o => !keys.has(`drawing:${o.id}`)) } : {}) });
   };
-  const applyChartGrouping = (ungroup = false) => {
-    if (chartGroupReason || (chartGroupChoices && chartGroupChoices.sheet !== sheet)) return false;
-    const ids = chartGroupChoices?.ids ?? chartGroupSelection.map(entry => entry.id);
-    const selected = new Set(ids.flatMap(id => selectedChartDrawings(chartGroupEntries, id).map(entry => entry.id)));
-    if (chartGroupEntries.some(entry=>selected.has(entry.id)&&entry.value.type==="shape")) return false;
-    if (!chartGroupEntries.filter(entry => selected.has(entry.id)).every(chartGroupEntryWritable)) return false;
-    const entries = ungroup ? ungroupChartDrawings(chartGroupEntries, chartGroupKey) : groupChartDrawings(chartGroupEntries, ids);
-    if (!entries) return false;
-    const result = commitChartGroupSheet(chartGroupSheetFromEntries(entries));
-    if (result) setChartGroupChoices(null);
-    return result;
-  };
-  const rotateChartAsPicture = async (degrees: number) => {
-    const selection = chartGroupSelection;
-    if (chartPictureInFlightRef.current || chartGroupReason || !selection.length || selection.some(entry=>entry.value.type==="shape") || !selection.every(chartGroupEntryWritable)) return false;
-    chartPictureInFlightRef.current = true;
-    const expectedKey = chartGroupKey;
-    const current = () => liveSheetsRef.current === sheets && liveSheetsRef.current[liveActiveSheetIndexRef.current] === sheet &&
-      dataDialogWriteAllowedRef.current && sheetProtectionAllowsRef.current(sheet, "editObjects") &&
-      (selectedObjectIdRef.current ? `drawing:${selectedObjectIdRef.current}` : selectedChartSelectionRef.current?.sheetId === sheet.id ? `native:${selectedChartSelectionRef.current.chartId}` : "") === expectedKey;
-    const fail = () => { toast({ variant: "destructive", description: t("spreadsheet.uiCopy.couldNotCreateThePictureTheOriginalChartWas") }); return false; };
-    try {
-      const sources = await Promise.all(selection.map(async entry => {
-        if (entry.kind === "drawing" && entry.value.type === "image") return entry.value.src;
-        const id = entry.value.id;
-        const container = document.querySelector(entry.kind === "native" ? `[data-chart-id="${CSS.escape(id)}"]` : `[data-spreadsheet-object-id="${CSS.escape(id)}"]`)
-          ?? document.querySelector(`[data-page-layout-drawing="${entry.kind === "native" ? "chart:" : ""}${CSS.escape(id)}"]`);
-        const snapshot = await prepareSpreadsheetChartPngSnapshot(container);
-        if (snapshot) return snapshot;
-        // A real shared-engine chart must never fall back to a different legacy rendering.
-        if (entry.value.chartFormat || entry.value.chartSubtype || container?.querySelector('[data-chart-export-engine-required="true"], [data-chart-render-status="ready"]')) return null;
-        const svg = container?.querySelector<SVGSVGElement>('[data-chart-export-source="legacy-svg"] svg');
-        if (!svg) return null;
-        const { svgElementToDataUrl, rasterDataUrlToPngBlob } = await import("@mrnote/core/web/lib/export/svg-to-png.ts");
-        const clone = svg.cloneNode(true) as SVGSVGElement;
-        const liveNodes = [svg, ...Array.from(svg.querySelectorAll("*"))];
-        const clonedNodes = [clone, ...Array.from(clone.querySelectorAll("*"))];
-        liveNodes.forEach((node, index) => {
-          const style = getComputedStyle(node);
-          for (const property of ["fill", "stroke", "stroke-width", "color", "font-family", "font-size", "font-weight"]) {
-            const value = style.getPropertyValue(property);
-            if (value) (clonedNodes[index] as SVGElement).style.setProperty(property, value);
-          }
-        });
-        const blob = await rasterDataUrlToPngBlob(svgElementToDataUrl(clone), entry.frame.width, entry.frame.height, { scale: 2, background: "#ffffff" });
-        if (!blob) return null;
-        return await new Promise<string | null>(resolve => { const reader = new FileReader(); reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : null); reader.onerror = () => resolve(null); reader.readAsDataURL(blob); });
-      }));
-      if (!current()) return false;
-      if (sources.some((src, index) => !(selection[index].value.type === "image" ? sanitizeSheetPictureSource(src) : sanitizeImageSource(src)) || (selection[index].value.type !== "image" && !src?.startsWith("data:image/png;base64,iVBORw0KGgo")))) return fail();
-      const geometries = applyMultiRotate(selection.map(entry => ({ blockId: entry.id, startGeom: entry.frame,
-        startRotation: entry.kind === "drawing" ? entry.value.anchor?.rotation ?? 0 : 0 })), degrees);
-      const bounds = selectionBoundingBox([...geometries].map(([blockId, startGeom]) => ({ blockId, startGeom })));
-      if (!bounds) return fail();
-      const pictures = new Map(selection.map((entry, index) => {
-        const frame = geometries.get(entry.id)!;
-        const existingPicture = entry.kind === "drawing" && entry.value.type === "image" ? entry.value : null;
-        const anchor = chartGroupMemberAnchor({ ...frame, left: frame.left + Math.max(0, -bounds.left), top: frame.top + Math.max(0, -bounds.top) }, entry.kind === "drawing" ? entry.value.anchor : undefined);
-        anchor.rotation = frame.rotation;
-        const image: SpreadsheetObject = { ...existingPicture, id: entry.value.id, type: "image", name: entry.name, alt: existingPicture?.alt ?? entry.name, caption: entry.name,
-          src: sources[index]!, anchor, chartPicture: true, ...(entry.groupId ? { groupId: entry.groupId } : {}),
-          ...(entry.kind === "drawing" && entry.value.source ? { source: entry.value.source } : {}) };
-        return [entry.id, image];
-      }));
-      const objects = [...sheetObjects.map(object => pictures.get(`drawing:${object.id}`) ?? object),
-        ...selection.filter(entry => entry.kind === "native").map(entry => pictures.get(entry.id)!)];
-      if (objects.length > MAX_SHEET_OBJECTS || new Set(objects.map(o => o.id)).size !== objects.length) return fail();
-      const next = { ...sheet, objects, ...(sheet.charts ? { charts: sheet.charts.filter(chart => !pictures.has(`native:${chart.id}`)) } : {}) };
-      if (!commitChartGroupSheet(next)) return false;
-      setSelectedObjectId(pictures.get(expectedKey)?.id ?? selection[0].value.id);
-      setChartGroupChoices(null);
-      return true;
-    } catch { return current() ? fail() : false; }
-    finally { chartPictureInFlightRef.current = false; }
-  };
-  // The objects Group would write (a chosen member of a group brings its
-  // group): one Group refuses (a shape, or an object the file keeps) closes
-  
-  const chartGroupChosenIds = () => chartGroupChoices?.sheet === sheet ? chartGroupChoices.ids : chartGroupSelection.map(item => item.id);
-  const chartGroupApplyRefusal = (): string | undefined => {
-    const chosen = new Set(chartGroupChosenIds().flatMap(id => selectedChartDrawings(chartGroupEntries, id).map(entry => entry.id)));
-    const refused = chartGroupEntries.filter(entry => chosen.has(entry.id) && (entry.value.type === "shape" || !chartGroupEntryWritable(entry)));
-    if (!refused.length) return undefined;
-    return refused.some(entry => entry.value.type !== "shape" && !entry.value.hidden && spreadsheetNativeWriteRoute !== "from-scratch")
-      ? t("presentation.groupImportedUnavailable")
-      : t("presentation.groupObjectUnavailable");
-  };
-  const renderChartGroupMenu = (prefix = "spreadsheet-chart") => <SpreadsheetRibbonMenuAction homeVariant="compact"
-    icon={<OfficeSemanticIcon semanticId="object.group" size={18}/>} label={t("presentation.group.group")} disabled={Boolean(chartGroupReason)} disabledReason={chartGroupReason ?? undefined} testId={`${prefix}-group`}>
-    <DropdownMenuLabel>{t("spreadsheet.uiCopy.chooseChartsToGroup")}</DropdownMenuLabel>
-    {chartGroupEntries.map(entry => <DropdownMenuCheckboxItem key={entry.id} checked={(chartGroupChoices?.sheet === sheet ? chartGroupChoices.ids : chartGroupSelection.map(item => item.id)).includes(entry.id)}
-      disabled={!chartGroupEntryWritable(entry)||entry.value.type==="shape"} onSelect={event => event.preventDefault()} data-testid={`${prefix}-group-select-${entry.value.id}`}
-      onCheckedChange={checked => setChartGroupChoices(previous => ({ sheet, ids: checked ? [...new Set([...(previous?.sheet === sheet ? previous.ids : chartGroupSelection.map(item => item.id)), entry.id])]
-        : (previous?.sheet === sheet ? previous.ids : chartGroupSelection.map(item => item.id)).filter(id => id !== entry.id) }))}>
-        <OfficeSemanticIcon semanticId={entry.value.type === "image" ? "image.insert" : entry.value.type === "shape" ? "shape.insert" : "chart.insert"} size={16} />{entry.name}</DropdownMenuCheckboxItem>)}
-    <DropdownMenuSeparator/>
-    <DropdownMenuItem disabled={chartGroupChosenIds().length < 2 || chartGroupApplyRefusal() !== undefined} title={chartGroupChosenIds().length >= 2 ? chartGroupApplyRefusal() : undefined} onSelect={() => applyChartGrouping()} data-testid={`${prefix}-group-apply`}>
-      <OfficeSemanticIcon semanticId="object.group" size={16} />{t("presentation.group.group")}</DropdownMenuItem>
-    <DropdownMenuItem disabled={!chartGroupSelection.some(entry => entry.groupId)} onSelect={() => applyChartGrouping(true)} data-testid={`${prefix}-ungroup`}>
-      <OfficeSemanticIcon semanticId="object.ungroup" size={16} />{t("presentation.group.ungroup")}</DropdownMenuItem>
-  </SpreadsheetRibbonMenuAction>;
-  const renderChartRotateMenu = (prefix = "spreadsheet-chart") => <SpreadsheetRibbonMenuAction homeVariant="compact"
-    icon={<OfficeSemanticIcon semanticId="object.rotate" size={18}/>} label={t("presentation.geometry.rotation")}
-    disabled={Boolean(chartGroupReason) || chartGroupSelection.some(entry=>entry.value.type==="shape") || !chartGroupSelection.every(chartGroupEntryWritable)} disabledReason={chartGroupReason ?? undefined} testId={`${prefix}-rotate`}>
-    <DropdownMenuLabel>{t("spreadsheet.uiCopy.convertToPictureAndRotateUndoable")}</DropdownMenuLabel>
-    {([[90,"rotateRight90"],[-90,"rotateLeft90"],[180,"rotate180"]] as const).map(([angle,key]) =>
-      <DropdownMenuItem key={angle} onSelect={() => { void rotateChartAsPicture(angle); }} data-testid={`${prefix}-rotate-${angle}`}>
-        <OfficePictureMenuIcon icon={{ kind: angle === 90 ? "rotate-right-90" : angle === -90 ? "rotate-left-90" : "rotate-180" }} />{t(`spreadsheet.dynamicCopy.${key}`)}</DropdownMenuItem>)}
-  </SpreadsheetRibbonMenuAction>;
   // ONE model-first write for every worksheet chart command. A command
   // computes the chart's next model (`ChartBlockAttrsV2`) from its CURRENT
   // model with the shared command Docs and the deck use; this stores it with
@@ -58126,21 +55968,6 @@ function SpreadsheetWindow({
       setOfficeChartSelectedArea(key, null);
     return true;
   };
-  // A chart's frame (size, position, anchor): the record's geometry, beside its model.
-  const commitDesktopChartPatch = (patch: Record<string, unknown>, authority=chartDesktopAuthorityRef.current ?? captureChartDesignAuthority()) => {
-    if (desktopChartFormatReason || !desktopAuthorityCurrent(authority)) return false;
-    // A native chart's frame edit starts from the frame it is drawn at (its
-    // cell anchor on this grid), so a width alone keeps where it stands.
-    const drawn=authority.kind==="native"&&["x","y","width","height"].some(key=>key in patch)?charts.find(chart=>chart.id===authority.chartId):undefined;
-    const next={...authority.chart,...(drawn?{x:drawn.x,y:drawn.y,width:drawn.width,height:drawn.height}:{}),...patch};
-    const field=authority.kind==="native" ? "charts" : "objects";
-    const nextSheet={...authority.sheet,[field]:authority.chartCollection.map(item=>item===authority.chart?next:item)} as SheetModel;
-    const result=replaceActiveSheet(nextSheet,undefined,"content",{kind:"mapped-drawing",authority:sheetViewMappedDrawingAuthorityRef.current,
-      collection:field,objectId:authority.chartId,sourceSheet:authority.sheet,rowMapKey:pageLayoutRowMap.key,chartProperties:true});
-    setChartDesktopPreview(null);
-    chartDesktopAuthorityRef.current=null;
-    return field==="charts" ? chartsLanded(result[authority.activeSheetIndex]?.charts, nextSheet.charts) : result[authority.activeSheetIndex]?.[field]===nextSheet[field];
-  };
   // Home ▸ Font on the selected chart: the chart's own text
   // (`c:chartSpace/c:txPr`), through the chart's design authority.
   homeChartTextRef.current = homeChartTextScope
@@ -58170,107 +55997,6 @@ function SpreadsheetWindow({
       dialog.authority,
     );
   };
-  // Format pane paint on one element: the shared area-style write.
-  const patchDesktopChartFormat = (area: DocumentChartAreaStyleKey, patch: PresentationChartAreaStyle | null) => {
-    if (!desktopChartAttrs) return false;
-    return commitSheetChartModel((attrs) => setPresentationChartAreaStyle(attrs, area, patch));
-  };
-  // Excel's Format Axis > Axis Options: the SHARED record on the chart's format.
-  const patchDesktopChartAxisOptions = (axis: OfficeChartAxisKey, options: OfficeChartAxisOptions | null) => {
-    if (!desktopChartAttrs) return false;
-    return commitSheetChartModel((attrs) => withOfficeChartAxisOptions(attrs, axis, options));
-  };
-  // Excel's Chart Filters: the hidden series and categories on the chart's
-  // format, kept in the part as Excel keeps them.
-  const patchDesktopChartFilters = (picked: ChartBlockAttrsV2) => {
-    if (!desktopChartAttrs) return false;
-    const sourcePoints = desktopChartSourcePoints;
-    return commitSheetChartModel((attrs) => {
-      const format = { ...(attrs.format ?? {}) };
-      if (picked.format?.hiddenSeries?.length) format.hiddenSeries = [...picked.format.hiddenSeries];
-      else delete format.hiddenSeries;
-      // Picked among the drawn points; kept over the whole source (S-105).
-      const hiddenCategories = hiddenCategoriesAmongSource(
-        picked.format?.hiddenCategories,
-        attrs.format?.hiddenCategories,
-        sourcePoints,
-      );
-      if (hiddenCategories?.length) format.hiddenCategories = hiddenCategories;
-      else delete format.hiddenCategories;
-      return { ...attrs, format };
-    });
-  };
-  const paintDesktopChartArea = (area: DocumentChartAreaStyleKey, field: "fill" | "outline", paint: PresentationChartAreaPaint) =>
-    commitSheetChartModel((attrs) =>
-      setPresentationChartAreaStyle(attrs, area, presentationChartPaintStyle(presentationChartAreaStyle(attrs, area), field, paint)));
-  const effectDesktopChartArea = (area: DocumentChartAreaStyleKey, effect: PresentationChartEffectPreset | null) =>
-    commitSheetChartModel((attrs) =>
-      setPresentationChartAreaStyle(attrs, area, presentationChartEffectStyle(presentationChartAreaStyle(attrs, area), effect)));
-  const textDesktopChartArea = (area: DocumentChartAreaStyleKey, textStyle: PresentationChartAreaStyle) => {
-    if (area !== "chartTitleStyle") return false;
-    return commitSheetChartModel((attrs) =>
-      setPresentationChartAreaStyle(attrs, area, presentationChartTitleTextStyle(presentationChartAreaStyle(attrs, area), textStyle)));
-  };
-  // Chart Styles: the shared gallery's recipe (its preset and format) on the
-  // model (`sheetChartWithStyleRecipe`, which the hover preview runs too).
-  const desktopChartStyleCommit = (id: DocumentChartStyleId, authority = captureChartDesignAuthority()) =>
-    commitSheetChartModel((attrs) => sheetChartWithStyleRecipe(attrs, id, sheetChartStylePaint), authority);
-  // The Chart Styles gallery's hover preview on a chart not on the model yet:
-  // a display-only overlay of its flat format (a chart on the model previews
-  // the recipe on its model; the commit is `desktopChartStyleCommit`).
-  const desktopChartStyleFormat = (id: DocumentChartStyleId) => {
-    if (!desktopChartPreviewAttrs) return null;
-    const recipe=documentChartStyleAttrs(desktopChartPreviewAttrs,id,sheetChartStylePaint);
-    if (!recipe) return null;
-    const next={...recipe.format};
-    const count=desktopChartPlan?.seriesCount ?? 0;
-    if (count>10 && next.seriesStyles?.length) {
-      const series=next.seriesStyles;
-      next.seriesStyles=Array.from({length:count},(_,index)=>({...series[index % series.length],seriesIndex:index}));
-    }
-    const {curve:_curve,trendline:_trendline,errorBars:_errors,upDownBars:_updown,dropLines:_drop,highLowLines:_high,seriesLines:_lines,...format}=next;
-    return normalizeSpreadsheetChartFormat({...format,...(selectedChartDesignTarget?.chart.chartFormat?.layout?{layout:selectedChartDesignTarget.chart.chartFormat.layout}:{})}) ?? null;
-  };
-  const desktopChartSize = selectedChartDesignTarget?.kind==="native"
-    ? {widthEmu:Math.round(selectedChartDesignTarget.chart.width*EMU_PER_CSS_PIXEL),heightEmu:Math.round(selectedChartDesignTarget.chart.height*EMU_PER_CSS_PIXEL)}
-    : selectedChartDesignTarget ? (()=>{const bounds=objectBoundsPixels(selectedChartDesignTarget.chart,colWidth,rowHeight);return {widthEmu:Math.round(bounds.width*EMU_PER_CSS_PIXEL),heightEmu:Math.round(bounds.height*EMU_PER_CSS_PIXEL)};})() : undefined;
-  const resizeDesktopChart = (axis:"widthEmu"|"heightEmu",value:number) => {
-    const authority=chartDesktopAuthorityRef.current;
-    if (!desktopAuthorityCurrent(authority)||!Number.isFinite(value)||value<80*EMU_PER_CSS_PIXEL||value>4000*EMU_PER_CSS_PIXEL) return false;
-    const member = chartGroupEntries.find(entry => entry.id === `${authority.kind}:${authority.chartId}`);
-    if (member?.groupId) return chartGroupFrameRef.current(member.id, { ...member.frame, [axis === "widthEmu" ? "width" : "height"]: value / EMU_PER_CSS_PIXEL }) ?? false;
-    if (authority.kind==="native") return commitDesktopChartPatch({[axis==="widthEmu"?"width":"height"]:value/EMU_PER_CSS_PIXEL},authority);
-    const bounds=objectBoundsPixels(authority.chart,colWidth,rowHeight);
-    const anchor=anchorForObjectBounds(anchorWithDefaults(authority.chart.anchor),{...bounds,[axis==="widthEmu"?"width":"height"]:value/EMU_PER_CSS_PIXEL},sheet.rowCount,sheet.columnCount,colWidth,rowHeight);
-    return commitDesktopChartPatch({anchor},authority);
-  };
-  // Format Chart Area > Size & Properties > Properties: how the chart follows
-  // the cells (Excel's Object positioning, `editAs` in the file), as for a
-  // picture or a shape. The chart keeps its place and size; only its anchor's
-  // kind changes (`objectPlacementPatch`). A chart made here holds it in its
-  // `drawingAnchor`, an imported one in its object anchor.
-  const desktopChartAnchor = selectedChartDesignTarget?.kind==="native"
-    ? (charts.find(chart=>chart.id===selectedChartDesignTarget.chart.id)?.drawingAnchor ?? {kind:"twoCell" as const})
-    : selectedChartDesignTarget?.chart.anchor;
-  const desktopChartPlacementEntry = selectedChartDesignTarget
-    ? chartGroupEntries.find(entry=>entry.id===`${selectedChartDesignTarget.kind}:${selectedChartDesignTarget.chart.id}`)
-    : undefined;
-  const desktopChartPlacementReason = desktopChartFormatReason
-    ?? (desktopChartPlacementEntry && !chartEntryFrameWritable(desktopChartPlacementEntry) ? t("spreadsheet.uiCopy.thisObjectCannotSafelyBeMovedOrResized") : undefined);
-  const placeDesktopChart = (placement:string) => {
-    const authority=captureChartDesignAuthority();
-    if (desktopChartPlacementReason||!desktopAuthorityCurrent(authority)) return false;
-    const grid={rowCount:sheet.rowCount,columnCount:sheet.columnCount,colWidth,rowHeight};
-    if (authority.kind==="native") {
-      const drawn=charts.find(chart=>chart.id===authority.chartId);
-      if (!drawn||drawn.x===undefined||drawn.y===undefined) return false;
-      const anchor=drawn.drawingAnchor ?? chartAnchorForFrame(undefined,{left:drawn.x,top:drawn.y,width:drawn.width,height:drawn.height},grid);
-      const patch=objectPlacementPatch({id:drawn.id,anchor:anchor as SpreadsheetObjectAnchor},placement,grid);
-      return patch?.anchor ? commitDesktopChartPatch({drawingAnchor:patch.anchor},authority) : false;
-    }
-    const patch=objectPlacementPatch(authority.chart,placement,grid);
-    return patch ? commitDesktopChartPatch(patch,authority) : false;
-  };
   function stableChartPosition(chart:SpreadsheetChart,index:number):{x:number;y:number} {
     const drawing=spreadsheetViewMode==="pageLayout"?pageLayoutDrawings.find(item=>item[0]===`chart:${chart.id}`)?.[4]?.frame:null;
     // Page Layout draws in the data area; a chart's position is on the drawing layer, past the headings.
@@ -58286,35 +56012,6 @@ function SpreadsheetWindow({
     if(!next)return;
     replaceActiveSheet(next,undefined,"content",{kind:"mapped-drawing",authority:sheetViewMappedDrawingAuthorityRef.current,
       collection:field,objectId:authority.chartId,sourceSheet:authority.sheet,rowMapKey:pageLayoutRowMap.key,chartOrder:true});
-  };
-  const alignDesktopChart = (alignment:"left"|"center"|"right"|"top"|"middle"|"bottom") => {
-    const authority=captureChartDesignAuthority(),viewport=gridWrapRef.current;
-    if(!desktopAuthorityCurrent(authority)||desktopChartFormatReason||!viewport||sheet.chartSheet)return false;
-    const id=authority.kind==="native"?`chart:${authority.chartId}`:authority.chartId;
-    const drawing=spreadsheetViewMode==="pageLayout"?pageLayoutDrawings.find(item=>item[0]===id):undefined;
-    let frame=drawing?.[4]?.frame ?? (authority.kind==="native"?{left:authority.chart.x??360,top:authority.chart.y??12+Math.max(0,chartViews.findIndex(item=>item.chart.id===authority.chartId))*(authority.chart.height+56),width:authority.chart.width,height:authority.chart.height}:objectBoundsPixels(authority.chart,colWidth,rowHeight));
-    let target={left:toContentPx(viewport.scrollLeft)+SPREADSHEET_HEADER_WIDTH_PX,top:toContentPx(viewport.scrollTop)+SPREADSHEET_HEADER_HEIGHT_PX,
-      width:toContentPx(viewport.clientWidth)-SPREADSHEET_HEADER_WIDTH_PX,height:toContentPx(viewport.clientHeight)-SPREADSHEET_HEADER_HEIGHT_PX};
-    if(spreadsheetViewMode==="pageLayout"){
-      if(!drawing?.[4])return false;
-      const occurrence=viewport.querySelector(`[data-page-layout-drawing="${CSS.escape(id)}"]`);
-      const pageIndex=Number(occurrence?.closest("[data-print-page-index]")?.getAttribute("data-print-page-index"));
-      const geometry=resolveSpreadsheetPageLayoutGeometry({drawingBounds:pageLayoutDrawingBounds,nativeGridDpi:nativeGrid?.dpi,nativeDigitWidth:nativeGrid?.digitWidth,printScale:nativeGrid?.printScale,totalRows:sheet.rowCount,totalCols:sheet.columnCount,rowOrder:pageLayoutRowMap.order,
-        printSettings:sheet.printSettings,rowHeights:pageLayoutRowHeights,columnWidths,defaultRowHeight:displayDefaultRowHeight,defaultColumnWidth:displayDefaultColumnWidth,
-        hiddenRows:pageLayoutHiddenRows,hiddenCols:new Set([...groupHiddenCols,...manualHiddenCols])});
-      const page=resolveSpreadsheetPageLayoutRenderPlan(geometry).pages.find(item=>item.index===pageIndex);
-      if(!page)return false;
-      const scale=.75*geometry.contentScale, print=geometry.printScale??{x:1,y:1};
-      target={left:geometry.colSizes.slice(0,page.colRange[0]).reduce((a,b)=>a+b,0)/(scale*print.x),
-        top:geometry.rowSizes.slice(0,page.rowRange[0]).reduce((a,b)=>a+b,0)/(scale*print.y),
-        width:geometry.dataAreaWidth/(scale*print.x),height:geometry.dataAreaHeight/(scale*print.y)};
-    }
-    if(!Object.values(target).every(Number.isFinite)||target.width<=0||target.height<=0)return false;
-    const horizontal=alignment==="left"||alignment==="center"||alignment==="right";
-    const fraction=(alignment==="center"||alignment==="middle")?0.5:(alignment==="right"||alignment==="bottom")?1:0;
-    frame={...frame,[horizontal?"left":"top"]:Math.max(0,(horizontal?target.left:target.top)+fraction*Math.max(0,(horizontal?target.width-frame.width:target.height-frame.height)))};
-    if(spreadsheetViewMode==="pageLayout")return beginPageLayoutDrawingTransform(id)?.commit(frame)??false;
-    return commitDesktopChartPatch(authority.kind==="native"?{x:frame.left,y:frame.top}:{anchor:anchorForObjectBounds(anchorWithDefaults(authority.chart.anchor),frame,sheet.rowCount,sheet.columnCount,colWidth,rowHeight)},authority);
   };
   const spreadsheetChartContextCommands = (): Partial<
     Record<OfficeChartContextCommandId, OfficeChartContextCommand>
@@ -58408,7 +56105,7 @@ function SpreadsheetWindow({
                   area: "chartAreaStyle",
                   token: chartFormatFocusTokenRef.current,
                 });
-                setRibbonTab("chartFormat");
+                void 0;
                 setChartSharedFormatPaneOpen(true);
               },
               disabledReason: desktopChartModelReason,
@@ -58447,7 +56144,7 @@ function SpreadsheetWindow({
             area: "chartAreaStyle",
             token: chartFormatFocusTokenRef.current,
           });
-          setRibbonTab("chartFormat");
+          void 0;
           setChartSharedFormatPaneOpen(true);
         },
         disabledReason: desktopChartModelReason,
@@ -58464,7 +56161,7 @@ function SpreadsheetWindow({
           openFormat: (area) => {
             chartFormatFocusTokenRef.current += 1;
             setChartFormatFocus({ area, token: chartFormatFocusTokenRef.current });
-            setRibbonTab("chartFormat");
+            void 0;
             setChartSharedFormatPaneOpen(true);
           },
           openFont: openChartFontDialog,
@@ -61797,6 +59494,7 @@ function SpreadsheetWindow({
     "spreadsheet.review.showAllNotes": showWorkbookNotes,
     "spreadsheet.review.showHideNote": toggleActiveCellNoteVisible,
     "spreadsheet.review.spelling": () => runSpellReview(),
+    "spreadsheet.review.thesaurus": () => openThesaurus(),
     "spreadsheet.review.statistics": () => setReviewDialogMode("statistics"),
     "spreadsheet.review.toggleCommentResolved": () =>
       executeReviewCommentReceiptWriter(
@@ -61889,8 +59587,6 @@ function SpreadsheetWindow({
     dataDialogWriteAllowedRef.current &&
     visibleCommandAuthority.resolve("XLSCTL.INSERT.CHART.RECOMMENDED_MENU.APPLY").enabled;
   });
-  const anyVisibleCommand = (...controlIds: readonly string[]) =>
-    controlIds.some((controlId) => visibleCommandState(controlId).visible);
   const visibleCommandReason = (
     reasonKey: SpreadsheetVisibleCommandReason | null,
   ): string | undefined => {
@@ -62011,6 +59707,8 @@ function SpreadsheetWindow({
         return webDataReviewViewLabels.sheetViewRequired;
       case "spreadsheet.capability.selectionAlreadyLocked":
         return t("spreadsheet.commandStatus.alreadyLocked");
+      case "spreadsheet.capability.filterLockedByHost":
+        return t("spreadsheet.commandStatus.commandUnavailable");
       case "spreadsheet.capability.selectionAlreadyUnlocked":
         return t("spreadsheet.commandStatus.alreadyUnlocked");
       case "spreadsheet.capability.sheetProtected":
@@ -63843,70 +61541,6 @@ function SpreadsheetWindow({
     writeSelectedChartSelection,
     writeSelectedInkIds,
   });
-  const executeSparklineDesignMutation = (
-    controlId: SparklineDesignWriterControlId,
-    parameter: string,
-  ) => {
-    const selection = readPageSetupSelectionSnapshot();
-    const sourceSparkline = sheet.sparklines?.[activeSparklineKey];
-    if (!selection || !activeSparkline || !sourceSparkline) {
-      return Promise.resolve(false);
-    }
-    sparklineDesignMutationCommandRef.current = {
-      controlId,
-      workbook: sheets,
-      activeSheetIndex,
-      sheet,
-      sheetId: sheet.id,
-      sparklineMap: sheet.sparklines,
-      sparkline: sourceSparkline,
-      activeKey: activeSparklineKey,
-      selection,
-      parameter,
-    };
-    return executeVisibleCommandWithReceipt(controlId, () => {
-      sparklineDesignMutationCommandRef.current = null;
-    });
-  };
-  const sparklineDesignActionProps = (
-    controlId: SparklineDesignWriterControlId,
-    parameter: string,
-    extraDisabled = false,
-    extraDisabledReason?: string,
-  ) => {
-    const state = visibleCommandState(controlId);
-    return {
-      controlId,
-      disabled: !state.enabled || extraDisabled,
-      disabledReason:
-        visibleCommandReason(state.reasonKey) ?? extraDisabledReason,
-      hidden: !state.visible,
-      onClick: () => executeSparklineDesignMutation(controlId, parameter),
-    };
-  };
-  // The Sparkline tab's on/off settings are Excel's check boxes: the same
-  // command, toggled to the opposite of what the sparkline shows.
-  const sparklineDesignCheckboxProps = (
-    controlId: SparklineDesignWriterControlId,
-    checked: boolean,
-    extraDisabled = false,
-    extraDisabledReason?: string,
-  ) => {
-    const action = sparklineDesignActionProps(
-      controlId,
-      String(!checked),
-      extraDisabled,
-      extraDisabledReason,
-    );
-    return {
-      checked,
-      controlId,
-      disabled: action.disabled,
-      hidden: action.hidden,
-      onCheckedChange: () => void action.onClick(),
-      title: action.disabledReason,
-    };
-  };
   // Tab Color, shared by the sheet tab's menu and Home > Format: the theme
   // accents as swatches named the way Office names them ("个性色 1"), then
   // clear and a custom colour. Home drew the same accents as hex strings.
@@ -64294,90 +61928,6 @@ function SpreadsheetWindow({
       "XLSCTL.CONTEXT.PIVOT.DESIGN.MRAI.APPLY",
       { ...pivotConfig, ...patch },
     );
-  };
-  const togglePivotShowDrillButtons = (): Promise<boolean> => {
-    if (!pivotConfig) return Promise.resolve(false);
-    const nextPivot = { ...pivotConfig };
-    if (pivotConfig.showDrillButtons === false) {
-      delete nextPivot.showDrillButtons;
-    } else {
-      nextPivot.showDrillButtons = false;
-    }
-    return executePivotContextMutation(
-      "XLSCTL.CONTEXT.PIVOT.SHOW_EXPAND_COLLAPSE_BUTTONS.MRAI.APPLY",
-      nextPivot,
-    );
-  };
-  // A Refresh that cannot happen says why, as Excel's does; a silent Refresh
-  // reads as a PivotTable that ignores its data.
-  const noticePivotRefreshRefusal = (refusal: Exclude<PivotRefreshRefusal, "no-snapshot">) => {
-    toast({
-      description:
-        refusal === "duplicate-field-names"
-          ? t("spreadsheet.pivotRefreshRefused.duplicateFieldNames")
-          : refusal === "preserve-only"
-            ? t(pivotPreservedReasonKey(pivotConfig?.native?.blocker))
-            : refusal === "scenario-report"
-              ? t("spreadsheet.pivotRefreshRefused.scenarioReport")
-              : t("spreadsheet.pivotRefreshRefused.sourceUnreadable"),
-    });
-  };
-  const executePivotRefresh = (): Promise<boolean> => {
-    if (!pivotConfig) {
-      return executeVisibleCommand("XLSCTL.CONTEXT.PIVOT.REFRESH");
-    }
-    // The cache rebuilt over the source as it is now (lib/spreadsheet/
-    // pivot-buttons, pivotRefreshPlan). A large tiled source holds only the
-    // rows around the screen: those rows are no refresh of the cache, so
-    // the rest are read first and the person refreshes again.
-    const refreshTiled = tiledRef.current;
-    const refreshRange = pivotLiveSourceSheet
-      ? pivotLiveSourceRange(pivotConfig, pivotLiveSourceSheet.dataTables) ?? normalizePivotRange(pivotConfig.source)
-      : null;
-    if (refreshTiled && pivotLiveSourceSheet && refreshRange) {
-      const missingTiles = refreshTiled.tilesMissingFor(pivotLiveSourceSheet.id, refreshRange.r1, refreshRange.r2);
-      if (missingTiles.length > 0) {
-        toast({ title: t("spreadsheet.tiledWorkbook.pivotRefreshWaitsForSource", {
-          sheet: pivotLiveSourceSheet.name, cells: refreshTiled.cellsOf(pivotLiveSourceSheet.id).toLocaleString() }) });
-        void refreshTiled.ensure(pivotLiveSourceSheet.id, missingTiles).then(() => {
-          applyTiledModelRef.current((previous) => refreshTiled.apply(previous));
-        }).catch(() => {});
-        return Promise.resolve(false);
-      }
-    }
-    const plan = pivotRefreshPlan(
-      pivotConfig,
-      activePivot,
-      pivotLiveSourceMatrix && pivotLiveSourceScalarMatrix
-        ? { matrix: pivotLiveSourceMatrix, scalarMatrix: pivotLiveSourceScalarMatrix }
-        : null,
-      pivotLiveSourceSheet,
-    );
-    if (plan.kind === "live") {
-      return executeVisibleCommand("XLSCTL.CONTEXT.PIVOT.REFRESH");
-    }
-    if (plan.kind === "none") return Promise.resolve(false);
-    if (plan.kind === "refused") {
-      noticePivotRefreshRefusal(plan.refusal);
-      return Promise.resolve(false);
-    }
-    const { fieldsChanged } = plan;
-    const refreshed = plan.config;
-    return executePivotContextMutation(
-      "XLSCTL.CONTEXT.PIVOT.REFRESH.MRAI.APPLY",
-      refreshed,
-    ).then((executed) => {
-      if (executed) {
-        toast({
-          description: fieldsChanged
-            ? t("spreadsheet.uiCopy.pivotTableRefreshFieldsChanged", {
-                count: (refreshed.native?.snapshot ?? refreshed.cacheSnapshot)?.fieldIds.length ?? 0,
-              })
-            : t("spreadsheet.uiCopy.pivotTableCacheRefreshed"),
-        });
-      }
-      return executed;
-    });
   };
   const executePivotChartCreate = (
     chartType: SpreadsheetPivotChartType,
@@ -65086,6 +62636,8 @@ function SpreadsheetWindow({
     // an entry being edited are selected.
     checkSpelling: (payload) =>
       runShortcutControl("XLSCTL.REVIEW.PROOF.SPELL", () => runSpellReview(payload)),
+    openThesaurus: (payload) =>
+      runShortcutControl("XLSCTL.REVIEW.PROOF.THESAURUS", () => openThesaurus(payload)),
   };
   // Registered at commit, like the registry's first ids, so a key always runs
   // against the grid on screen.
@@ -65096,22 +62648,6 @@ function SpreadsheetWindow({
       commandRegistryRef.current.register(id, shortcutCommandHandlers[id]);
     }
   });
-  const executePageMarginPreset = (
-    preset: MarginPreset,
-    source: PageSetupSourceAuthority = pageSetupSourceAuthority,
-  ) => {
-    pageSetupMutationCommandRef.current = {
-      ...source,
-      controlId: "XLSCTL.PAGE_LAYOUT.MARGINS.APPLY",
-      preset,
-    };
-    executeVisibleCommandWithReceipt(
-      "XLSCTL.PAGE_LAYOUT.MARGINS.APPLY",
-      () => {
-        pageSetupMutationCommandRef.current = null;
-      },
-    );
-  };
   const executePageSetupQuickSetting = (
     update: Partial<
       Pick<PrintSettings, "orientation" | "paperSize" | "paperSizeNativeId" | "margins" | "scaling">
@@ -65128,151 +62664,6 @@ function SpreadsheetWindow({
     const change = printSettingsWithQuickSetting(liveSheet.printSettings, update);
     return change ? commitPageLayoutSettings(liveSheet, change.settings) : false;
   };
-  const executePageScalePages = (
-    axis: "width" | "height",
-    pages: number,
-    source: PageSetupSourceAuthority,
-  ) => {
-    const liveSheet = resolveLivePageSetupSheet(true, source);
-    if (!liveSheet || !Number.isInteger(pages) || pages < 0 || pages > 9) {
-      return false;
-    }
-    const scaling = fitPagesScaling(liveSheet.printSettings, axis, pages);
-    return scaling ? executePageSetupQuickSetting({ scaling }, source) : false;
-  };
-  const renderPageScaleMenu = (axis: "width" | "height") => {
-    const controlId = axis === "width"
-      ? "XLSCTL.PAGE_LAYOUT.SCALE.WIDTH"
-      : "XLSCTL.PAGE_LAYOUT.SCALE.HEIGHT";
-    const state = visibleCommandState(controlId);
-    const selectedPages = axis === "width"
-      ? (pageSetupScale?.kind === "fitToWidth" ? pageSetupScale.pages
-        : pageSetupScale?.kind === "fitToPages"
-          ? ("pages" in pageSetupScale ? pageSetupScale.pages : pageSetupScale.widthPages) : 0)
-      : (pageSetupScale?.kind === "fitToPages"
-        ? ("pages" in pageSetupScale ? 1 : pageSetupScale.heightPages) : 0);
-    const label = axis === "width"
-      ? `${t("toolbar.pageSetupWidth")}: ${pageSetupScaleWidthValue}`
-      : `${t("toolbar.pageSetupHeight")}: ${pageSetupScaleHeightValue}`;
-    return (
-      <SpreadsheetRibbonMenuAction
-        {...spreadsheetPageSetupPrintActionProps(
-          "page-layout-ribbon-page-setup", axis === "width" ? "scale-width" : "scale-height",
-        )}
-        disabled={!state.enabled}
-        disabledReason={visibleCommandReason(state.reasonKey)}
-        hidden={!state.visible}
-        homeVariant="compact"
-        icon={<SpreadsheetPageLayoutIcon name="scaling" size={20} />}
-        label={label}
-        testId={`spreadsheet-ribbon-page-layout-scale-${axis}`}
-        className={spreadsheetHomeStyles.pageScaleTrigger}
-        menuClassName={spreadsheetHomeStyles.pageScaleMenu}
-        onCloseAutoFocus={(event) => {
-          if (pageSetupFocusTargetRef.current) event.preventDefault();
-        }}
-      >
-        <DropdownMenuRadioGroup
-          value={String(selectedPages)}
-          onValueChange={(value) =>
-            executePageScalePages(axis, Number(value), pageSetupSourceAuthority)
-          }
-        >
-          {Array.from({ length: 10 }, (_, pages) => (
-            <DropdownMenuRadioItem
-              key={pages}
-              value={String(pages)}
-              {...visibleCommandMenuProps("XLSCTL.PAGE_LAYOUT.PAGE_SETUP.APPLY")}
-              data-testid={`spreadsheet-ribbon-scale-${axis}-${pages}`}
-            >
-              {pages === 0 ? pageSetupAutomaticLabel : t("spreadsheet.dynamicCopy.pageCount", { count: pages })}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          {...visibleCommandMenuProps(controlId)}
-          data-testid={`spreadsheet-ribbon-scale-${axis}-more`}
-          onSelect={() => void executeVisibleCommand(controlId)}
-        >
-          <FilePlus2 size={16} aria-hidden />
-          {t("spreadsheet.uiCopy.morePages")}
-        </DropdownMenuItem>
-      </SpreadsheetRibbonMenuAction>
-    );
-  };
-  const executePageSetupMutation = (
-    controlId: string,
-    source: PageSetupSourceAuthority = pageSetupSourceAuthority,
-  ) => {
-    const coordinateBound =
-      controlId === "XLSCTL.PAGE_LAYOUT.BREAKS.INSERT" ||
-      controlId === "XLSCTL.PAGE_LAYOUT.BREAKS.REMOVE";
-    const selection = coordinateBound
-      ? readPageSetupSelectionSnapshot()
-      : null;
-    if (coordinateBound && !selection) return;
-    pageSetupMutationCommandRef.current = {
-      ...source,
-      controlId,
-      ...(coordinateBound && selection
-        ? {
-            row: selection.active.row,
-            col: selection.active.col,
-            selectionEpoch: selection.epoch,
-          }
-        : {}),
-    };
-    executeVisibleCommandWithReceipt(controlId, () => {
-      pageSetupMutationCommandRef.current = null;
-    });
-  };
-  const executeSetPrintArea = (
-    source: PageSetupSourceAuthority = pageSetupSourceAuthority,
-    range = spreadsheetRangeA1(selRect),
-  ) => {
-    const liveSheet = resolveLivePageSetupSheet(true, source);
-    if (!liveSheet) return;
-    const selection = readPageSetupSelectionSnapshot();
-    if (!selection) return;
-    const liveRange = spreadsheetRangeA1(selection.range);
-    if (range !== liveRange) return;
-    pageSetupMutationCommandRef.current = {
-      ...source,
-      controlId: "XLSCTL.PAGE_LAYOUT.PRINT_AREA.SET",
-      range,
-      selectionEpoch: selection.epoch,
-    };
-    executeVisibleCommandWithReceipt(
-      "XLSCTL.PAGE_LAYOUT.PRINT_AREA.SET",
-      () => {
-        pageSetupMutationCommandRef.current = null;
-      },
-    );
-  };
-  const executeAddToPrintArea = (
-    source: PageSetupSourceAuthority = pageSetupSourceAuthority,
-    range = spreadsheetRangeA1(selRect),
-  ) => {
-    const liveSheet = resolveLivePageSetupSheet(true, source);
-    if (!liveSheet) return;
-    const selection = readPageSetupSelectionSnapshot();
-    if (!selection) return;
-    const liveRange = spreadsheetRangeA1(selection.range);
-    if (range !== liveRange) return;
-    pageSetupMutationCommandRef.current = {
-      ...source,
-      controlId: "XLSCTL.PAGE_LAYOUT.PRINT_AREA.ADD",
-      range,
-      selectionEpoch: selection.epoch,
-    };
-    executeVisibleCommandWithReceipt(
-      "XLSCTL.PAGE_LAYOUT.PRINT_AREA.ADD",
-      () => {
-        pageSetupMutationCommandRef.current = null;
-      },
-    );
-  };
   const visibleCommandActionProps = (controlId: string) => {
     const state = visibleCommandState(controlId);
     return {
@@ -65283,13 +62674,6 @@ function SpreadsheetWindow({
       onClick: () => executeVisibleCommand(controlId),
     };
   };
-  const reviewCommandActionProps = (controlId: string) => ({
-    ...visibleCommandActionProps(controlId),
-    // Review remains a stable Office surface: missing providers or permissions
-    // disable a command with its authoritative reason instead of silently
-    // collapsing the group and leaving a large unexplained gap.
-    hidden: false,
-  });
   const executeDataValidationApply = () => {
     const authority = dataValidationDialogAuthorityRef.current;
     if (!authority) return Promise.resolve(false);
@@ -65415,12 +62799,6 @@ function SpreadsheetWindow({
     visibleCommandMenuProps,
     workbookThemeHeadingFontFamily,
   });
-  const formulaFunctionMenuState = visibleCommandState(
-    "XLSCTL.FORMULAS.INSERT_FUNCTION",
-  );
-  const formulaFunctionMenuDisabledReason = visibleCommandReason(
-    formulaFunctionMenuState.reasonKey,
-  );
   const visibleCommandDomActionProps = (controlId: string) => ({
     ...visibleCommandDomStateProps(controlId),
     onClick: () => executeVisibleCommand(controlId),
@@ -65595,130 +62973,12 @@ function SpreadsheetWindow({
       (pivotValueSettingsBaseItemWanted &&
         !pivotValueSettingsDraft?.showAs?.base),
   );
-  const pivotChartCreateState = visibleCommandState(
-    "XLSCTL.CONTEXT.PIVOT.CHART.MRAI.APPLY",
-  );
-  const pivotChartCreateReason = visibleCommandReason(
-    pivotChartCreateState.reasonKey,
-  );
   const tableStyleCommandState = visibleCommandState(
     "XLSCTL.CONTEXT.TABLE.STYLE_GALLERY",
   );
-  const tableNameCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.TABLE.NAME",
-  );
-  const tableNameDisabledReason = visibleCommandReason(
-    tableNameCommandState.reasonKey,
-  );
-  const tableSummarizePivotCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.TABLE.SUMMARIZE_PIVOT",
-  );
-  const tableSummarizePivotDisabledReason =
-    sheet.pivot && pivotCreationNewSheetDisabledReason
-      ? t("spreadsheet.uiCopy.thisWorksheetAlreadyContainsAPivotTable")
-      : activeTable && !activeTable.headerRow
-        ? t("spreadsheet.uiCopy.turnOnTheTableHeaderRowBeforeCreatingA")
-        : visibleCommandReason(tableSummarizePivotCommandState.reasonKey);
   const tableStyleDisabledReason = visibleCommandReason(
     tableStyleCommandState.reasonKey,
   );
-  const chartQuickLayoutCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.CHART.QUICK_LAYOUT.MRAI.APPLY",
-  );
-  const chartQuickLayoutDisabledReason = visibleCommandReason(
-    chartQuickLayoutCommandState.reasonKey,
-  );
-  // Quick Layout's refusals, the shared catalogue's rule on the chart's
-  // model; the tiles and the gallery are the one set Docs and the deck draw.
-  const chartQuickLayoutRefusal = (layoutId: ChartQuickLayoutId) =>
-    !selectedChartModel || officeChartQuickLayoutAvailable(selectedChartModel, layoutId)
-      ? null
-      : t("spreadsheet.uiCopy.thisLayoutIsNotAvailableForThisChartType");
-  const chartQuickLayoutCalibrated = [
-    "column",
-    "bar",
-    "stacked-column",
-    "stacked-bar",
-  ].includes(selectedChartDesignType ?? "column");
-  const chartStyleCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.CHART.STYLE_GALLERY.MRAI.APPLY",
-  );
-  const chartStyleDisabledReason = visibleCommandReason(
-    chartStyleCommandState.reasonKey,
-  );
-  const chartColorCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.CHART.CHANGE_COLORS.MRAI.APPLY",
-  );
-  const chartColorDisabledReason = visibleCommandReason(
-    chartColorCommandState.reasonKey,
-  );
-  const slicerStyleItems: readonly OfficeStyleGalleryItem<SlicerStyleId>[] = useMemo(() =>
-    SLICER_STYLE_IDS.map((styleId) => ({
-      id: styleId,
-      // Excel counts Light and Dark separately: "Slicer Style Dark 1", not 4.
-      label: t("spreadsheet.dynamicCopy.slicerStyle", {
-        tone: t(
-          `spreadsheet.dynamicCopy.tableStyleTone.${styleId.startsWith("dark") ? "dark" : "light"}`,
-        ),
-        index: styleId.replace(/^(?:light|dark)/, ""),
-      }),
-    })), [t]);
-  const slicerTitleCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.SLICER.TITLE.MRAI.APPLY",
-  );
-  const slicerHeaderCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.SLICER.SHOW_HEADER.MRAI.APPLY",
-  );
-  const slicerStyleCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.SLICER.STYLE.MRAI.APPLY",
-  );
-  const slicerColumnsCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.SLICER.COLUMNS.MRAI.APPLY",
-  );
-  const slicerButtonHeightCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.SLICER.BUTTON_HEIGHT.MRAI.APPLY",
-  );
-  const slicerWidthCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.SLICER.WIDTH.MRAI.APPLY",
-  );
-  const slicerHeightCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.SLICER.HEIGHT.MRAI.APPLY",
-  );
-  const slicerClearFilterCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.SLICER.CLEAR_FILTER.MRAI.APPLY",
-  );
-  const slicerRemoveCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.SLICER.REMOVE.MRAI.APPLY",
-  );
-  const renderSlicerStylePreview = (
-    item: OfficeStyleGalleryItem<SlicerStyleId>,
-  ) => {
-    const recipe = SLICER_STYLE_RECIPES[item.id];
-    return (
-      <span
-        aria-hidden="true"
-        className="block h-11 w-16 overflow-hidden rounded-[3px] border bg-white p-1"
-        style={{ borderColor: recipe.border, background: recipe.surface }}
-      >
-        <span
-          className="mb-1 block h-2 rounded-[1px]"
-          style={{ background: recipe.header }}
-        />
-        <span className="grid grid-cols-2 gap-0.5">
-          {[0, 1, 2, 3].map((ordinal) => (
-            <span
-              key={ordinal}
-              className="h-3 rounded-[1px] border"
-              style={{
-                background: ordinal < 2 ? recipe.selected : "transparent",
-                borderColor: recipe.border,
-              }}
-            />
-          ))}
-        </span>
-      </span>
-    );
-  };
   const tableStyleGalleryBaseItems: readonly OfficeStyleGalleryItem<TableStyleChoice>[] = useMemo(() => [
     // Excel lists the workbook's own table styles first, under Custom.
     ...(workbookNativeTableStyles ?? []).map((style) => ({
@@ -65732,13 +62992,6 @@ function SpreadsheetWindow({
       groupId: preset.tone,
     })),
   ], [t, workbookNativeTableStyles, workbookThemeAccentColors]);
-  const tableStyleGalleryItems: readonly OfficeStyleGalleryItem<TableStyleChoice>[] =
-    tableStyleGalleryBaseItems.map((item) => ({
-      ...item,
-      ...(!tableStyleCommandState.enabled && tableStyleDisabledReason
-        ? { disabledReason: tableStyleDisabledReason }
-        : {}),
-    }));
   const homeTableStyleMenuDisabledReason = activeTable
     ? (tableStyleDisabledReason ?? homeFormattingUnavailableReason)
     : dataTables.length >= MAX_DATA_TABLES
@@ -65784,49 +63037,6 @@ function SpreadsheetWindow({
       ).map((preset) => preset.id as TableStyleChoice),
     })),
   ];
-  const tableStyleQuickIds: readonly TableStyleChoice[] = [
-    ...(workbookNativeTableStyles ?? [])
-      .slice(0, 3)
-      .map((style) => nativeTableStyleChoice(style.name)),
-    "light-21",
-    "slate-medium",
-    "blue-medium",
-    "orange-medium",
-    "green-medium",
-    "teal-medium",
-    "purple-medium",
-  ];
-  const executeTableNameMutation = (rawName: string) => {
-    const selection = readPageSetupSelectionSnapshot();
-    const nextName = rawName.trim();
-    if (
-      !selection ||
-      !activeTable ||
-      !activeTableSource ||
-      !sheet.dataTables
-    ) {
-      return Promise.resolve(false);
-    }
-    tableNameMutationCommandRef.current = {
-      controlId: "XLSCTL.CONTEXT.TABLE.NAME",
-      workbook: sheets,
-      activeSheetIndex,
-      sheet,
-      sheetId: sheet.id,
-      tableCollection: sheet.dataTables,
-      table: activeTableSource,
-      tableId: activeTable.id,
-      selection,
-      previousName: activeTable.name,
-      nextName,
-    };
-    return executeVisibleCommandWithReceipt(
-      "XLSCTL.CONTEXT.TABLE.NAME",
-      () => {
-        tableNameMutationCommandRef.current = null;
-      },
-    );
-  };
   const executeTableStyleMutation = (styleId: TableStyleChoice) => {
     const selection = readPageSetupSelectionSnapshot();
     if (!selection || !activeTable || !activeTableSource) {
@@ -65850,31 +63060,6 @@ function SpreadsheetWindow({
         tableStyleMutationCommandRef.current = null;
       },
     );
-  };
-  const executeTableStyleOptionMutation = (
-    controlId: TableStyleOptionControlId,
-    option: TableStyleOption,
-  ) => {
-    const selection = readPageSetupSelectionSnapshot();
-    if (!selection || !activeTable || !activeTableSource || !sheet.dataTables) {
-      return Promise.resolve(false);
-    }
-    tableStyleOptionMutationCommandRef.current = {
-      controlId,
-      workbook: sheets,
-      activeSheetIndex,
-      sheet,
-      sheetId: sheet.id,
-      tableCollection: sheet.dataTables,
-      table: activeTableSource,
-      tableId: activeTable.id,
-      selection,
-      option,
-      nextValue: !Boolean(activeTable[option]),
-    };
-    return executeVisibleCommandWithReceipt(controlId, () => {
-      tableStyleOptionMutationCommandRef.current = null;
-    });
   };
   const openPivotSlicerInsertDialog = (
     controlId:
@@ -66040,35 +63225,6 @@ function SpreadsheetWindow({
       );
     });
   };
-  const openTableAltTextDialog = () => {
-    const selection = readPageSetupSelectionSnapshot();
-    if (!selection || !activeTable || !activeTableSource || !sheet.dataTables) {
-      return;
-    }
-    const receipt = {
-      workbook: sheets,
-      activeSheetIndex,
-      sheet,
-      sheetId: sheet.id,
-      tableCollection: sheet.dataTables,
-      table: activeTableSource,
-      tableId: activeTable.id,
-      selection,
-      previousAltText: activeTable.altText ?? "",
-      previousAltTextSummary: activeTable.altTextSummary ?? "",
-    };
-    void executeVisibleCommand("XLSCTL.CONTEXT.TABLE.ALT_TEXT").then(
-      (opened) => {
-        if (!opened) return;
-        setTableAltTextDraft({
-          receipt,
-          title: receipt.previousAltTextSummary,
-          description: receipt.previousAltText,
-          error: null,
-        });
-      },
-    );
-  };
   const applyTableAltTextDialog = () => {
     if (!tableAltTextDraft) return;
     const nextAltText = normalizedTableAltTextInput(
@@ -66104,33 +63260,6 @@ function SpreadsheetWindow({
           : null,
       );
     });
-  };
-  const openTableResizeDialog = () => {
-    const selection = readPageSetupSelectionSnapshot();
-    if (!selection || !activeTable || !activeTableSource || !sheet.dataTables) {
-      return;
-    }
-    const receipt = {
-      workbook: sheets,
-      activeSheetIndex,
-      sheet,
-      sheetId: sheet.id,
-      tableCollection: sheet.dataTables,
-      table: activeTableSource,
-      tableId: activeTable.id,
-      selection,
-      tableRange: spreadsheetRangeA1(activeTable.range),
-    };
-    void executeVisibleCommand("XLSCTL.CONTEXT.TABLE.RESIZE").then(
-      (opened) => {
-        if (!opened) return;
-        setTableResizeDraft({
-          receipt,
-          value: receipt.tableRange,
-          error: null,
-        });
-      },
-    );
   };
   const applyTableResizeDialog = () => {
     if (!tableResizeDraft) return;
@@ -66593,16 +63722,6 @@ function SpreadsheetWindow({
   const { title: pageSetupDialogDisabledReason } = visibleCommandDomStateProps(
     "XLSCTL.PAGE_LAYOUT.PAGE_SETUP.DIALOG",
   );
-  const visibleCommandCheckboxProps = (controlId: string) => {
-    const state = visibleCommandState(controlId);
-    return {
-      controlId,
-      disabled: !state.enabled,
-      hidden: !state.visible,
-      onCheckedChange: () => executeVisibleCommand(controlId),
-      title: visibleCommandReason(state.reasonKey),
-    };
-  };
   const homeFontFamilyCommandState = visibleCommandState(
     "XLSCTL.HOME.FONT.FAMILY",
   );
@@ -66762,196 +63881,6 @@ function SpreadsheetWindow({
     "front" | "forward" | "backward" | "back",
     PictureFormatWriterControlId
   >;
-  // Excel's Arrange group after the layer commands: Selection Pane, then
-  
-  // and Picture Format both show it; Rotate turns the selected picture or
-  // shape through its own tab's commands.
-  const renderDrawingArrangeLane = (prefix: string, options: { group?: boolean; rotate?: boolean } = {}) => {
-    const rotatesPicture = selectedRibbonObject?.type === "image";
-    const rotateDisabledReason = rotatesPicture
-      ? pictureTransformDisabledReason
-      : !selectedShapeObject
-        ? t("spreadsheet.commandStatus.commandUnavailable")
-        : shapeFormatDisabledReason;
-    return (
-      <>
-        <SpreadsheetRibbonAction
-          homeVariant="large"
-          active={selectionPaneOpen}
-          icon={<OfficeSemanticIcon semanticId="object.selectionPane" size={24} />}
-          label={t("spreadsheet.chartFormatCopy.arrange.selectionPane")}
-          onClick={() => setSelectionPaneOpen((open) => !open)}
-          testId={`${prefix}-selection-pane`}
-        />
-        <OfficeHomeCommandStack rows={3}>
-          <SpreadsheetRibbonMenuAction
-            variant="inline"
-            icon={<OfficeSemanticIcon semanticId="object.align" size={16} />}
-            label={t("presentation.align.toolbarLabel")}
-            testId={`${prefix}-align`}
-            menuClassName="docs-cupertino-menu w-max max-w-[16rem]"
-          >
-            {(["left", "center", "right", "top", "middle", "bottom", "distributeHorizontal", "distributeVertical"] as const).map((action) => (
-              <DropdownMenuItem
-                key={action}
-                disabled={!alignDrawingSelection(action, true)}
-                data-testid={`${prefix}-align-${action}`}
-                onSelect={() => void alignDrawingSelection(action)}
-              >
-                {action === "distributeHorizontal"
-                  ? t("spreadsheet.shapeFormat.distributeHorizontally")
-                  : action === "distributeVertical"
-                    ? t("spreadsheet.shapeFormat.distributeVertically")
-                    : t(`spreadsheet.dynamicCopy.align.${action}`)}
-              </DropdownMenuItem>
-            ))}
-          </SpreadsheetRibbonMenuAction>
-          {options.group === false ? null : (
-            <SpreadsheetRibbonMenuAction
-              variant="inline"
-              disabled={!canGroupSelection && !canUngroupSelection}
-              disabledReason={!canGroupSelection && !canUngroupSelection ? groupDisabledReason : undefined}
-              icon={<OfficeSemanticIcon semanticId="object.group" size={16} />}
-              label={t("presentation.group.group")}
-              testId={`${prefix}-group`}
-              menuClassName="docs-cupertino-menu w-max max-w-[14rem]"
-            >
-              <DropdownMenuItem
-                disabled={!canGroupSelection}
-                title={!canGroupSelection ? groupDisabledReason : undefined}
-                data-testid={`${prefix}-group-group`}
-                onSelect={() => void groupDrawingSelection()}
-              >
-                {t("presentation.group.group")}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={!canUngroupSelection}
-                data-testid={`${prefix}-group-ungroup`}
-                onSelect={() => void ungroupDrawingSelection()}
-              >
-                {t("presentation.group.ungroup")}
-              </DropdownMenuItem>
-            </SpreadsheetRibbonMenuAction>
-          )}
-          {options.rotate === false ? null : (
-            <SpreadsheetRibbonMenuAction
-              variant="inline"
-              disabled={Boolean(rotateDisabledReason)}
-              disabledReason={rotateDisabledReason}
-              icon={<OfficeSemanticIcon semanticId="object.rotate" size={16} />}
-              label={t("presentation.rotate.right")}
-              testId={`${prefix}-rotate`}
-              menuClassName="docs-cupertino-menu w-max max-w-[14rem]"
-            >
-              {([
-                ["rotateRight90", "ROTATE_RIGHT", "90", t("spreadsheet.dynamicCopy.rotateRight90")],
-                ["rotateLeft90", "ROTATE_LEFT", "-90", t("spreadsheet.dynamicCopy.rotateLeft90")],
-                ["flipVertical", "FLIP_VERTICAL", "toggle", t("spreadsheet.shapeFormat.flipVertical")],
-                ["flipHorizontal", "FLIP_HORIZONTAL", "toggle", t("spreadsheet.shapeFormat.flipHorizontal")],
-              ] as const).map(([action, command, parameter, label]) => (
-                <DropdownMenuItem
-                  key={action}
-                  data-testid={`${prefix}-rotate-${action}`}
-                  onSelect={() =>
-                    void (rotatesPicture
-                      ? executePictureFormatMutation(`XLSCTL.CONTEXT.PICTURE.${command}.MRAI.APPLY`, parameter)
-                      : executeShapeFormatMutation(`XLSCTL.CONTEXT.SHAPE.${command}.MRAI.APPLY`, parameter))
-                  }
-                >
-                  {label}
-                </DropdownMenuItem>
-              ))}
-            </SpreadsheetRibbonMenuAction>
-          )}
-        </OfficeHomeCommandStack>
-      </>
-    );
-  };
-  const {
-    pictureFormatRibbonGroups,
-  } = spreadsheetPictureFormatRibbonGroups({
-    arrangeLane: renderDrawingArrangeLane("spreadsheet-ribbon-picture-arrange", {
-      // A picture in a chart group keeps that group's own menus.
-      group: !selectedPictureObject?.groupId,
-      rotate: !selectedPictureObject?.groupId,
-    }),
-    colWidth,
-    executePictureFormatMutation,
-    executeVisibleCommand,
-    pictureArrangeControlIdByMove,
-    pictureCropDisabledReason,
-    pictureCropEditingId,
-    pictureCropTriggerRef,
-    pictureEffectsDisabledReason,
-    pictureMetadataDisabledReason,
-    pictureStyleDisabledReason,
-    pictureTransformDisabledReason,
-    pictureRecolorTheme,
-    openPictureFormatPane: () => setPictureFormatPane({ tab: "effects" }),
-    // Picture Format > Picture Effects (Reflection, Glow, Soft Edges, Bevel,
-    // 3-D Rotation; the Shadow is the pane's sheet preset): the deck's menu
-    // over the picture's `pictureEffects`; 3-D Options... opens the pane.
-    renderPictureEffectsMenu: () => {
-      if (!selectedPictureObject) return null;
-      const accents = {
-        accent1: workbookThemeAccentColors[0] ?? "#4472c4",
-        accent2: workbookThemeAccentColors[1] ?? "#ed7d31",
-        accent3: workbookThemeAccentColors[2] ?? "#a5a5a5",
-        accent4: workbookThemeAccentColors[3] ?? "#ffc000",
-        accent5: workbookThemeAccentColors[4] ?? "#5b9bd5",
-        accent6: workbookThemeAccentColors[5] ?? "#70ad47",
-      };
-      const preserved = spreadsheetPictureEffectsBlocker(selectedPictureObject) !== null;
-      const reason = preserved ? t("presentation.shapeEffectsUnavailable") : pictureEffectsDisabledReason;
-      return (
-        <OfficePictureEffectsMenu
-          effects={selectedPictureObject.pictureEffects}
-          // Preset and Shadow are the menu's where the picture keeps them in
-          // its Picture Effects (readings row 570), as Excel's menu has them.
-          shadow={spreadsheetPictureShadowInEffects(selectedPictureObject)}
-          accentColors={accents}
-          kinds={
-            spreadsheetPictureShadowInEffects(selectedPictureObject)
-              ? SPREADSHEET_PICTURE_EFFECT_MENU_KINDS_WITH_SHADOW
-              : SPREADSHEET_PICTURE_EFFECT_MENU_KINDS
-          }
-          disabled={Boolean(reason)}
-          disabledReason={reason}
-          controlId="XLSCTL.CONTEXT.PICTURE.EFFECTS.MRAI.APPLY"
-          testId="spreadsheet-ribbon-picture-effects"
-          labels={presentationEffectsMenuLabels(t, t("office.pictureEffects.button"))}
-          onPick={(kind, value) =>
-            void executePictureFormatMutation(
-              "XLSCTL.CONTEXT.PICTURE.EFFECTS.MRAI.APPLY",
-              spreadsheetPictureEffectParameter(kind, value),
-            )
-          }
-          // Each submenu's "... Options": Format Picture at its Effects
-          // page, that effect's section in view.
-          onEffectOptions={(section) =>
-            setPictureFormatPane((current) => spreadsheetFormatPaneAt(current, "effects", section))
-          }
-        />
-      );
-    },
-    renderChartGroupMenu,
-    renderChartRotateMenu,
-    rowHeight,
-    selectedObjectIdRef,
-    selectedObjectArrangeDisabled,
-    selectedPictureObject,
-    setPictureStylePreview,
-    sheet,
-    t,
-    visibleCommandMenuProps,
-  });
-
-  const shapeQuickStyleCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.SHAPE.STYLE_GALLERY.MRAI.APPLY",
-  );
-  const shapeChangeCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.SHAPE.CHANGE_SHAPE.MRAI.APPLY",
-  );
   const shapeFillColorCommandState = visibleCommandState(
     "XLSCTL.CONTEXT.SHAPE.FILL_COLOR.MRAI.APPLY",
   );
@@ -66984,22 +63913,6 @@ function SpreadsheetWindow({
     (shapeOutlineDashCommandState.enabled
       ? undefined
       : visibleCommandReason(shapeOutlineDashCommandState.reasonKey));
-  const shapeOutlineSketchCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.SHAPE.OUTLINE_SKETCH.MRAI.APPLY",
-  );
-  const shapeOutlineSketchDisabledReason =
-    shapeFormatDisabledReason ??
-    (shapeOutlineSketchCommandState.enabled
-      ? undefined
-      : visibleCommandReason(shapeOutlineSketchCommandState.reasonKey));
-  const shapeTextTransformCommandState = visibleCommandState(
-    "XLSCTL.CONTEXT.SHAPE.TEXT_TRANSFORM.MRAI.APPLY",
-  );
-  const shapeTextTransformDisabledReason =
-    shapeFormatDisabledReason ??
-    (shapeTextTransformCommandState.enabled
-      ? undefined
-      : visibleCommandReason(shapeTextTransformCommandState.reasonKey));
   const shapeLineDetailCommandState = visibleCommandState(
     "XLSCTL.CONTEXT.SHAPE.LINE_DETAIL.MRAI.APPLY",
   );
@@ -67352,35 +64265,6 @@ function SpreadsheetWindow({
           },
         )
       : null);
-
-  // ONE contextual tab, mounted by every editor. The worksheet passes its own
-  // test-id prefix and its own i18n; the layout gallery, the fourteen styles,
-  // Change Colors, the structural commands, Reset Graphic and Alt Text are the
-  // shared component's (components/office-ribbon/OfficeSmartArtDesignTab).
-  const smartArtDesignRibbonGroups: SpreadsheetRibbonGroup[] =
-    selectedNativeSmartArtObject || selectedSmartArtDiagram
-      ? [
-          {
-            id: "smartart-design",
-            label: t("presentation.smartartContext.createGraphicGroup"),
-            unwrapped: true,
-            content: (
-              <OfficeSmartArtDesignTab
-                testIdPrefix="spreadsheet"
-                application="spreadsheet"
-                textPaneTriggerRef={smartArtTextPaneTriggerRef}
-                placeholders={smartArtPlaceholders}
-                labels={smartArtDesignLabels}
-                preserved={spreadsheetSmartArtPreserved}
-                diagram={spreadsheetSmartArtDiagram}
-                // Change Colors resolves Office's variations against the
-                // workbook's own theme accents, as Excel does.
-                colorTheme={smartArtColorTheme}
-              />
-            ),
-          },
-        ]
-      : [];
   // The ONE Shape Format tab (components/office-ribbon/OfficeShapeFormatTab):
   // the worksheet supplies its selection, its writers and its reasons. A
   // control the sheet cannot write yet is shown disabled with the writer
@@ -67415,11 +64299,6 @@ function SpreadsheetWindow({
     outline: "none",
     outlineWidthPt: 0,
   };
-  const writeShapeTextPaint = (paint: OfficeTextPaint | null) =>
-    executeShapeFormatMutation(
-      "XLSCTL.CONTEXT.SHAPE.TEXT_PAINT.MRAI.APPLY",
-      paint ? JSON.stringify(paint) : "none",
-    );
   // The words open for typing in the selected shape, if any: WordArt then
   // formats the selected characters (a caret: its word), as Excel does.
   const typedSelectedShapeWords = () => {
@@ -67441,19 +64320,6 @@ function SpreadsheetWindow({
       undefined,
       style ? undefined : edit,
     );
-  };
-  const fillShapeText = (color: string | null) => {
-    const typed = typedSelectedShapeWords();
-    if (typed && selectedShapeStyle) {
-      return Promise.resolve(
-        color
-          ? formatSpreadsheetTypedShapeWords(typed, selectedShapeStyle, { kind: "color", color }) === true
-          : paintSpreadsheetTypedShapeWords(typed, selectedShapeStyle, (paint) => patchOfficeTextPaint(paint, { fill: "none" })),
-      );
-    }
-    return selectedShapeStyle?.textPaint
-      ? editShapeTextPaint((paint) => patchOfficeTextPaint(paint, { fill: color ?? "none" }))
-      : executeShapeFormatMutation("XLSCTL.CONTEXT.SHAPE.TEXT_COLOR.MRAI.APPLY", color ?? "none");
   };
   // Edit Shape > Edit Points (and the right-click entry): the selected
   // shape's outline in the shared vertex editor.
@@ -67511,93 +64377,6 @@ function SpreadsheetWindow({
       );
     }, source ?? "file");
   };
-  const {
-    shapeFormatAdapter,
-  } = spreadsheetShapeFormatAdapter({
-    pptParity: {
-      reroute: { enabled: canRerouteSelection, run: rerouteSelectedConnectors },
-      merge: {
-        enabled: canMergeSelection,
-        twoSelected: chartGroupSelection.length === 2,
-        run: mergeSelectedDrawings,
-      },
-      reorder: {
-        enabled: canReorderDrawings,
-        overlappingEnabled: canReorderOverlappingDrawings,
-        open: openDrawingReorder,
-      },
-      regroup: { enabled: canRegroupSelection, run: regroupDrawingSelection },
-      ungroup: ungroupDrawingSelectionRemembered,
-      selectionCount: drawingSelectionCount,
-      lockedReason: chartGroupReason ?? undefined,
-    },
-    beginShapeFillPicture,
-    shapeFillLineDisabledReason,
-    shapeOutlineDashDisabledReason,
-    shapeOutlineSketchDisabledReason,
-    shapeTextTransformDisabledReason,
-    shapeEffectsDisabledReason,
-    workbookThemeAccentColors,
-    activeShapeQuickStyleId,
-    alignDrawingSelection,
-    canGroupSelection,
-    canUngroupSelection,
-    cmToPx,
-    executeShapeFormatMutation,
-    groupDisabledReason,
-    groupDrawingSelection,
-    insertShape,
-    liveActiveSheetIndexRef,
-    liveSheetsRef,
-    objectSnapToGrid,
-    objectSnapToShape,
-    openShapeAltTextPane,
-    pxToCm,
-    recentColors,
-    selectedObjectArrangeDisabled,
-    selectedShapeObject,
-    selectedShapeStyle,
-    selectionIsGroup,
-    setObjectSnapToGrid,
-    setObjectSnapToShape,
-    setRecentColors,
-    setSelectionPaneOpen,
-    setShapeFormatPane,
-    setShapeLastFillColor,
-    setShapeLastKind,
-    setShapeLastStrokeColor,
-    setShapeRotationDraft,
-    setSheetFreeformTool,
-    shapeAltTextCommandState,
-    shapeArrangeControlIdByMove,
-    shapeChangeCommandState,
-    shapeEditPointsCommand,
-    shapeFillColorCommandState,
-    shapeFormatDisabledReason,
-    // Excel rotates no whole SmartArt graphic (its Shape.Rotation refuses
-    
-    shapeRotateDisabledReason: smartArtGraphicSelected ? t("spreadsheet.selectionGate.smartArtGraphic") : undefined,
-    shapeLastFillColor,
-    shapeLastStrokeColor,
-    shapeLineEndsDisabledReason,
-    shapeOutlineColorCommandState,
-    shapeOutlineWeightDisabledReason,
-    shapeOutlineWeightPx,
-    shapeQuickStyleCommandState,
-    shapeQuickStyleRecipes,
-    shapeShadowCommandState,
-    shapeSizePx,
-    shapeTextPaintBase,
-    shapeTextPaintDisabledReason,
-    shapeWriterUnavailable,
-    t,
-    ungroupDrawingSelection,
-    visibleCommandReason,
-    workbookThemePaletteId,
-    writeShapeTextPaint,
-    editShapeTextPaint,
-    fillShapeText,
-  });
   // XLS-A080: write a picture's link (empty address removes it), refused on a
   // sheet whose objects are protected.
   const writePictureLink = (objectId: string, address: string, tooltip: string): boolean => {
@@ -67742,210 +64521,6 @@ function SpreadsheetWindow({
     shapeTextCommandState,
     t,
     visibleCommandReason,
-  });
-  // Picture Format on the selected SmartArt slot's picture: the next format
-  // from the shared model, written through the Format Shape fill writer (the
-  // slot's picture is its fill), so Undo, protection and save are the shape's.
-  const runSmartArtSlotPictureCommand = (command: SmartArtSlotPictureCommand) => {
-    const slot = selectedSmartArtSlotPicture;
-    if (!slot || shapeFormatDisabledReason) return;
-    const current = smartArtSlotPictureFormatOf(slot);
-    const write = (next: ReturnType<typeof smartArtSlotPictureFormatAfter>) => {
-      if (!next || selectedObjectIdRef.current !== slot.id) return;
-      void executeShapeFormatMutation(
-        "XLSCTL.CONTEXT.SHAPE.FILL_LINE.MRAI.APPLY",
-        JSON.stringify({ smartArtPicture: next }),
-      );
-    };
-    if (command.kind !== "crop") {
-      write(smartArtSlotPictureFormatAfter(current, command));
-      return;
-    }
-    const box = objectSizePixels(slot, colWidth, rowHeight);
-    void loadOfficeImageNaturalSize(slot.shape?.src).then((natural) =>
-      write(smartArtSlotPictureFormatAfter(current, command, { picture: natural, slot: box })),
-    );
-  };
-  const smartArtPictureRibbonGroups: SpreadsheetRibbonGroup[] = spreadsheetSmartArtPictureRibbonGroups({
-    format: selectedSmartArtSlotPicture ? smartArtSlotPictureFormatOf(selectedSmartArtSlotPicture) : null,
-    disabledReason: shapeFormatDisabledReason,
-    onCommand: runSmartArtSlotPictureCommand,
-    t: t as (key: string) => string,
-  });
-  const shapeFormatRibbonGroups: SpreadsheetRibbonGroup[] = shapeFormatAdapter
-    ? [
-        {
-          id: "shape-format",
-          label: t("presentation.home.shapeStyles"),
-          unwrapped: true,
-          content: (
-            <OfficeShapeFormatTab
-              adapter={
-                // The whole graphic selected: Change Shape has no one shape
-                // to change (it would have changed the pressed one alone).
-                spreadsheetSmartArtDiagram && smartArtGraphicSelected
-                  ? (() => {
-                      const graphic = readSmartArtGraphicFormat(selectedShapeObject);
-                      return {
-                        ...shapeFormatAdapter,
-                        changeShape: {
-                          ...shapeFormatAdapter.changeShape,
-                          disabled: true,
-                          disabledReason: smartArtDesignLabels.noShapeSelectedReason,
-                        },
-                        // The graphic's own line and effect (`dgm:whole`,
-                        // `dgm:bg`): its background holds the effect-list
-                        // effects only, no Bevel or 3-D.
-                        outline: {
-                          ...shapeFormatAdapter.outline,
-                          value: graphic?.line?.color ?? "none",
-                          // The button's colour: the graphic's own line, else
-                          // Office's default black (Excel writes prstClr black).
-                          lastColor: graphic?.line?.color ?? "#000000",
-                          weightPt: graphic?.line?.widthPt ?? null,
-                        },
-                        effects: {
-                          ...shapeFormatAdapter.effects,
-                          render: undefined,
-                          value: graphic?.effect ?? "none",
-                          available: ["none", "shadow", "reflection", "glow", "softEdge"] as const,
-                        },
-                      };
-                    })()
-                  : spreadsheetSmartArtDiagram && readSmartArtBlockMarker(selectedShapeObject)
-                    ? {
-                        ...shapeFormatAdapter,
-                        // One shape of a graphic keeps the layout's order:
-                        // Office has no field for another (`dgm:prSet`
-                        // states no z-order), so its Arrange order is greyed.
-                        zOrder: {
-                          ...shapeFormatAdapter.zOrder,
-                          disabled: true,
-                          disabledReason: t("presentation.smartartContext.formatArrangedByLayout"),
-                        },
-                        // In a 3-D scene its size and turn wait for Edit in 2-D.
-                        ...(sheetSmartArtShapesLocked
-                          ? {
-                              size: {
-                                ...shapeFormatAdapter.size,
-                                disabled: true,
-                                disabledReason: t("presentation.smartartContext.shapesLockedIn3d"),
-                              },
-                              rotate: {
-                                ...shapeFormatAdapter.rotate,
-                                disabled: true,
-                                disabledReason: t("presentation.smartartContext.shapesLockedIn3d"),
-                              },
-                            }
-                          : {}),
-                      }
-                    : shapeFormatAdapter
-              }
-              // A shape of a SmartArt graphic: Excel's SmartArt Format tab
-              // opens on Shapes (Change Shape, Larger, Smaller), not on
-              // Insert Shapes.
-              smartArtShapes={
-                spreadsheetSmartArtDiagram
-                  ? {
-                      groupLabel: smartArtDesignLabels.shapesGroup ?? t("presentation.smartartContext.shapesGroup"),
-                      larger: smartArtDesignLabels.larger ?? t("presentation.smartartContext.larger"),
-                      smaller: smartArtDesignLabels.smaller ?? t("presentation.smartartContext.smaller"),
-                      canResize:
-                        smartArtDesignWritable && smartArtShapeCommandItemId !== null && !sheetSmartArtShapesLocked,
-                      resizeDisabledReason: sheetSmartArtShapesLocked
-                        ? t("presentation.smartartContext.shapesLockedIn3d")
-                        : smartArtDesignLabels.noShapeSelectedReason,
-                      onResize: (direction) =>
-                        resizeSmartArtShapeCommand(direction, smartArtShapeCommandItemId),
-                      editIn2d: {
-                        label: t("presentation.smartartContext.editIn2d"),
-                        pressed: sheetSmartArtEditIn2dAvailable && sheetSmartArtEditIn2dOn,
-                        disabled: !sheetSmartArtEditIn2dAvailable,
-                        disabledReason: t("presentation.smartartContext.editIn2dNeedsScene"),
-                        onToggle: () => {
-                          if (sheetSmartArtEditIn2dKey) toggleSmartArtEditingIn2d(sheetSmartArtEditIn2dKey);
-                        },
-                      },
-                    }
-                  : undefined
-              }
-              testIdPrefix="spreadsheet-ribbon-shape"
-              menuClassName="docs-cupertino-menu"
-              ids={{
-                changeShape: "spreadsheet-ribbon-shape-change",
-                changeShapeTile: "spreadsheet-ribbon-shape-change",
-                styles: "spreadsheet-shape-style-gallery",
-                fillSplit: "spreadsheet-ribbon-object-fill-color-split",
-                fillPrimary: "spreadsheet-ribbon-object-fill-color",
-                fillTrigger: "spreadsheet-ribbon-object-fill-color-options",
-                fill: "spreadsheet-ribbon-shape-fill",
-                outlineSplit: "spreadsheet-ribbon-object-stroke-color-split",
-                outlinePrimary: "spreadsheet-ribbon-object-stroke-color",
-                outlineTrigger: "spreadsheet-ribbon-object-stroke-color-options",
-                outline: "spreadsheet-ribbon-shape-stroke",
-                lineEnds: "spreadsheet-shape",
-                arrows: "spreadsheet-ribbon-shape-arrows",
-                altText: "spreadsheet-ribbon-shape-alt",
-                layer: "spreadsheet-ribbon-arrange-forward",
-                layerSplit: "spreadsheet-ribbon-arrange-forward-split",
-                layerMenu: "spreadsheet-ribbon-arrange-forward-menu",
-                send: "spreadsheet-ribbon-arrange-backward",
-                sendSplit: "spreadsheet-ribbon-arrange-backward-split",
-                sendMenu: "spreadsheet-ribbon-arrange-backward-menu",
-              }}
-            />
-          ),
-        },
-      ]
-    : [];
-  const {
-    pivotAnalyzeRibbonGroups,
-  } = spreadsheetPivotAnalyzeRibbonGroups({
-    clearPivot,
-    clearPivotAll,
-    clearPivotFilters,
-    executePivotChartCreate,
-    executePivotRefresh,
-    executeVisibleCommand,
-    insertChartIconName,
-    openPivotSlicerInsertDialog,
-    pivotChartCreateReason,
-    pivotChartCreateState,
-    pivotChartOpen,
-    pivotConfig,
-    pivotMoveDialogReturnFocusRef,
-    pivotNativeSourceDirty,
-    pivotOrChartContextActive,
-    pivotPanelOpen,
-    pivotSourceDialogReturnFocusRef,
-    t,
-    togglePivotShowDrillButtons,
-    visibleCommandActionProps,
-    visibleCommandDisclosureProps,
-    visibleCommandMenuProps,
-    visibleCommandState,
-  });
-
-  const {
-    pivotChartAnalyzeRibbonGroups,
-    pivotDesignRibbonGroups,
-  } = useSpreadsheetPivotDesignState({
-    executePivotDesignMutation,
-    executeVisibleCommand,
-    pivotAnalyzeRibbonGroups,
-    pivotChartContextActive,
-    pivotChartFieldButtonsCommandRef,
-    pivotConfig,
-    pivotContextActive,
-    pivotPanelOpen,
-    selectedChartDesignTarget,
-    selectedPivotChartSource,
-    t,
-    visibleCommandActionProps,
-    visibleCommandDisclosureProps,
-    visibleCommandReason,
-    visibleCommandState,
-    workbookThemeAccentColors,
   });
 
   const projectedWorkbookLinks = useMemo(() => {
@@ -69276,8 +65851,16 @@ function SpreadsheetWindow({
           canEditMessage: (message) =>
             commentDeleteState.enabled &&
             reviewCommentMessageOwnedByActor(message),
+          // Resolve and Delete thread of another person's thread need an
+          // embed session's manageComments (always granted outside one).
           canMutateThread:
-            commentResolveState.enabled || commentDeleteState.enabled,
+            (commentResolveState.enabled || commentDeleteState.enabled) &&
+            (!reviewCommentSurfaceThread.thread[0] ||
+              reviewCommentMessageOwnedByActor(reviewCommentSurfaceThread.thread[0]) ||
+              embedAllowsManagingComment(
+                reviewCommentSurfaceThread.thread[0].author,
+                reviewCommentActorName,
+              )),
           canPost: commentPostState.enabled,
           copyLinkReason:
             workbookShareAuthorityAvailable && shareRuntimeCapabilities.clipboard
@@ -69312,7 +65895,11 @@ function SpreadsheetWindow({
               "XLSCTL.REVIEW.COMMENT.POST",
               text,
             ).then((posted) => {
-              if (posted) commentMentions?.notifyPosted({ threadRef, text });
+              // An embed comment session's post is the server's to write;
+              // "posted" says only that it was sent, so nothing else is.
+              if (posted && !reviewCommentsMediated) {
+                commentMentions?.notifyPosted({ threadRef, text });
+              }
             });
           },
           onToggleResolved: () =>
@@ -69527,143 +66114,12 @@ function SpreadsheetWindow({
     );
   }
 
-  const {
-    renderSheetChartPaneOptions,
-  } = spreadsheetChartPaneOptionsRenderer({
-    chartDesignControlState,
-    chartMarkerSeriesIndex,
-    desktopChartAttrs: (desktopChartAttrs as ChartBlockAttrsV2 | null) ?? null,
-    executeChartDesignMutation,
-    executeVisibleCommand,
-    selectedChartDesignKey,
-    selectedChartDesignRange,
-    selectedChartDesignTarget,
-    selectedChartDesignTitle,
-    selectedChartEffectiveValueAxisNumberFormat,
-    selectedChartLineSeriesStyles,
-    selectedChartLinkedNumberFormatReason,
-    selectedChartLinkedNumberFormatResolution,
-    selectedChartMarkerSeriesIndices,
-    selectedChartValueAxisNumberFormat,
-    selectedChartValueAxisNumberFormatPaneVisible,
-    setChartMarkerSeriesIndex,
-    t,
-    visibleCommandDomStateProps,
-  });
-  const sheetChartPaneHeaderActions = selectedChartDesignTarget ? (
-    <span className={spreadsheetHomeStyles.chartFormatOptions}>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label={t("spreadsheet.chartFormatPane.moreActions")}
-                    className={spreadsheetHomeStyles.chartFormatIconButton}
-                    data-testid="spreadsheet-chart-format-more"
-                  >
-                    <MoreHorizontal size={18} aria-hidden="true" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem
-                    data-control-id="XLSCTL.CONTEXT.CHART.FORMAT_PANE.EXPORT_PICTURE"
-                    data-control-occurrence-id="format-export-picture"
-                    data-control-surface="chart-format-pane"
-                    data-testid="spreadsheet-chart-format-export-picture"
-                    onSelect={() => {
-                      const target = selectedChartDesignTarget;
-                      const label =
-                        target.kind === "native"
-                          ? target.chart.title ||
-                            chartSourceRangeToA1(target.chart)
-                          : target.chart.title ||
-                            target.chart.caption ||
-                            target.chart.id;
-                      void exportChartAsImage(
-                        target.chart.id,
-                        label,
-                        target.kind,
-                      );
-                    }}
-                  >
-                    <OfficeSemanticIcon semanticId="image.insert" size={17} />
-                    {t("spreadsheet.chartFormatPane.exportPicture")}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-    </span>
-  ) : null;
-
   // Excel's Chart Elements / Styles / Filters buttons for the selected chart,
   // built with its Chart Design tab below and drawn beside that chart.
   const sheetChartQuick: { key: string | null; node: ReactNode } = {
     key: null,
     node: null,
   };
-  const {
-    chartDesignRibbonGroups,
-  } = spreadsheetChartDesignRibbonGroups({
-    chartColorCommandState,
-    chartColorDisabledReason,
-    chartDataReturnFocusRef,
-    chartDesignActionProps,
-    chartDesignControlState,
-    chartFormatFocusTokenRef,
-    chartMoveTriggerRef,
-    chartQuickLayoutCalibrated,
-    chartQuickLayoutCommandState,
-    chartQuickLayoutDisabledReason,
-    chartQuickLayoutRefusal,
-    chartStyleCommandState,
-    chartStyleDisabledReason,
-    chooseDesktopChartType,
-    desktopChartAttrs,
-    desktopChartFormatReason,
-    desktopChartModelReason,
-    desktopChartPreviewAttrs,
-    desktopChartStyleCommit,
-    desktopChartStyleFormat,
-    desktopTypeChoice,
-    executeChartDesignMutation,
-    executeVisibleCommand,
-    locale,
-    openDesktopChartMove,
-    patchDesktopChartFilters,
-    selectedChartColorPaletteId,
-    selectedChartDesignKey,
-    selectedChartDesignLegendPosition,
-    selectedChartDesignShowAxisLabels,
-    selectedChartDesignShowDataLabels,
-    selectedChartDesignShowDataTable,
-    selectedChartDesignShowGridlines,
-    selectedChartDesignShowLegend,
-    selectedChartDesignTarget,
-    selectedChartDesignTitle,
-    selectedChartDesignType,
-    selectedChartModel,
-    selectedChartQuickLayoutId,
-    setChartColorPalettePreview,
-    setChartDesktopPreview,
-    setChartFormatFocus,
-    setChartQuickLayoutPreview,
-    setRibbonTab,
-    sheetChartEditReason,
-    sheetChartQuick,
-    t,
-    visibleCommandDisclosureProps,
-    visibleCommandReason,
-    workbookThemeAccentColors,
-    workbookTopologyLocked,
-    // The selected chart's size on the sheet: its Chart Styles tiles are it.
-    selectedChartStyleGallerySize: (() => {
-      if (!selectedChartDesignTarget) return undefined;
-      if (selectedChartDesignTarget.kind === "drawing") {
-        const bounds = objectBoundsPixels(selectedChartDesignTarget.chart, colWidth, rowHeight);
-        return bounds.width > 0 && bounds.height > 0 ? { width: bounds.width, height: bounds.height } : undefined;
-      }
-      const { width, height } = selectedChartDesignTarget.chart as { width?: unknown; height?: unknown };
-      return typeof width === "number" && typeof height === "number" && width > 0 && height > 0 ? { width, height } : undefined;
-    })(),
-  });
   // The row numbers. In the grid they ride one strip beside the table (one
   // sticky box) instead of each being sticky: a sticky cell is a compositor
   // layer of its own, and a window carried one per visible row. With the
@@ -71772,7 +68228,7 @@ function SpreadsheetWindow({
             editTextBlockedReason:
               spreadsheetSmartArtPreserved?.textBlockedReason ?? null,
             onChangeLayout: () => {
-              setRibbonTab("smartArtDesign");
+              void 0;
               openOfficeSmartArtLayoutGallery("spreadsheet");
             },
           }}
@@ -72653,7 +69109,7 @@ function SpreadsheetWindow({
             </OfficeDialogShell>
           ) : null}
           <ForecastSheetDialog
-            open={forecastOpen}
+            open={false}
             translate={t}
             onApply={runForecastSheet}
             onClose={closeForecast}
@@ -73330,9 +69786,7 @@ function SpreadsheetWindow({
           <SpreadsheetRibbon
             penCompact={penFirst.compact}
             collapseRibbon={
-              visibleRibbonTab === "draw" && penFirst.available && !penDrawDisabledReason
-                ? { onCollapse: penFirst.showPalette }
-                : undefined
+              undefined
             }
             activeTab={visibleRibbonTab}
             onActiveTabChange={(tab) => {
@@ -73819,8 +70273,7 @@ function SpreadsheetWindow({
                   : spreadsheetScreenTipShortcut(key, isMacPlatform()),
               };
             }}
-            groups={{
-              home: () => [
+            groups={{ home: () => [
                 {
                   id: "home-clipboard",
                   label: t("toolbar.ribbonClipboard"),
@@ -74693,11 +71146,7 @@ function SpreadsheetWindow({
                                 <DropdownMenuSeparator />
                                 {/* Excel's Draw Borders tools. */}
                                 {(
-                                  [
-                                    ["draw", "spreadsheet.drawBorder", <Pencil key="i" size={16} aria-hidden />],
-                                    ["grid", "spreadsheet.drawBorderGrid", <Grid3X3 key="i" size={16} aria-hidden />],
-                                    ["erase", "spreadsheet.eraseBorder", <Eraser key="i" size={16} aria-hidden />],
-                                  ] as const
+                                  [["grid", "spreadsheet.drawBorderGrid", <Grid3X3 key="i" size={16} aria-hidden />], ["erase", "spreadsheet.eraseBorder", <Eraser key="i" size={16} aria-hidden />]] as const
                                 ).map(([mode, labelKey, icon]) => (
                                   <DropdownMenuCheckboxItem
                                     key={mode}
@@ -76693,8 +73142,7 @@ function SpreadsheetWindow({
                     </OfficeHomeCommandRow>
                   ),
                 },
-              ],
-              insert: () => [
+              ], insert: () => [
                 {
                   id: "insert-tables",
                   label: insertLabels.tables,
@@ -77663,5974 +74111,7 @@ function SpreadsheetWindow({
                     </>
                   ),
                 },
-              ],
-              pageLayout: () => [
-                {
-                  id: "page-themes",
-                  label: t("toolbar.designTheme"),
-                  content: (
-                    <>
-                      <SpreadsheetRibbonMenuAction
-                        disabled={!workbookWholeThemeMutationAvailable}
-                        disabledReason={workbookWholeThemeDisabledReason}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetPageLayoutIcon name="themes" size={24} />
-                        }
-                        label={t("toolbar.designTheme")}
-                        testId="spreadsheet-ribbon-page-layout-themes"
-                        menuClassName={officeGalleryMenuStyles.menu}
-                      >
-                        <SpreadsheetThemeGallery
-                          disabled={!workbookWholeThemeMutationAvailable}
-                          locale={locale}
-                          translate={t}
-                          value={workbookThemePreset?.id ?? ""}
-                          onValueChange={(themeId) => {
-                            const preset =
-                              spreadsheetWorkbookThemePreset(themeId);
-                            if (preset) {
-                              commitWorkbookTheme(preset.selection, {
-                                wholeTheme: true,
-                              });
-                            }
-                          }}
-                          onBrowse={() =>
-                            workbookThemeFileInputRef.current?.click()
-                          }
-                          onSaveCurrent={saveCurrentWorkbookTheme}
-                        />
-                      </SpreadsheetRibbonMenuAction>
-                      <OfficeHomeCommandStack
-                        className={
-                          spreadsheetHomeStyles.pageLayoutThemeStack
-                        }
-                      >
-                        <SpreadsheetRibbonMenuAction
-                          active={workbookThemeColorGalleryValue !== "office"}
-                          disabled={!workbookThemeMutationAvailable}
-                          disabledReason={workbookThemeDisabledReason}
-                          homeVariant="compact"
-                          icon={
-                            <SpreadsheetPageLayoutIcon
-                              name="colors"
-                              size={20}
-                            />
-                          }
-                          displayLabel={t("toolbar.designColors")}
-                          label={t("toolbar.designColors")}
-                          testId="spreadsheet-ribbon-page-layout-colors"
-                          menuClassName={spreadsheetThemeAxisStyles.colorMenu}
-                        >
-                          <SpreadsheetThemeColorGallery
-                            disabled={!workbookThemeMutationAvailable}
-                            locale={locale}
-                            value={workbookThemeColorGalleryValue}
-                            onValueChange={(colorId) =>
-                              commitWorkbookTheme({
-                                ...workbookTheme,
-                                colorId,
-                                nativeColors: undefined,
-                              })
-                            }
-                          />
-                        </SpreadsheetRibbonMenuAction>
-                        <SpreadsheetRibbonMenuAction
-                          active={workbookThemeFontGalleryValue !== "office"}
-                          disabled={!workbookThemeMutationAvailable}
-                          disabledReason={workbookThemeDisabledReason}
-                          homeVariant="compact"
-                          icon={
-                            <SpreadsheetPageLayoutIcon
-                              name="fonts"
-                              size={20}
-                            />
-                          }
-                          displayLabel={t("toolbar.designFonts")}
-                          label={t("toolbar.designFonts")}
-                          testId="spreadsheet-ribbon-page-layout-fonts"
-                          menuClassName={spreadsheetThemeAxisStyles.fontMenu}
-                        >
-                          <SpreadsheetThemeFontGallery
-                            disabled={!workbookThemeMutationAvailable}
-                            locale={locale}
-                            showEastAsianFaces={homeZh}
-                            value={workbookThemeFontGalleryValue}
-                            onValueChange={(fontId) => {
-                              // The Custom entry is the workbook's own scheme already.
-                              if (String(fontId).startsWith("custom:")) return;
-                              commitWorkbookTheme({
-                                ...workbookTheme,
-                                fontId,
-                                nativeFonts: undefined,
-                              });
-                            }}
-                            customFonts={workbookThemeCustomFonts}
-                            customHeading={t("officeThemeFonts.custom")}
-                            onCustomize={
-                              workbookThemeMutationAvailable
-                                ? () => setWorkbookThemeFontsDialogOpen(true)
-                                : undefined
-                            }
-                            customizeLabel={t("officeThemeFonts.customize")}
-                          />
-                        </SpreadsheetRibbonMenuAction>
-                        <SpreadsheetRibbonMenuAction
-                          active={
-                            Boolean(workbookTheme.nativeEffects) ||
-                            workbookTheme.effectId !== "none"
-                          }
-                          disabled={!workbookThemeMutationAvailable}
-                          disabledReason={workbookThemeDisabledReason}
-                          homeVariant="compact"
-                          icon={
-                            <SpreadsheetPageLayoutIcon
-                              name="effects"
-                              size={20}
-                            />
-                          }
-                          displayLabel={t("toolbar.designEffects")}
-                          label={t("toolbar.designEffects")}
-                          testId="spreadsheet-ribbon-page-layout-effects"
-                          menuClassName={officeGalleryMenuStyles.menu}
-                        >
-                          <SpreadsheetThemeEffectGallery
-                            disabled={!workbookThemeMutationAvailable}
-                            locale={locale}
-                            paletteId={workbookThemePaletteId}
-                            value={workbookTheme.nativeEffects ? "" : workbookTheme.effectId}
-                            onValueChange={(effectId) =>
-                              commitWorkbookTheme({
-                                ...workbookTheme,
-                                effectId,
-                                nativeEffects: undefined,
-                              })
-                            }
-                          />
-                        </SpreadsheetRibbonMenuAction>
-                      </OfficeHomeCommandStack>
-                    </>
-                  ),
-                },
-                {
-                  id: "page-setup",
-                  label: t("spreadsheet.pageSetupMenu"),
-                  content: (
-                    <>
-                      <SpreadsheetRibbonMenuAction
-                        {...visibleCommandDisclosureProps(
-                          "XLSCTL.PAGE_LAYOUT.MARGINS",
-                        )}
-                        {...spreadsheetPageSetupPrintActionProps(
-                          "page-layout-ribbon-page-setup",
-                          "margins",
-                        )}
-                        hidden={!SHOW_SPREADSHEET_DESKTOP_PAGE_LAYOUT_EXTRAS}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetPageLayoutIcon name="margins" size={24} />
-                        }
-                        label={t("spreadsheet.pageSetupMargins")}
-                        testId="spreadsheet-ribbon-page-layout-margins"
-                        menuClassName={`docs-cupertino-menu ${spreadsheetHomeStyles.marginPresetMenu}`}
-                      >
-                        <DropdownMenuRadioGroup
-                          value={pageMarginSelection ?? ""}
-                          onValueChange={(value) => {
-                            if (
-                              value === "normal" ||
-                              value === "wide" ||
-                              value === "narrow"
-                            ) {
-                              executePageMarginPreset(
-                                value,
-                                pageSetupSourceAuthority,
-                              );
-                            }
-                          }}
-                        >
-                          {(["normal", "wide", "narrow"] as const).map(
-                            (preset) => (
-                              // `key` goes before the spreads: after one, the
-                              // element compiles to createElement with its
-                              // children inside the props, where React never
-                              // marks them validated, and the menu item's
-                              // <div> reports them as an unkeyed list.
-                              <DropdownMenuRadioItem
-                                key={preset}
-                                {...spreadsheetPageSetupPrintDomProps(
-                                  "page-layout-ribbon-page-setup",
-                                  `margin-${preset}`,
-                                )}
-                                {...visibleCommandMenuProps(
-                                  "XLSCTL.PAGE_LAYOUT.MARGINS.APPLY",
-                                )}
-                                value={preset}
-                                className={spreadsheetHomeStyles.marginPresetItem}
-                                aria-label={pageMarginMenuLabels[preset]}
-                                aria-describedby={`${pageMarginMenuId}-${preset}`}
-                                data-testid={`spreadsheet-ribbon-page-layout-margins-${preset}`}
-                              >
-                                <SpreadsheetPageLayoutIcon
-                                  name={`margins-${preset}`}
-                                  size={34}
-                                  viewBox="3 2 18 20"
-                                  className={spreadsheetHomeStyles.marginPresetPreview}
-                                />
-                                <span className={spreadsheetHomeStyles.marginPresetCopy}>
-                                  <strong>{pageMarginMenuLabels[preset]}</strong>
-                                  <span
-                                    id={`${pageMarginMenuId}-${preset}`}
-                                    className={spreadsheetHomeStyles.marginPresetValues}
-                                  >
-                                    {(["top", "bottom", "left", "right"] as const).map((edge) => (
-                                      <span key={edge} data-margin-edge={edge}>
-                                        {pageMarginMenuLabels[edge]}: {MARGIN_PRESETS[preset][edge] / 72}″
-                                      </span>
-                                    ))}
-                                  </span>
-                                </span>
-                              </DropdownMenuRadioItem>
-                            ),
-                          )}
-                          {pageMarginSelection === "custom" ? (
-                            // Excel adds the sheet's own margins as a checked
-                            // Custom Margins row under the presets.
-                            <DropdownMenuRadioItem
-                              {...spreadsheetPageSetupPrintDomProps(
-                                "page-layout-ribbon-page-setup",
-                                "margin-current",
-                              )}
-                              {...visibleCommandMenuProps(
-                                "XLSCTL.PAGE_LAYOUT.MARGINS.APPLY",
-                              )}
-                              value="custom"
-                              className={spreadsheetHomeStyles.marginPresetItem}
-                              aria-label={pageMarginMenuLabels.current}
-                              aria-describedby={`${pageMarginMenuId}-current`}
-                              data-testid="spreadsheet-ribbon-page-layout-margins-current"
-                            >
-                              <SpreadsheetPageLayoutIcon
-                                name="margins-custom"
-                                size={34}
-                                viewBox="3 2 18 20"
-                                className={spreadsheetHomeStyles.marginPresetPreview}
-                              />
-                              <span className={spreadsheetHomeStyles.marginPresetCopy}>
-                                <strong>{pageMarginMenuLabels.current}</strong>
-                                <span
-                                  id={`${pageMarginMenuId}-current`}
-                                  className={spreadsheetHomeStyles.marginPresetValues}
-                                >
-                                  {(["top", "bottom", "left", "right"] as const).map((edge) => (
-                                    <span key={edge} data-margin-edge={edge}>
-                                      {pageMarginMenuLabels[edge]}:{" "}
-                                      {Math.round((resolveMargins(normalizedPageSetupSettings.margins)[edge] / 72) * 100) / 100}″
-                                    </span>
-                                  ))}
-                                </span>
-                              </span>
-                            </DropdownMenuRadioItem>
-                          ) : null}
-                        </DropdownMenuRadioGroup>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          {...spreadsheetPageSetupPrintDomProps(
-                            "page-layout-ribbon-page-setup",
-                            "margin-custom",
-                          )}
-                          {...visibleCommandMenuProps(
-                            "XLSCTL.PAGE_LAYOUT.MARGINS.CUSTOM",
-                          )}
-                          className={spreadsheetHomeStyles.marginPresetCustom}
-                          data-testid="spreadsheet-ribbon-page-layout-margins-custom"
-                          onSelect={() =>
-                            executeVisibleCommand(
-                              "XLSCTL.PAGE_LAYOUT.MARGINS.CUSTOM",
-                            )
-                          }
-                        >
-                          {pageMarginMenuLabels.custom}
-                        </DropdownMenuItem>
-                      </SpreadsheetRibbonMenuAction>
-                      <OfficeHomeSplitLayout
-                        className={spreadsheetHomeStyles.pageLayoutLargeSplit}
-                        testId="spreadsheet-ribbon-page-layout-orientation-split"
-                        primary={
-                          <SpreadsheetRibbonAction
-                            {...visibleCommandActionProps(
-                              "XLSCTL.PAGE_LAYOUT.ORIENTATION",
-                            )}
-                            {...spreadsheetPageSetupPrintActionProps(
-                              "page-layout-ribbon-page-setup",
-                              "orientation",
-                            )}
-                            active={
-                              normalizedPageSetupSettings.orientation ===
-                              "landscape"
-                            }
-                            homeVariant="large"
-                            icon={
-                              <SpreadsheetPageLayoutIcon
-                                name="orientation"
-                                size={24}
-                              />
-                            }
-                            label={t("spreadsheet.pageSetupOrientation")}
-                            onClick={() =>
-                              setPageLayoutSplitMenuOpen("orientation")
-                            }
-                            testId="spreadsheet-ribbon-page-layout-orientation"
-                          />
-                        }
-                        trigger={
-                          <DropdownMenu
-                            modal={false}
-                            open={pageLayoutSplitMenuOpen === "orientation"}
-                            onOpenChange={(open) =>
-                              setPageLayoutSplitMenuOpen(
-                                open ? "orientation" : null,
-                              )
-                            }
-                          >
-                            <DropdownMenuTrigger asChild>
-                              <OfficeHomeMenuTrigger
-                                {...visibleCommandMenuProps(
-                                  "XLSCTL.PAGE_LAYOUT.ORIENTATION",
-                                )}
-                                icon={
-                                  <SpreadsheetRibbonMenuChevron size={12} />
-                                }
-                                label={t("spreadsheet.dynamicCopy.options", { label: t("spreadsheet.pageSetupOrientation") })}
-                                testId="spreadsheet-ribbon-page-layout-orientation-options"
-                                variant="icon"
-                              />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                              align="start"
-                              className="docs-cupertino-menu w-max max-w-[220px]"
-                            >
-                              <DropdownMenuRadioGroup
-                                value={
-                                  normalizedPageSetupSettings.orientation ??
-                                  "portrait"
-                                }
-                                onValueChange={(orientation) =>
-                                  executePageSetupQuickSetting(
-                                    {
-                                      orientation: orientation as
-                                        | "portrait"
-                                        | "landscape",
-                                    },
-                                    pageSetupSourceAuthority,
-                                  )
-                                }
-                              >
-                                {(["portrait", "landscape"] as const).map(
-                                  (orientation) => (
-                                    <DropdownMenuRadioItem
-                                      key={orientation}
-                                      value={orientation}
-                                      {...visibleCommandMenuProps(
-                                        "XLSCTL.PAGE_LAYOUT.PAGE_SETUP.APPLY",
-                                      )}
-                                      // Same preview row as Margins and Size:
-                                      // the highlighted row is the indicator.
-                                      className={spreadsheetHomeStyles.marginPresetItem}
-                                      data-testid={`spreadsheet-ribbon-page-layout-orientation-${orientation}`}
-                                    >
-                                      <OfficeSemanticIcon
-                                        semanticId={OFFICE_PAGE_ORIENTATION_ICON_IDS[orientation]}
-                                        size={32}
-                                      />
-                                      <span>
-                                        {t(
-                                          orientation === "portrait"
-                                            ? "spreadsheet.pageSetupPortrait"
-                                            : "spreadsheet.pageSetupLandscape",
-                                        )}
-                                      </span>
-                                    </DropdownMenuRadioItem>
-                                  ),
-                                )}
-                              </DropdownMenuRadioGroup>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        }
-                      />
-                      <OfficeHomeSplitLayout
-                        className={spreadsheetHomeStyles.pageLayoutLargeSplit}
-                        testId="spreadsheet-ribbon-page-layout-size-split"
-                        primary={
-                          <SpreadsheetRibbonAction
-                            {...visibleCommandActionProps(
-                              "XLSCTL.PAGE_LAYOUT.SIZE",
-                            )}
-                            {...spreadsheetPageSetupPrintActionProps(
-                              "page-layout-ribbon-page-setup",
-                              "size",
-                            )}
-                            homeVariant="large"
-                            icon={
-                              <SpreadsheetPageLayoutIcon
-                                name="size"
-                                size={24}
-                              />
-                            }
-                            label={t("spreadsheet.pageLayoutSize")}
-                            onClick={() =>
-                              setPageLayoutSplitMenuOpen("size")
-                            }
-                            testId="spreadsheet-ribbon-page-layout-size"
-                          />
-                        }
-                        trigger={
-                          <DropdownMenu
-                            modal={false}
-                            open={pageLayoutSplitMenuOpen === "size"}
-                            onOpenChange={(open) =>
-                              setPageLayoutSplitMenuOpen(
-                                open ? "size" : null,
-                              )
-                            }
-                          >
-                            <DropdownMenuTrigger asChild>
-                              <OfficeHomeMenuTrigger
-                                {...visibleCommandMenuProps(
-                                  "XLSCTL.PAGE_LAYOUT.SIZE",
-                                )}
-                                icon={
-                                  <SpreadsheetRibbonMenuChevron size={12} />
-                                }
-                                label={t("spreadsheet.dynamicCopy.options", { label: t("spreadsheet.pageLayoutSize") })}
-                                testId="spreadsheet-ribbon-page-layout-size-options"
-                                variant="icon"
-                              />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                              align="start"
-                              className={`docs-cupertino-menu ${spreadsheetHomeStyles.paperSizeMenu}`}
-                            >
-                              <DropdownMenuRadioGroup
-                                value={
-                                  normalizedPageSetupSettings.paperSize ??
-                                  "letter"
-                                }
-                                onValueChange={(value) => {
-                                  if (!Object.prototype.hasOwnProperty.call(PAPER_SIZE_NATIVE_IDS, value)) return;
-                                  const paperSize = value as PrintPaperSize;
-                                  const nativeId = PAPER_SIZE_NATIVE_IDS[paperSize];
-                                  if (nativeId !== undefined) {
-                                    executePageSetupQuickSetting(
-                                      { paperSize, paperSizeNativeId: nativeId },
-                                      pageSetupSourceAuthority,
-                                    );
-                                  }
-                                }}
-                              >
-                                {spreadsheetPaperSizeOptions(normalizedPageSetupSettings.paperSize).map((paper) => {
-                                  const paperSize = paper.id;
-                                  const labels = spreadsheetPaperSizeLabels(paperSize, t);
-                                  const previewScale = 30 / PAPER_SIZE_POINTS.a3.height;
-                                  return (
-                                  <DropdownMenuRadioItem
-                                    key={paperSize}
-                                    value={paperSize}
-                                    className={`${spreadsheetHomeStyles.marginPresetItem} ${spreadsheetHomeStyles.paperSizeItem}`}
-                                    aria-describedby={`${pageMarginMenuId}-paper-${paperSize}`}
-                                    {...visibleCommandMenuProps(
-                                      "XLSCTL.PAGE_LAYOUT.PAGE_SETUP.APPLY",
-                                      labels.title,
-                                    )}
-                                    data-testid={`spreadsheet-ribbon-page-layout-size-${paperSize}`}
-                                  >
-                                    <OfficePaperSizePreview
-                                      width={paper.width * previewScale}
-                                      height={paper.height * previewScale}
-                                    />
-                                    <span className={spreadsheetHomeStyles.marginPresetCopy}>
-                                      <strong>{labels.title}</strong>
-                                      <span
-                                        id={`${pageMarginMenuId}-paper-${paperSize}`}
-                                        className={spreadsheetHomeStyles.paperSizeValues}
-                                      >
-                                        {labels.inches}
-                                      </span>
-                                    </span>
-                                  </DropdownMenuRadioItem>
-                                  );
-                                })}
-                              </DropdownMenuRadioGroup>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                {...spreadsheetPageSetupPrintDomProps(
-                                  "page-layout-ribbon-page-setup",
-                                  "size-more",
-                                )}
-                                {...visibleCommandMenuProps(
-                                  "XLSCTL.PAGE_LAYOUT.SIZE",
-                                )}
-                                className={spreadsheetHomeStyles.marginPresetCustom}
-                                data-testid="spreadsheet-ribbon-page-layout-size-more"
-                                onSelect={() =>
-                                  executeVisibleCommand("XLSCTL.PAGE_LAYOUT.SIZE")
-                                }
-                              >
-                                {t("spreadsheet.localCopy.pageSize.more")}
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        }
-                      />
-                      <OfficeHomeSplitLayout
-                        className={
-                          spreadsheetHomeStyles.pageLayoutLargeSplit
-                        }
-                        testId="spreadsheet-ribbon-page-layout-print-area-split"
-                        primary={
-                          <SpreadsheetRibbonAction
-                            {...visibleCommandActionProps(
-                              "XLSCTL.PAGE_LAYOUT.PRINT_AREA",
-                            )}
-                            {...spreadsheetPageSetupPrintActionProps(
-                              "page-layout-ribbon-page-setup",
-                              "print-area",
-                            )}
-                            active={Boolean(
-                              normalizedPageSetupSettings.printArea,
-                            )}
-                            homeVariant="large"
-                            icon={
-                              <SpreadsheetPageLayoutIcon
-                                name="printArea"
-                                size={24}
-                              />
-                            }
-                            label={t("spreadsheet.pageSetupPrintArea")}
-                            onClick={() =>
-                              setPageLayoutSplitMenuOpen("print-area")
-                            }
-                            testId="spreadsheet-ribbon-page-layout-print-area"
-                          />
-                        }
-                        trigger={
-                          <DropdownMenu
-                            modal={false}
-                            open={pageLayoutSplitMenuOpen === "print-area"}
-                            onOpenChange={(open) =>
-                              setPageLayoutSplitMenuOpen(
-                                open ? "print-area" : null,
-                              )
-                            }
-                          >
-                            <DropdownMenuTrigger asChild>
-                              <OfficeHomeMenuTrigger
-                                {...spreadsheetPageSetupPrintDomProps(
-                                  "page-layout-ribbon-page-setup",
-                                  "print-area-disclosure",
-                                )}
-                                {...visibleCommandMenuProps(
-                                  "XLSCTL.PAGE_LAYOUT.PRINT_AREA.DISCLOSURE",
-                                )}
-                                icon={
-                                  <SpreadsheetRibbonMenuChevron size={12} />
-                                }
-                                label={
-                                  t("spreadsheet.uiCopy.printAreaOptions")
-                                }
-                                testId="spreadsheet-ribbon-page-layout-print-area-options"
-                                variant="icon"
-                              />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                              align="start"
-                              className="docs-cupertino-menu w-max max-w-[260px]"
-                            >
-                        <DropdownMenuItem
-                          {...spreadsheetPageSetupPrintDomProps(
-                            "page-layout-ribbon-page-setup",
-                            "print-area-set",
-                          )}
-                          {...visibleCommandMenuProps(
-                            "XLSCTL.PAGE_LAYOUT.PRINT_AREA.SET",
-                          )}
-                          className="gap-3"
-                          onSelect={() =>
-                            executeSetPrintArea(
-                              pageSetupSourceAuthority,
-                              spreadsheetRangeA1(selRect),
-                            )
-                          }
-                          data-testid="spreadsheet-ribbon-page-layout-print-area-set"
-                        >
-                          <SpreadsheetPageLayoutIcon
-                            name="printArea"
-                            size={18}
-                          />
-                          {t("spreadsheet.dynamicCopy.setPrintArea", { range: spreadsheetRangeA1(selRect) })}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          {...spreadsheetPageSetupPrintDomProps(
-                            "page-layout-ribbon-page-setup",
-                            "print-area-clear",
-                          )}
-                          {...visibleCommandMenuProps(
-                            "XLSCTL.PAGE_LAYOUT.PRINT_AREA.CLEAR",
-                          )}
-                          className="gap-3"
-                          onSelect={() =>
-                            executePageSetupMutation(
-                              "XLSCTL.PAGE_LAYOUT.PRINT_AREA.CLEAR",
-                              pageSetupSourceAuthority,
-                            )
-                          }
-                          data-testid="spreadsheet-ribbon-page-layout-print-area-clear"
-                        >
-                          <SpreadsheetPageLayoutIcon
-                            name="printArea"
-                            size={18}
-                          />
-                          {t("spreadsheet.uiCopy.clearPrintArea")}
-                        </DropdownMenuItem>
-                        {/* Excel lists Add to Print Area third, only while a
-                            print area exists and the selection lies outside
-                            it ("Set or clear a print area on a worksheet"). */}
-                        {visibleCommandState("XLSCTL.PAGE_LAYOUT.PRINT_AREA.ADD").enabled ? (
-                          <DropdownMenuItem
-                            {...spreadsheetPageSetupPrintDomProps(
-                              "page-layout-ribbon-page-setup",
-                              "print-area-add",
-                            )}
-                            {...visibleCommandMenuProps(
-                              "XLSCTL.PAGE_LAYOUT.PRINT_AREA.ADD",
-                            )}
-                            className="gap-3"
-                            onSelect={() =>
-                              executeAddToPrintArea(
-                                pageSetupSourceAuthority,
-                                spreadsheetRangeA1(selRect),
-                              )
-                            }
-                            data-testid="spreadsheet-ribbon-page-layout-print-area-add"
-                          >
-                            <SpreadsheetPageLayoutIcon
-                              name="printArea"
-                              size={18}
-                            />
-                            {t("spreadsheet.dynamicCopy.addToPrintArea", { range: spreadsheetRangeA1(selRect) })}
-                          </DropdownMenuItem>
-                        ) : null}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          {...spreadsheetPageSetupPrintDomProps(
-                            "page-layout-ribbon-page-setup",
-                            "print-area-edit",
-                          )}
-                          {...visibleCommandMenuProps(
-                            "XLSCTL.PAGE_LAYOUT.PRINT_AREA.EDIT",
-                          )}
-                          className="gap-3"
-                          onSelect={() =>
-                            executeVisibleCommand(
-                              "XLSCTL.PAGE_LAYOUT.PRINT_AREA.EDIT",
-                            )
-                          }
-                          data-testid="spreadsheet-ribbon-page-layout-print-area-edit"
-                        >
-                          <SpreadsheetPageLayoutIcon
-                            name="pageSetup"
-                            size={18}
-                          />
-                          {t("spreadsheet.uiCopy.customPrintArea")}
-                        </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        }
-                      />
-                      <SpreadsheetRibbonMenuAction
-                        {...visibleCommandDisclosureProps(
-                          "XLSCTL.PAGE_LAYOUT.BREAKS",
-                        )}
-                        {...spreadsheetPageSetupPrintActionProps(
-                          "page-layout-ribbon-page-setup",
-                          "breaks",
-                        )}
-                        active={pageBreakPreview || hasAnyManualPageBreak}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetPageLayoutIcon name="breaks" size={24} />
-                        }
-                        label={t("spreadsheet.pageLayoutBreaks")}
-                        testId="spreadsheet-ribbon-page-breaks"
-                        menuClassName="docs-cupertino-menu w-max max-w-[270px]"
-                      >
-                        <DropdownMenuItem
-                          {...spreadsheetPageSetupPrintDomProps(
-                            "page-layout-ribbon-page-setup",
-                            "break-insert",
-                          )}
-                          {...visibleCommandMenuProps(
-                            "XLSCTL.PAGE_LAYOUT.BREAKS.INSERT",
-                          )}
-                          className="gap-3"
-                          onSelect={() =>
-                            executePageSetupMutation(
-                              "XLSCTL.PAGE_LAYOUT.BREAKS.INSERT",
-                              pageSetupSourceAuthority,
-                            )
-                          }
-                          data-testid="spreadsheet-ribbon-page-break-insert"
-                        >
-                          <SpreadsheetPageLayoutIcon name="breaks" size={18} />
-                          {t("spreadsheet.uiCopy.insertPageBreak")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          {...spreadsheetPageSetupPrintDomProps(
-                            "page-layout-ribbon-page-setup",
-                            "break-remove",
-                          )}
-                          {...visibleCommandMenuProps(
-                            "XLSCTL.PAGE_LAYOUT.BREAKS.REMOVE",
-                          )}
-                          className="gap-3"
-                          onSelect={() =>
-                            executePageSetupMutation(
-                              "XLSCTL.PAGE_LAYOUT.BREAKS.REMOVE",
-                              pageSetupSourceAuthority,
-                            )
-                          }
-                          data-testid="spreadsheet-ribbon-page-break-remove"
-                        >
-                          <SpreadsheetPageLayoutIcon name="breaks" size={18} />
-                          {t("spreadsheet.uiCopy.removePageBreak")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          {...spreadsheetPageSetupPrintDomProps(
-                            "page-layout-ribbon-page-setup",
-                            "break-reset",
-                          )}
-                          {...visibleCommandMenuProps(
-                            "XLSCTL.PAGE_LAYOUT.BREAKS.RESET",
-                          )}
-                          className="gap-3"
-                          onSelect={() =>
-                            executePageSetupMutation(
-                              "XLSCTL.PAGE_LAYOUT.BREAKS.RESET",
-                              pageSetupSourceAuthority,
-                            )
-                          }
-                          data-testid="spreadsheet-ribbon-page-break-reset"
-                        >
-                          <SpreadsheetPageLayoutIcon name="breaks" size={18} />
-                          {t("spreadsheet.uiCopy.resetAllPageBreaks")}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuCheckboxItem
-                          {...spreadsheetPageSetupPrintDomProps(
-                            "page-layout-ribbon-page-setup",
-                            "break-preview",
-                          )}
-                          {...visibleCommandMenuProps(
-                            "XLSCTL.PAGE_LAYOUT.BREAKS.PREVIEW",
-                          )}
-                          checked={pageBreakPreview}
-                          onCheckedChange={() =>
-                            executeVisibleCommand(
-                              "XLSCTL.PAGE_LAYOUT.BREAKS.PREVIEW",
-                            )
-                          }
-                          data-testid="spreadsheet-ribbon-page-break-preview"
-                        >
-                          <SpreadsheetPageLayoutIcon name="breaks" size={18} />
-                          {t("spreadsheet.pageBreakPreviewToggle")}
-                        </DropdownMenuCheckboxItem>
-                      </SpreadsheetRibbonMenuAction>
-                      {/* Excel's Background: chooses a picture to tile
-                          behind the sheet; once the sheet has one, the same
-                          button is Delete Background. */}
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.PAGE_LAYOUT.BACKGROUND",
-                        )}
-                        homeVariant="large"
-                        icon={<SpreadsheetPageLayoutIcon name="background" size={24} />}
-                        label={
-                          sheetBackgroundPicture
-                            ? t("spreadsheet.pageLayoutRibbon.deleteBackground")
-                            : t("presentation.background")
-                        }
-                        testId="spreadsheet-ribbon-page-layout-background"
-                      />
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.PAGE_LAYOUT.PRINT_TITLES",
-                        )}
-                        {...spreadsheetPageSetupPrintActionProps(
-                          "page-layout-ribbon-page-setup",
-                          "print-titles",
-                        )}
-                        hidden={!SHOW_SPREADSHEET_DESKTOP_PAGE_LAYOUT_EXTRAS}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetPageLayoutIcon
-                            name="printTitles"
-                            size={24}
-                          />
-                        }
-                        label={
-                          t("spreadsheet.uiCopy.printTitles")
-                        }
-                        testId="spreadsheet-ribbon-page-layout-print-titles"
-                      />
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.PAGE_LAYOUT.PAGE_SETUP.DIALOG",
-                        )}
-                        {...spreadsheetPageSetupPrintActionProps(
-                          "page-layout-ribbon-page-setup",
-                          "page-setup",
-                        )}
-                        activation="click"
-                        active={Boolean(sheet.printSettings)}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetPageLayoutIcon
-                            name="pageSetup"
-                            size={24}
-                          />
-                        }
-                        label={t("spreadsheet.pageSetupMenu")}
-                        onClick={() => {
-                          pageSetupReturnFocusRef.current = {
-                            tab: ribbonTab,
-                            triggerTestId: "spreadsheet-ribbon-page-setup",
-                          };
-                          setRibbonTab("pageLayout");
-                          void executeVisibleCommand(
-                            "XLSCTL.PAGE_LAYOUT.PAGE_SETUP.DIALOG",
-                          );
-                        }}
-                        testId="spreadsheet-ribbon-page-setup"
-                      />
-                    </>
-                  ),
-                },
-                {
-                  id: "page-scale",
-                  label: t("spreadsheet.pageSetupScaling"),
-                  content: (
-                    <OfficeHomeCommandStack
-                      className={spreadsheetHomeStyles.pageLayoutCommandStack}
-                    >
-                      {renderPageScaleMenu("width")}
-                      {renderPageScaleMenu("height")}
-                    </OfficeHomeCommandStack>
-                  ),
-                },
-                {
-                  id: "page-sheet-options",
-                  label: t("spreadsheet.tabMenu"),
-                  content: (
-                    <>
-                      {SHOW_SPREADSHEET_DESKTOP_PAGE_LAYOUT_EXTRAS ? (
-                        <div
-                          className={
-                            spreadsheetHomeStyles.pageLayoutSheetOptions
-                          }
-                          data-testid="spreadsheet-ribbon-page-layout-sheet-options"
-                        >
-                          <span
-                            className={
-                              spreadsheetHomeStyles.pageLayoutOptionName
-                            }
-                          >
-                            {t("toolbar.view.gridlines")}
-                          </span>
-                          <span
-                            className={
-                              spreadsheetHomeStyles.pageLayoutOptionName
-                            }
-                          >
-                            {t("spreadsheet.uiCopy.pageLayoutRowColumnHeadings")}
-                          </span>
-                          <OfficeHomeCheckbox
-                            {...visibleCommandCheckboxProps(
-                              "XLSCTL.PAGE_LAYOUT.GRIDLINES.VIEW",
-                            )}
-                            aria-pressed={!sheetHidesGridlines}
-                            checked={!sheetHidesGridlines}
-                            label={
-                              t("spreadsheet.uiCopy.showPageElementsOnScreen")
-                            }
-                            aria-label={t("spreadsheet.pageLayoutSheetOption", {
-                              option: t("toolbar.view.gridlines"),
-                              action: t("spreadsheet.uiCopy.showPageElementsOnScreen"),
-                            })}
-                            testId="spreadsheet-ribbon-page-layout-gridlines-view"
-                          />
-                          <OfficeHomeCheckbox
-                            {...visibleCommandCheckboxProps(
-                              "XLSCTL.PAGE_LAYOUT.HEADINGS.VIEW",
-                            )}
-                            aria-pressed={!sheetHidesHeadings}
-                            checked={!sheetHidesHeadings}
-                            label={
-                              t("spreadsheet.uiCopy.showPageElementsOnScreen")
-                            }
-                            aria-label={t("spreadsheet.pageLayoutSheetOption", {
-                              option: t("spreadsheet.uiCopy.pageLayoutRowColumnHeadings"),
-                              action: t("spreadsheet.uiCopy.showPageElementsOnScreen"),
-                            })}
-                            testId="spreadsheet-ribbon-page-layout-headings-view"
-                          />
-                          <OfficeHomeCheckbox
-                            {...spreadsheetPageSetupPrintDomProps(
-                              "page-layout-ribbon-sheet-options",
-                              "gridlines-print",
-                            )}
-                            aria-pressed={sheet.printSettings?.showGridlines === true}
-                            checked={sheet.printSettings?.showGridlines === true}
-                            label={t("toolbar.print")}
-                            controlId="XLSCTL.PAGE_LAYOUT.GRIDLINES.PRINT"
-                            disabled={
-                              !visibleCommandState(
-                                "XLSCTL.PAGE_LAYOUT.GRIDLINES.PRINT",
-                              ).enabled
-                            }
-                            hidden={
-                              !visibleCommandState(
-                                "XLSCTL.PAGE_LAYOUT.GRIDLINES.PRINT",
-                              ).visible
-                            }
-                            onCheckedChange={() =>
-                              executePageSetupMutation(
-                                "XLSCTL.PAGE_LAYOUT.GRIDLINES.PRINT",
-                                pageSetupSourceAuthority,
-                              )
-                            }
-                            title={
-                              visibleCommandReason(
-                                visibleCommandState(
-                                  "XLSCTL.PAGE_LAYOUT.GRIDLINES.PRINT",
-                                ).reasonKey,
-                              ) ?? undefined
-                            }
-                            aria-label={t("spreadsheet.pageLayoutSheetOption", {
-                              option: t("toolbar.view.gridlines"),
-                              action: t("toolbar.print"),
-                            })}
-                            testId="spreadsheet-ribbon-page-layout-gridlines-print"
-                          />
-                          <OfficeHomeCheckbox
-                            {...spreadsheetPageSetupPrintDomProps(
-                              "page-layout-ribbon-sheet-options",
-                              "headings-print",
-                            )}
-                            aria-pressed={
-                              sheet.printSettings?.showHeadings === true
-                            }
-                            checked={
-                              sheet.printSettings?.showHeadings === true
-                            }
-                            label={t("toolbar.print")}
-                            controlId="XLSCTL.PAGE_LAYOUT.HEADINGS.PRINT"
-                            disabled={
-                              !visibleCommandState(
-                                "XLSCTL.PAGE_LAYOUT.HEADINGS.PRINT",
-                              ).enabled
-                            }
-                            hidden={
-                              !visibleCommandState(
-                                "XLSCTL.PAGE_LAYOUT.HEADINGS.PRINT",
-                              ).visible
-                            }
-                            onCheckedChange={() =>
-                              executePageSetupMutation(
-                                "XLSCTL.PAGE_LAYOUT.HEADINGS.PRINT",
-                                pageSetupSourceAuthority,
-                              )
-                            }
-                            title={visibleCommandReason(
-                              visibleCommandState(
-                                "XLSCTL.PAGE_LAYOUT.HEADINGS.PRINT",
-                              ).reasonKey,
-                            )}
-                            aria-label={t("spreadsheet.pageLayoutSheetOption", {
-                              option: t("spreadsheet.uiCopy.pageLayoutRowColumnHeadings"),
-                              action: t("toolbar.print"),
-                            })}
-                            testId="spreadsheet-ribbon-page-layout-headings-print"
-                          />
-                        </div>
-                      ) : null}
-                    </>
-                  ),
-                },
-                {
-                  // Excel places Arrange after Sheet Options. Objects paint in
-                  // array order, so these commands keep their existing stacking
-                  // authority while the group moves to its native ribbon slot.
-                  id: "page-arrange",
-                  label: t("spreadsheet.arrangeMenu"),
-                  // XLS-A021: Excel's Arrange group — the layer commands, then
-                  // Selection Pane, Align, Group and Rotate.
-                  content: (
-                    <>
-                      {objectArrangeRibbonControls()}
-                      {renderDrawingArrangeLane("spreadsheet-ribbon-page-arrange")}
-                    </>
-                  ),
-                },
-              ],
-              formulas: () => {
-                const circularReferenceCells = findCircularReferenceCells();
-                return [
-                {
-                  id: "formula-library",
-                  label: t("spreadsheet.formulas.functionLibrary"),
-                  content: (
-                    <>
-                      <span style={{ display: "contents" }} onMouseEnter={preloadSpreadsheetFunctionDialogs} onFocus={preloadSpreadsheetFunctionDialogs}>
-                        <SpreadsheetRibbonAction
-                          {...visibleCommandActionProps(
-                            "XLSCTL.FORMULAS.INSERT_FUNCTION",
-                          )}
-                          active={insertFunctionOpen || funcArgsName !== null}
-                          homeVariant="large"
-                          icon={
-                            <SpreadsheetFormulaIcon
-                              name="insertFunction"
-                              size={24}
-                            />
-                          }
-                          label={t("spreadsheet.insertFunctionMenu")}
-                          testId="spreadsheet-ribbon-insert-function"
-                        />
-                      </span>
-                      <SpreadsheetRibbonMenuAction
-                        {...visibleCommandDisclosureProps(
-                          "XLSCTL.FORMULAS.AUTOSUM_MENU",
-                        )}
-                        displayLabel={t("spreadsheet.uiCopy.autoSum")}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetFormulaIcon name="autoSum" size={24} />
-                        }
-                        label={t("spreadsheet.autoSum")}
-                        testId="spreadsheet-ribbon-autosum"
-                        menuClassName="docs-cupertino-menu w-max max-w-[13rem]"
-                      >
-                        {autoSumRibbonMenuItems(
-                          "spreadsheet-ribbon-formulas-autosum",
-                        )}
-                      </SpreadsheetRibbonMenuAction>
-                      {/* XLS-A023: Function Library ▸ Recently Used. */}
-                      <SpreadsheetRibbonMenuAction
-                        {...visibleCommandDisclosureProps("XLSCTL.FORMULAS.INSERT_FUNCTION")}
-                        homeVariant="large"
-                        icon={<SpreadsheetFormulaIcon name="insertFunction" size={24} />}
-                        label={t("spreadsheet.formulas.recentlyUsed")}
-                        testId="spreadsheet-ribbon-function-recent"
-                        menuClassName="docs-cupertino-menu max-h-[70vh] w-max max-w-[16rem] overflow-y-auto"
-                        onCloseAutoFocus={keepFunctionDialogFocus}
-                      >
-                        {recentFunctionNames
-                          .filter((name) => signatureFor(name) !== null)
-                          .map((name) => (
-                            <DropdownMenuItem
-                              key={name}
-                              data-testid={`spreadsheet-ribbon-function-recent-item-${name}`}
-                              disabled={!formulaFunctionMenuState.enabled}
-                              title={formulaFunctionMenuDisabledReason}
-                              onSelect={() => openFunctionArgsFromRibbon(name)}
-                            >
-                              {name}
-                            </DropdownMenuItem>
-                          ))}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          data-testid="spreadsheet-ribbon-function-recent-browse"
-                          disabled={!formulaFunctionMenuState.enabled}
-                          onSelect={() => void executeVisibleCommand("XLSCTL.FORMULAS.INSERT_FUNCTION")}
-                        >
-                          <SpreadsheetFormulaIcon name="insertFunction" size={16} />
-                          <span>{t("spreadsheet.insertFunctionMenu")}</span>
-                        </DropdownMenuItem>
-                      </SpreadsheetRibbonMenuAction>
-                      {SPREADSHEET_FORMULA_LIBRARY_CONTROL_OCCURRENCES.map(
-                        ({ controlId, occurrenceId, surface }) => {
-                          if (
-                            !controlId ||
-                            !isSpreadsheetFormulaLibraryOccurrenceId(
-                              occurrenceId,
-                            )
-                          ) {
-                            throw new Error(
-                              "Invalid Formulas library control occurrence",
-                            );
-                          }
-                          const category =
-                            SPREADSHEET_FORMULA_LIBRARY_CATEGORY_BY_OCCURRENCE[
-                              occurrenceId
-                            ];
-                          return (
-                            <SpreadsheetRibbonMenuAction
-                              key={occurrenceId}
-                              {...visibleCommandDisclosureProps(controlId)}
-                              controlOccurrenceId={occurrenceId}
-                              controlSurface={surface}
-                              homeVariant="large"
-                              icon={
-                                <SpreadsheetFormulaIcon
-                                  name={
-                                    SPREADSHEET_FORMULA_LIBRARY_ICON_BY_OCCURRENCE[
-                                      occurrenceId
-                                    ]
-                                  }
-                                  size={24}
-                                />
-                              }
-                              // The ribbon names two groups otherwise than
-                              // Insert Function's category list (XLS-A024).
-                              label={t(
-                                category === "math"
-                                  ? "spreadsheet.functionLibraryMath"
-                                  : category === "dateTime"
-                                    ? "spreadsheet.functionLibraryDateTime"
-                                    : `spreadsheet.functionCategory.${category}`,
-                              )}
-                              testId={`spreadsheet-ribbon-function-${category}`}
-                              triggerRef={(node) => {
-                                if (node) {
-                                  formulaCategoryTriggerRefs.current[
-                                    occurrenceId
-                                  ] = node;
-                                } else {
-                                  delete formulaCategoryTriggerRefs.current[
-                                    occurrenceId
-                                  ];
-                                }
-                              }}
-                              menuClassName="docs-cupertino-menu max-h-[70vh] w-max max-w-[16rem] overflow-y-auto"
-                              onCloseAutoFocus={keepFunctionDialogFocus}
-                            >
-                              <SpreadsheetFormulaFunctionMenuItems
-                                browseLabel={t(
-                                  "spreadsheet.insertFunctionMenu",
-                                )}
-                                category={category}
-                                disabled={!formulaFunctionMenuState.enabled}
-                                disabledReason={
-                                  formulaFunctionMenuDisabledReason
-                                }
-                                names={functionCatalog[category]}
-                                surface={`formulas-ribbon-${occurrenceId}-functions`}
-                                onSelectFunction={(name) =>
-                                  openFunctionArgsFromRibbon(
-                                    name,
-                                    formulaCategoryTriggerRefs.current[
-                                      occurrenceId
-                                    ] ?? null,
-                                  )
-                                }
-                                onBrowse={() =>
-                                  openFunctionCategoryFromMenu(
-                                    category,
-                                    formulaCategoryTriggerRefs.current[
-                                      occurrenceId
-                                    ] ?? null,
-                                  )
-                                }
-                              />
-                            </SpreadsheetRibbonMenuAction>
-                          );
-                        },
-                      )}
-                      <SpreadsheetRibbonMenuAction
-                        {...visibleCommandDisclosureProps(
-                          "XLSCTL.FORMULAS.LIBRARY.MORE",
-                        )}
-                        displayLabel={t("spreadsheet.uiCopy.more")}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetFormulaIcon
-                            name="moreFunctions"
-                            size={24}
-                          />
-                        }
-                        label={t("spreadsheet.formulas.moreFunctions")}
-                        testId="spreadsheet-ribbon-more-functions"
-                        menuClassName="docs-cupertino-menu w-max max-w-[15rem]"
-                        triggerRef={formulaMoreTriggerRef}
-                        onCloseAutoFocus={keepFunctionDialogFocus}
-                      >
-                        {SPREADSHEET_MORE_FUNCTION_CATEGORIES.filter(
-                          (category) => functionCatalog[category].length > 0,
-                        )
-                          .map((category) => (
-                            <DropdownMenuSub key={category}>
-                              <DropdownMenuSubTrigger
-                                {...visibleCommandMenuProps(
-                                  "XLSCTL.FORMULAS.LIBRARY.MORE.CATEGORY",
-                                  t(`spreadsheet.functionCategory.${category}`),
-                                )}
-                                data-control-occurrence-id={category}
-                                data-control-surface="formulas-ribbon-more"
-                                data-testid={`spreadsheet-ribbon-more-functions-${category}`}
-                              >
-                                <SpreadsheetFormulaIcon
-                                  name={
-                                    SPREADSHEET_MORE_FUNCTION_ICON_BY_CATEGORY[
-                                      category
-                                    ]
-                                  }
-                                  size={16}
-                                />
-                                <span>
-                                  {t(
-                                    `spreadsheet.functionCategory.${category}`,
-                                  )}
-                                </span>
-                              </DropdownMenuSubTrigger>
-                              <DropdownMenuSubContent className="docs-cupertino-menu docs-cupertino-menu--submenu max-h-[70vh] w-max max-w-[16rem] overflow-y-auto">
-                                <SpreadsheetFormulaFunctionMenuItems
-                                  browseLabel={t(
-                                    "spreadsheet.insertFunctionMenu",
-                                  )}
-                                  category={category}
-                                  disabled={!formulaFunctionMenuState.enabled}
-                                  disabledReason={
-                                    formulaFunctionMenuDisabledReason
-                                  }
-                                  names={functionCatalog[category]}
-                                  surface={`formulas-ribbon-more-${category}`}
-                                  onSelectFunction={(name) =>
-                                    openFunctionArgsFromRibbon(
-                                      name,
-                                      formulaMoreTriggerRef.current,
-                                    )
-                                  }
-                                  onBrowse={() =>
-                                    openFunctionCategoryFromMenu(
-                                      category,
-                                      formulaMoreTriggerRef.current,
-                                    )
-                                  }
-                                />
-                              </DropdownMenuSubContent>
-                            </DropdownMenuSub>
-                          ))}
-                      </SpreadsheetRibbonMenuAction>
-                    </>
-                  ),
-                },
-                {
-                  id: "defined-names",
-                  label: t("spreadsheet.formulas.definedNames"),
-                  content: (
-                    <>
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.FORMULAS.NAME.MANAGER",
-                        )}
-                        active={nameManagerOpen}
-                        homeVariant="large"
-                        icon={<SpreadsheetFormulaIcon name="names" size={24} />}
-                        label={t("spreadsheet.formulas.nameManager")}
-                        testId="spreadsheet-ribbon-name-manager"
-                      />
-                      {/* Define Name is Excel's New Name dialog, which here is
-                          the Name Manager's own New Name form, as the cell
-                          context menu already opens it. */}
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.FORMULAS.NAME.MANAGER",
-                        )}
-                        controlId="XLSCTL.FORMULAS.NAME.DEFINE_MENU"
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetFormulaIcon name="names" size={24} />
-                        }
-                        label={t("spreadsheet.nameDefine")}
-                        onClick={() =>
-                          void executeVisibleCommand(
-                            "XLSCTL.FORMULAS.NAME.MANAGER",
-                          ).then((opened) => {
-                            if (opened) beginCreateNameManagerEntry();
-                          })
-                        }
-                        testId="spreadsheet-ribbon-formulas-names"
-                      />
-                      {/* XLS-A023: Use in Formula and Create from Selection. */}
-                      <RibbonCol>
-                        <SpreadsheetRibbonMenuAction
-                          variant="inline"
-                          icon={<SpreadsheetFormulaIcon name="names" size={16} />}
-                          label={t("spreadsheet.formulas.useInFormula")}
-                          testId="spreadsheet-ribbon-use-in-formula"
-                          menuClassName="docs-cupertino-menu max-h-[70vh] w-max max-w-[18rem] overflow-y-auto"
-                        >
-                          {workbookNamedRanges
-                            .filter(
-                              (entry) =>
-                                !entry.hidden &&
-                                (entry.scope !== "worksheet" || entry.scopeSheetId === sheet.id),
-                            )
-                            .map((entry) => (
-                              <DropdownMenuItem
-                                key={`${entry.scope ?? "workbook"}:${entry.scopeSheetId ?? ""}:${entry.name}`}
-                                data-testid={`spreadsheet-ribbon-use-in-formula-${entry.name}`}
-                                onSelect={() => insertNameIntoFormula(entry.name)}
-                              >
-                                {entry.name}
-                              </DropdownMenuItem>
-                            ))}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            data-testid="spreadsheet-ribbon-paste-names"
-                            onSelect={() => setPasteNamesDraft({ selected: null })}
-                          >
-                            {t("spreadsheet.formulas.pasteNames")}
-                          </DropdownMenuItem>
-                        </SpreadsheetRibbonMenuAction>
-                        <SpreadsheetRibbonAction
-                          homeVariant="compact"
-                          disabled={autosave.readOnly}
-                          icon={<SpreadsheetFormulaIcon name="names" size={16} />}
-                          label={t("spreadsheet.formulas.createFromSelection")}
-                          onClick={openCreateNamesDialog}
-                          testId="spreadsheet-ribbon-create-from-selection"
-                        />
-                      </RibbonCol>
-                    </>
-                  ),
-                },
-                {
-                  id: "formula-auditing",
-                  label: t("spreadsheet.formulas.auditing"),
-                  content: (
-                    <>
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.FORMULAS.AUDIT.SHOW_FORMULAS",
-                        )}
-                        active={sheetShowsFormulas}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetFormulaIcon
-                            name="showFormulas"
-                            size={24}
-                          />
-                        }
-                        displayLabel={t("spreadsheet.uiCopy.showFormulas")}
-                        label={t("spreadsheet.showFormulasToggle")}
-                        testId="spreadsheet-ribbon-show-formulas"
-                      />
-                      {
-
-
-
-
-
-
-}
-                      <OfficeHomeCommandStack rows={3}>
-                        <SpreadsheetRibbonAction
-                          {...visibleCommandActionProps(
-                            "XLSCTL.FORMULAS.AUDIT.PRECEDENTS",
-                          )}
-                          homeVariant="compact"
-                          icon={
-                            <SpreadsheetFormulaIcon
-                              name="tracePrecedents"
-                              size={16}
-                            />
-                          }
-                          label={t("spreadsheet.tracePrecedents")}
-                          testId="spreadsheet-ribbon-trace-precedents"
-                        />
-                        <SpreadsheetRibbonAction
-                          {...visibleCommandActionProps(
-                            "XLSCTL.FORMULAS.AUDIT.DEPENDENTS",
-                          )}
-                          homeVariant="compact"
-                          icon={
-                            <SpreadsheetFormulaIcon
-                              name="traceDependents"
-                              size={16}
-                            />
-                          }
-                          label={t("spreadsheet.traceDependents")}
-                          testId="spreadsheet-ribbon-trace-dependents"
-                        />
-                        <SpreadsheetRibbonAction
-                          {...visibleCommandActionProps(
-                            "XLSCTL.FORMULAS.AUDIT.REMOVE_ARROWS_MENU",
-                          )}
-                          homeVariant="compact"
-                          icon={
-                            <SpreadsheetFormulaIcon
-                              name="removeArrows"
-                              size={16}
-                            />
-                          }
-                          label={t("spreadsheet.traceClear")}
-                          testId="spreadsheet-ribbon-remove-arrows"
-                        />
-                      </OfficeHomeCommandStack>
-                      {SHOW_SPREADSHEET_DESKTOP_FORMULAS_EXTRAS ? (
-                        <OfficeHomeCommandStack rows={3}>
-                          <span style={{ display: "contents" }} onMouseEnter={preloadErrorCheckPanel} onFocus={preloadErrorCheckPanel}>
-                            <OfficeHomeSplitLayout
-                              className={spreadsheetHomeStyles.labeledSplit}
-                              testId="spreadsheet-ribbon-error-check-split"
-                              primary={
-                                <SpreadsheetRibbonAction
-                                  {...visibleCommandActionProps(
-                                    "XLSCTL.FORMULAS.AUDIT.ERROR_CHECK_MENU",
-                                  )}
-                                  homeVariant="compact"
-                                  active={errorCheckOpen}
-                                  icon={
-                                    <SpreadsheetFormulaIcon
-                                      name="errorCheck"
-                                      size={16}
-                                    />
-                                  }
-                                  label={errorCheckLabel}
-                                  testId="spreadsheet-ribbon-error-check"
-                                />
-                              }
-                              trigger={
-                                <DropdownMenu modal={false}>
-                                  <DropdownMenuTrigger asChild>
-                                    <OfficeHomeMenuTrigger
-                                      icon={<SpreadsheetRibbonMenuChevron size={9} />}
-                                      label={t("spreadsheet.formulas.errorCheckingMenu")}
-                                      testId="spreadsheet-ribbon-error-check-menu"
-                                      variant="icon"
-                                    />
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent
-                                    align="start"
-                                    className="docs-cupertino-menu w-max max-w-[16rem]"
-                                  >
-                                <DropdownMenuItem
-                                  data-testid="spreadsheet-ribbon-trace-error"
-                                  onSelect={traceErrorFromActiveCell}
-                                >
-                                  <SpreadsheetFormulaIcon name="trace" size={16} />
-                                  <span>{t("spreadsheet.formulas.traceError")}</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuSub>
-                                  <DropdownMenuSubTrigger
-                                    data-testid="spreadsheet-ribbon-circular-references"
-                                    disabled={circularReferenceCells.length === 0}
-                                  >
-                                    <span>{t("spreadsheet.formulas.circularReferences")}</span>
-                                  </DropdownMenuSubTrigger>
-                                  <DropdownMenuSubContent className="docs-cupertino-menu docs-cupertino-menu--submenu w-max max-w-[13rem]">
-                                    {circularReferenceCells.map(({ row, col }) => (
-                                      <DropdownMenuItem
-                                        key={`${row}:${col}`}
-                                        data-testid={`spreadsheet-ribbon-circular-reference-${row}-${col}`}
-                                        onSelect={() => navigateToSheetCell(activeSheetIndex, row, col)}
-                                      >
-                                        {`$${columnLabel(col)}$${row + 1}`}
-                                      </DropdownMenuItem>
-                                    ))}
-                                  </DropdownMenuSubContent>
-                                </DropdownMenuSub>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              }
-                            />
-                          </span>
-                          <span style={{ display: "contents" }} onMouseEnter={preloadFormulaEvaluationDialog} onFocus={preloadFormulaEvaluationDialog}>
-                            <SpreadsheetRibbonAction
-                              {...visibleCommandActionProps(
-                                "XLSCTL.FORMULAS.EVALUATE.DIALOG",
-                              )}
-                              homeVariant="compact"
-                              active={evaluateFormulaOpen}
-                              icon={
-                                <SpreadsheetFormulaIcon
-                                  name="evaluate"
-                                  size={16}
-                                />
-                              }
-                              label={evaluateFormulaLabel}
-                              testId="spreadsheet-ribbon-evaluate-formula"
-                            />
-                          </span>
-                        </OfficeHomeCommandStack>
-                      ) : null}
-                      {SHOW_DESKTOP_WATCH_WINDOW ? (
-                        <span
-                          style={{
-                            position: "relative",
-                            display: "inline-flex",
-                          }}
-                        >
-                          <SpreadsheetRibbonAction
-                            active={watchPanelOpen}
-                            homeVariant="large"
-                            icon={<Eye size={24} />}
-                            label={t("spreadsheet.watchMenu")}
-                            onClick={() =>
-                              setWatchPanelOpen((value) => !value)
-                            }
-                            testId="spreadsheet-ribbon-formulas-watch"
-                          />
-                        </span>
-                      ) : null}
-                    </>
-                  ),
-                },
-                {
-                  id: "calculation",
-                  label: t("spreadsheet.formulas.calculation"),
-                  content: (
-                    <>
-                      <SpreadsheetRibbonMenuAction
-                        {...visibleCommandDisclosureProps(
-                          "XLSCTL.FORMULAS.CALC.OPTIONS_MENU",
-                        )}
-                        active={calcState.mode === "manual"}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetFormulaIcon
-                            name="calculationOptions"
-                            size={24}
-                          />
-                        }
-                        label={t("spreadsheet.formulas.calculationOptions")}
-                        testId="spreadsheet-ribbon-calculation-options"
-                        menuClassName="docs-cupertino-menu w-max max-w-[14rem]"
-                      >
-                        {/* XLS-A025: Excel's three options, in its order;
-                            the 1904 date system is an Excel Option (command
-                            search), not part of this menu. */}
-                        <DropdownMenuRadioGroup
-                          value={
-                            calcState.mode === "manual"
-                              ? "manual"
-                              : viewOptions.calculationExceptDataTables
-                                ? "autoNoTable"
-                                : "auto"
-                          }
-                        >
-                          <DropdownMenuRadioItem
-                            value="auto"
-                            {...visibleCommandMenuProps(
-                              "XLSCTL.FORMULAS.CALC.OPTIONS.AUTOMATIC",
-                            )}
-                            data-testid="spreadsheet-ribbon-calculation-auto"
-                            onSelect={() => setCalculationOption("auto")}
-                          >
-                            {t("spreadsheet.formulas.calculationAutomatic")}
-                          </DropdownMenuRadioItem>
-                          <DropdownMenuRadioItem
-                            value="autoNoTable"
-                            {...visibleCommandMenuProps(
-                              "XLSCTL.FORMULAS.CALC.OPTIONS.AUTOMATIC",
-                            )}
-                            data-testid="spreadsheet-ribbon-calculation-auto-no-table"
-                            onSelect={() => setCalculationOption("autoNoTable")}
-                          >
-                            {t("spreadsheet.formulas.calculationAutomaticExceptTables")}
-                          </DropdownMenuRadioItem>
-                          <DropdownMenuRadioItem
-                            value="manual"
-                            {...visibleCommandMenuProps(
-                              "XLSCTL.FORMULAS.CALC.OPTIONS.MANUAL",
-                            )}
-                            data-testid="spreadsheet-ribbon-calculation-manual"
-                            onSelect={() => setCalculationOption("manual")}
-                          >
-                            {t("spreadsheet.formulas.calculationManual")}
-                          </DropdownMenuRadioItem>
-                        </DropdownMenuRadioGroup>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          data-testid="spreadsheet-ribbon-calculation-iteration"
-                          onSelect={openIterationDialog}
-                        >
-                          {t("spreadsheet.formulas.iterativeCalculationMenu")}
-                        </DropdownMenuItem>
-                        <DropdownMenuCheckboxItem
-                          checked={viewOptions.precisionAsDisplayed === true}
-                          data-testid="spreadsheet-ribbon-calculation-precision-as-displayed"
-                          onSelect={togglePrecisionAsDisplayed}
-                        >
-                          {t("spreadsheet.formulas.precisionAsDisplayedMenu")}
-                        </DropdownMenuCheckboxItem>
-                      </SpreadsheetRibbonMenuAction>
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.FORMULAS.CALC.CALCULATE_NOW",
-                        )}
-                        displayLabel={t("spreadsheet.uiCopy.workbook")}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetFormulaIcon
-                            name="calculateWorkbook"
-                            size={24}
-                          />
-                        }
-                        label={
-                          calculationStatusText(
-                            calcState,
-                            t,
-                          ) ?? t("spreadsheet.formulas.calculateWorkbook")
-                        }
-                        testId="spreadsheet-ribbon-calculate-workbook"
-                      />
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.FORMULAS.CALC.CALCULATE_SHEET",
-                        )}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetFormulaIcon
-                            name="calculateSheet"
-                            size={24}
-                          />
-                        }
-                        label={t("spreadsheet.formulas.calculateSheet")}
-                        testId="spreadsheet-ribbon-calculate-sheet"
-                      />
-                    </>
-                  ),
-                },
-              ];
-              },
-              data: () => [
-                {
-                  id: "data-picture",
-                  label: webDataReviewViewLabels.getTransform,
-                  content: (
-                    <>
-                      <SpreadsheetRibbonMenuAction
-                        {...visibleCommandDisclosureProps("XLSCTL.DATA.QUERY.GET_DATA_MENU")}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="query" size={24} />}
-                        label={webDataReviewViewLabels.getData}
-                        testId="spreadsheet-ribbon-data-get-data"
-                      >
-                        <DropdownMenuItem
-                          {...visibleCommandMenuProps("XLSCTL.DATA.QUERY.GET_DATA.FROM_TEXT_CSV")}
-                          data-testid="spreadsheet-ribbon-data-get-text-csv"
-                          onSelect={() => void executeVisibleCommand("XLSCTL.DATA.QUERY.GET_DATA.FROM_TEXT_CSV")}
-                        >
-                          {renderRibbonMenuLabel({
-                            icon: "fromTextCsv",
-                            title: webDataReviewViewLabels.fromTextCsvValues,
-                          })}
-                        </DropdownMenuItem>
-                        {/* Excel for the web keeps Data from Power BI in this
-                            same Get & Transform Data group. MRAI has no Power
-                            BI connection behind it, so the entry says that
-                            rather than leaving the group a command short. */}
-                        <DropdownMenuItem
-                          {...visibleCommandMenuProps("XLSCTL.DATA.QUERY.GET_DATA.FROM_POWER_BI")}
-                          data-testid="spreadsheet-ribbon-data-get-power-bi"
-                          onSelect={() => void executeVisibleCommand("XLSCTL.DATA.QUERY.GET_DATA.FROM_POWER_BI")}
-                        >
-                          {renderRibbonMenuLabel({
-                            icon: "fromPowerBi",
-                            title: t("spreadsheet.data.fromPowerBi"),
-                          })}
-                        </DropdownMenuItem>
-                      </SpreadsheetRibbonMenuAction>
-                      <OfficeHomeCommandStack className={spreadsheetHomeStyles.dataImportCommands}>
-                        <SpreadsheetRibbonAction
-                          {...visibleCommandActionProps("XLSCTL.DATA.QUERY.FROM_TABLE_RANGE")}
-                          homeVariant="compact"
-                          icon={<SpreadsheetDataIcon name="fromTableRange" size={24} />}
-                          label={t("spreadsheet.uiCopy.fromTableRange")}
-                          testId="spreadsheet-ribbon-data-from-table-range"
-                          onClick={() => executeVisibleCommand("XLSCTL.DATA.QUERY.FROM_TABLE_RANGE")}
-                        />
-                    {null}
-                      </OfficeHomeCommandStack>
-                    </>
-                  ),
-                },
-                {
-                  id: "data-queries-connections",
-                  label: webDataReviewViewLabels.queriesConnections,
-                  hidden: !anyVisibleCommand(
-                    "XLSCTL.DATA.QUERY.REFRESH",
-                    "XLSCTL.DATA.QUERY.REFRESH_ALL_MENU",
-                    "XLSCTL.DATA.QUERY.QUERIES_CONNECTIONS",
-                    "XLSCTL.DATA.QUERY.PROPERTIES",
-                    "XLSCTL.DATA.QUERY.WORKBOOK_LINKS",
-                  ),
-                  content: (
-                    <>
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.DATA.QUERY.REFRESH",
-                        )}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="query" size={24} />}
-                        label={webDataReviewViewLabels.refresh}
-                        onClick={() =>
-                          executeVisibleCommand("XLSCTL.DATA.QUERY.REFRESH")
-                        }
-                        testId="spreadsheet-ribbon-data-refresh"
-                      />
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.DATA.QUERY.REFRESH_ALL_MENU",
-                        )}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="query" size={24} />}
-                        label={webDataReviewViewLabels.refreshAll}
-                        onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Refresh All"))}
-                        testId="spreadsheet-ribbon-data-refresh-all"
-                      />
-                        <SpreadsheetRibbonAction
-                          {...visibleCommandActionProps(
-                            "XLSCTL.DATA.QUERY.QUERIES_CONNECTIONS",
-                          )}
-                          homeVariant="large"
-                          icon={<SpreadsheetDataIcon name="query" size={18} />}
-                          label={webDataReviewViewLabels.queriesConnections}
-                          onClick={() =>
-                            executeVisibleCommand(
-                              "XLSCTL.DATA.QUERY.QUERIES_CONNECTIONS",
-                            )
-                          }
-                          testId="spreadsheet-ribbon-data-queries-connections"
-                        />
-                        <SpreadsheetRibbonAction
-                          {...visibleCommandActionProps(
-                            "XLSCTL.DATA.QUERY.PROPERTIES",
-                          )}
-                          homeVariant="large"
-                          icon={
-                            <SpreadsheetDataIcon name="viewOptions" size={18} />
-                          }
-                          label={webDataReviewViewLabels.connectionProperties}
-                          onClick={() =>
-                            executeVisibleCommand(
-                              "XLSCTL.DATA.QUERY.PROPERTIES",
-                            )
-                          }
-                          testId="spreadsheet-ribbon-data-connection-properties"
-                        />
-                        <SpreadsheetRibbonAction
-                          {...visibleCommandActionProps(
-                            "XLSCTL.DATA.QUERY.WORKBOOK_LINKS",
-                          )}
-                          homeVariant="large"
-                          icon={
-                            <SpreadsheetDataIcon
-                              name="workbookLinks"
-                              size={18}
-                            />
-                          }
-                          label={webDataReviewViewLabels.workbookLinks}
-                          onClick={() =>
-                            executeVisibleCommand(
-                              "XLSCTL.DATA.QUERY.WORKBOOK_LINKS",
-                            )
-                          }
-                          testId="spreadsheet-ribbon-data-workbook-links"
-                        />
-                    </>
-                  ),
-                },
-                {
-                  id: "data-types",
-                  label: webDataReviewViewLabels.dataTypes,
-                  hidden:
-                    !SHOW_SPREADSHEET_DESKTOP_DATA_EXTRAS ||
-                    !anyVisibleCommand(
-                      "XLSCTL.DATA.TYPE.STOCKS",
-                      "XLSCTL.DATA.TYPE.CURRENCIES",
-                    ),
-                  content: (
-                    <>
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.DATA.TYPE.STOCKS",
-                        )}
-                        homeVariant="large"
-                        icon={<TrendingUp size={24} />}
-                        label={webDataReviewViewLabels.stocks}
-                        onClick={() =>
-                          executeVisibleCommand("XLSCTL.DATA.TYPE.STOCKS")
-                        }
-                        testId="spreadsheet-ribbon-data-type-stocks"
-                      />
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.DATA.TYPE.CURRENCIES",
-                        )}
-                        homeVariant="large"
-                        icon={<CircleDollarSign size={24} />}
-                        label={webDataReviewViewLabels.currencies}
-                        onClick={() =>
-                          executeVisibleCommand("XLSCTL.DATA.TYPE.CURRENCIES")
-                        }
-                        testId="spreadsheet-ribbon-data-type-currencies"
-                      />
-                    </>
-                  ),
-                },
-                {
-                  id: "data-sort-filter",
-                  label: webDataReviewViewLabels.sortFilter,
-                  content: (
-                    <>
-                      <OfficeHomeCommandStack>
-                        <SpreadsheetRibbonAction
-                          {...visibleCommandActionProps("XLSCTL.DATA.SORT.ASC")}
-                          homeVariant="compact"
-                          icon={
-                            <SpreadsheetDataIcon
-                              name="sortAscending"
-                              size={16}
-                            />
-                          }
-                          label={t("spreadsheet.sortAscending")}
-                          onClick={() =>
-                            executeVisibleCommand("XLSCTL.DATA.SORT.ASC")
-                          }
-                          testId="spreadsheet-ribbon-sort-asc"
-                        />
-                        <SpreadsheetRibbonAction
-                          {...visibleCommandActionProps(
-                            "XLSCTL.DATA.SORT.DESC",
-                          )}
-                          homeVariant="compact"
-                          icon={
-                            <SpreadsheetDataIcon
-                              name="sortDescending"
-                              size={16}
-                            />
-                          }
-                          label={t("spreadsheet.sortDescending")}
-                          onClick={() =>
-                            executeVisibleCommand("XLSCTL.DATA.SORT.DESC")
-                          }
-                          testId="spreadsheet-ribbon-sort-desc"
-                        />
-                      </OfficeHomeCommandStack>
-                      <SpreadsheetRibbonAction
-                        active={sortDialogOpen}
-                        {...visibleCommandActionProps(
-                          "XLSCTL.DATA.SORT.DIALOG",
-                        )}
-                        displayLabel={webDataReviewViewLabels.customSort}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetDataIcon name="sortDialog" size={24} />
-                        }
-                        label={t("spreadsheet.sortDialogMenu")}
-                        onClick={() =>
-                          executeVisibleCommand("XLSCTL.DATA.SORT.DIALOG")
-                        }
-                        testId="spreadsheet-ribbon-sort-dialog"
-                      />
-                      <SpreadsheetRibbonAction
-                        active={autoFilterPressed}
-                        {...visibleCommandActionProps(
-                          "XLSCTL.DATA.SORT.FILTER",
-                        )}
-                        displayLabel={t("spreadsheet.insertRibbon.filter")}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="filter" size={24} />}
-                        label={t("spreadsheet.insertRibbon.filter")}
-                        onClick={() =>
-                          executeVisibleCommand("XLSCTL.DATA.SORT.FILTER")
-                        }
-                        testId="spreadsheet-ribbon-filter-column"
-                      />
-                      <OfficeHomeCommandStack>
-                        <SpreadsheetRibbonAction
-                          active={hasActiveFilter}
-                          {...visibleCommandActionProps(
-                            "XLSCTL.DATA.SORT.CLEAR",
-                          )}
-                          displayLabel={webDataReviewViewLabels.clear}
-                          homeVariant="compact"
-                          icon={
-                            <SpreadsheetDataIcon name="clearFilter" size={16} />
-                          }
-                          label={t("spreadsheet.clearFilters")}
-                          onClick={() =>
-                            executeVisibleCommand("XLSCTL.DATA.SORT.CLEAR")
-                          }
-                          testId="spreadsheet-ribbon-clear-filters"
-                        />
-                        <SpreadsheetRibbonAction
-                          active={hasActiveFilter}
-                          {...visibleCommandActionProps(
-                            "XLSCTL.DATA.SORT.REAPPLY",
-                          )}
-                          displayLabel={webDataReviewViewLabels.reapply}
-                          homeVariant="compact"
-                          icon={
-                            <SpreadsheetDataIcon
-                              name="reapplyFilter"
-                              size={16}
-                            />
-                          }
-                          label={reapplyFilterLabel}
-                          onClick={() =>
-                            executeVisibleCommand("XLSCTL.DATA.SORT.REAPPLY")
-                          }
-                          testId="spreadsheet-ribbon-reapply-filters"
-                        />
-                        <SpreadsheetRibbonAction
-                          active={advancedFilterOpen}
-                          {...visibleCommandActionProps(
-                            "XLSCTL.DATA.SORT.ADVANCED",
-                          )}
-                          hidden={!SHOW_SPREADSHEET_DESKTOP_ANALYSIS}
-                          homeVariant="compact"
-                          icon={<SpreadsheetDataIcon name="filter" size={16} />}
-                          label={advancedFilterLabel}
-                          onClick={() =>
-                            executeVisibleCommand("XLSCTL.DATA.SORT.ADVANCED")
-                          }
-                          testId="spreadsheet-ribbon-advanced-filter"
-                        />
-                      </OfficeHomeCommandStack>
-                    </>
-                  ),
-                },
-                {
-                  id: "data-tools",
-                  label: webDataReviewViewLabels.dataTools,
-                  content: (
-                    <>
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.DATA.TOOLS.TEXT_TO_COLUMNS",
-                        )}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetDataIcon name="textToColumns" size={24} />
-                        }
-                        label={t("spreadsheet.textToColumnsMenu")}
-                        displayLabel={t("spreadsheet.uiCopy.textToColumns")}
-                        onClick={() =>
-                          executeVisibleCommand(
-                            "XLSCTL.DATA.TOOLS.TEXT_TO_COLUMNS",
-                          )
-                        }
-                        testId="spreadsheet-ribbon-data-text-to-columns"
-                      />
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.DATA.TOOLS.FLASH_FILL",
-                        )}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="flashFill" size={24} />}
-                        label={t("spreadsheet.flashFillMenu")}
-                        displayLabel={t("spreadsheet.uiCopy.flashFill")}
-                        onClick={() =>
-                          executeVisibleCommand("XLSCTL.DATA.TOOLS.FLASH_FILL")
-                        }
-                        testId="spreadsheet-ribbon-data-flash-fill"
-                      />
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.DATA.TOOLS.REMOVE_DUPLICATES",
-                        )}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetDataIcon
-                            name="removeDuplicates"
-                            size={24}
-                          />
-                        }
-                        label={t("spreadsheet.removeDuplicatesMenu")}
-                        onClick={() =>
-                          executeVisibleCommand(
-                            "XLSCTL.DATA.TOOLS.REMOVE_DUPLICATES",
-                          )
-                        }
-                        testId="spreadsheet-ribbon-data-remove-duplicates"
-                      />
-                      {/* Consolidate (Excel "Data > Consolidate" parity): aggregate multiple
-            source ranges into a summary range by position or by category labels.
-            The pure consolidate() helper (lib/spreadsheet/consolidate.ts) does
-            all the math; the dialog collects sources, function, mode and dest. */}
-                      {/* XLS-A027: desktop Excel's Data Tools ▸ Consolidate. */}
-                      {SHOW_SPREADSHEET_DESKTOP_ANALYSIS ? (
-                        <span
-                            style={{
-                              position: "relative",
-                              display: "inline-flex",
-                            }}
-                            data-testid="spreadsheet-ribbon-data-consolidate-control"
-                          >
-                            <SpreadsheetRibbonAction
-                              active={consolidateOpen}
-                              buttonRef={consolidateTriggerRef}
-                              homeVariant="large"
-                              icon={<SpreadsheetDataIcon name="group" size={24} />}
-                              label={t("spreadsheet.consolidateMenu")}
-                              onClick={toggleConsolidate}
-                              testId="spreadsheet-ribbon-data-consolidate"
-                            />
-                        </span>
-                      ) : null}
-                      {/* Excel's Data Validation is a split button: the
-                          top opens the dialog, the arrow also offers Circle
-                          Invalid Data and Clear Validation Circles. */}
-                      <OfficeHomeSplitLayout
-                        testId="spreadsheet-ribbon-validation-split"
-                        primary={
-                          <SpreadsheetRibbonAction
-                            active={selectionHasValidation}
-                            {...visibleCommandActionProps(
-                              "XLSCTL.DATA.TOOLS.VALIDATION",
-                            )}
-                            homeVariant="large"
-                            icon={
-                              <SpreadsheetDataIcon name="validation" size={24} />
-                            }
-                            label={t("spreadsheet.dataValidationMenu")}
-                            onClick={() =>
-                              executeVisibleCommand(
-                                "XLSCTL.DATA.TOOLS.VALIDATION",
-                              )
-                            }
-                            testId="spreadsheet-ribbon-validation"
-                          />
-                        }
-                        trigger={
-                          <DropdownMenu modal={false}>
-                            <DropdownMenuTrigger asChild>
-                              <OfficeHomeMenuTrigger
-                                className="note-editor-office-toolbar__split-chevron"
-                                icon={<SpreadsheetRibbonMenuChevron size={12} />}
-                                label={t("spreadsheet.dataValidationMenu")}
-                                testId="spreadsheet-ribbon-validation-options"
-                                variant="icon"
-                              />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start">
-                              <DropdownMenuItem
-                                {...visibleCommandMenuProps(
-                                  "XLSCTL.DATA.TOOLS.VALIDATION",
-                                )}
-                                onSelect={() =>
-                                  executeVisibleCommand(
-                                    "XLSCTL.DATA.TOOLS.VALIDATION",
-                                  )
-                                }
-                                data-testid="spreadsheet-ribbon-validation-dialog"
-                              >
-                                {t("spreadsheet.validationDialogMenuItem")}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                disabled={validations.length === 0}
-                                onSelect={circleInvalidData}
-                                data-testid="spreadsheet-validation-circle"
-                              >
-                                {t("spreadsheet.circleInvalid")}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                disabled={!invalidCircles}
-                                onSelect={clearInvalidCircles}
-                                data-testid="spreadsheet-validation-clear-circles"
-                              >
-                                {t("spreadsheet.clearValidationCircles")}
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        }
-                      />
-                      {null}
-                      <SpreadsheetRibbonMenuAction
-                        triggerRef={cellTransformTriggerRef}
-                        hidden={!SHOW_SPREADSHEET_DESKTOP_DATA_EXTRAS}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="viewOptions" size={24} />}
-                        label={t("spreadsheet.cellTransformMenu")}
-                        testId="spreadsheet-cell-transform-toggle"
-                        menuClassName="docs-cupertino-menu"
-                      >
-                        {cellTransformChoices.map(([transform, label]) => (
-                          <DropdownMenuItem
-                            key={transform}
-                            data-control-id="XLSCTL.DATA.TRANSFORM.MENU"
-                            data-control-occurrence-id={transform}
-                            data-control-surface="data-ribbon-transform"
-                            onSelect={() =>
-                              previewCellTransform(transform, label)
-                            }
-                            data-testid={`spreadsheet-transform-${transform}`}
-                          >
-                            {label}
-                          </DropdownMenuItem>
-                        ))}
-                      </SpreadsheetRibbonMenuAction>
-                    </>
-                  ),
-                },
-                {
-                  id: "data-what-if",
-                  label: t("spreadsheet.data.forecastGroup"), // Excel's Forecast group (XLS-A027)
-                  hidden: !SHOW_SPREADSHEET_DESKTOP_ANALYSIS,
-                  content: (
-                    <>
-                    <SpreadsheetRibbonMenuAction
-                      controlId="XLSCTL.DATA.WHAT_IF.MENU"
-                      homeVariant="large"
-                      icon={<SpreadsheetDataIcon name="analyze" size={24} />}
-                      // Excel's Forecast group: the button is "What-If
-                      // Analysis"; Data Table is one of its three entries,
-                      // listed after Scenario Manager and Goal Seek as Excel
-                      // lists them. The trigger used to wear the entry's name.
-                      label={t("spreadsheet.whatIfAnalysisMenu")}
-                      menuClassName="docs-cupertino-menu w-max max-w-[15rem]"
-                      testId="spreadsheet-ribbon-data-what-if"
-                    >
-                      <DropdownMenuItem
-                        data-control-id="XLSCTL.DATA.SCENARIO_MANAGER.DIALOG"
-                        data-testid="spreadsheet-ribbon-data-what-if-scenario"
-                        onSelect={toggleScenario}
-                      >
-                        <SpreadsheetDataIcon name="viewOptions" size={16} />
-                        <span>{t("spreadsheet.scenarioMenu")}</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        data-control-id="XLSCTL.DATA.GOAL_SEEK.DIALOG"
-                        data-testid="spreadsheet-ribbon-data-what-if-goal-seek"
-                        onSelect={toggleGoalSeek}
-                      >
-                        <Target size={16} />
-                        <span>{t("spreadsheet.goalSeekMenu")}</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        data-control-id="XLSCTL.DATA.WHAT_IF.DATA_TABLE.DIALOG"
-                        data-testid="spreadsheet-ribbon-data-what-if-data-table"
-                        onSelect={toggleWhatIf}
-                      >
-                        <SpreadsheetDataIcon name="analyze" size={16} />
-                        {/* Excel's entry is "Data Table", the dialog's own name. */}
-                        <span>{t("editorCommands.spreadsheet.data.what_if_table")}</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        data-control-id="XLSCTL.DATA.SOLVER.DIALOG"
-                        data-testid="spreadsheet-ribbon-data-what-if-solver"
-                        onSelect={toggleSolver}
-                      >
-                        <SpreadsheetDataIcon name="analyze" size={16} />
-                        <span>{t("spreadsheet.solverMenu")}</span>
-                      </DropdownMenuItem>
-                    </SpreadsheetRibbonMenuAction>
-                    {/* XLS-A027: Forecast ▸ Forecast Sheet. */}
-                      <SpreadsheetRibbonAction
-                        active={forecastOpen}
-                        buttonRef={forecastTriggerRef}
-                        disabled={
-                          workbookStructureProtection?.locked === true ||
-                          sheets.length >= MAX_SHEETS
-                        }
-                        disabledReason={
-                          workbookStructureProtection?.locked
-                            ? workbookStructureProtectedReason
-                            : forecastSheetLimitReason
-                        }
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="analyze" size={24} />}
-                        label={forecastLabel}
-                        onClick={() =>
-                          forecastOpen
-                            ? closeForecast()
-                            : setForecastOpen(true)
-                        }
-                        testId="spreadsheet-ribbon-data-forecast-sheet"
-                      />
-                    </>
-                  ),
-                },
-                {
-                  id: "data-outline",
-                  label: webDataReviewViewLabels.outline,
-                  content: (
-                    <>
-                      <SpreadsheetRibbonMenuAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.DATA.OUTLINE.GROUP_MENU",
-                        )}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="group" size={24} />}
-                        label={t("spreadsheet.data.group")}
-                        testId="spreadsheet-ribbon-data-group"
-                      >
-                        <DropdownMenuItem
-                          {...visibleCommandMenuProps(
-                            "XLSCTL.DATA.OUTLINE.GROUP.ROWS",
-                          )}
-                          data-testid="spreadsheet-ribbon-data-group-rows"
-                          onSelect={() =>
-                            executeVisibleCommand(
-                              "XLSCTL.DATA.OUTLINE.GROUP.ROWS",
-                            )
-                          }
-                        >
-                          {t("spreadsheet.groupRows")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          {...visibleCommandMenuProps(
-                            "XLSCTL.DATA.OUTLINE.GROUP.COLUMNS",
-                          )}
-                          data-testid="spreadsheet-ribbon-data-group-columns"
-                          onSelect={() =>
-                            executeVisibleCommand(
-                              "XLSCTL.DATA.OUTLINE.GROUP.COLUMNS",
-                            )
-                          }
-                        >
-                          {t("spreadsheet.groupColumns")}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        {/* Desktop Excel: Data > Group arrow > Auto Outline. */}
-                        <DropdownMenuItem
-                          data-control-id="XLSCTL.DATA.OUTLINE.GROUP_MENU"
-                          data-control-occurrence-id="auto-outline"
-                          data-control-surface="data-ribbon-outline"
-                          data-testid="spreadsheet-ribbon-data-auto-outline"
-                          onSelect={autoOutline}
-                        >
-                          {t("spreadsheet.autoOutline")}
-                        </DropdownMenuItem>
-                      </SpreadsheetRibbonMenuAction>
-                      <SpreadsheetRibbonMenuAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.DATA.OUTLINE.UNGROUP_MENU",
-                        )}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="ungroup" size={24} />}
-                        label={t("spreadsheet.ungroup")}
-                        testId="spreadsheet-ribbon-data-ungroup"
-                      >
-                        <DropdownMenuItem
-                          {...visibleCommandMenuProps(
-                            "XLSCTL.DATA.OUTLINE.UNGROUP.ROWS",
-                          )}
-                          data-testid="spreadsheet-ribbon-data-ungroup-rows"
-                          onSelect={() =>
-                            executeVisibleCommand(
-                              "XLSCTL.DATA.OUTLINE.UNGROUP.ROWS",
-                            )
-                          }
-                        >
-                          {t("spreadsheet.ungroupRows")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          {...visibleCommandMenuProps(
-                            "XLSCTL.DATA.OUTLINE.UNGROUP.COLUMNS",
-                          )}
-                          data-testid="spreadsheet-ribbon-data-ungroup-columns"
-                          onSelect={() =>
-                            executeVisibleCommand(
-                              "XLSCTL.DATA.OUTLINE.UNGROUP.COLUMNS",
-                            )
-                          }
-                        >
-                          {t("spreadsheet.ungroupColumns")}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        {/* Excel's Ungroup ▸ Clear Outline: every row and
-                            column group goes; hidden lines stay hidden. */}
-                        <DropdownMenuItem
-                          data-testid="spreadsheet-ribbon-data-clear-outline"
-                          disabled={outlineGroups.length === 0}
-                          onSelect={clearOutline}
-                        >
-                          {t("spreadsheet.clearOutline")}
-                        </DropdownMenuItem>
-                      </SpreadsheetRibbonMenuAction>
-                      {/* Desktop Excel: Data > Outline > Subtotal. */}
-                      <SpreadsheetRibbonAction
-                        active={subtotalOpen}
-                        controlId="XLSCTL.DATA.OUTLINE.SUBTOTAL"
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="analyze" size={24} />}
-                        label={t("spreadsheet.subtotalMenu")}
-                        onClick={toggleSubtotal}
-                        testId="spreadsheet-ribbon-data-subtotal"
-                      />
-                      {/* XLS-A027: Outline ▸ Show Detail / Hide Detail. */}
-                      <RibbonCol>
-                        <SpreadsheetRibbonAction
-                          homeVariant="compact"
-                          disabled={!outlineDetailTarget(outlineGroups, "row", activeCell.row, sheet.outlineSummaryBelow !== false, "show") &&
-                            !outlineDetailTarget(outlineGroups, "col", activeCell.col, sheet.outlineSummaryRight !== false, "show")}
-                          icon={<SpreadsheetDataIcon name="group" size={16} />}
-                          label={t("spreadsheet.data.showDetail")}
-                          onClick={() => applyOutlineDetail("show")}
-                          testId="spreadsheet-ribbon-data-show-detail"
-                        />
-                        <SpreadsheetRibbonAction
-                          homeVariant="compact"
-                          disabled={!outlineDetailTarget(outlineGroups, "row", activeCell.row, sheet.outlineSummaryBelow !== false, "hide") &&
-                            !outlineDetailTarget(outlineGroups, "col", activeCell.col, sheet.outlineSummaryRight !== false, "hide")}
-                          icon={<SpreadsheetDataIcon name="ungroup" size={16} />}
-                          label={t("spreadsheet.data.hideDetail")}
-                          onClick={() => applyOutlineDetail("hide")}
-                          testId="spreadsheet-ribbon-data-hide-detail"
-                        />
-                      </RibbonCol>
-                    </>
-                  ),
-                },
-              ],
-              review: () => orderSpreadsheetReviewGroups([
-                {
-                  id: "review-comments",
-                  label: webDataReviewViewLabels.comments,
-                  content: (
-                    <>
-                      <SpreadsheetRibbonAction
-                        {...reviewCommandActionProps(
-                          "XLSCTL.REVIEW.COMMENT.NEW",
-                        )}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetDataIcon name="newComment" size={24} />
-                        }
-                        label={t("spreadsheet.review.newComment")}
-                        onClick={() =>
-                          executeVisibleCommand("XLSCTL.REVIEW.COMMENT.NEW")
-                        }
-                        testId="spreadsheet-ribbon-comment-new"
-                      />
-                      <SpreadsheetRibbonAction
-                        active={commentsPaneOpen}
-                        {...reviewCommandActionProps(
-                          "XLSCTL.REVIEW.COMMENT.SHOW",
-                        )}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetDataIcon name="showComments" size={24} />
-                        }
-                        label={t("spreadsheet.review.showComments")}
-                        onClick={() =>
-                          executeVisibleCommand("XLSCTL.REVIEW.COMMENT.SHOW")
-                        }
-                        testId="spreadsheet-ribbon-comment-show"
-                      />
-                      <OfficeHomeCommandStack>
-                          <SpreadsheetRibbonAction
-                            {...reviewCommandActionProps(
-                              "XLSCTL.REVIEW.COMMENT.PREVIOUS",
-                            )}
-                            displayLabel={webDataReviewViewLabels.previous}
-                            homeVariant="compact"
-                            icon={
-                              <SpreadsheetDataIcon
-                                name="previousComment"
-                                size={16}
-                              />
-                            }
-                            label={t("spreadsheet.previousComment")}
-                            onClick={() =>
-                              executeVisibleCommand(
-                                "XLSCTL.REVIEW.COMMENT.PREVIOUS",
-                              )
-                            }
-                            testId="spreadsheet-ribbon-comment-previous"
-                          />
-                          <SpreadsheetRibbonAction
-                            {...reviewCommandActionProps(
-                              "XLSCTL.REVIEW.COMMENT.NEXT",
-                            )}
-                            displayLabel={webDataReviewViewLabels.next}
-                            homeVariant="compact"
-                            icon={
-                              <SpreadsheetDataIcon
-                                name="nextComment"
-                                size={16}
-                              />
-                            }
-                            label={t("spreadsheet.nextComment")}
-                            onClick={() =>
-                              executeVisibleCommand(
-                                "XLSCTL.REVIEW.COMMENT.NEXT",
-                              )
-                            }
-                            testId="spreadsheet-ribbon-comment-next"
-                          />
-                        <SpreadsheetRibbonAction
-                          {...reviewCommandActionProps(
-                            "XLSCTL.REVIEW.COMMENT.DELETE",
-                          )}
-                          homeVariant="compact"
-                          icon={
-                            <SpreadsheetDataIcon
-                              name="deleteComment"
-                              size={16}
-                            />
-                          }
-                          label={t("spreadsheet.review.deleteComment")}
-                          onClick={() =>
-                            // Excel's Delete removes the active cell's note
-                            // as well as its threaded comment; a note is not
-                            // a receipt-written thread, it is dropped in
-                            // place like the cell menu's Delete Note.
-                            hasNote(activeComment) && !hasThread(activeComment)
-                              ? deleteActiveCellNote()
-                              : executeReviewCommentMutation(
-                                  "XLSCTL.REVIEW.COMMENT.DELETE",
-                                  "",
-                                )
-                          }
-                          testId="spreadsheet-ribbon-comment-delete"
-                        />
-                      </OfficeHomeCommandStack>
-                    </>
-                  ),
-                },
-                {
-                  id: "review-changes",
-                  label: webDataReviewViewLabels.changes,
-                  content: (
-                    <>
-                      <SpreadsheetRibbonAction
-                        {...reviewCommandActionProps(
-                          "XLSCTL.REVIEW.CHANGES.SHOW",
-                        )}
-                        homeVariant="large"
-                        icon={
-                          <OfficeSemanticIcon
-                            semanticId="review.trackChanges"
-                            size={24}
-                          />
-                        }
-                        label={t("spreadsheet.review.showChanges")}
-                        disabled={false}
-                        disabledReason={undefined}
-                        onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Show Changes"))}
-                        testId="spreadsheet-ribbon-review-show-changes"
-                      />
-                      <SpreadsheetRibbonAction
-                        {...reviewCommandActionProps(
-                          "XLSCTL.REVIEW.CHANGES.VERSION_HISTORY",
-                        )}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetDataIcon name="versionHistory" size={24} />
-                        }
-                        label={t("toolbar.versionHistory")}
-                        disabled={false}
-                        disabledReason={undefined}
-                        onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Version History"))}
-                        testId="spreadsheet-ribbon-review-version-history"
-                      />
-                    </>
-                  ),
-                },
-                {
-                  id: "review-proofing",
-                  label: webDataReviewViewLabels.proofing,
-                  content: (
-                    <>
-                      <SpreadsheetRibbonAction
-                        {...reviewCommandActionProps(
-                          "XLSCTL.REVIEW.PROOF.SPELL",
-                        )}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="spelling" size={24} />}
-                        label={t("spreadsheet.reviewSpelling")}
-                        onClick={() =>
-                          executeVisibleCommand("XLSCTL.REVIEW.PROOF.SPELL")
-                        }
-                        testId="spreadsheet-ribbon-review-spelling"
-                      />
-                      <SpreadsheetRibbonAction
-                        active={reviewDialogMode === "performance"}
-                        {...reviewCommandActionProps(
-                          "XLSCTL.REVIEW.PROOF.PERFORMANCE",
-                        )}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetDataIcon name="performance" size={24} />
-                        }
-                        label={t("spreadsheet.review.performance")}
-                        onClick={() =>
-                          executeVisibleCommand(
-                            "XLSCTL.REVIEW.PROOF.PERFORMANCE",
-                          )
-                        }
-                        testId="spreadsheet-ribbon-review-performance"
-                      />
-                      <SpreadsheetRibbonAction
-                        active={reviewDialogMode === "statistics"}
-                        {...reviewCommandActionProps(
-                          "XLSCTL.REVIEW.PROOF.WORKBOOK_STATS",
-                        )}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetDataIcon name="statistics" size={24} />
-                        }
-                        label={t("spreadsheet.review.workbookStatistics")}
-                        onClick={() =>
-                          executeVisibleCommand(
-                            "XLSCTL.REVIEW.PROOF.WORKBOOK_STATS",
-                          )
-                        }
-                        testId="spreadsheet-ribbon-review-statistics"
-                      />
-                    </>
-                  ),
-                },
-                {
-                  // XLS-A028: Excel's Accessibility group.
-                  id: "review-accessibility",
-                  label: t("spreadsheet.review.accessibilityGroup"),
-                  content: (
-                    <>
-                      <SpreadsheetRibbonAction
-                        active={reviewDialogMode === "accessibility"}
-                        {...reviewCommandActionProps(
-                          "XLSCTL.REVIEW.PROOF.ACCESSIBILITY_MENU",
-                        )}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetDataIcon name="accessibility" size={24} />
-                        }
-                        label={t("spreadsheet.review.accessibility")}
-                        onClick={() =>
-                          executeVisibleCommand(
-                            "XLSCTL.REVIEW.PROOF.ACCESSIBILITY_MENU",
-                          )
-                        }
-                        testId="spreadsheet-ribbon-review-accessibility"
-                      />
-                    </>
-                  ),
-                },
-                {
-                  id: "review-protection",
-                  label: webDataReviewViewLabels.protection,
-                  content: (
-                    <>
-                      {/* XLS-A028: Excel's Protect group commands, as direct
-                          buttons; MRAI's lock/unlock menu stays beside them. */}
-                      <SpreadsheetRibbonAction
-                        active={sheetProtectionConfigured}
-                        {...reviewCommandActionProps("XLSCTL.REVIEW.PROTECT.SHEET")}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="protect" size={24} />}
-                        label={t(
-                          sheetProtectionConfigured
-                            ? "spreadsheet.unprotectSheet"
-                            : "spreadsheet.protectSheet",
-                        )}
-                        onClick={() => executeVisibleCommand("XLSCTL.REVIEW.PROTECT.SHEET")}
-                        testId="spreadsheet-ribbon-review-protect-sheet"
-                      />
-                      <SpreadsheetRibbonAction
-                        active={workbookProtectionActive(workbookStructureProtection)}
-                        {...reviewCommandActionProps("XLSCTL.REVIEW.PROTECT.WORKBOOK")}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="protect" size={24} />}
-                        label={
-                          workbookProtectionActive(workbookStructureProtection)
-                            ? t("spreadsheet.uiCopy.unprotectWorkbook")
-                            : t("spreadsheet.review.protectWorkbook")
-                        }
-                        onClick={() => executeVisibleCommand("XLSCTL.REVIEW.PROTECT.WORKBOOK")}
-                        testId="spreadsheet-ribbon-review-protect-workbook"
-                      />
-                      {/* File > Info > Protect Workbook > Encrypt with Password: the
-                          .xlsx is saved encrypted (ECMA-376 Agile Encryption);
-                          the password lives in this session only. */}
-                      <SpreadsheetRibbonAction
-                        active={workbookEncrypted}
-                        disabled={autosave.readOnly}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="protect" size={24} />}
-                        label={t("officeEncryption.menuEncrypt")}
-                        onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Encrypt with Password"))}
-                        testId="spreadsheet-ribbon-review-encrypt-with-password"
-                      />
-                      {workbookEncrypted ? (
-                        <SpreadsheetRibbonAction
-                          disabled={autosave.readOnly}
-                          homeVariant="large"
-                          icon={<SpreadsheetDataIcon name="protect" size={24} />}
-                          label={t("officeEncryption.menuRemove")}
-                          onClick={removeWorkbookPassword}
-                          testId="spreadsheet-ribbon-review-remove-password"
-                        />
-                      ) : null}
-                      <SpreadsheetRibbonAction
-                        // XLS-A028: Allow Edit Ranges — defined while the
-                        // sheet is unprotected; Excel greys it otherwise.
-                        disabled={autosave.readOnly || sheet.protected === true || Boolean(sheet.chartSheet)}
-                        disabledReason={
-                          sheet.protected
-                            ? t("spreadsheet.editRanges.unprotectFirst")
-                            : undefined
-                        }
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="protect" size={24} />}
-                        label={t("spreadsheet.editRanges.command")}
-                        onClick={() =>
-                          setEditRangesDialog({
-                            ranges: [...(sheet.protectedRanges ?? [])],
-                            selected: sheet.protectedRanges?.length ? 0 : null,
-                            editor: null,
-                          })
-                        }
-                        testId="spreadsheet-ribbon-review-allow-edit-ranges"
-                      />
-                      <SpreadsheetRibbonMenuAction
-                        active={Boolean(isSheetProtectionEffectiveRef.current(sheet))}
-                        {...reviewCommandActionProps(
-                          "XLSCTL.REVIEW.PROTECT.MANAGE_MENU",
-                        )}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="protect" size={24} />}
-                        label={t("spreadsheet.review.manageProtection")}
-                        testId="spreadsheet-ribbon-review-manage-protection"
-                      >
-                        <DropdownMenuItem
-                          {...visibleCommandMenuProps(
-                            "XLSCTL.REVIEW.PROTECT.SELECTION_UNLOCK",
-                          )}
-                          onSelect={() =>
-                            executeVisibleCommand(
-                              "XLSCTL.REVIEW.PROTECT.SELECTION_UNLOCK",
-                            )
-                          }
-                          data-testid="spreadsheet-review-unlock-selection"
-                        >
-                          {t("spreadsheet.unlockCells")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          {...visibleCommandMenuProps(
-                            "XLSCTL.REVIEW.PROTECT.SELECTION_LOCK",
-                          )}
-                          onSelect={() =>
-                            executeVisibleCommand(
-                              "XLSCTL.REVIEW.PROTECT.SELECTION_LOCK",
-                            )
-                          }
-                          data-testid="spreadsheet-review-lock-selection"
-                        >
-                          {t("spreadsheet.lockCells")}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          {...visibleCommandMenuProps(
-                            "XLSCTL.REVIEW.PROTECT.SHEET",
-                          )}
-                          onSelect={() =>
-                            executeVisibleCommand("XLSCTL.REVIEW.PROTECT.SHEET")
-                          }
-                          data-testid="spreadsheet-review-toggle-sheet-protection"
-                        >
-                          {t(
-                            sheetProtectionConfigured
-                              ? "spreadsheet.unprotectSheet"
-                              : "spreadsheet.protectSheet",
-                          )}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          {...visibleCommandMenuProps(
-                            "XLSCTL.REVIEW.PROTECT.WORKBOOK",
-                          )}
-                          onSelect={() =>
-                            executeVisibleCommand(
-                              "XLSCTL.REVIEW.PROTECT.WORKBOOK",
-                            )
-                          }
-                          data-testid="spreadsheet-review-protect-workbook"
-                        >
-                          {workbookProtectionActive(workbookStructureProtection)
-                            ? t("spreadsheet.uiCopy.unprotectWorkbook")
-                            : t("spreadsheet.review.protectWorkbook")}
-                        </DropdownMenuItem>
-                      </SpreadsheetRibbonMenuAction>
-                      <SpreadsheetRibbonAction
-                        active={sheetProtectionPaused}
-                        {...reviewCommandActionProps(
-                          "XLSCTL.REVIEW.PROTECT.PAUSE",
-                        )}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="protect" size={24} />}
-                        label={
-                          sheetProtectionPaused
-                            ? t("spreadsheet.uiCopy.resumeProtection")
-                            : t("spreadsheet.review.pauseProtection")
-                        }
-                        onClick={() =>
-                          executeVisibleCommand("XLSCTL.REVIEW.PROTECT.PAUSE")
-                        }
-                        testId="spreadsheet-ribbon-review-pause-protection"
-                      />
-                    </>
-                  ),
-                },
-                {
-                  id: "review-notes",
-                  label: webDataReviewViewLabels.notes,
-                  content: (
-                    <SpreadsheetRibbonMenuAction
-                      {...reviewCommandActionProps("XLSCTL.REVIEW.NOTE.MENU")}
-                      homeVariant="large"
-                      icon={<SpreadsheetDataIcon name="notes" size={24} />}
-                      label={t("spreadsheet.review.notes")}
-                      onCloseAutoFocus={(event) => {
-                        if (!reviewNewNoteCloseAutoFocusRef.current) return;
-                        reviewNewNoteCloseAutoFocusRef.current = false;
-                        event.preventDefault();
-                        scheduleRaf(() => {
-                          const popover = document.querySelector<HTMLElement>(
-                            '[role="dialog"][data-kind="note"][data-testid="spreadsheet-comment-thread"]',
-                          );
-                          const textarea =
-                            popover?.querySelector<HTMLTextAreaElement>(
-                              '[data-testid="spreadsheet-comment-textarea"]',
-                            );
-                          if (
-                            !popover?.isConnected ||
-                            popover.dataset.kind !== "note" ||
-                            !textarea?.isConnected ||
-                            textarea.disabled
-                          ) {
-                            return;
-                          }
-                          const style = window.getComputedStyle(popover);
-                          if (
-                            style.display === "none" ||
-                            style.visibility === "hidden"
-                          ) {
-                            return;
-                          }
-                          textarea.focus({ preventScroll: true });
-                        });
-                      }}
-                      testId="spreadsheet-ribbon-review-notes"
-                    >
-                      <DropdownMenuItem
-                        {...visibleCommandMenuProps("XLSCTL.REVIEW.NOTE.NEW")}
-                        onSelect={() => {
-                          void executeVisibleCommand(
-                            "XLSCTL.REVIEW.NOTE.NEW",
-                          ).catch(() => {
-                            reviewNewNoteCloseAutoFocusRef.current = false;
-                          });
-                        }}
-                        data-testid="spreadsheet-review-new-note"
-                      >
-                        {hasNote(activeComment)
-                          ? t("spreadsheet.review.editNote")
-                          : t("spreadsheet.review.newNote")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        {...visibleCommandMenuProps(
-                          "XLSCTL.REVIEW.NOTE.SHOW_HIDE",
-                        )}
-                        onSelect={() =>
-                          executeVisibleCommand("XLSCTL.REVIEW.NOTE.SHOW_HIDE")
-                        }
-                        data-testid="spreadsheet-review-show-hide-note"
-                      >
-                        {t("spreadsheet.review.showHideNote")}
-                      </DropdownMenuItem>
-                      <DropdownMenuCheckboxItem
-                        {...visibleCommandMenuProps(
-                          "XLSCTL.REVIEW.NOTE.SHOW_ALL",
-                        )}
-                        checked={notesShownAll}
-                        onSelect={() =>
-                          executeVisibleCommand("XLSCTL.REVIEW.NOTE.SHOW_ALL")
-                        }
-                        data-testid="spreadsheet-review-show-notes"
-                      >
-                        {t("spreadsheet.review.showAllNotes")}
-                      </DropdownMenuCheckboxItem>
-                    </SpreadsheetRibbonMenuAction>
-                  ),
-                },
-              ]),
-              view: () => orderSpreadsheetViewGroups([
-                {
-                  // XLS-A030: Workbook Views — Normal, Page Break Preview,
-                  // Page Layout (the status bar's three, on the ribbon too).
-                  id: "view-workbook-views",
-                  label: t("spreadsheet.view.workbookViewsGroup"),
-                  collapsedIcon: <SpreadsheetViewModeIcon name="normal" size={24} />,
-                  content: (
-                    <>
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps("XLSCTL.VIEW.MODE.NORMAL")}
-                        active={spreadsheetViewMode === "normal"}
-                        homeVariant="large"
-                        icon={<SpreadsheetViewModeIcon name="normal" size={24} />}
-                        label={t("spreadsheet.view.normal")}
-                        testId="spreadsheet-ribbon-view-normal"
-                      />
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps("XLSCTL.VIEW.MODE.PAGE_BREAK")}
-                        active={spreadsheetViewMode === "pageBreakPreview"}
-                        homeVariant="large"
-                        icon={<SpreadsheetViewModeIcon name="pageBreakPreview" size={24} />}
-                        label={t("spreadsheet.view.pageBreakPreview")}
-                        testId="spreadsheet-ribbon-view-page-break"
-                      />
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps("XLSCTL.VIEW.MODE.PAGE_LAYOUT")}
-                        active={spreadsheetViewMode === "pageLayout"}
-                        homeVariant="large"
-                        icon={<SpreadsheetViewModeIcon name="pageLayout" size={24} />}
-                        label={t("spreadsheet.view.pageLayout")}
-                        testId="spreadsheet-ribbon-view-page-layout"
-                      />
-                      <SpreadsheetRibbonAction
-                        // XLS-A030: Custom Views — Excel greys it while the
-                        // workbook contains a table.
-                        disabled={customViewsBlockedByTable}
-                        disabledReason={t("spreadsheet.customViews.tableBlocked")}
-                        homeVariant="large"
-                        icon={<SpreadsheetViewModeIcon name="pageLayout" size={24} />}
-                        label={t("spreadsheet.view.customViews")}
-                        onClick={() =>
-                          setCustomViewsDialog({
-                            selected: workbookCustomViews[0]?.id ?? null,
-                            adding: null,
-                            confirmDelete: null,
-                          })
-                        }
-                        testId="spreadsheet-ribbon-view-custom-views"
-                      />
-                    </>
-                  ),
-                },
-                {
-                  // XLS-A030: Zoom — Zoom…, 100%, Zoom to Selection.
-                  id: "view-zoom",
-                  label: t("spreadsheet.view.zoomGroup"),
-                  collapsedIcon: <OfficeSemanticIcon semanticId="view.zoom" size={24} />,
-                  content: (
-                    <>
-                      <SpreadsheetRibbonAction
-                        activation="click"
-                        homeVariant="large"
-                        icon={<OfficeSemanticIcon semanticId="view.zoom" size={24} />}
-                        label={t("spreadsheet.view.zoom")}
-                        displayLabel={t("spreadsheet.view.zoomGroup")}
-                        onClick={() => {
-                          const current = String(Math.round(sheetZoom * 100));
-                          const preset = SPREADSHEET_ZOOM_DIALOG_PRESETS.find((value) => value === current);
-                          setZoomDialogDraft({ choice: preset ?? "custom", custom: current });
-                        }}
-                        testId="spreadsheet-ribbon-view-zoom"
-                      />
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps("XLSCTL.VIEW.ZOOM.RESET_100")}
-                        homeVariant="large"
-                        icon={<OfficeSemanticIcon semanticId="view.onePage" size={24} />}
-                        label="100%"
-                        testId="spreadsheet-ribbon-view-zoom-100"
-                      />
-                      <SpreadsheetRibbonAction
-                        homeVariant="large"
-                        icon={<OfficeSemanticIcon semanticId="view.pageWidth" size={24} />}
-                        label={t("spreadsheet.view.zoomToSelection")}
-                        onClick={zoomToSelection}
-                        testId="spreadsheet-ribbon-view-zoom-selection"
-                      />
-                    </>
-                  ),
-                },
-                {
-                  id: "view-sheet-views",
-                  label: webDataReviewViewLabels.sheetViews,
-                  content: (
-                    <>
-                      <OfficeHomeCommandStack>
-                        <OfficeHomeCommandRow className={spreadsheetHomeStyles.viewFieldRow}>
-                          <span className={spreadsheetHomeStyles.viewFieldLabel}>{webDataReviewViewLabels.sheetViews}</span>
-                        {sheetViewMode !== "default" ? (
-                          <input
-                            type="text"
-                            className={spreadsheetHomeStyles.viewNameInput}
-                            aria-label={`${t("spreadsheet.view.sheetView")}: ${currentSheetViewLabel}`}
-                            aria-invalid={sheetViewNameError ? "true" : undefined}
-                            title={sheetViewNameErrorText}
-                            maxLength={MAX_NAMED_SHEET_VIEW_NAME}
-                            spellCheck={false}
-                            value={sheetViewNameDraft ?? currentSheetViewLabel}
-                            onChange={(event) => {
-                              setSheetViewNameDraft(event.target.value);
-                              setSheetViewNameError(null);
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                submitSheetViewNameBox();
-                              } else if (event.key === "Escape") {
-                                event.preventDefault();
-                                resetSheetViewNameBox();
-                              }
-                            }}
-                            onBlur={resetSheetViewNameBox}
-                            data-spreadsheet-view-field-value="true"
-                            data-testid="spreadsheet-view-sheet-view-name"
-                          />
-                        ) : null}
-                        <SpreadsheetRibbonMenuAction
-                          // With the name box showing the state, the switch is
-                          // a plain chevron attached to it — not a second,
-                          // tinted 120px field beside the first.
-                          active={false}
-                          {...visibleCommandActionProps(
-                            "XLSCTL.VIEW.SHEET_VIEW.SWITCH",
-                          )}
-                          className={
-                            sheetViewMode !== "default"
-                              ? spreadsheetHomeStyles.viewNameDisclosure
-                              : spreadsheetHomeStyles.viewChoiceTrigger
-                          }
-                          geometry={sheetViewMode !== "default" ? "gallery" : undefined}
-                          homeVariant="icon"
-                          icon={
-                            sheetViewMode !== "default" ? null : (
-                              <span className={spreadsheetHomeStyles.viewChoiceValue} data-spreadsheet-view-field-value="true">{currentSheetViewLabel}</span>
-                            )
-                          }
-                          label={`${t("spreadsheet.view.sheetView")}: ${currentSheetViewLabel}`}
-                          disabled={false}
-                          disabledReason={undefined}
-                          onNotice={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Sheet View"))}
-                          testId="spreadsheet-ribbon-view-sheet-view"
-                        >
-                          <DropdownMenuRadioGroup
-                            value={
-                              sheetViewMode === "temporary"
-                                ? "temporary"
-                                : activeNamedSheetView?.id ?? "default"
-                            }
-                          >
-                            <DropdownMenuRadioItem
-                              {...visibleCommandMenuProps(
-                                "XLSCTL.VIEW.SHEET_VIEW.SWITCH",
-                              )}
-                              value="default"
-                              onSelect={() => switchSheetView(null)}
-                              data-control-id="XLSCTL.VIEW.SHEET_VIEW.SWITCH.DEFAULT"
-                              data-testid="spreadsheet-view-sheet-view-default"
-                            >
-                              {webDataReviewViewLabels.defaultView}
-                            </DropdownMenuRadioItem>
-                            {sheetViewMode === "temporary" ? (
-                              <DropdownMenuRadioItem
-                                value="temporary"
-                                disabled
-                                data-testid="spreadsheet-view-sheet-view-temporary"
-                              >
-                                {webDataReviewViewLabels.temporaryView}
-                              </DropdownMenuRadioItem>
-                            ) : null}
-                            {(sheet.namedSheetViews ?? []).map((view) => (
-                              <DropdownMenuRadioItem
-                                key={view.id}
-                                value={view.id}
-                                disabled={Boolean(view.nativeBlocker)}
-                                aria-label={
-                                  view.nativeBlocker
-                                    ? `${view.name}: ${webDataReviewViewLabels.sheetViewUnsupported}`
-                                    : view.name
-                                }
-                                title={
-                                  view.nativeBlocker
-                                    ? webDataReviewViewLabels.sheetViewUnsupported
-                                    : undefined
-                                }
-                                onSelect={() => switchSheetView(view.id)}
-                                data-testid={`spreadsheet-view-sheet-view-${view.id}`}
-                              >
-                                {view.name}
-                              </DropdownMenuRadioItem>
-                            ))}
-                          </DropdownMenuRadioGroup>
-                          {sheetViewScopePreference !== "ask" ? (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onSelect={askSheetViewScopeAgain}
-                                data-testid="spreadsheet-view-sheet-view-ask-scope"
-                              >
-                                {t("spreadsheet.sheetViewScope.askAgain")}
-                              </DropdownMenuItem>
-                            </>
-                          ) : null}
-                        </SpreadsheetRibbonMenuAction>
-                        </OfficeHomeCommandRow>
-                        <OfficeHomeCommandRow className={spreadsheetHomeStyles.viewSmallCommands}>
-                          <SpreadsheetRibbonAction
-                            {...visibleCommandActionProps(
-                              "XLSCTL.VIEW.SHEET_VIEW.KEEP",
-                            )}
-                            homeVariant="compact"
-                            icon={
-                              <SpreadsheetDataIcon name="keepView" size={16} />
-                            }
-                            label={webDataReviewViewLabels.saveView}
-                            disabled={false}
-                            disabledReason={undefined}
-                            onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Keep Sheet View"))}
-                            testId="spreadsheet-view-sheet-view-keep"
-                          />
-                          <SpreadsheetRibbonAction
-                            {...visibleCommandActionProps(
-                              "XLSCTL.VIEW.SHEET_VIEW.NEW",
-                            )}
-                            homeVariant="compact"
-                            icon={
-                              <SpreadsheetDataIcon name="newView" size={16} />
-                            }
-                            label={webDataReviewViewLabels.newView}
-                            disabled={false}
-                            disabledReason={undefined}
-                            onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("New Sheet View"))}
-                            testId="spreadsheet-view-sheet-view-new"
-                          />
-                          <SpreadsheetRibbonAction
-                            {...visibleCommandActionProps(
-                              "XLSCTL.VIEW.SHEET_VIEW.OPTIONS",
-                            )}
-                            homeVariant="compact"
-                            icon={
-                              <SpreadsheetDataIcon
-                                name="viewOptions"
-                                size={16}
-                              />
-                            }
-                            label={webDataReviewViewLabels.viewOptions}
-                            disabled={false}
-                            disabledReason={undefined}
-                            onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Sheet View Options"))}
-                            testId="spreadsheet-view-sheet-view-options"
-                          />
-                        </OfficeHomeCommandRow>
-                      </OfficeHomeCommandStack>
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.VIEW.SHEET_VIEW.EXIT",
-                        )}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="exitView" size={24} />}
-                        label={webDataReviewViewLabels.exitView}
-                        onClick={() =>
-                          executeVisibleCommand("XLSCTL.VIEW.SHEET_VIEW.EXIT")
-                        }
-                        testId="spreadsheet-view-sheet-view-exit"
-                      />
-                    </>
-                  ),
-                },
-                {
-                  id: "view-window",
-                  label: webDataReviewViewLabels.window,
-                  content: (
-                    <>
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps("XLSCTL.VIEW.WINDOW.NEW")}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="newWindow" size={24} />}
-                        label={t("spreadsheet.view.newWindow")}
-                        disabled={false}
-                        disabledReason={undefined}
-                        onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("New Window"))}
-                        testId="spreadsheet-ribbon-view-new-window"
-                      />
-                      <SpreadsheetRibbonAction
-                        homeVariant="large"
-                        icon={<OfficeSemanticIcon semanticId="window.blocks" size={24} />}
-                        label={t("spreadsheet.view.arrangeAll")}
-                        onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Arrange All"))}
-                        testId="spreadsheet-ribbon-view-arrange-all"
-                      />
-                      <OfficeHomeSplitLayout
-                        testId="spreadsheet-ribbon-freeze-panes-split"
-                        primary={
-                          <SpreadsheetRibbonAction
-                            active={freezeActive}
-                            {...visibleCommandActionProps(
-                              "XLSCTL.VIEW.WINDOW.FREEZE",
-                            )}
-                            homeVariant="large"
-                            icon={
-                              <SpreadsheetDataIcon name="freezePanes" size={24} />
-                            }
-                            label={t(
-                              freezeActive
-                                ? "spreadsheet.unfreeze"
-                                : "spreadsheet.freezePanesMenu",
-                            )}
-                            onClick={() =>
-                              executeVisibleCommand("XLSCTL.VIEW.WINDOW.FREEZE")
-                            }
-                            testId="spreadsheet-ribbon-freeze-panes"
-                          />
-                        }
-                        trigger={
-                          <DropdownMenu modal={false}>
-                            <DropdownMenuTrigger asChild>
-                              <OfficeHomeMenuTrigger
-                                className="note-editor-office-toolbar__split-chevron"
-                                icon={
-                                  <SpreadsheetRibbonMenuChevron size={12} />
-                                }
-                                label={t("spreadsheet.freezePanesMenu")}
-                                testId="spreadsheet-ribbon-freeze-panes-options"
-                                variant="icon"
-                              />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start">
-                              {freezeMenuEntries.map((entry) => {
-                                // The first command doubles as Unfreeze once a
-                                // freeze is on, which is where this surface
-                                // shows that command; the other four never do.
-                                const unfreezing =
-                                  entry.action === "freezePanes" &&
-                                  freezeActive;
-                                return (
-                                  <Fragment key={entry.testid}>
-                                    {entry.separatorBefore ? (
-                                      <DropdownMenuSeparator />
-                                    ) : null}
-                                    <DropdownMenuItem
-                                      {...visibleCommandMenuProps(
-                                        entry.controlId,
-                                      )}
-                                      onSelect={() =>
-                                        executeVisibleCommand(entry.controlId)
-                                      }
-                                      data-testid={`spreadsheet-view-${
-                                        entry.action === "freezePanes"
-                                          ? "freeze-selection"
-                                          : entry.testid
-                                      }`}
-                                    >
-                                      {renderRibbonMenuLabel(
-                                        unfreezing
-                                          ? {
-                                              icon: "unfreezePanes",
-                                              title: t("spreadsheet.unfreeze"),
-                                            }
-                                          : entry,
-                                      )}
-                                    </DropdownMenuItem>
-                                  </Fragment>
-                                );
-                              })}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        }
-                      />
-                      {/* View > Window > Split (desktop Excel): split above
-                          and left of the active cell with movable dividers;
-                          pressing it again removes the split. Turning a split
-                          on clears any freeze. */}
-                      <OfficeHomeCommandStack rows={3}>
-                      <SpreadsheetRibbonAction
-                        active={nativeSplitPresent}
-                        controlId="XLSCTL.VIEW.WINDOW.SPLIT"
-                        disabled={!splitToggleAvailable}
-                        disabledReason={
-                          nativeSplitPresent
-                            ? undefined
-                            : !splitRenderingSupported
-                              ? t("spreadsheet.commandStatus.splitNeedsNormalView")
-                              : !splitSelectionFitsPersistedGrid
-                                ? t("spreadsheet.uiCopy.expandTheSheetOrEnterDataBeforeUsingSplit")
-                                : undefined
-                        }
-                        displayLabel={t("toolbar.splitView")}
-                        homeVariant="compact"
-                        icon={<SquareSplitHorizontal size={16} strokeWidth={1.6} />}
-                        label={t("spreadsheet.splitPanesToggle")}
-                        onClick={applySplitToggle}
-                        testId="spreadsheet-ribbon-view-split"
-                      />
-                      {
-
-
-}
-                        <SpreadsheetRibbonAction
-                          homeVariant="compact"
-                          icon={<OfficeSemanticIcon semanticId="view.hide" size={16} />}
-                          label={t("spreadsheet.view.hideWindow")}
-                          onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Hide Window"))}
-                          testId="spreadsheet-ribbon-view-hide-window"
-                        />
-                        <SpreadsheetRibbonMenuAction
-                          variant="inline"
-                          onNotice={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Unhide Window"))}
-                          icon={<OfficeSemanticIcon semanticId="view.show" size={16} />}
-                          label={t("spreadsheet.view.unhideWindow")}
-                          testId="spreadsheet-ribbon-view-unhide-window"
-                          menuClassName="docs-cupertino-menu w-max max-w-[18rem]"
-                        >
-                          {(() => {
-                            const hidden = sheetWindowChoices().filter((choice) => choice.minimized);
-                            return hidden.length === 0 ? (
-                              <DropdownMenuItem disabled data-testid="spreadsheet-ribbon-view-unhide-none">
-                                {t("spreadsheet.view.noHiddenWindows")}
-                              </DropdownMenuItem>
-                            ) : (
-                              hidden.map((choice) => (
-                                <DropdownMenuItem
-                                  key={choice.id}
-                                  data-testid={`spreadsheet-ribbon-view-unhide-${choice.id}`}
-                                  onSelect={() => {
-                                    if (windowManager) switchToOfficeWindow(windowManager, choice.id, "spreadsheet");
-                                  }}
-                                >
-                                  {choice.title}
-                                </DropdownMenuItem>
-                              ))
-                            );
-                          })()}
-                        </SpreadsheetRibbonMenuAction>
-                      </OfficeHomeCommandStack>
-                      <OfficeHomeCommandStack rows={3}>
-                        <SpreadsheetRibbonAction
-                          homeVariant="compact"
-                          icon={<OfficeSemanticIcon semanticId="layout.columns.two" size={16} />}
-                          label={t("spreadsheet.view.sideBySide")}
-                          onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("View Side by Side"))}
-                          testId="spreadsheet-ribbon-view-side-by-side"
-                        />
-                        <SpreadsheetRibbonAction
-                          homeVariant="compact"
-                          active={sheetSynchronizedScroll.active}
-                          icon={<OfficeSemanticIcon semanticId="nav.chevrons.upDown" size={16} />}
-                          label={t("spreadsheet.view.synchronousScrolling")}
-                          onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Synchronous Scrolling"))}
-                          testId="spreadsheet-ribbon-view-sync-scrolling"
-                        />
-                        <SpreadsheetRibbonAction
-                          homeVariant="compact"
-                          icon={<OfficeSemanticIcon semanticId="window.restore" size={16} />}
-                          label={t("spreadsheet.view.resetWindowPosition")}
-                          onClick={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Reset Window Position"))}
-                          testId="spreadsheet-ribbon-view-reset-window-position"
-                        />
-                      </OfficeHomeCommandStack>
-                      <SpreadsheetRibbonMenuAction
-                        onNotice={() => void import("@mrnote/core/host/desktop-app.ts").then((module) => module.noteDesktopFeature("Switch Windows"))}
-                        homeVariant="large"
-                        icon={<OfficeSemanticIcon semanticId="view.window" size={24} />}
-                        label={t("spreadsheet.view.switchWindows")}
-                        testId="spreadsheet-ribbon-view-switch-windows"
-                        menuClassName="docs-cupertino-menu w-max max-w-[18rem]"
-                      >
-                        {sheetWindowChoices().map((choice, index) => (
-                          <DropdownMenuCheckboxItem
-                            key={choice.id}
-                            checked={choice.current}
-                            data-testid={`spreadsheet-ribbon-view-switch-${choice.id}`}
-                            onCheckedChange={() => {
-                              if (windowManager) switchToOfficeWindow(windowManager, choice.id, "spreadsheet");
-                            }}
-                          >
-                            {`${index + 1} ${choice.title}`}
-                          </DropdownMenuCheckboxItem>
-                        ))}
-                      </SpreadsheetRibbonMenuAction>
-                      <SpreadsheetRibbonAction
-                        active={spreadsheetFullscreenActive}
-                        {...visibleCommandActionProps(
-                          "XLSCTL.VIEW.WINDOW.FULLSCREEN",
-                        )}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetDataIcon name="fullScreen" size={24} />
-                        }
-                        label={webDataReviewViewLabels.fullScreen}
-                        onClick={() =>
-                          executeVisibleCommand("XLSCTL.VIEW.WINDOW.FULLSCREEN")
-                        }
-                        testId="spreadsheet-ribbon-view-full-screen"
-                      />
-                    </>
-                  ),
-                },
-                {
-                  id: "view-show",
-                  label: webDataReviewViewLabels.show,
-                  content: (
-                    <>
-                      <SpreadsheetRibbonAction
-                        active={navigationPaneOpen}
-                        {...visibleCommandActionProps(
-                          "XLSCTL.VIEW.SHOW.NAVIGATION",
-                        )}
-                        buttonRef={navigationTriggerRef}
-                        homeVariant="large"
-                        icon={
-                          <SpreadsheetDataIcon name="sheetViews" size={24} />
-                        }
-                        label={webDataReviewViewLabels.navigation}
-                        onClick={() =>
-                          executeVisibleCommand("XLSCTL.VIEW.SHOW.NAVIGATION")
-                        }
-                        testId="spreadsheet-ribbon-view-navigation"
-                      />
-                      {/* Excel's Show group: four check commands in two
-                          columns of two (Ruler and Gridlines, Formula Bar and
-                          Headings). One column of four overflowed the band:
-                          Ruler under its top edge and Formula Bar over the
-                          group caption. */}
-                      <OfficeHomeCommandStack className={spreadsheetHomeStyles.viewSmallCommands}>
-                        <SpreadsheetRibbonAction
-                          // XLS-A030: Ruler, live in Page Layout view only
-                          // (Excel greys it in Normal and Page Break Preview).
-                          active={!viewOptions.hideRuler}
-                          disabled={spreadsheetViewMode !== "pageLayout"}
-                          disabledReason={t("spreadsheet.view.rulerPageLayoutOnly")}
-                          homeVariant="compact"
-                          icon={<OfficeSemanticIcon semanticId="view.ruler" size={16} />}
-                          label={t("spreadsheet.view.ruler")}
-                          onClick={() =>
-                            commitViewOptions((current) => {
-                              const next = { ...current };
-                              if (current.hideRuler) delete next.hideRuler;
-                              else next.hideRuler = true;
-                              return next;
-                            })
-                          }
-                          testId="spreadsheet-ribbon-view-ruler"
-                        />
-                        <SpreadsheetRibbonAction
-                          active={!sheetHidesGridlines}
-                          {...visibleCommandActionProps(
-                            "XLSCTL.VIEW.SHOW.GRIDLINES",
-                          )}
-                          homeVariant="compact"
-                          icon={
-                            <SpreadsheetDataIcon name="gridlines" size={16} />
-                          }
-                          label={t("spreadsheet.gridlinesToggle")}
-                          displayLabel={webDataReviewViewLabels.gridlines}
-                          onClick={() =>
-                            executeVisibleCommand(
-                              "XLSCTL.VIEW.SHOW.GRIDLINES",
-                            )
-                          }
-                          testId="spreadsheet-ribbon-gridlines"
-                        />
-                      </OfficeHomeCommandStack>
-                      <OfficeHomeCommandStack className={spreadsheetHomeStyles.viewSmallCommands}>
-                        <SpreadsheetRibbonAction
-                          active={!viewOptions.hideFormulaBar}
-                          {...visibleCommandActionProps(
-                            "XLSCTL.VIEW.SHOW.FORMULA_BAR",
-                          )}
-                          homeVariant="compact"
-                          icon={
-                            <SpreadsheetDataIcon name="formulaBar" size={16} />
-                          }
-                          label={t("spreadsheet.formulaBarToggle")}
-                          displayLabel={webDataReviewViewLabels.formulaBar}
-                          onClick={() =>
-                            executeVisibleCommand(
-                              "XLSCTL.VIEW.SHOW.FORMULA_BAR",
-                            )
-                          }
-                          testId="spreadsheet-ribbon-formula-bar"
-                        />
-                        <SpreadsheetRibbonAction
-                          active={!sheetHidesHeadings}
-                          {...visibleCommandActionProps(
-                            "XLSCTL.VIEW.SHOW.HEADINGS",
-                          )}
-                          homeVariant="compact"
-                          icon={
-                            <SpreadsheetDataIcon name="headings" size={16} />
-                          }
-                          label={t("spreadsheet.headingsToggle")}
-                          displayLabel={webDataReviewViewLabels.headings}
-                          onClick={() =>
-                            executeVisibleCommand("XLSCTL.VIEW.SHOW.HEADINGS")
-                          }
-                          testId="spreadsheet-ribbon-headings"
-                        />
-                      </OfficeHomeCommandStack>
-                      <SpreadsheetRibbonAction
-                        {...visibleCommandActionProps(
-                          "XLSCTL.VIEW.SHOW.DATA_TYPE_ICONS",
-                        )}
-                        homeVariant="large"
-                        icon={<SpreadsheetDataIcon name="headings" size={24} />}
-                        label={webDataReviewViewLabels.dataTypeIcons}
-                        onClick={() =>
-                          executeVisibleCommand(
-                            "XLSCTL.VIEW.SHOW.DATA_TYPE_ICONS",
-                          )
-                        }
-                        testId="spreadsheet-ribbon-view-data-type-icons"
-                      />
-                      <OfficeHomeSplitLayout
-                        testId="spreadsheet-ribbon-view-focus-cell-split"
-                        primary={
-                          <SpreadsheetRibbonAction
-                            active={viewOptions.readingMode}
-                            {...visibleCommandActionProps(
-                              "XLSCTL.VIEW.SHOW.FOCUS_CELL",
-                            )}
-                            homeVariant="large"
-                            icon={
-                              <SpreadsheetDataIcon name="focusCell" size={24} />
-                            }
-                            label={webDataReviewViewLabels.focusCell}
-                            onClick={() =>
-                              executeVisibleCommand(
-                                "XLSCTL.VIEW.SHOW.FOCUS_CELL",
-                              )
-                            }
-                            testId="spreadsheet-ribbon-view-focus-cell"
-                          />
-                        }
-                        trigger={
-                          <DropdownMenu
-                            modal={false}
-                            open={focusCellMenuOpen}
-                            onOpenChange={setFocusCellMenuOpen}
-                          >
-                            <DropdownMenuTrigger asChild>
-                              <OfficeHomeMenuTrigger
-                                className="note-editor-office-toolbar__split-chevron"
-                                icon={
-                                  <SpreadsheetRibbonMenuChevron size={12} />
-                                }
-                                // The split button's two halves are two
-                                // different commands, as they are in Excel:
-                                // the face toggles Focus Cell, the chevron
-                                // opens Focus Cell Color. Naming both of them
-                                // "Focus Cell" left the View tab with the same
-                                // button twice and nothing to tell a screen
-                                // reader (or a pointer) which one picks the
-                                // colour.
-                                label={webDataReviewViewLabels.focusCellColor}
-                                testId="spreadsheet-ribbon-view-focus-cell-options"
-                                variant="icon"
-                              />
-                            </DropdownMenuTrigger>
-                            {/* Excel for the web's Focus Cell menu: the
-                                toggle itself (state shown on the ribbon
-                                button, the item keeps its icon rather than
-                                a check), then "Focus Cell Color" opening
-                                the editors' one shared colour palette. */}
-                            <DropdownMenuContent align="start">
-                              <DropdownMenuItem
-                                role="menuitemcheckbox"
-                                aria-checked={viewOptions.readingMode}
-                                {...visibleCommandMenuProps(
-                                  "XLSCTL.VIEW.SHOW.FOCUS_CELL",
-                                )}
-                                onSelect={() =>
-                                  executeVisibleCommand(
-                                    "XLSCTL.VIEW.SHOW.FOCUS_CELL",
-                                  )
-                                }
-                                data-control-id="XLSCTL.VIEW.SHOW.FOCUS_CELL.TOGGLE_MENU"
-                                data-testid="spreadsheet-view-focus-cell-toggle"
-                              >
-                                {renderRibbonMenuLabel({
-                                  icon: "focusCell",
-                                  title: webDataReviewViewLabels.focusCell,
-                                })}
-                              </DropdownMenuItem>
-                              <DropdownMenuSub>
-                                <DropdownMenuSubTrigger
-                                  data-control-id="XLSCTL.VIEW.SHOW.FOCUS_CELL.COLOR_MENU"
-                                  data-testid="spreadsheet-view-focus-cell-color-menu"
-                                >
-                                  {renderRibbonMenuLabel({
-                                    icon: "focusCellColor",
-                                    title:
-                                      webDataReviewViewLabels.focusCellColor,
-                                  })}
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent
-                                  className="spreadsheet-window__focus-cell-color-menu"
-                                  data-testid="spreadsheet-view-focus-cell-color-panel"
-                                >
-                                  <OfficeColorPalettePanel
-                                    value={resolveFocusCellColor(
-                                      viewOptions.focusCellColor,
-                                    )}
-                                    paletteId={workbookThemePaletteId}
-                                    themeColumns={themeColorGrid(
-                                      workbookThemePaletteId,
-                                    )}
-                                    recents={recentColors}
-                                    labels={{
-                                      themeColors: t("spreadsheet.themeColors"),
-                                      standardColors: t(
-                                        "spreadsheet.standardColors",
-                                      ),
-                                      recentColors: t(
-                                        "spreadsheet.recentColors",
-                                      ),
-                                      moreColors: t("spreadsheet.moreColors"),
-                                    }}
-                                    controlId="XLSCTL.VIEW.SHOW.FOCUS_CELL.COLOR"
-                                    entryControlId={() =>
-                                      "XLSCTL.VIEW.SHOW.FOCUS_CELL.COLOR"
-                                    }
-                                    onPick={(color) => {
-                                      if (color) setFocusCellColor(color);
-                                      setFocusCellMenuOpen(false);
-                                    }}
-                                    testIdPrefix="spreadsheet-view-focus-cell-color"
-                                  />
-                                </DropdownMenuSubContent>
-                              </DropdownMenuSub>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        }
-                      />
-                    </>
-                  ),
-                },
-                {
-                  id: "view-immersive",
-                  label: webDataReviewViewLabels.immersiveReader,
-                  hidden: !anyVisibleCommand("XLSCTL.VIEW.IMMERSIVE_READER"),
-                  content: (
-                    <SpreadsheetRibbonAction
-                      {...visibleCommandActionProps(
-                        "XLSCTL.VIEW.IMMERSIVE_READER",
-                      )}
-                      activation="click"
-                      active={immersiveReaderOpen}
-                      buttonRef={immersiveReaderReturnFocusRef}
-                      homeVariant="large"
-                      icon={
-                        <OfficeSemanticIcon
-                          semanticId="view.immersiveReader"
-                          size={24}
-                        />
-                      }
-                      label={webDataReviewViewLabels.immersiveReader}
-                      onClick={() =>
-                        executeVisibleCommand("XLSCTL.VIEW.IMMERSIVE_READER")
-                      }
-                      testId="spreadsheet-ribbon-view-immersive-reader"
-                    />
-                  ),
-                },
-                {
-                  // Desktop Excel's View > Macros: View Macros and Record
-                  // Macro, over the workbook's recorded (cell-edit) macros —
-                  // the same recorder and list the Automate tab drives.
-                  id: "view-macros",
-                  label: t("spreadsheet.view.macrosGroup"),
-                  content: (
-                    <SpreadsheetRibbonMenuAction
-                      active={macroRecording}
-                      homeVariant="large"
-                      icon={<SpreadsheetViewModeIcon name="macros" size={24} />}
-                      label={t("spreadsheet.view.macros")}
-                      testId="spreadsheet-ribbon-view-macros"
-                      triggerRef={viewMacrosTriggerRef}
-                    >
-                      <DropdownMenuItem
-                        data-testid="spreadsheet-view-macros-view"
-                        onSelect={() => {
-                          setMacroDialogOpen(true);
-                          // The menu item is gone once the menu closes; the
-                          // dialog returns to the ribbon button.
-                          automationDialogReturnFocusRef.current =
-                            viewMacrosTriggerRef.current;
-                        }}
-                      >
-                        <SpreadsheetViewModeIcon name="macroView" size={16} />
-                        {t("spreadsheet.view.viewMacros")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        data-testid="spreadsheet-view-macros-record"
-                        onSelect={() => {
-                          if (macroRecording) stopMacroRecording();
-                          else openRecordMacroDialog();
-                          automationDialogReturnFocusRef.current =
-                            viewMacrosTriggerRef.current;
-                        }}
-                      >
-                        <SpreadsheetViewModeIcon name="macroRecord" size={16} />
-                        {macroRecording
-                          ? t("spreadsheet.automate.stopRecording")
-                          : t("spreadsheet.view.recordMacro")}
-                      </DropdownMenuItem>
-                      <DropdownMenuCheckboxItem
-                        checked={macroRelativeReferences}
-                        disabled={macroRecording}
-                        onCheckedChange={(checked) => setMacroRelativeReferences(checked === true)}
-                        data-testid="spreadsheet-view-macros-relative"
-                      >
-                        {t("spreadsheet.view.useRelativeReferences")}
-                      </DropdownMenuCheckboxItem>
-                    </SpreadsheetRibbonMenuAction>
-                  ),
-                },
-              ]),
-              automate: () => [
-                {
-                  id: "automate-office-scripts",
-                  label: t("spreadsheet.automate.officeScriptsGroup"),
-                  content: (
-                    <>
-                      <SpreadsheetRibbonMenuAction
-                        icon={
-                          <SpreadsheetInsertIcon name="newScript" size={24} />
-                        }
-                        label={t("spreadsheet.automate.newScript")}
-                        testId="spreadsheet-ribbon-automate-new-script"
-                        triggerRef={automateNewScriptTriggerRef}
-                      >
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            automationDialogReturnFocusRef.current =
-                              automateNewScriptTriggerRef.current;
-                            openLocalScriptEditor("", true);
-                          }}
-                          data-testid="spreadsheet-automate-new-local-script"
-                        >
-                          <SpreadsheetInsertIcon name="newScript" size={16} />
-                          {t("spreadsheet.automate.newLocalScript")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            automationDialogReturnFocusRef.current =
-                              automateNewScriptTriggerRef.current;
-                            if (macroRecording) requestAutomationRecordingStop();
-                            else startAutomationRecording();
-                          }}
-                          data-testid="spreadsheet-automate-record-actions-menu-item"
-                        >
-                          <SpreadsheetInsertIcon
-                            name="recordActions"
-                            size={16}
-                          />
-                          {t(
-                            macroRecording
-                              ? "spreadsheet.automate.stopRecording"
-                              : "spreadsheet.automate.recordActions",
-                          )}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          disabled
-                          title={t(
-                            "spreadsheet.automate.officeScriptsUnavailable",
-                          )}
-                          data-testid="spreadsheet-automate-office-script-editor"
-                        >
-                          {t("spreadsheet.automate.officeScriptEditor")}
-                        </DropdownMenuItem>
-                      </SpreadsheetRibbonMenuAction>
-                      <SpreadsheetRibbonMenuAction
-                        icon={
-                          <SpreadsheetInsertIcon name="viewScripts" size={24} />
-                        }
-                        label={t("spreadsheet.automate.viewScripts")}
-                        testId="spreadsheet-ribbon-automate-view-scripts"
-                        triggerRef={automateViewScriptsTriggerRef}
-                      >
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            automationDialogReturnFocusRef.current =
-                              automateViewScriptsTriggerRef.current;
-                            setAutomationCatalogOpen(true);
-                          }}
-                          data-testid="spreadsheet-automate-view-local-scripts"
-                        >
-                          <SpreadsheetInsertIcon name="viewScripts" size={16} />
-                          {t("spreadsheet.automate.localAutomationCatalog")}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          disabled
-                          title={t(
-                            "spreadsheet.automate.officeScriptsUnavailable",
-                          )}
-                          data-testid="spreadsheet-automate-all-office-scripts"
-                        >
-                          {t("spreadsheet.automate.allOfficeScripts")}
-                        </DropdownMenuItem>
-                      </SpreadsheetRibbonMenuAction>
-                      <SpreadsheetRibbonAction
-                        active={macroRecording}
-                        icon={
-                          <SpreadsheetInsertIcon
-                            name="recordActions"
-                            size={24}
-                          />
-                        }
-                        label={t(
-                          macroRecording
-                            ? "spreadsheet.automate.stopRecording"
-                            : "spreadsheet.automate.recordActions",
-                        )}
-                        onClick={
-                          macroRecording
-                            ? requestAutomationRecordingStop
-                            : startAutomationRecording
-                        }
-                        testId="spreadsheet-ribbon-automate-record-actions"
-                      />
-                    </>
-                  ),
-                },
-                {
-                  id: "automate-gallery",
-                  label: t("spreadsheet.automate.galleryGroup"),
-                  content: (
-                    <>
-                      <SpreadsheetRibbonAction
-                        icon={
-                          <SpreadsheetInsertIcon name="unhideAll" size={24} />
-                        }
-                        label={t("spreadsheet.automate.unhideAll")}
-                        onClick={runAutomationUnhideAll}
-                        testId="spreadsheet-ribbon-automate-unhide-all"
-                      />
-                      <SpreadsheetRibbonAction
-                        icon={
-                          <SpreadsheetInsertIcon
-                            name="freezeSelection"
-                            size={24}
-                          />
-                        }
-                        label={t("spreadsheet.automate.freezeSelection")}
-                        onClick={runAutomationFreezeSelection}
-                        testId="spreadsheet-ribbon-automate-freeze-selection"
-                      />
-                      <SpreadsheetRibbonAction
-                        icon={
-                          <SpreadsheetInsertIcon name="clearLinks" size={24} />
-                        }
-                        label={t("spreadsheet.automate.clearHyperlinks")}
-                        onClick={runAutomationRemoveHyperlinks}
-                        testId="spreadsheet-ribbon-automate-clear-hyperlinks"
-                      />
-                      <SpreadsheetRibbonAction
-                        icon={
-                          <SpreadsheetInsertIcon
-                            name="countBlankRows"
-                            size={24}
-                          />
-                        }
-                        label={t("spreadsheet.automate.countBlankRows")}
-                        onClick={runAutomationCountBlankRows}
-                        testId="spreadsheet-ribbon-automate-count-blank-rows"
-                      />
-                    </>
-                  ),
-                },
-              ],
-              draw: () => {
-                // Excel for Mac's Draw tab: Draw, the Eraser (Stroke, Small or
-                // Medium), Lasso Select, the pen gallery with Add Pen, and Draw
-                // with Trackpad. A pen is picked from the gallery; its drop
-                // arrow tunes it (Office's shared pen menus).
-                const penDisabledReason = !sheetProtectionAllowsRef.current(sheet, "editObjects")
-                  ? drawLabels.protected
-                  : !(inkInteractionMode === "lasso" && selectedInkIds.size > 0) &&
-                      sheetObjects.length >= MAX_SHEET_OBJECTS
-                    ? drawLabels.objectLimit
-                    : undefined;
-                return [
-                  {
-                    id: "draw-tools",
-                    label: drawLabels.tools,
-                    content: (
-                      <>
-                        {/* Drawing Tools in the order every MRAI Draw tab
-                            shares (Office's): Select, Lasso, Draw, Eraser. */}
-                        <SpreadsheetRibbonAction
-                          controlId="XLSCTL.DRAW.SELECT"
-                          active={inkInteractionMode === null}
-                          homeVariant="large"
-                          icon={
-                            <OfficeSemanticIcon semanticId="draw.select" size={24} />
-                          }
-                          label={t("toolbar.select")}
-                          onClick={() => writeInkInteractionMode(null)}
-                          testId="spreadsheet-ribbon-draw-select"
-                        />
-                        <SpreadsheetRibbonAction
-                          controlId="XLSCTL.DRAW.LASSO"
-                          active={inkInteractionMode === "lasso"}
-                          disabled={Boolean(drawExistingInkDisabledReason)}
-                          disabledReason={drawExistingInkDisabledReason}
-                          homeVariant="large"
-                          icon={
-                            <OfficeSemanticIcon semanticId="draw.lasso" size={24} />
-                          }
-                          label={drawLabels.lasso}
-                          onClick={() =>
-                            writeInkInteractionMode(
-                              inkInteractionMode === "lasso" ? null : "lasso",
-                            )
-                          }
-                          testId="spreadsheet-ribbon-draw-lasso"
-                        />
-                        <SpreadsheetRibbonAction
-                          controlId="XLSCTL.DRAW.MODE"
-                          active={inkDrawTools.penDrawActive}
-                          disabled={Boolean(drawCreateDisabledReason)}
-                          disabledReason={drawCreateDisabledReason}
-                          homeVariant="large"
-                          icon={
-                            <OfficeSemanticIcon semanticId="draw.mode" size={24} />
-                          }
-                          label={drawLabels.draw}
-                          onClick={() => {
-                            if (inkDrawTools.penDrawActive) {
-                              writeInkInteractionMode(null);
-                              return;
-                            }
-                            inkDrawTools.choosePenDraw();
-                            if (inkInteractionMode !== "draw") writeInkInteractionMode("draw");
-                          }}
-                          testId="spreadsheet-ribbon-draw-mode"
-                        />
-                        {/* Draw with Touch, one of the five tools (useInkDrawTools). */}
-                        <OfficeInkTouchDrawCommand
-                          inkDrawing={inkInteractionMode === "draw"}
-                          controlId="XLSCTL.DRAW.TOUCH"
-                          disabled={Boolean(drawCreateDisabledReason)}
-                          disabledReason={drawCreateDisabledReason}
-                          testId="spreadsheet-ribbon-draw-touch"
-                          onArm={() => writeInkInteractionMode("draw")}
-                          onExit={() => writeInkInteractionMode(null)}
-                        />
-                        <OfficeHomeLargeSplitLayout
-                          testId="spreadsheet-ribbon-draw-eraser-split"
-                          primary={
-                            <SpreadsheetRibbonAction
-                              controlId="XLSCTL.DRAW.ERASER_MENU"
-                              active={inkInteractionMode === "eraser"}
-                              disabled={Boolean(drawExistingInkDisabledReason)}
-                              disabledReason={drawExistingInkDisabledReason}
-                              homeVariant="large"
-                              icon={
-                                <OfficeSemanticIcon
-                                  semanticId="draw.eraser.stroke"
-                                  size={24}
-                                />
-                              }
-                              label={t("toolbar.drawEraser")}
-                              onClick={() =>
-                                writeInkInteractionMode(
-                                  inkInteractionMode === "eraser" ? null : "eraser",
-                                )
-                              }
-                              testId="spreadsheet-ribbon-draw-eraser"
-                            />
-                          }
-                          trigger={
-                            <DropdownMenu modal={false}>
-                              <DropdownMenuTrigger asChild>
-                                <OfficeHomeMenuTrigger
-                                  disabled={Boolean(drawExistingInkDisabledReason)}
-                                  disabledReason={drawExistingInkDisabledReason}
-                                  icon={<SpreadsheetRibbonMenuChevron size={9} />}
-                                  label={t("toolbar.drawEraserKinds")}
-                                  title={t("toolbar.drawEraserKinds")}
-                                  testId="spreadsheet-ribbon-draw-eraser-menu"
-                                  variant="icon"
-                                />
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent
-                                align="start"
-                                className="note-editor-toolbar-menu"
-                                data-testid="spreadsheet-ribbon-draw-eraser-menu-content"
-                                onCloseAutoFocus={(event) => event.preventDefault()}
-                              >
-                                <OfficeInkEraserMenuItems
-                                  value={inkEraser}
-                                  testIdPrefix="spreadsheet-ribbon-draw-eraser"
-                                  onChoose={chooseSpreadsheetInkEraser}
-                                />
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          }
-                        />
-                      </>
-                    ),
-                  },
-                  {
-                    id: "draw-pens",
-                    label: drawLabels.pens,
-                    content: (
-                      <>
-                        <OfficeInkPenGallery
-                          pens={inkPens.pens}
-                          selectedId={inkPresetId}
-                          drawing={inkInteractionMode === "draw"}
-                          disabled={Boolean(penDisabledReason)}
-                          disabledReason={penDisabledReason}
-                          testIdPrefix="spreadsheet-ribbon-draw-ink"
-                          controlIdFor={(pen) =>
-                            SPREADSHEET_INK_DEFAULT_PEN_CONTROL_IDS[pen.id]
-                          }
-                          onChoose={chooseSpreadsheetInkPreset}
-                          onUpdate={updateInkPen}
-                          onRemove={removeInkPen}
-                          onMoreColors={setInkMoreColorsPenId}
-                          penRef={(id, element) => {
-                            inkPenRefs.current.set(id, element);
-                          }}
-                        />
-                        <SpreadsheetRibbonMenuAction
-                          controlId="XLSCTL.DRAW.ADD_PEN_MENU"
-                          disabled={
-                            Boolean(drawCreateDisabledReason) ||
-                            inkPens.pens.length >= DOCUMENT_INK_MAX_PENS
-                          }
-                          disabledReason={drawCreateDisabledReason}
-                          homeVariant="large"
-                          icon={<Plus size={24} aria-hidden />}
-                          label={t("toolbar.drawAddPen")}
-                          testId="spreadsheet-ribbon-draw-add-pen"
-                        >
-                          <OfficeInkAddPenMenuItems
-                            testIdPrefix="spreadsheet-ribbon-draw-add-pen"
-                            onAdd={addInkPen}
-                          />
-                        </SpreadsheetRibbonMenuAction>
-                        <SpreadsheetRibbonAction
-                          {...visibleCommandActionProps(
-                            "XLSCTL.DRAW.ACTION_PEN",
-                          )}
-                          homeVariant="large"
-                          icon={
-                            <OfficeSemanticIcon
-                              semanticId="draw.actionPen"
-                              size={24}
-                            />
-                          }
-                          label={drawLabels.actionPen}
-                          testId="spreadsheet-ribbon-draw-action-pen"
-                        />
-                      </>
-                    ),
-                  },
-                  {
-                    // XLS-A032: Draw ▸ Convert — Ink to Shape, Ink to Math and
-                    // Ink to Text, as PowerPoint's Draw tab: each converts the
-                    // selected ink, or with none selected turns on the mode in
-                    // which new strokes convert (one mode at a time). The Math
-                    // Input Control is on Ink to Math's menu.
-                    id: "draw-convert",
-                    label: t("toolbar.drawConvert"),
-                    content: (
-                      
-                      // Docs and deck Draw tabs show the three conversions.
-                      <OfficeHomeCommandStack rows={3}>
-                        <SpreadsheetRibbonAction
-                          active={inkToShape}
-                          disabled={
-                            selectedInkIds.size > 0
-                              ? !sheetProtectionAllowsRef.current(sheet, "editObjects")
-                              : Boolean(drawCreateDisabledReason)
-                          }
-                          disabledReason={selectedInkIds.size > 0 ? drawLabels.protected : drawCreateDisabledReason}
-                          homeVariant="compact"
-                          icon={<OfficeSemanticIcon semanticId="ink.toShape" size={16} />}
-                          label={t("toolbar.drawInkToShape")}
-                          onClick={() => runInkConvert("shape")}
-                          testId="spreadsheet-ribbon-draw-ink-to-shape"
-                        />
-                        {null}
-                        {null}
-                      </OfficeHomeCommandStack>
-                    ),
-                  },
-                  {
-                    id: "draw-replay",
-                    label: t("toolbar.drawReplay"),
-                    content: (
-                      <SpreadsheetRibbonAction
-                        active={inkReplay !== null}
-                        disabled={sheetInkObjects.length === 0}
-                        homeVariant="large"
-                        icon={<OfficeSemanticIcon semanticId="media.play" size={24} />}
-                        label={t("toolbar.drawInkReplay")}
-                        onClick={() => {
-                          writeInkInteractionMode(null);
-                          setInkReplay({ position: 0, playing: true });
-                        }}
-                        testId="spreadsheet-ribbon-draw-ink-replay"
-                      />
-                    ),
-                  },
-                  {
-                    id: "draw-stencils",
-                    label: t("presentation.draw.stencilsGroup"),
-                    content: (
-                      <SpreadsheetRibbonAction
-                        active={inkRuler !== null}
-                        disabled={Boolean(drawCreateDisabledReason)}
-                        disabledReason={drawCreateDisabledReason}
-                        homeVariant="large"
-                        icon={<IconInkRuler home size={24} />}
-                        label={t("toolbar.ruler")}
-                        onClick={toggleInkRuler}
-                        testId="spreadsheet-ribbon-draw-ruler"
-                      />
-                    ),
-                  },
-                  // The way a finger or a trackpad draws, last on the tab as
-                  // on every MRAI Draw tab: one switch per device.
-                  ...(sheetDeviceHasTouch ? [] : [
-                  {
-                    id: "draw-trackpad",
-                    label: t("toolbar.drawTrackpad"),
-                    content: (
-                      <OfficeInkTrackpadSwitch
-                        on={inkTrackpad}
-                        controlId="XLSCTL.DRAW.TRACKPAD"
-                        disabled={Boolean(drawCreateDisabledReason)}
-                        disabledReason={drawCreateDisabledReason}
-                        testId="spreadsheet-ribbon-draw-trackpad"
-                        onToggle={() => setInkTrackpad((current) => !current)}
-                      />
-                    ),
-                  },
-                  ]),
-                  // The ribbon brought back over the pen palette folds into it
-                  // again from here (lib/pen-first-draw).
-                  ...(penFirst.available && !penDrawDisabledReason ? [
-                  {
-                    id: "draw-pen-palette",
-                    label: t("toolbar.penPalette"),
-                    content: (
-                      <OfficeInkHideRibbonCommand
-                        controlId="XLSCTL.DRAW.HIDE_RIBBON"
-                        testId="spreadsheet-ribbon-draw-hide-ribbon"
-                        onHide={penFirst.showPalette}
-                      />
-                    ),
-                  },
-                  ] : []),
-                ];
-              },
-              slicerDesign: selectedSlicer
-                ? [
-                    {
-                      id: "slicer-design-properties",
-                      label: t("spreadsheet.insertRibbon.slicer"),
-                      content: (
-                        <OfficeHomeCommandStack>
-                          <label className="flex min-h-[36px] min-w-[156px] items-center gap-2 px-2 text-[10px] font-medium text-slate-600">
-                            <span>{t("spreadsheet.uiCopy.slicerCaption")}</span>
-                            {/* Excel's Slicer Caption box shows the caption
-                                the slicer displays, which is the field name
-                                until a caption is typed (Microsoft Support,
-                                "Use slicers to filter data"). Leaving the
-                                shown caption as it is writes nothing. */}
-                            <input
-                              key={`${selectedSlicer.id}:${selectedSlicerView?.title ?? selectedSlicer.title ?? ""}`}
-                              aria-label={
-                                t("spreadsheet.uiCopy.slicerCaption")
-                              }
-                              className="h-7 w-24 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-200 disabled:bg-slate-100"
-                              data-control-id="XLSCTL.CONTEXT.SLICER.TITLE.MRAI.APPLY"
-                              data-testid="spreadsheet-ribbon-slicer-title"
-                              defaultValue={
-                                selectedSlicerView?.title ??
-                                selectedSlicer.title ??
-                                ""
-                              }
-                              disabled={!slicerTitleCommandState.enabled}
-                              maxLength={200}
-                              title={
-                                slicerFormatDisabledReason ??
-                                visibleCommandReason(
-                                  slicerTitleCommandState.reasonKey,
-                                )
-                              }
-                              onBlur={(event) => {
-                                const title = event.currentTarget.value.trim();
-                                if (
-                                  title ===
-                                  (selectedSlicerView?.title ??
-                                    selectedSlicer.title ??
-                                    "")
-                                ) {
-                                  return;
-                                }
-                                void executeSlicerDesignMutation(
-                                  "XLSCTL.CONTEXT.SLICER.TITLE.MRAI.APPLY",
-                                  title,
-                                );
-                              }}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  event.currentTarget.blur();
-                                } else if (event.key === "Escape") {
-                                  event.preventDefault();
-                                  event.currentTarget.value =
-                                    selectedSlicerView?.title ??
-                                    selectedSlicer.title ??
-                                    "";
-                                  event.currentTarget.blur();
-                                }
-                              }}
-                            />
-                          </label>
-                          <OfficeHomeCheckbox
-                            checked={selectedSlicer.showHeader !== false}
-                            controlId="XLSCTL.CONTEXT.SLICER.SHOW_HEADER.MRAI.APPLY"
-                            disabled={!slicerHeaderCommandState.enabled}
-                            label={t("spreadsheet.uiCopy.displayHeader")}
-                            onCheckedChange={(checked) =>
-                              void executeSlicerDesignMutation(
-                                "XLSCTL.CONTEXT.SLICER.SHOW_HEADER.MRAI.APPLY",
-                                checked,
-                              )
-                            }
-                            testId="spreadsheet-ribbon-slicer-show-header"
-                            title={
-                              slicerFormatDisabledReason ??
-                              visibleCommandReason(
-                                slicerHeaderCommandState.reasonKey,
-                              )
-                            }
-                          />
-                        </OfficeHomeCommandStack>
-                      ),
-                    },
-                    {
-                      id: "slicer-design-styles",
-                      label: t("spreadsheet.uiCopy.slicerStyles"),
-                      content: (
-                        <span data-control-id="XLSCTL.CONTEXT.SLICER.STYLE.MRAI.APPLY">
-                          <OfficeStyleGallery<SlicerStyleId>
-                            application="spreadsheet"
-                            ariaLabel={
-                              t("spreadsheet.uiCopy.slicerStyles")
-                            }
-                            className={
-                              spreadsheetHomeStyles.contextualStyleGallery
-                            }
-                            disabled={!slicerStyleCommandState.enabled}
-                            items={slicerStyleItems}
-                            labels={{
-                              more: t("spreadsheet.uiCopy.moreStyles"),
-                            }}
-                            // Excel's Slicer Styles sheet: swatches, no captions.
-                            menuGrid={{ columns: 7, thumbnail: [64, 44] }}
-                            menuMode="preview-only"
-                            groupHeadings
-                            quickIds={SLICER_STYLE_IDS}
-                            renderPreview={renderSlicerStylePreview}
-                            testIdPrefix="spreadsheet-slicer-style-gallery"
-                            value={selectedSlicer.styleId ?? "light1"}
-                            onPreviewChange={() => undefined}
-                            onCommit={(styleId) =>
-                              void executeSlicerDesignMutation(
-                                "XLSCTL.CONTEXT.SLICER.STYLE.MRAI.APPLY",
-                                styleId,
-                              )
-                            }
-                          />
-                        </span>
-                      ),
-                    },
-                    {
-                      id: "slicer-design-buttons",
-                      label: t("spreadsheet.uiCopy.buttons_fddec7"),
-                      content: (
-                        <>
-                          {(
-                            [
-                              {
-                                id: "columns",
-                                label: t("spreadsheet.pivotColumns"),
-                                value:
-                                  selectedSlicer.columns ??
-                                  DEFAULT_SLICER_COLUMNS,
-                                min: 1,
-                                max: MAX_SLICER_COLUMNS,
-                              },
-                              {
-                                id: "buttonHeight",
-                                label: t("spreadsheet.uiCopy.buttonHeight"),
-                                value:
-                                  selectedSlicer.buttonHeight ??
-                                  DEFAULT_SLICER_BUTTON_HEIGHT,
-                                min: MIN_SLICER_BUTTON_HEIGHT,
-                                max: MAX_SLICER_BUTTON_HEIGHT,
-                              },
-                            ] as const
-                          ).map((field) => {
-                            const controlId: SlicerDesignWriterControlId =
-                              field.id === "columns"
-                                ? "XLSCTL.CONTEXT.SLICER.COLUMNS.MRAI.APPLY"
-                                : "XLSCTL.CONTEXT.SLICER.BUTTON_HEIGHT.MRAI.APPLY";
-                            const commandState =
-                              field.id === "columns"
-                                ? slicerColumnsCommandState
-                                : slicerButtonHeightCommandState;
-                            return (
-                              <OfficeRibbonNumberField
-                                key={`${selectedSlicer.id}:${field.id}`}
-                                controlId={controlId}
-                                disabled={!commandState.enabled}
-                                disabledReason={
-                                  slicerFormatDisabledReason ??
-                                  visibleCommandReason(commandState.reasonKey)
-                                }
-                                icon={
-                                  field.id === "columns" ? (
-                                    <SpreadsheetDataIcon
-                                      name="group"
-                                      size={18}
-                                    />
-                                  ) : (
-                                    <OfficeSemanticIcon
-                                      semanticId="object.height"
-                                      size={18}
-                                    />
-                                  )
-                                }
-                                label={field.label}
-                                max={field.max}
-                                min={field.min}
-                                onCommit={(raw) =>
-                                  void executeSlicerDesignMutation(
-                                    controlId,
-                                    raw,
-                                  )
-                                }
-                                step={1}
-                                testId={`spreadsheet-ribbon-slicer-${field.id}`}
-                                unit={
-                                  field.id === "buttonHeight" ? "px" : undefined
-                                }
-                                value={String(field.value)}
-                              />
-                            );
-                          })}
-                        </>
-                      ),
-                    },
-                    {
-                      id: "slicer-design-size",
-                      label: t("presentation.smartartContext.sizeGroup"),
-                      content: (
-                        <>
-                          {(
-                            [
-                              {
-                                id: "width",
-                                label: t("toolbar.pageSetupWidth"),
-                                value:
-                                  selectedSlicer.width ?? DEFAULT_SLICER_WIDTH,
-                                min: MIN_SLICER_WIDTH,
-                                max: MAX_SLICER_WIDTH,
-                              },
-                              {
-                                id: "height",
-                                label: t("toolbar.pageSetupHeight"),
-                                value:
-                                  selectedSlicer.height ??
-                                  DEFAULT_SLICER_HEIGHT,
-                                min: MIN_SLICER_HEIGHT,
-                                max: MAX_SLICER_HEIGHT,
-                              },
-                            ] as const
-                          ).map((field) => {
-                            const controlId: SlicerDesignWriterControlId =
-                              field.id === "width"
-                                ? "XLSCTL.CONTEXT.SLICER.WIDTH.MRAI.APPLY"
-                                : "XLSCTL.CONTEXT.SLICER.HEIGHT.MRAI.APPLY";
-                            const commandState =
-                              field.id === "width"
-                                ? slicerWidthCommandState
-                                : slicerHeightCommandState;
-                            return (
-                              <OfficeRibbonNumberField
-                                key={`${selectedSlicer.id}:${field.id}`}
-                                controlId={controlId}
-                                disabled={!commandState.enabled}
-                                disabledReason={
-                                  slicerFormatDisabledReason ??
-                                  visibleCommandReason(commandState.reasonKey)
-                                }
-                                icon={
-                                  <OfficeSemanticIcon
-                                    semanticId={
-                                      field.id === "width"
-                                        ? "object.width"
-                                        : "object.height"
-                                    }
-                                    size={18}
-                                  />
-                                }
-                                label={field.label}
-                                max={field.max}
-                                min={field.min}
-                                onCommit={(raw) =>
-                                  void executeSlicerDesignMutation(
-                                    controlId,
-                                    raw,
-                                  )
-                                }
-                                step={1}
-                                testId={`spreadsheet-ribbon-slicer-${field.id}`}
-                                unit="px"
-                                value={String(field.value)}
-                              />
-                            );
-                          })}
-                        </>
-                      ),
-                    },
-                    {
-                      id: "slicer-design-filter",
-                      label: t("spreadsheet.insertRibbon.filter"),
-                      content: (
-                        <>
-                          <SpreadsheetRibbonAction
-                            controlId="XLSCTL.CONTEXT.SLICER.CLEAR_FILTER.MRAI.APPLY"
-                            disabled={
-                              !slicerClearFilterCommandState.enabled ||
-                              (selectedSlicerView?.selected.size ?? 0) === 0
-                            }
-                            disabledReason={
-                              selectedSlicerView?.disabledReason ??
-                              visibleCommandReason(
-                                slicerClearFilterCommandState.reasonKey,
-                              ) ??
-                              ((selectedSlicerView?.selected.size ?? 0) === 0
-                                ? t("spreadsheet.uiCopy.thisSlicerHasNoFilterToClear")
-                                : undefined)
-                            }
-                            homeVariant="large"
-                            icon={<FilterX size={24} />}
-                            label={t("spreadsheet.uiCopy.clearFilter")}
-                            onClick={() =>
-                              void executeSlicerDesignMutation(
-                                "XLSCTL.CONTEXT.SLICER.CLEAR_FILTER.MRAI.APPLY",
-                                "clear",
-                              )
-                            }
-                            testId="spreadsheet-ribbon-slicer-clear"
-                          />
-                          <SpreadsheetRibbonAction
-                            controlId="XLSCTL.CONTEXT.SLICER.REMOVE.MRAI.APPLY"
-                            disabled={!slicerRemoveCommandState.enabled}
-                            disabledReason={
-                              slicerFormatDisabledReason ??
-                              visibleCommandReason(
-                                slicerRemoveCommandState.reasonKey,
-                              )
-                            }
-                            homeVariant="large"
-                            icon={<X size={24} />}
-                            label={t("spreadsheet.uiCopy.removeSlicer")}
-                            onClick={() =>
-                              void executeSlicerDesignMutation(
-                                "XLSCTL.CONTEXT.SLICER.REMOVE.MRAI.APPLY",
-                                selectedSlicer.id,
-                              )
-                            }
-                            testId="spreadsheet-ribbon-slicer-remove"
-                          />
-                        </>
-                      ),
-                    },
-                  ]
-                : [],
-              sparklineDesign:
-                activeSparkline && !selectedObject
-                  ? [
-                      {
-                        // Excel's Sparkline group: Edit Data's range, and its
-                        // Hidden & Empty Cells settings, one 24px row each.
-                        id: "sparkline-design-data",
-                        label: t("spreadsheet.uiCopy.sparklineData"),
-                        content: (
-                          <div
-                            className={spreadsheetHomeStyles.sparklineFields}
-                            data-testid="spreadsheet-ribbon-sparkline-data-fields"
-                          >
-                            <span className={spreadsheetHomeStyles.sparklineFieldLabel}>
-                              {t("spreadsheet.chartDataRange")}
-                            </span>
-                            <input
-                              key={`${sheet.id}:${activeSparklineKey}:${activeSparkline.range}`}
-                              aria-label={t("spreadsheet.chartDataRange")}
-                              className={spreadsheetHomeStyles.sparklineFieldControl}
-                              data-control-id="XLSCTL.CONTEXT.SPARKLINE.DATA_RANGE"
-                              data-testid="spreadsheet-ribbon-sparkline-range"
-                              defaultValue={activeSparkline.range}
-                              disabled={
-                                !visibleCommandState(
-                                  "XLSCTL.CONTEXT.SPARKLINE.DATA_RANGE",
-                                ).enabled
-                              }
-                              title={visibleCommandReason(
-                                visibleCommandState(
-                                  "XLSCTL.CONTEXT.SPARKLINE.DATA_RANGE",
-                                ).reasonKey,
-                              )}
-                              onBlur={(event) => {
-                                const nextRange =
-                                  event.currentTarget.value.trim();
-                                if (nextRange === activeSparkline.range) {
-                                  return;
-                                }
-                                const input = event.currentTarget;
-                                void executeSparklineDesignMutation(
-                                  "XLSCTL.CONTEXT.SPARKLINE.DATA_RANGE",
-                                  nextRange,
-                                ).then((applied) => {
-                                  if (applied || !input.isConnected) return;
-                                  input.value = activeSparkline.range;
-                                  // A 2-D range is refused with Insert
-                                  // Sparklines' own reason (B468).
-                                  toast({
-                                    variant: "destructive",
-                                    description:
-                                      sparklineMemberRangeRefusal(nextRange) === "dimensions"
-                                        ? t("spreadsheet.uiCopy.theDataRangeAndLocationRangeDimensionsDoNot")
-                                        : t("spreadsheet.sparklineRangeInvalid"),
-                                  });
-                                });
-                              }}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  event.currentTarget.blur();
-                                } else if (event.key === "Escape") {
-                                  event.preventDefault();
-                                  event.currentTarget.value =
-                                    activeSparkline.range;
-                                  event.currentTarget.blur();
-                                }
-                              }}
-                            />
-                            <span className={spreadsheetHomeStyles.sparklineFieldLabel}>
-                              {t("spreadsheet.uiCopy.showEmptyCellsAs")}
-                            </span>
-                            <select
-                              aria-label={t("spreadsheet.uiCopy.emptyCellDisplay")}
-                              className={spreadsheetHomeStyles.sparklineFieldControl}
-                              data-control-id="XLSCTL.CONTEXT.SPARKLINE.EMPTY_CELLS"
-                              data-testid="spreadsheet-ribbon-sparkline-empty-cells"
-                              disabled={
-                                !visibleCommandState(
-                                  "XLSCTL.CONTEXT.SPARKLINE.EMPTY_CELLS",
-                                ).enabled
-                              }
-                              title={visibleCommandReason(
-                                visibleCommandState(
-                                  "XLSCTL.CONTEXT.SPARKLINE.EMPTY_CELLS",
-                                ).reasonKey,
-                              )}
-                              value={activeSparkline.displayEmptyCellsAs ?? "zero"}
-                              onChange={(event) =>
-                                void executeSparklineDesignMutation(
-                                  "XLSCTL.CONTEXT.SPARKLINE.EMPTY_CELLS",
-                                  event.currentTarget.value,
-                                )
-                              }
-                            >
-                              <option value="gap">
-                                {t("spreadsheet.uiCopy.gaps")}
-                              </option>
-                              <option value="zero">
-                                {t("spreadsheet.uiCopy.zero")}
-                              </option>
-                              <option
-                                value="span"
-                                disabled={activeSparkline.type !== "line"}
-                              >
-                                {t("spreadsheet.uiCopy.connectDataPoints")}
-                              </option>
-                            </select>
-                            <OfficeHomeCheckbox
-                              {...sparklineDesignCheckboxProps(
-                                "XLSCTL.CONTEXT.SPARKLINE.DISPLAY_HIDDEN",
-                                Boolean(activeSparkline.displayHidden),
-                              )}
-                              className={spreadsheetHomeStyles.sparklineFieldWide}
-                              label={t("spreadsheet.uiCopy.showDataInHiddenRowsAndColumns")}
-                              testId="spreadsheet-ribbon-sparkline-display-hidden"
-                            />
-                          </div>
-                        ),
-                      },
-                      {
-                        id: "sparkline-design-type",
-                        label: t("spreadsheet.sparklineType"),
-                        content: (
-                          <>
-                            {SPARKLINE_TYPES.map((type) => {
-                              const controlId =
-                                type === "line"
-                                  ? "XLSCTL.CONTEXT.SPARKLINE.TYPE.LINE"
-                                  : type === "column"
-                                    ? "XLSCTL.CONTEXT.SPARKLINE.TYPE.COLUMN"
-                                    : "XLSCTL.CONTEXT.SPARKLINE.TYPE.WIN_LOSS";
-                              const state = visibleCommandState(controlId);
-                              return (
-                                <SpreadsheetRibbonAction
-                                  key={type}
-                                  active={activeSparkline.type === type}
-                                  controlId={controlId}
-                                  disabled={!state.enabled}
-                                  disabledReason={visibleCommandReason(
-                                    state.reasonKey,
-                                  )}
-                                icon={
-                                  <SpreadsheetInsertIcon
-                                    name={
-                                      type === "line"
-                                        ? "chartLine"
-                                        : type === "column"
-                                          ? "chartColumn"
-                                          : "sparklineWinLoss"
-                                    }
-                                    size={24}
-                                  />
-                                }
-                                label={t(
-                                  `spreadsheet.sparklineType_${type}`,
-                                )}
-                                onClick={() =>
-                                  void executeSparklineDesignMutation(
-                                    controlId,
-                                    type,
-                                  )
-                                }
-                                testId={`spreadsheet-ribbon-sparkline-type-${type}`}
-                              />
-                              );
-                            })}
-                          </>
-                        ),
-                      },
-                      {
-                        // Excel's Show group: six check boxes read down two
-                        // columns -- High, Low, Negative; First, Last, Markers.
-                        id: "sparkline-design-show",
-                        label: t("spreadsheet.view.show"),
-                        content: (
-                          <div
-                            className={spreadsheetHomeStyles.sparklineShowOptions}
-                            data-testid="spreadsheet-ribbon-sparkline-show-options"
-                          >
-                            {(
-                              [
-                                ["XLSCTL.CONTEXT.SPARKLINE.HIGH_POINT", activeSparkline.high, "highPoint", "high"],
-                                ["XLSCTL.CONTEXT.SPARKLINE.LOW_POINT", activeSparkline.low, "lowPoint", "low"],
-                                ["XLSCTL.CONTEXT.SPARKLINE.NEGATIVE_POINTS", activeSparkline.negative, "negativePoints", "negative"],
-                                ["XLSCTL.CONTEXT.SPARKLINE.FIRST_POINT", activeSparkline.first, "firstPoint", "first"],
-                                ["XLSCTL.CONTEXT.SPARKLINE.LAST_POINT", activeSparkline.last, "lastPoint", "last"],
-                                ["XLSCTL.CONTEXT.SPARKLINE.MARKERS", activeSparkline.markers, "markers", "markers"],
-                              ] as const
-                            ).map(([controlId, checked, labelKey, testSuffix]) => {
-                              // Markers are drawn on a line sparkline only.
-                              const lineOnly =
-                                controlId === "XLSCTL.CONTEXT.SPARKLINE.MARKERS" &&
-                                activeSparkline.type !== "line";
-                              return (
-                                <OfficeHomeCheckbox
-                                  key={controlId}
-                                  {...sparklineDesignCheckboxProps(
-                                    controlId,
-                                    Boolean(checked),
-                                    lineOnly,
-                                    lineOnly
-                                      ? t("spreadsheet.uiCopy.markersApplyToLineSparklinesOnly")
-                                      : undefined,
-                                  )}
-                                  label={t(`spreadsheet.uiCopy.${labelKey}`)}
-                                  testId={`spreadsheet-ribbon-sparkline-${testSuffix}`}
-                                />
-                              );
-                            })}
-                          </div>
-                        ),
-                      },
-                      {
-                        id: "sparkline-design-style",
-                        label: t("spreadsheet.uiCopy.sparklineStyle"),
-                        content: (
-                          <span
-                            ref={sparklineColorPickerRef}
-                            className="relative flex min-h-[56px] items-center gap-2 px-1"
-                          >
-                            {/* Excel's Style gallery: the 36 built-in
-                                sparkline styles, drawn in this workbook's
-                                theme and the group's own kind. */}
-                            <span data-control-id="XLSCTL.CONTEXT.SPARKLINE.STYLE.MRAI.APPLY">
-                              <OfficeStyleGallery<string>
-                                application="spreadsheet"
-                                ariaLabel={t("spreadsheet.uiCopy.sparklineStyle")}
-                                className={spreadsheetHomeStyles.contextualStyleGallery}
-                                disabled={
-                                  !visibleCommandState("XLSCTL.CONTEXT.SPARKLINE.STYLE.MRAI.APPLY").enabled
-                                }
-                                items={sparklineStyleItems}
-                                labels={{ more: t("spreadsheet.uiCopy.moreStyles") }}
-                                // Excel's sheet and strip: thumbnails only, the
-                                // style's name in the tooltip.
-                                menuGrid={{ columns: 6, thumbnail: [44, 28] }}
-                                menuMode="preview-only"
-                                menuTile="picture"
-                                quickIds={sparklineStyleQuickIds}
-                                renderPreview={(item) => {
-                                  const style = sparklineStyleById(item.id);
-                                  return style ? (
-                                    <SpreadsheetSparklineStyleSwatch
-                                      style={style}
-                                      type={activeSparkline.type}
-                                      paletteId={workbookThemePaletteId}
-                                    />
-                                  ) : null;
-                                }}
-                                testIdPrefix="spreadsheet-sparkline-style-gallery"
-                                value={sparklineStyleIdOf(activeSparkline)}
-                                onPreviewChange={() => undefined}
-                                onCommit={(styleId) =>
-                                  void executeSparklineDesignMutation(
-                                    "XLSCTL.CONTEXT.SPARKLINE.STYLE.MRAI.APPLY",
-                                    styleId,
-                                  )
-                                }
-                              />
-                            </span>
-                            <OfficeHomeMenuTrigger
-                              controlId="XLSCTL.CONTEXT.SPARKLINE.COLOR.MRAI.APPLY"
-                              active={
-                                openSparklineColorPicker === "primary"
-                              }
-                              aria-expanded={
-                                openSparklineColorPicker === "primary"
-                              }
-                              aria-haspopup="dialog"
-                              disabled={
-                                !visibleCommandState(
-                                  "XLSCTL.CONTEXT.SPARKLINE.COLOR.MRAI.APPLY",
-                                ).enabled
-                              }
-                              disabledReason={visibleCommandReason(
-                                visibleCommandState(
-                                  "XLSCTL.CONTEXT.SPARKLINE.COLOR.MRAI.APPLY",
-                                ).reasonKey,
-                              )}
-                              displayLabel={
-                                t("spreadsheet.uiCopy.sparklineColor")
-                              }
-                              hasMenuIndicator
-                              icon={
-                                <span className="note-editor-office-toolbar__color-glyph">
-                                  <Activity size={24} />
-                                  <span
-                                    className="note-editor-office-toolbar__color-underline"
-                                    style={{
-                                      backgroundColor:
-                                        activeSparkline.color ??
-                                        SPARKLINE_DEFAULT_COLOR,
-                                    }}
-                                  />
-                                </span>
-                              }
-                              label={t("spreadsheet.uiCopy.sparklineColor")}
-                              onClick={() =>
-                                setOpenSparklineColorPicker((current) =>
-                                  current === "primary" ? null : "primary",
-                                )
-                              }
-                              testId="spreadsheet-ribbon-sparkline-primary-color"
-                              variant="large"
-                            />
-                            <OfficeHomeMenuTrigger
-                              controlId="XLSCTL.CONTEXT.SPARKLINE.COLOR.MRAI.APPLY"
-                              active={
-                                openSparklineColorPicker === "negative"
-                              }
-                              aria-expanded={
-                                openSparklineColorPicker === "negative"
-                              }
-                              aria-haspopup="dialog"
-                              disabled={
-                                !visibleCommandState(
-                                  "XLSCTL.CONTEXT.SPARKLINE.COLOR.MRAI.APPLY",
-                                ).enabled
-                              }
-                              disabledReason={visibleCommandReason(
-                                visibleCommandState(
-                                  "XLSCTL.CONTEXT.SPARKLINE.COLOR.MRAI.APPLY",
-                                ).reasonKey,
-                              )}
-                              displayLabel={
-                                t("spreadsheet.uiCopy.negativeColor")
-                              }
-                              hasMenuIndicator
-                              icon={
-                                <span className="note-editor-office-toolbar__color-glyph">
-                                  <Activity size={24} />
-                                  <span
-                                    className="note-editor-office-toolbar__color-underline"
-                                    style={{
-                                      backgroundColor:
-                                        activeSparkline.negativeColor ??
-                                        SPARKLINE_DEFAULT_NEGATIVE,
-                                    }}
-                                  />
-                                </span>
-                              }
-                              label={t("spreadsheet.uiCopy.negativeColor")}
-                              onClick={() =>
-                                setOpenSparklineColorPicker((current) =>
-                                  current === "negative" ? null : "negative",
-                                )
-                              }
-                              testId="spreadsheet-ribbon-sparkline-negative-color"
-                              variant="large"
-                            />
-                            {/* Excel's Marker Color: a colour for each kind
-                                of point the Show group can mark. */}
-                            <DropdownMenu modal={false}>
-                              <DropdownMenuTrigger asChild>
-                                <OfficeHomeMenuTrigger
-                                  controlId="XLSCTL.CONTEXT.SPARKLINE.COLOR.MRAI.APPLY"
-                                  disabled={
-                                    !visibleCommandState(
-                                      "XLSCTL.CONTEXT.SPARKLINE.COLOR.MRAI.APPLY",
-                                    ).enabled
-                                  }
-                                  disabledReason={visibleCommandReason(
-                                    visibleCommandState(
-                                      "XLSCTL.CONTEXT.SPARKLINE.COLOR.MRAI.APPLY",
-                                    ).reasonKey,
-                                  )}
-                                  displayLabel={t("spreadsheet.uiCopy.markerColor")}
-                                  hasMenuIndicator
-                                  icon={
-                                    <span className="note-editor-office-toolbar__color-glyph">
-                                      <CircleDot size={24} />
-                                      <span
-                                        className="note-editor-office-toolbar__color-underline"
-                                        style={{
-                                          backgroundColor:
-                                            activeSparkline.markerColor ??
-                                            activeSparkline.color ??
-                                            SPARKLINE_DEFAULT_COLOR,
-                                        }}
-                                      />
-                                    </span>
-                                  }
-                                  label={t("spreadsheet.uiCopy.markerColor")}
-                                  testId="spreadsheet-ribbon-sparkline-marker-color"
-                                  variant="large"
-                                />
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="start" className="docs-cupertino-menu w-max max-w-[240px]">
-                                {(
-                                  [
-                                    ["negative", "spreadsheet.uiCopy.negativePoints"],
-                                    ["markers", "spreadsheet.uiCopy.markers"],
-                                    ["high", "spreadsheet.uiCopy.highPoint"],
-                                    ["low", "spreadsheet.uiCopy.lowPoint"],
-                                    ["first", "spreadsheet.uiCopy.firstPoint"],
-                                    ["last", "spreadsheet.uiCopy.lastPoint"],
-                                  ] as const
-                                ).map(([target, labelKey]) => (
-                                  <DropdownMenuItem
-                                    key={target}
-                                    data-control-id="XLSCTL.CONTEXT.SPARKLINE.COLOR.MRAI.APPLY"
-                                    data-testid={`spreadsheet-ribbon-sparkline-marker-color-${target}`}
-                                    disabled={target === "markers" && activeSparkline.type !== "line"}
-                                    onSelect={() => setOpenSparklineColorPicker(target)}
-                                  >
-                                    <span
-                                      aria-hidden="true"
-                                      style={{
-                                        display: "inline-block",
-                                        width: 12,
-                                        height: 12,
-                                        borderRadius: 2,
-                                        marginRight: 8,
-                                        border: "1px solid rgba(0,0,0,0.2)",
-                                        backgroundColor:
-                                          activeSparkline[SPARKLINE_COLOR_TARGET_FIELDS[target]] ??
-                                          (target === "negative" ? SPARKLINE_DEFAULT_NEGATIVE : (activeSparkline.color ?? SPARKLINE_DEFAULT_COLOR)),
-                                      }}
-                                    />
-                                    {t(labelKey)}
-                                  </DropdownMenuItem>
-                                ))}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                            {openSparklineColorPicker ? (
-                              <ColorPalettePopover
-                                labels={{
-                                  themeColors: t("spreadsheet.themeColors"),
-                                  standardColors: t(
-                                    "spreadsheet.standardColors",
-                                  ),
-                                  recentColors: t(
-                                    "spreadsheet.recentColors",
-                                  ),
-                                  moreColors: t("spreadsheet.moreColors"),
-                                  noFill: t("spreadsheet.noFill"),
-                                }}
-                                onDismiss={() =>
-                                  setOpenSparklineColorPicker(null)
-                                }
-                                onPick={(color) => {
-                                  setOpenSparklineColorPicker(null);
-                                  void executeSparklineDesignMutation(
-                                    "XLSCTL.CONTEXT.SPARKLINE.COLOR.MRAI.APPLY",
-                                    JSON.stringify({
-                                      target: openSparklineColorPicker,
-                                      color,
-                                    }),
-                                  );
-                                }}
-                                paletteId={workbookThemePaletteId}
-                                recents={recentColors}
-                                testIdPrefix={`spreadsheet-ribbon-sparkline-${openSparklineColorPicker}`}
-                                value={
-                                  activeSparkline[SPARKLINE_COLOR_TARGET_FIELDS[openSparklineColorPicker]] ??
-                                  (openSparklineColorPicker === "negative"
-                                    ? SPARKLINE_DEFAULT_NEGATIVE
-                                    : (activeSparkline.color ?? SPARKLINE_DEFAULT_COLOR))
-                                }
-                              />
-                            ) : null}
-                          </span>
-                        ),
-                      },
-                      {
-                        // Excel's Axis options, laid out as rows: show the
-                        // horizontal axis, then the vertical minimum and
-                        // maximum (Custom Value adds its number beside it).
-                        id: "sparkline-design-axis",
-                        label: t("spreadsheet.uiCopy.axis"),
-                        content: (
-                          <div
-                            className={spreadsheetHomeStyles.sparklineFields}
-                            data-testid="spreadsheet-ribbon-sparkline-axis-fields"
-                          >
-                            <OfficeHomeCheckbox
-                              {...sparklineDesignCheckboxProps(
-                                "XLSCTL.CONTEXT.SPARKLINE.SHOW_AXIS",
-                                Boolean(activeSparkline.displayXAxis),
-                              )}
-                              className={spreadsheetHomeStyles.sparklineFieldWide}
-                              label={t("spreadsheet.uiCopy.showAxis")}
-                              testId="spreadsheet-ribbon-sparkline-show-axis"
-                            />
-                            {(
-                              [
-                                ["min", t("spreadsheet.uiCopy.verticalMin")],
-                                ["max", t("spreadsheet.uiCopy.verticalMax")],
-                              ] as const
-                            ).map(([edge, label]) => {
-                              const typeField =
-                                edge === "min"
-                                  ? "minAxisType"
-                                  : "maxAxisType";
-                              const manualField =
-                                edge === "min" ? "manualMin" : "manualMax";
-                              const axisTypeControlId =
-                                edge === "min"
-                                  ? "XLSCTL.CONTEXT.SPARKLINE.MIN_AXIS_TYPE"
-                                  : "XLSCTL.CONTEXT.SPARKLINE.MAX_AXIS_TYPE";
-                              const axisValueControlId =
-                                edge === "min"
-                                  ? "XLSCTL.CONTEXT.SPARKLINE.MIN_AXIS_VALUE"
-                                  : "XLSCTL.CONTEXT.SPARKLINE.MAX_AXIS_VALUE";
-                              const axisTypeState =
-                                visibleCommandState(axisTypeControlId);
-                              const axisValueState =
-                                visibleCommandState(axisValueControlId);
-                              const axisType =
-                                activeSparkline[typeField] ?? "individual";
-                              return (
-                                <Fragment key={edge}>
-                                  <span className={spreadsheetHomeStyles.sparklineFieldLabel}>
-                                    {label}
-                                  </span>
-                                  <span className={spreadsheetHomeStyles.sparklineFieldPair}>
-                                    <select
-                                      aria-label={label}
-                                      className={spreadsheetHomeStyles.sparklineFieldControl}
-                                      data-control-id={axisTypeControlId}
-                                      data-testid={`spreadsheet-ribbon-sparkline-${edge}-axis-type`}
-                                      disabled={!axisTypeState.enabled}
-                                      title={visibleCommandReason(
-                                        axisTypeState.reasonKey,
-                                      )}
-                                      value={axisType}
-                                      onChange={(event) => {
-                                        const nextType = event.currentTarget
-                                          .value as
-                                          | "individual"
-                                          | "group"
-                                          | "custom";
-                                        void executeSparklineDesignMutation(
-                                          axisTypeControlId,
-                                          nextType,
-                                        );
-                                      }}
-                                    >
-                                      <option value="individual">
-                                        {t("spreadsheet.uiCopy.automaticEach")}
-                                      </option>
-                                      <option value="group">
-                                        {t("spreadsheet.uiCopy.sameForGroup")}
-                                      </option>
-                                      <option value="custom">
-                                        {t("spreadsheet.fmtCatCustom")}
-                                      </option>
-                                    </select>
-                                    {axisType === "custom" ? (
-                                      <input
-                                        key={`${edge}:${activeSparkline[manualField]}`}
-                                        aria-label={`${label} ${t("spreadsheet.uiCopy.customValue")}`}
-                                        className={`${spreadsheetHomeStyles.sparklineFieldControl} ${spreadsheetHomeStyles.sparklineFieldNumber}`}
-                                        data-control-id={axisValueControlId}
-                                        data-testid={`spreadsheet-ribbon-sparkline-${edge}-axis-value`}
-                                        defaultValue={
-                                          activeSparkline[manualField] ?? ""
-                                        }
-                                        disabled={!axisValueState.enabled}
-                                        inputMode="decimal"
-                                        onBlur={(event) => {
-                                          const value = Number(
-                                            event.currentTarget.value,
-                                          );
-                                          const other =
-                                            edge === "min"
-                                              ? activeSparkline.manualMax
-                                              : activeSparkline.manualMin;
-                                          const valid =
-                                            Number.isFinite(value) &&
-                                            (other === undefined ||
-                                              (edge === "min"
-                                                ? value < other
-                                                : value > other));
-                                          if (!valid) {
-                                            event.currentTarget.value = String(
-                                              activeSparkline[manualField] ?? "",
-                                            );
-                                            return;
-                                          }
-                                          void executeSparklineDesignMutation(
-                                            axisValueControlId,
-                                            String(value),
-                                          );
-                                        }}
-                                        onKeyDown={(event) => {
-                                          if (event.key === "Enter") {
-                                            event.preventDefault();
-                                            event.currentTarget.blur();
-                                          } else if (event.key === "Escape") {
-                                            event.preventDefault();
-                                            event.currentTarget.value = String(
-                                              activeSparkline[manualField] ?? "",
-                                            );
-                                            event.currentTarget.blur();
-                                          }
-                                        }}
-                                      />
-                                    ) : null}
-                                  </span>
-                                </Fragment>
-                              );
-                            })}
-                          </div>
-                        ),
-                      },
-                      {
-                        // Excel's Group group: Group, Ungroup, Clear.
-                        id: "sparkline-design-group",
-                        label: t("spreadsheet.data.group"),
-                        content: (
-                          <>
-                            <SpreadsheetRibbonAction
-                              {...sparklineDesignActionProps(
-                                "XLSCTL.CONTEXT.SPARKLINE.GROUP",
-                                "group",
-                                !sparklineGroupingAvailable.group,
-                              )}
-                              icon={<SparklineGroupIcon size={24} />}
-                              label={t("spreadsheet.data.group")}
-                              testId="spreadsheet-ribbon-sparkline-group"
-                            />
-                            <SpreadsheetRibbonAction
-                              {...sparklineDesignActionProps(
-                                "XLSCTL.CONTEXT.SPARKLINE.UNGROUP",
-                                "ungroup",
-                                !sparklineGroupingAvailable.ungroup,
-                              )}
-                              icon={<SparklineUngroupIcon size={24} />}
-                              label={t("spreadsheet.ungroup")}
-                              testId="spreadsheet-ribbon-sparkline-ungroup"
-                            />
-                            <SpreadsheetRibbonAction
-                              controlId="XLSCTL.CONTEXT.SPARKLINE.CLEAR"
-                              disabled={
-                                !visibleCommandState(
-                                  "XLSCTL.CONTEXT.SPARKLINE.CLEAR",
-                                ).enabled
-                              }
-                              disabledReason={visibleCommandReason(
-                                visibleCommandState(
-                                  "XLSCTL.CONTEXT.SPARKLINE.CLEAR",
-                                ).reasonKey,
-                              )}
-                              icon={<Trash2 size={24} />}
-                              label={t("spreadsheet.sparklineClear")}
-                              onClick={() =>
-                                void executeSparklineDesignMutation(
-                                  "XLSCTL.CONTEXT.SPARKLINE.CLEAR",
-                                  "clear",
-                                )
-                              }
-                              testId="spreadsheet-ribbon-sparkline-clear"
-                            />
-                          </>
-                        ),
-                      },
-                    ]
-                  : [],
-              objectFormat:
-                selectedRibbonObject?.type === "image"
-                  ? pictureFormatRibbonGroups
-                  : selectedRibbonObject?.type === "shape"
-                    ? shapeFormatRibbonGroups
-                    : [],
-              smartArtDesign: smartArtDesignRibbonGroups,
-              smartArtPicture: smartArtPictureRibbonGroups,
-              equation: [
-                {
-                  id: "equation-shared",
-                  label: "",
-                  unwrapped: true,
-                  content: (
-                    <SpreadsheetEquationContextRibbon
-                      t={t as (key: string, values?: Record<string, string>) => string}
-                      locale={locale}
-                      disabled={autosave.readOnly}
-                      equations={spreadsheetEquations}
-                    />
-                  ),
-                },
-              ],
-              pivotTable: [
-                ...pivotAnalyzeRibbonGroups,
-                ...pivotDesignRibbonGroups,
-              ],
-              pivotChartAnalyze: pivotChartAnalyzeRibbonGroups,
-              chartDesign: chartDesignRibbonGroups,
-              chartFormat: selectedChartDesignTarget ? [{ id:"chart-format-shared",label:"",unwrapped:true,
-                content:<SpreadsheetChartFormatRibbon application="spreadsheet" officeProfile testIdPrefix="spreadsheet-chart-format-ribbon"
-                  themeColumns={workbookThemeColumns}
-                  accentColors={workbookThemeAccentColors}
-                  translate={t}
-                  sharedShapeStyleRecipes={spreadsheetNativeShapeStyleRecipes(workbookThemeAccentColors)}
-                  shapeRecentStorageKey={SPREADSHEET_SHAPE_RECENT_STORAGE_KEY}
-                  attrs={desktopChartAttrs} selectionIdentity={selectedChartDesignKey} authority={chartFormatPaneAuthority}
-                  disabledReason={desktopChartModelReason ?? (!desktopChartAttrs ? (t("spreadsheet.uiCopy.chartDataIsNotReady")):null)} locale={locale}
-                  onRememberSelection={rememberDesktopChart}
-                  onPaint={paintDesktopChartArea}
-                  onStyle={(area,style)=>patchDesktopChartFormat(area,style)}
-                  onEffect={effectDesktopChartArea}
-                  onAxisOptions={patchDesktopChartAxisOptions}
-                  onChartModel={(command) => commitSheetChartModel((attrs) => command(attrs))}
-                  onTextStyle={textDesktopChartArea}
-                  onReset={(area)=>patchDesktopChartFormat(area,null)} size={sheet.chartSheet?undefined:desktopChartSize} maxSizeEmu={4000*EMU_PER_CSS_PIXEL}
-                  onRememberSize={rememberDesktopChart} onSize={sheet.chartSheet?undefined:resizeDesktopChart}
-                  paneSizePropertiesSections={sheet.chartSheet||!selectedChartDesignTarget?undefined:[
-                    spreadsheetObjectPropertiesSection(t,desktopChartAnchor as SpreadsheetObject["anchor"],desktopChartPlacementReason,(value)=>{placeDesktopChart(value);}),
-                  ]}
-                  onInsertShape={(preset)=>{if(desktopChartFormatReason)return false;setSheetShapeDraw({ kind: preset, source: "face" });return true;}}
-                  paneContainer={sheetTaskPaneDock.host}
-                  paneDock={sheetTaskPaneDock}
-                  // Format > Accessibility > Alt Text (XLS-A081's pane).
-                  onAltText={() => void openAltTextPane()}
-                  altTextPaneOpen={altTextPaneOpen}
-                  paneClassName={spreadsheetHomeStyles.chartFormatPaneFill}
-                  // Office's Legend, Label, Data Table, Trendline and Error
-                  // Bar Options pages, on the same commands Add Chart Element
-                  // runs: the pages every editor shows.
-                  elementPane={desktopChartAttrs ? {
-                    view: {
-                      ...officeChartElementView(desktopChartAttrs),
-                      legend: selectedChartDesignShowLegend
-                        ? (selectedChartDesignLegendPosition as OfficeChartLegendPosition)
-                        : "none",
-                      dataTableLegendKeys:
-                        selectedChartDesignTarget?.chart.chartFormat
-                          ? normalizeSpreadsheetChartFormat(selectedChartDesignTarget.chart.chartFormat)?.dataTableLegendKeys !== false
-                          : true,
-                    },
-                    areas: ["legendStyle", "dataLabelStyle", "dataTableStyle", "trendlineStyle", "errorBarStyle", "series:", "slice:", "point:", "chartAreaStyle"],
-                    pieOptions: true,
-                    trendlineOptions: true,
-                    // Format Data Labels ▸ Label Contains, chart-wide.
-                    dataLabelContents: {
-                      format: desktopChartAttrs.format,
-                      chartType: desktopChartAttrs.chartType,
-                      chartSubtype: desktopChartAttrs.chartSubtype,
-                      onChange: (contents) =>
-                        commitSheetChartModel((attrs) => ({
-                          ...attrs,
-                          format: chartFormatWithDataLabelContents(attrs.format, contents),
-                        })),
-                    },
-                    // Format Data Series ▸ Series Options of a 2-D column /
-                    // bar chart: Series Overlap and Gap Width (a clustered or
-                    // stacked chart's layout, a 100% stacked one's own keys).
-                    seriesOptions: true,
-                    barSpacingOptions: true,
-                    // Error Amount ▸ Custom ▸ Specify Value: the workbook
-                    // writers state it as `errValType cust` (a new chart's
-                    // shared writer, an imported chart's shared edit).
-                    customErrorAmounts: true,
-                    onIntent: (intent) => {
-                      if (
-                        intent.element === "seriesOptions" ||
-                        intent.element === "view3D" ||
-                        intent.element === "dataTableBorders" ||
-                        intent.element === "pieOptions" ||
-                        intent.element === "pointExplosion" ||
-                        intent.element === "legendOverlay" ||
-                        intent.element === "roundedCorners" ||
-                        intent.element === "trendline" ||
-                        intent.element === "trendlineOption" ||
-                        intent.element === "errorBars" ||
-                        intent.element === "seriesAxis" ||
-                        intent.element === "formatOption"
-                      ) {
-                        // A 3-D pie's 3-D Rotation, a data table's Table
-                        // Borders, a pie's Series Options and a slice's
-                        // Point Explosion: the chart's model, as Home ▸ Font
-                        // writes its text.
-                        commitSheetChartModel((attrs) => chartWithElementIntent(attrs, intent));
-                      } else if (intent.element === "dataLabelOverride") {
-                        // A field taken off (an emptied Label Text, the
-                        // chart's own position) is `undefined` in the patch,
-                        // which JSON drops: it travels as null, so the
-                        // writer still takes it off (S-080).
-                        void executeChartDesignMutation(
-                          "XLSCTL.CONTEXT.CHART.DATA_LABEL_OVERRIDE.MRAI.APPLY",
-                          JSON.stringify({
-                            target: intent.target,
-                            patch: intent.patch === null
-                              ? null
-                              : Object.fromEntries(
-                                  Object.entries(intent.patch).map(([key, value]) => [key, value ?? null]),
-                                ),
-                          }),
-                        );
-                      } else if (intent.element === "legend") {
-                        void executeChartDesignMutation(
-                          intent.position === "none"
-                            ? "XLSCTL.CONTEXT.CHART.LEGEND"
-                            : "XLSCTL.CONTEXT.CHART.LEGEND_POSITION.MRAI.APPLY",
-                          intent.position === "none" ? "false" : intent.position,
-                        );
-                      } else if (intent.element === "dataLabels" && intent.on) {
-                        void executeChartDesignMutation(
-                          "XLSCTL.CONTEXT.CHART.DATA_LABEL_POSITION.MRAI.APPLY",
-                          intent.placement ?? "automatic",
-                        );
-                      } else if (intent.element === "dataTable" && intent.on) {
-                        void executeChartDesignMutation(
-                          "XLSCTL.CONTEXT.CHART.DATA_TABLE",
-                          intent.legendKeys ? "true:keys" : "true:no-keys",
-                        );
-                      }
-                    },
-                  } : undefined}
-                  focusArea={chartFormatFocus ?? undefined}
-                  elementHit={chartElementHit}
-                  onAreaChange={(area) => setOfficeChartSelectedArea(sheetChartSelectionKey, area)}
-                  selectedArea={sheetChartSelectedArea}
-                  formatPaneOpen={chartSharedFormatPaneOpen}
-                  onFormatPaneOpenChange={setChartSharedFormatPaneOpen}
-                  paneOptions={renderSheetChartPaneOptions}
-                  paneHeaderActions={sheetChartPaneHeaderActions}
-                  slots={{arrange:<OfficeHomeRibbonGroup ribbon="chartFormat" label={t("spreadsheet.arrangeMenu")} testId="spreadsheet-chart-format-ribbon-arrange-group" className={spreadsheetHomeStyles.chartDesktopArrange}>
-                    <OfficeHomeCommandRow>
-                      {renderInsertSplitAction({icon:<OfficeSemanticIcon semanticId="object.bringForward" size={24}/>,label:t("spreadsheet.uiCopy.bringForward"),displayLabel:t("spreadsheet.uiCopy.bringForward"),
-                        disabled:Boolean(desktopChartFormatReason)||!drawingsArrangeable,disabledReason:desktopChartFormatReason??undefined,testId:"spreadsheet-chart-arrange-front",onClick:()=>desktopChartArrange("forward"),
-                        children:(["forward","front"] as const).map(move=><DropdownMenuItem key={move} onSelect={()=>desktopChartArrange(move)}>{move==="front"?(t("spreadsheet.uiCopy.bringToFront")):(t("spreadsheet.uiCopy.bringForward"))}</DropdownMenuItem>)})}
-                      {renderInsertSplitAction({icon:<OfficeSemanticIcon semanticId="object.sendBackward" size={24}/>,label:t("spreadsheet.uiCopy.sendBackward"),displayLabel:t("spreadsheet.uiCopy.sendBackward"),
-                        disabled:Boolean(desktopChartFormatReason)||!drawingsArrangeable,disabledReason:desktopChartFormatReason??undefined,testId:"spreadsheet-chart-arrange-back",onClick:()=>desktopChartArrange("backward"),
-                        children:(["backward","back"] as const).map(move=><DropdownMenuItem key={move} onSelect={()=>desktopChartArrange(move)}>{move==="back"?(t("spreadsheet.uiCopy.sendToBack")):(t("spreadsheet.uiCopy.sendBackward"))}</DropdownMenuItem>)})}
-                      <OfficeHomeCommand variant="large" icon={<OfficeSemanticIcon semanticId="object.selectionPane" size={24}/>} label={t("toolbar.selectionPane")}
-                        testId="spreadsheet-chart-selection-pane" onClick={()=>setSelectionPaneOpen(open=>!open)}/>
-                      <OfficeHomeCommandStack>
-                        <SpreadsheetRibbonMenuAction homeVariant="compact" icon={<OfficeSemanticIcon semanticId="object.align" size={18}/>} label={t("presentation.tableCellAlign")}
-                          disabled={Boolean(desktopChartFormatReason)||Boolean(sheet.chartSheet)} disabledReason={desktopChartFormatReason??(sheet.chartSheet?(t("spreadsheet.uiCopy.chartSheetsUseAFullPageChartLayout")):undefined)} testId="spreadsheet-chart-align">
-                          <DropdownMenuLabel>{spreadsheetViewMode==="pageLayout"?(t("spreadsheet.uiCopy.alignToCurrentPage")):(t("spreadsheet.uiCopy.alignToVisibleArea"))}</DropdownMenuLabel>
-                          {(["left","center","right","top","middle","bottom"] as const).map((alignment)=><DropdownMenuItem key={alignment} data-testid={`spreadsheet-chart-align-${alignment}`} onSelect={()=>alignDesktopChart(alignment)}>{t(`spreadsheet.dynamicCopy.align.${alignment}`)}</DropdownMenuItem>)}
-                        </SpreadsheetRibbonMenuAction>
-                        {renderChartGroupMenu()}
-                        {renderChartRotateMenu()}
-                      </OfficeHomeCommandStack>
-                    </OfficeHomeCommandRow>
-                  </OfficeHomeRibbonGroup>}} /> }, {
-                    id:"chart-format-series-options",label:t("spreadsheet.chartLineMarkerSeries"),
-                    content:<SpreadsheetRibbonAction
-                      {...chartDesignActionProps("XLSCTL.CONTEXT.CHART.FORMAT_PANE")}
-                      active={chartSharedFormatPaneOpen} homeVariant="large" controlSurface="chart-format"
-                      controlOccurrenceId="series-options" icon={<OfficeSemanticIcon semanticId="chart.format" size={26}/>}
-                      label={t("spreadsheet.chartFormatPane.seriesOptions")}
-                      onClick={()=>void executeVisibleCommand("XLSCTL.CONTEXT.CHART.FORMAT_PANE")}
-                      testId="spreadsheet-ribbon-chart-series-options"/>,
-                  }] : [],
-              tableDesign: activeTable
-                ? [
-                    {
-                      id: "table-design-properties",
-                      label: t("presentation.smartartContext.propertiesGroup"),
-                      content: (
-                        <div
-                          className={
-                            spreadsheetHomeStyles.tableDesignProperties
-                          }
-                          data-testid="spreadsheet-ribbon-table-properties-layout"
-                        >
-                          <label
-                            className={
-                              spreadsheetHomeStyles.tableDesignNameField
-                            }
-                            hidden={!tableNameCommandState.visible}
-                            title={tableNameDisabledReason ?? undefined}
-                          >
-                            <span className="sr-only">
-                              {t("spreadsheet.uiCopy.tableName")}
-                            </span>
-                            <input
-                              key={`${activeTable.id}:${activeTable.name}`}
-                              aria-label={
-                                tableNameDisabledReason
-                                  ? `${t("spreadsheet.uiCopy.tableName")}: ${tableNameDisabledReason}`
-                                  : t("spreadsheet.uiCopy.tableName")
-                              }
-                              className={
-                                spreadsheetHomeStyles.tableDesignNameInput
-                              }
-                              data-control-id="XLSCTL.CONTEXT.TABLE.NAME"
-                              data-control-occurrence-id="table-name"
-                              data-control-surface="table-design"
-                              data-testid="spreadsheet-ribbon-table-name"
-                              defaultValue={activeTable.name}
-                              disabled={!tableNameCommandState.enabled}
-                              maxLength={200}
-                              onBlur={(event) => {
-                                const input = event.currentTarget;
-                                void executeTableNameMutation(input.value).then(
-                                  (renamed) => {
-                                    if (renamed) return;
-                                    input.value = activeTable.name;
-                                    toast({
-                                      variant: "destructive",
-                                      description: t("spreadsheet.uiCopy.theTableNameIsInvalidAlreadyInUseOr"),
-                                    });
-                                  },
-                                );
-                              }}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  event.currentTarget.blur();
-                                } else if (event.key === "Escape") {
-                                  event.preventDefault();
-                                  event.currentTarget.value = activeTable.name;
-                                  event.currentTarget.blur();
-                                }
-                              }}
-                            />
-                          </label>
-                          <SpreadsheetRibbonAction
-                            {...visibleCommandActionProps(
-                              "XLSCTL.CONTEXT.TABLE.ALT_TEXT",
-                            )}
-                            buttonRef={tableAltTextTriggerRef}
-                            hidden={false}
-                            homeVariant="compact"
-                            controlOccurrenceId="alt-text"
-                            controlSurface="table-design"
-                            icon={
-                              <OfficeSemanticIcon
-                                semanticId="review.accessibility"
-                                size={18}
-                              />
-                            }
-                            label={t("presentation.pictureRibbon.altText")}
-                            onClick={openTableAltTextDialog}
-                            testId="spreadsheet-ribbon-table-alt-text"
-                          />
-                          <SpreadsheetRibbonAction
-                            {...visibleCommandActionProps(
-                              "XLSCTL.CONTEXT.TABLE.RESIZE",
-                            )}
-                            disabled={
-                              Boolean(activeTableSlicerStructureReason) ||
-                              !activeTableResizeEditable
-                            }
-                            disabledReason={
-                              activeTableSlicerStructureReason ??
-                              visibleCommandReason(
-                                visibleCommandState(
-                                  "XLSCTL.CONTEXT.TABLE.RESIZE",
-                                ).reasonKey,
-                              )
-                            }
-                            buttonRef={tableResizeTriggerRef}
-                            homeVariant="compact"
-                            controlOccurrenceId="resize-table"
-                            controlSurface="table-design"
-                            icon={<OfficeSemanticIcon
-                                semanticId="table.resize"
-                                size={18} />}
-                            label={t("spreadsheet.uiCopy.resizeTable")}
-                            onClick={openTableResizeDialog}
-                            testId="spreadsheet-ribbon-table-resize"
-                          />
-                        </div>
-                      ),
-                    },
-                    {
-                      id: "table-design-insert-slicer",
-                      label: t("spreadsheet.uiCopy.insertSlicer"),
-                      content: (
-                        <SpreadsheetRibbonAction
-                            {...visibleCommandActionProps(
-                            "XLSCTL.CONTEXT.TABLE.INSERT_SLICER",
-                            )}
-                          disabled={Boolean(slicerInsertDisabledReason)}
-                          disabledReason={slicerInsertDisabledReason}
-                          controlOccurrenceId="insert-slicer"
-                          controlSurface="table-design"
-                          homeVariant="large"
-                            icon={<OfficeSemanticIcon
-                              semanticId="table.slicer"
-                              size={27} />}
-                            label={t("spreadsheet.uiCopy.insertSlicer")}
-                            onClick={() =>
-                              void openTableSlicerInsertDialog(
-                                "XLSCTL.CONTEXT.TABLE.INSERT_SLICER",
-                              )
-                            }
-                            testId="spreadsheet-ribbon-table-insert-slicer"
-                        />
-                      ),
-                    },
-                    {
-                      id: "table-design-tools",
-                      label: t("spreadsheet.ribbon.toolsGroup"),
-                      content: (
-                        <>
-                          {null}
-                          <SpreadsheetRibbonAction
-                            {...visibleCommandActionProps(
-                              "XLSCTL.CONTEXT.TABLE.REMOVE_DUPLICATES",
-                            )}
-                            controlOccurrenceId="remove-duplicates"
-                            controlSurface="table-design"
-                            homeVariant="large"
-                            icon={<OfficeSemanticIcon
-                                semanticId="table.removeDuplicates"
-                                size={26} />}
-                            label={t("spreadsheet.uiCopy.removeDuplicates")}
-                            onClick={() =>
-                              void executeVisibleCommand(
-                                "XLSCTL.CONTEXT.TABLE.REMOVE_DUPLICATES",
-                              )
-                            }
-                            testId="spreadsheet-ribbon-table-remove-duplicates"
-                          />
-                          <SpreadsheetRibbonAction
-                            {...visibleCommandActionProps(
-                              "XLSCTL.CONTEXT.TABLE.CONVERT_TO_RANGE",
-                            )}
-                            disabled={
-                              Boolean(activeTableSlicerStructureReason) ||
-                              !visibleCommandState(
-                                "XLSCTL.CONTEXT.TABLE.CONVERT_TO_RANGE",
-                              ).enabled
-                            }
-                            disabledReason={
-                              activeTableSlicerStructureReason ??
-                              visibleCommandReason(
-                                visibleCommandState(
-                                  "XLSCTL.CONTEXT.TABLE.CONVERT_TO_RANGE",
-                                ).reasonKey,
-                              )
-                            }
-                            controlOccurrenceId="convert-to-range"
-                            controlSurface="table-design"
-                            homeVariant="large"
-                            icon={<OfficeSemanticIcon
-                                semanticId="table.convertRange"
-                                size={26} />}
-                            label={t("spreadsheet.uiCopy.convertToRange")}
-                            onClick={() =>
-                              void executeVisibleCommand(
-                                "XLSCTL.CONTEXT.TABLE.CONVERT_TO_RANGE",
-                              )
-                            }
-                            testId="spreadsheet-ribbon-table-convert-range"
-                          />
-                        </>
-                      ),
-                    },
-                    {
-                      id: "table-design-external-data",
-                      label: t("spreadsheet.uiCopy.externalTableData"),
-                      content: (
-                        <SpreadsheetRibbonAction
-                            {...visibleCommandActionProps(
-                            "XLSCTL.DATA.QUERY.REFRESH_ALL_MENU",
-                            )}
-                          hidden={false}
-                          controlOccurrenceId="refresh-all"
-                          controlSurface="table-design"
-                          homeVariant="large"
-                            icon={<OfficeSemanticIcon
-                              semanticId="data.refreshAll"
-                              size={27} />}
-                            label={t("spreadsheet.data.refreshAll")}
-                            onClick={() =>
-                              void executeVisibleCommand(
-                              "XLSCTL.DATA.QUERY.REFRESH_ALL_MENU",
-                            )
-                          }
-                          testId="spreadsheet-ribbon-table-refresh-all"
-                        />
-                      ),
-                    },
-                    {
-                      id: "table-design-style-options",
-                      label: t("presentation.tableRibbon.styleOptions"),
-                      content: (
-                        <div
-                          className={
-                            spreadsheetHomeStyles.tableDesignStyleOptions
-                          }
-                          data-testid="spreadsheet-ribbon-table-style-options-layout"
-                        >
-                          {(
-                            [
-                              [
-                                "XLSCTL.CONTEXT.TABLE.HEADER_ROW",
-                                t("spreadsheet.uiCopy.headerRow"),
-                                activeTable.headerRow,
-                                "header-row",
-                                null,
-                              ],
-                              [
-                                "XLSCTL.CONTEXT.TABLE.TOTAL_ROW",
-                                t("spreadsheet.uiCopy.totalRow"),
-                                Boolean(activeTable.totalsRow),
-                                "total-row",
-                                null,
-                              ],
-                              [
-                                "XLSCTL.CONTEXT.TABLE.FIRST_COLUMN",
-                                t("spreadsheet.uiCopy.firstColumn"),
-                                Boolean(activeTable.firstColumn),
-                                "first-column",
-                                "firstColumn",
-                              ],
-                              [
-                                "XLSCTL.CONTEXT.TABLE.LAST_COLUMN",
-                                t("spreadsheet.uiCopy.lastColumn"),
-                                Boolean(activeTable.lastColumn),
-                                "last-column",
-                                "lastColumn",
-                              ],
-                              [
-                                "XLSCTL.CONTEXT.TABLE.BANDED_ROWS",
-                                t("spreadsheet.uiCopy.bandedRows"),
-                                Boolean(activeTable.bandedRows),
-                                "banded-rows",
-                                "bandedRows",
-                              ],
-                              [
-                                "XLSCTL.CONTEXT.TABLE.BANDED_COLUMNS",
-                                t("spreadsheet.uiCopy.bandedColumns"),
-                                Boolean(activeTable.bandedColumns),
-                                "banded-columns",
-                                "bandedColumns",
-                              ],
-                              [
-                                "XLSCTL.CONTEXT.TABLE.FILTER_BUTTON",
-                                t("spreadsheet.uiCopy.filterButton"),
-                                activeTable.headerRow &&
-                                  activeTable.showFilterButton !== false,
-                                "filter-button",
-                                null,
-                              ],
-                            ] as const
-                          ).map(([
-                            controlId,
-                            label,
-                            checked,
-                            occurrenceId,
-                            tableStyleOption,
-                          ]) => (
-                            <span key={controlId}>
-                              <OfficeHomeCheckbox
-                                {...visibleCommandCheckboxProps(controlId)}
-                                aria-pressed={checked}
-                                checked={checked}
-                                data-control-occurrence-id={occurrenceId}
-                                data-control-surface="table-design"
-                                label={label}
-                                onCheckedChange={() => {
-                                  if (tableStyleOption) {
-                                    void executeTableStyleOptionMutation(
-                                      controlId as TableStyleOptionControlId,
-                                      tableStyleOption,
-                                    );
-                                    return;
-                                  }
-                                  void executeVisibleCommand(controlId);
-                                }}
-                                testId={`spreadsheet-ribbon-table-${occurrenceId}`}
-                              />
-                            </span>
-                          ))}
-                          {/* Excel's per-column total picker sits under the
-                              Filter Button slot, beside Total Row, not in
-                              Properties (which holds only Table Name, Resize
-                              Table and Alt Text). */}
-                          <span
-                            className={
-                              spreadsheetHomeStyles.tableDesignColumnTotal
-                            }
-                          >
-                          <label
-                              className={
-                                spreadsheetHomeStyles.tableDesignNameField
-                              }
-                              title={
-                                tableNativeStructureBlocked(activeTable)
-                                  ? t("spreadsheet.uiCopy.thisImportedTableContainsNativeDataThatCannotBe_0bd9e5")
-                                  : activeTable.totalsRow
-                                    ? undefined
-                                    : t("spreadsheet.uiCopy.turnOnTotalRowFirst")
-                              }
-                            >
-                              <span className="sr-only">
-                                {t("spreadsheet.tableColumnTotal")}
-                              </span>
-                              <select
-                                aria-label={t("spreadsheet.tableColumnTotal")}
-                                className={
-                                  spreadsheetHomeStyles.tableDesignNameInput
-                                }
-                                data-testid="spreadsheet-ribbon-table-column-agg"
-                                disabled={
-                                  !activeTable.totalsRow ||
-                                  tableNativeStructureBlocked(activeTable)
-                                }
-                                value={
-                                  activeTable.totals?.[
-                                    activeCell.col - activeTable.range.c1
-                                  ] === "custom"
-                                    ? "customCurrent"
-                                    : activeTable.totals?.[
-                                        activeCell.col - activeTable.range.c1
-                                      ] ?? "none"
-                                }
-                                onChange={(event) =>
-                                  chooseTableColumnTotal(
-                                    activeTable.id,
-                                    activeCell.col - activeTable.range.c1,
-                                    event.target.value as TableTotalKind,
-                                    event.currentTarget,
-                                  )
-                                }
-                              >
-                                {activeTable.totals?.[
-                                  activeCell.col - activeTable.range.c1
-                                ] === "custom" ? (
-                                  <option disabled value="customCurrent">
-                                    {t("spreadsheet.tableAgg_customCurrent")}
-                                  </option>
-                                ) : null}
-                                {TABLE_TOTAL_KINDS.map((kind) => (
-                                  <option key={kind} value={kind}>
-                                    {t(`spreadsheet.tableAgg_${kind}`)}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                          </span>
-                        </div>
-                      ),
-                    },
-                    {
-                      id: "table-design-style-gallery",
-                      label: t("presentation.tableRibbon.tableStyles"),
-                      content: (
-                        <div
-                          data-control-id="XLSCTL.CONTEXT.TABLE.STYLE_GALLERY"
-                          data-control-occurrence-id="style-gallery"
-                          data-control-surface="table-design"
-                          data-testid="spreadsheet-ribbon-table-style-authority"
-                          title={tableStyleDisabledReason}
-                        >
-                          <OfficeStyleGallery<TableStyleChoice>
-                            application="spreadsheet"
-                            ariaLabel={t("presentation.tableRibbon.tableStyles")}
-                            className={
-                              `${spreadsheetHomeStyles.contextualStyleGallery} ${spreadsheetHomeStyles.tableDesignStyleGallery}`
-                            }
-                            disabled={!tableStyleCommandState.enabled}
-                            groups={tableStyleGalleryGroups}
-                            items={tableStyleGalleryItems}
-                            labels={{ more: t("spreadsheet.uiCopy.moreStyles") }}
-                            menuGrid={{ columns: 7, thumbnail: [60, 44] }}
-                            menuMode="preview-only"
-                            groupHeadings
-                            quickIds={tableStyleQuickIds}
-                            renderPreview={renderTableStylePreview}
-                            testIdPrefix="spreadsheet-table-style-gallery"
-                            value={tableStyleChoiceOf(
-                              activeTable,
-                              workbookNativeTableStyles,
-                            )}
-                            onPreviewChange={(styleId) =>
-                              setTableStylePreview(
-                                styleId
-                                  ? { tableId: activeTable.id, styleId }
-                                  : null,
-                              )
-                            }
-                            onCommit={(styleId) => {
-                              setTableStylePreview(null);
-                              void executeTableStyleMutation(styleId);
-                            }}
-                          />
-                        </div>
-                      ),
-                    },
-                    ...(SHOW_LEGACY_TABLE_DESIGN_CONTROLS
-                      ? [
-                    {
-                      id: "table-design-options",
-                      label: t("presentation.tableRibbon.styleOptions"),
-                      content: (
-                        <>
-                          <label className="flex min-h-[56px] min-w-[112px] flex-col justify-center gap-1 rounded-md bg-emerald-50 px-3 text-emerald-900">
-                            <span className="text-[10px] font-medium uppercase tracking-wide text-emerald-700">
-                              {t("spreadsheet.uiCopy.tableName")}
-                            </span>
-                            <input
-                              key={`${activeTable.id}:${activeTable.name}`}
-                              aria-label={
-                                t("spreadsheet.uiCopy.tableName")
-                              }
-                              className="h-6 w-28 rounded border border-emerald-200 bg-white px-1.5 text-xs font-semibold text-emerald-950 outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-200"
-                              data-testid="spreadsheet-ribbon-table-name"
-                              defaultValue={activeTable.name}
-                              maxLength={200}
-                              onBlur={(event) => {
-                                if (
-                                  !renameDataTable(
-                                    activeTable.id,
-                                    event.currentTarget.value,
-                                  )
-                                ) {
-                                  event.currentTarget.value = activeTable.name;
-                                  toast({
-                                    variant: "destructive",
-                                    description: t("spreadsheet.uiCopy.theTableNameIsInvalidOrAlreadyInUse"),
-                                  });
-                                }
-                              }}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  event.currentTarget.blur();
-                                }
-                                if (event.key === "Escape") {
-                                  event.preventDefault();
-                                  event.currentTarget.value = activeTable.name;
-                                  event.currentTarget.blur();
-                                }
-                              }}
-                            />
-                          </label>
-                          <SpreadsheetRibbonAction
-                            active={Boolean(activeTable.bandedRows)}
-                            icon={<Rows3 size={18} />}
-                            label={
-                              t("spreadsheet.uiCopy.bandedRows")
-                            }
-                            onClick={() =>
-                              toggleTableStyleOption(
-                                activeTable.id,
-                                "bandedRows",
-                              )
-                            }
-                            testId="spreadsheet-ribbon-table-banded-rows"
-                          />
-                          <SpreadsheetRibbonAction
-                            active={Boolean(activeTable.bandedColumns)}
-                            icon={<Columns3 size={18} />}
-                            label={
-                              t("spreadsheet.uiCopy.bandedColumns")
-                            }
-                            onClick={() =>
-                              toggleTableStyleOption(
-                                activeTable.id,
-                                "bandedColumns",
-                              )
-                            }
-                            testId="spreadsheet-ribbon-table-banded-columns"
-                          />
-                          <SpreadsheetRibbonAction
-                            active={Boolean(activeTable.firstColumn)}
-                            icon={<PanelLeft size={18} />}
-                            label={
-                              t("spreadsheet.uiCopy.firstColumn_b364aa")
-                            }
-                            onClick={() =>
-                              toggleTableStyleOption(
-                                activeTable.id,
-                                "firstColumn",
-                              )
-                            }
-                            testId="spreadsheet-ribbon-table-first-column"
-                          />
-                          <SpreadsheetRibbonAction
-                            active={Boolean(activeTable.lastColumn)}
-                            icon={<PanelRight size={18} />}
-                            label={
-                              t("spreadsheet.uiCopy.lastColumn_2c75d1")
-                            }
-                            onClick={() =>
-                              toggleTableStyleOption(
-                                activeTable.id,
-                                "lastColumn",
-                              )
-                            }
-                            testId="spreadsheet-ribbon-table-last-column"
-                          />
-                          <SpreadsheetRibbonAction
-                            active={Boolean(activeTable.totalsRow)}
-                            icon={<SquareSigma size={18} />}
-                            label={t("spreadsheet.tableTotalsToggle")}
-                            onClick={() => toggleTableTotals(activeTable.id)}
-                            testId="spreadsheet-ribbon-table-totals"
-                          />
-                        </>
-                      ),
-                    },
-                    {
-                      id: "table-design-styles",
-                      label: t("presentation.tableRibbon.tableStyles"),
-                      content: (
-                        <div
-                          className="flex min-h-[56px] items-center gap-1 px-1"
-                          data-testid="spreadsheet-ribbon-table-style-gallery"
-                        >
-                          {TABLE_STYLE_PRESETS.map((preset) => {
-                            const selected =
-                              (activeTable.styleId ?? "teal-medium") ===
-                              preset.id;
-                            const label = spreadsheetTableStyleLabel(preset, t);
-                            return (
-                              <button
-                                key={preset.id}
-                                type="button"
-                                aria-label={label}
-                                aria-pressed={selected}
-                                className={[
-                                  "flex h-12 w-12 flex-col overflow-hidden rounded-md border bg-white p-1 shadow-sm transition",
-                                  selected
-                                    ? "border-emerald-600 ring-2 ring-emerald-100"
-                                    : "border-slate-200 hover:border-slate-400 hover:shadow",
-                                ].join(" ")}
-                                data-testid={`spreadsheet-ribbon-table-style-${preset.id}`}
-                                onClick={() =>
-                                  setTableStyle(activeTable.id, preset.id)
-                                }
-                                title={label}
-                              >
-                                <span
-                                  aria-hidden="true"
-                                  className="block h-3 w-full rounded-sm"
-                                  style={{
-                                    backgroundColor: preset.headerBackground,
-                                  }}
-                                />
-                                <span
-                                  aria-hidden="true"
-                                  className="mt-1 block h-2 w-full rounded-sm"
-                                  style={{
-                                    backgroundColor: preset.bandBackground,
-                                  }}
-                                />
-                                <span
-                                  aria-hidden="true"
-                                  className="mt-1 block h-2 w-full rounded-sm bg-white"
-                                />
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ),
-                    },
-                    {
-                      id: "table-design-tools",
-                      label: t("toolbar.ribbonTableTools"),
-                      content: (
-                        <>
-                                <label className="flex min-h-[56px] min-w-[118px] flex-col justify-center gap-1 px-2 text-[10px] font-medium text-slate-600">
-                            <span>
-                              {t("spreadsheet.uiCopy.resizeTable")}
-                            </span>
-                            <input
-                              key={`${activeTable.id}:${activeTable.range.r1}:${activeTable.range.c1}:${activeTable.range.r2}:${activeTable.range.c2}`}
-                              aria-label={
-                                t("spreadsheet.uiCopy.tableRange_6b4ded")
-                              }
-                              className="h-7 w-28 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-200"
-                              data-testid="spreadsheet-ribbon-table-range"
-                              defaultValue={`${columnLabel(activeTable.range.c1)}${
-                                activeTable.range.r1 + 1
-                              }:${columnLabel(activeTable.range.c2)}${
-                                activeTable.range.r2 + 1
-                              }`}
-                              onBlur={(event) => {
-                                if (
-                                  !resizeDataTable(
-                                    activeTable.id,
-                                    event.currentTarget.value,
-                                  )
-                                ) {
-                                  event.currentTarget.value = `${columnLabel(
-                                    activeTable.range.c1,
-                                  )}${activeTable.range.r1 + 1}:${columnLabel(
-                                    activeTable.range.c2,
-                                  )}${activeTable.range.r2 + 1}`;
-                                  toast({
-                                    variant: "destructive",
-                                    description: tableResizeRefusalMessage(
-                                      tableResizeRefusalRef.current,
-                                      "spreadsheet.uiCopy.theTableRangeIsInvalidOutOfBoundsOr",
-                                    ),
-                                  });
-                                }
-                              }}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  event.currentTarget.blur();
-                                }
-                                if (event.key === "Escape") {
-                                  event.preventDefault();
-                                  event.currentTarget.value = `${columnLabel(
-                                    activeTable.range.c1,
-                                  )}${activeTable.range.r1 + 1}:${columnLabel(
-                                    activeTable.range.c2,
-                                  )}${activeTable.range.r2 + 1}`;
-                                  event.currentTarget.blur();
-                                }
-                              }}
-                            />
-                          </label>
-                                <label
-                                  className="flex min-h-[56px] min-w-[126px] flex-col justify-center gap-1 px-2 text-[10px] font-medium text-slate-600"
-                                  title={
-                                    tableNativeStructureBlocked(activeTable)
-                                      ? t("spreadsheet.uiCopy.thisImportedTableContainsNativeDataThatCannotBe_0bd9e5")
-                                      : undefined
-                                  }
-                                >
-                                  <span>
-                                    {t("spreadsheet.tableColumnTotal")}
-                                  </span>
-                                  <select
-                              aria-label={t("spreadsheet.tableColumnTotal")}
-                              className="h-7 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-                              data-testid="spreadsheet-ribbon-table-column-agg"
-                              disabled={
-                                !activeTable.totalsRow ||
-                                tableNativeStructureBlocked(activeTable)
-                              }
-                              value={
-                                activeTable.totals?.[
-                                  activeCell.col - activeTable.range.c1
-                                ] === "custom"
-                                  ? "customCurrent"
-                                  : activeTable.totals?.[
-                                      activeCell.col - activeTable.range.c1
-                                    ] ?? "none"
-                              }
-                              onChange={(event) =>
-                                chooseTableColumnTotal(
-                                  activeTable.id,
-                                  activeCell.col - activeTable.range.c1,
-                                  event.target.value as TableTotalKind,
-                                  event.currentTarget,
-                                )
-                              }
-                            >
-                              {activeTable.totals?.[
-                                activeCell.col - activeTable.range.c1
-                              ] === "custom" ? (
-                                <option disabled value="customCurrent">
-                                  {t("spreadsheet.tableAgg_customCurrent")}
-                                </option>
-                              ) : null}
-                              {TABLE_TOTAL_KINDS.map((kind) => (
-                                <option key={kind} value={kind}>
-                                  {t(`spreadsheet.tableAgg_${kind}`)}
-                                </option>
-                              ))}
-                            </select>
-                                </label>
-                                <SpreadsheetRibbonAction
-                            icon={<Trash2 size={18} />}
-                            label={t("spreadsheet.tableRemove")}
-                            onClick={() => confirmConvertTableToRange(activeTable.id)}
-                            testId="spreadsheet-ribbon-table-remove"
-                          />
-                              </>
-                      ),
-                    },
-                      ]
-                      : []),
-                  ]
-                : [],
-            }}
+              ] }}
           />
           </OfficeRibbonCommandGateProvider>
           </SpreadsheetRibbonHeld>
@@ -84273,31 +74754,7 @@ function SpreadsheetWindow({
           pure consolidate() helper (lib/spreadsheet/consolidate.ts) does the
           math. Excel's buttons read OK and Close. Its Data-tab launcher is
           not mounted today (Excel for the web has no Consolidate). */}
-      {consolidateOpen && consolidateAuthority !== null ? (
-        renderSpreadsheetConsolidateDialog({
-          rangePick,
-          closeConsolidate,
-          consolidateCreateLinks,
-          consolidateDest,
-          consolidateFn,
-          consolidateLeftCol,
-          consolidateMode,
-          consolidateSources,
-          consolidateStatus,
-          consolidateTopRow,
-          consolidateTriggerRef,
-          runConsolidate,
-          setConsolidateCreateLinks,
-          setConsolidateDest,
-          setConsolidateFn,
-          setConsolidateLeftCol,
-          setConsolidateMode,
-          setConsolidateSources,
-          setConsolidateStatus,
-          setConsolidateTopRow,
-          t,
-        })
-      ) : null}
+      {null}
       {/* Data > Form (Excel's data form, WPS 记录单): the fields of one record
           on the left, Excel's buttons down the right, and Close as the only
           way out -- Excel's form has no OK. Enter in a field steps to the next
@@ -85958,20 +76415,7 @@ function SpreadsheetWindow({
           rows/columns, Linear/Growth/Date/AutoFill type, date unit, Trend,
           step and stop value, laid out like Excel's dialog. applySeries
           writes the whole fill as one undo step. */}
-      {workbookThemeFontsDialogOpen ? (
-        <OfficeCreateThemeFontsDialog
-          open
-          initial={workbookThemeFontsDialogInitial}
-          showEastAsian={
-            homeZh ||
-            Boolean(workbookThemeFontsDialogInitial.headingEastAsian || workbookThemeFontsDialogInitial.bodyEastAsian)
-          }
-          locale={locale}
-          onSave={applyWorkbookCustomThemeFonts}
-          onCancel={() => setWorkbookThemeFontsDialogOpen(false)}
-          testIdPrefix="spreadsheet-theme-fonts-dialog"
-        />
-      ) : null}
+      {null}
       {seriesDialogOpen ? (
         renderSpreadsheetFillSeriesDialog({
           applySeries,
@@ -86153,26 +76597,7 @@ function SpreadsheetWindow({
       {/* MRAI Data-cell transform preview. The pure planner has not changed the
           worksheet yet; Confirm performs one guarded sheet replacement, while
           Cancel/Escape is a zero-write transaction. */}
-      {cellTransformPreview && typeof document !== "undefined"
-        ? createPortal(
-            <ConfirmDialog
-              open
-              title={
-                t("spreadsheet.dynamicCopy.preview", { label: cellTransformPreview.label })
-              }
-              body={cellTransformPreviewBody}
-              confirmLabel={
-                t("spreadsheet.uiCopy.apply")
-              }
-              cancelLabel={
-                t("common.cancel")
-              }
-              onConfirm={confirmCellTransformPreview}
-              onCancel={closeCellTransformPreview}
-            />,
-            popupPortalTarget ?? document.body,
-          )
-        : null}
+      {null}
       {/* Data > What-If Analysis (Excel): Goal Seek, Solver, Data Table and
           Scenario Manager, each a window-level Office modal. */}
       {/* Goal Seek: Set cell, To value, By changing cell. OK solves without
@@ -87723,7 +78148,8 @@ function SpreadsheetWindow({
           data-split-active={splitActive ? "true" : "false"}
           // A right-to-left window mirrors its panes: the leading (column A)
           // panes and the row numbers sit on the right (G1 §3).
-          dir={splitActive && gridRtl ? "rtl" : undefined}
+          // Stated either way: an rtl interface must not flip an ltr sheet.
+          dir={splitActive && gridRtl ? "rtl" : "ltr"}
           data-split-preserve-only={
             nativeSplitPresent && !splitRenderingSupported ? "true" : undefined
           }
@@ -87847,7 +78273,7 @@ function SpreadsheetWindow({
           // out which column is first — so a wide RTL sheet would have rendered
           // the wrong columns the moment it was scrolled. Setting it here flips
           // the layout and the scroll axis together (see the onScroll below).
-          dir={gridRtl ? "rtl" : undefined}
+          dir={gridRtl ? "rtl" : "ltr"}
           // Format Painter: while armed, a pointer release over the grid (after
           // the click / Shift-range selection has committed its active-cell +
           // anchor state) paints the captured style onto the final selection.
@@ -93042,7 +83468,7 @@ function SpreadsheetWindow({
                     {smartArtDrawnObjects.map((drawnObject, objectIndex) => {
                   // A stroke the lasso's grip is scaling is drawn as its
                   // commit will write it: its box and its line both.
-                  const lassoScaled = inkLassoScalePreview?.get(drawnObject.id);
+                  const lassoScaled = null?.get(drawnObject.id);
                   // A stroke its own grip is resizing: its line as well.
                   const ownResize =
                     !lassoScaled &&
@@ -93054,9 +83480,7 @@ function SpreadsheetWindow({
                       : null;
                   const object = lassoScaled
                     ? spreadsheetLassoObjectScaled(drawnObject, lassoScaled, INK_LASSO_SCALE_MIN)
-                    : inkLassoTurn && inkLasso?.ids.has(drawnObject.id)
-                      ? spreadsheetLassoObjectTurned(drawnObject, inkLassoTurn.center, inkLassoTurn.degrees)
-                      : ownResize
+                    : (ownResize
                         ? spreadsheetLineFollowsBox(
                             {
                               ...drawnObject,
@@ -93068,7 +83492,7 @@ function SpreadsheetWindow({
                             } as SpreadsheetObject,
                             drawnObject.anchor,
                           )
-                        : drawnObject;
+                        : drawnObject);
                   // A SmartArt item its layout does not draw (Office's unused
                   // text) is in the outline, never on the sheet.
                   if (object.hidden || isSmartArtHiddenMember(object) || spreadsheetObjectCollapsedByCells(object, colWidth, rowHeight)) return null;
@@ -95354,184 +85778,10 @@ function SpreadsheetWindow({
                     testId="spreadsheet-peer-ink"
                   />
                 ) : null}
-                {ribbonTab === "draw" && (inkInteractionMode !== null || inkRuler !== null) ? (
-                <div
-                  role="application"
-                  tabIndex={0}
-                  aria-label={
-                    t("spreadsheet.dynamicCopy.drawingSurface", { mode: t(inkInteractionMode === "eraser" ? `toolbar.drawEraser_${inkEraser}` : inkInteractionMode === "lasso" ? "spreadsheet.dynamicCopy.drawingMode.lasso" : "spreadsheet.dynamicCopy.drawingMode.draw") })
-                  }
-                  ref={setInkSurfaceNode}
-                  data-testid="spreadsheet-draw-surface"
-                  data-ink-mode={inkInteractionMode ?? undefined}
-                  // Mounted for the ruler alone, the surface takes no
-                  // pointer: the grid keeps its clicks and its pans.
-                  data-ink-passive={inkInteractionMode === null ? "true" : undefined}
-                  onPointerDown={inkInteractionMode !== null ? beginSpreadsheetInkGesture : undefined}
-                  style={{
-                    pointerEvents: inkInteractionMode === null ? "none" : undefined,
-                    position: "absolute",
-                    left: SPREADSHEET_HEADER_WIDTH_PX,
-                    top: SPREADSHEET_HEADER_HEIGHT_PX,
-                    width: Math.max(
-                      1,
-                      gridStageSize.totalWidth - SPREADSHEET_HEADER_WIDTH_PX,
-                    ),
-                    height: Math.max(
-                      1,
-                      gridStageSize.totalHeight - SPREADSHEET_HEADER_HEIGHT_PX,
-                    ),
-                    zIndex: 20,
-                    cursor:
-                      inkInteractionMode === "eraser"
-                        ? "cell"
-                        : inkInteractionMode === "lasso"
-                          ? "crosshair"
-                          : "crosshair",
-                    touchAction: inkInteractionMode === null ? undefined : "none",
-                  }}
-                >
-                  <svg
-                    ref={inkWetMount}
-                    aria-hidden="true"
-                    data-testid="spreadsheet-draw-wet-ink"
-                    viewBox={`0 0 ${Math.max(1, gridStageSize.totalWidth - SPREADSHEET_HEADER_WIDTH_PX)} ${Math.max(1, gridStageSize.totalHeight - SPREADSHEET_HEADER_HEIGHT_PX)}`}
-                    preserveAspectRatio="none"
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      width: "100%",
-                      height: "100%",
-                      overflow: "visible",
-                      pointerEvents: "none",
-                    }}
-                  />
-                  {inkGesturePreview && inkGesturePreview.length > 0 ? (
-                    <svg
-                      aria-hidden="true"
-                      viewBox={`0 0 ${Math.max(1, gridStageSize.totalWidth - SPREADSHEET_HEADER_WIDTH_PX)} ${Math.max(1, gridStageSize.totalHeight - SPREADSHEET_HEADER_HEIGHT_PX)}`}
-                      preserveAspectRatio="none"
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        width: "100%",
-                        height: "100%",
-                        overflow: "visible",
-                        pointerEvents: "none",
-                        // A stroke over a frozen pane is in that pane's
-                        // coordinates: show it where the pen is.
-                        transform:
-                          inkPreviewShift.x || inkPreviewShift.y
-                            ? `translate(${inkPreviewShift.x}px, ${inkPreviewShift.y}px)`
-                            : undefined,
-                      }}
-                    >
-                      {inkInteractionMode === "lasso" ? (
-                        <polygon
-                          points={inkGesturePreview
-                            .map(
-                              (point) =>
-                                `${point.x - SPREADSHEET_HEADER_WIDTH_PX},${point.y - SPREADSHEET_HEADER_HEIGHT_PX}`,
-                            )
-                            .join(" ")}
-                          fill="rgba(21, 128, 61, 0.08)"
-                          stroke="#15803d"
-                          strokeWidth={1.5}
-                          strokeDasharray="5 4"
-                          vectorEffect="non-scaling-stroke"
-                        />
-                      ) : (
-                        <path
-                          // the curve the stroke is drawn as once it lands
-                          // (lib/office-ink-smooth)
-                          d={inkStrokePathData(
-                            inkGesturePreview.map((point) => ({
-                              x: point.x - SPREADSHEET_HEADER_WIDTH_PX,
-                              y: point.y - SPREADSHEET_HEADER_HEIGHT_PX,
-                            })),
-                          )}
-                          fill="none"
-                          stroke={
-                            inkInteractionMode === "eraser"
-                              ? "#dc2626"
-                              : inkPresetRef.current.color
-                          }
-                          strokeWidth={
-                            inkInteractionMode === "eraser"
-                              ? documentInkEraserRadiusPx(inkEraser) * 2
-                              : spreadsheetInkWidthPx(inkPresetRef.current.widthPt)
-                          }
-                          strokeOpacity={
-                            inkInteractionMode === "draw"
-                              ? spreadsheetInkOpacityForTool(inkPresetRef.current.tool)
-                              : 1
-                          }
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeDasharray={
-                            inkInteractionMode === "eraser" ? "4 3" : undefined
-                          }
-                          vectorEffect="non-scaling-stroke"
-                        />
-                      )}
-                    </svg>
-                  ) : null}
-                  {inkCircleOffer && inkCircleOffer.sheetId === sheet.id && inkInteractionMode === "draw" ? (
-                    <OfficeInkCircleSelect
-                      offer={inkCircleOffer}
-                      space={{
-                        width: Math.max(1, gridStageSize.totalWidth - SPREADSHEET_HEADER_WIDTH_PX),
-                        height: Math.max(1, gridStageSize.totalHeight - SPREADSHEET_HEADER_HEIGHT_PX),
-                      }}
-                      label={t("toolbar.drawCircleSelect")}
-                      testId="spreadsheet-ink-circle-select"
-                      onSelect={takeInkCircleOffer}
-                    />
-                  ) : null}
-                  {inkLassoView && !inkGesturePreview ? (
-                    <OfficeInkLassoSelection
-                      space={{
-                        width: Math.max(1, gridStageSize.totalWidth - SPREADSHEET_HEADER_WIDTH_PX),
-                        height: Math.max(1, gridStageSize.totalHeight - SPREADSHEET_HEADER_HEIGHT_PX),
-                      }}
-                      box={inkLassoView.box}
-                      label={t("toolbar.drawLasso")}
-                      commandsLabel={t("toolbar.miniToolbar")}
-                      commands={
-                        autosave.readOnly
-                          ? []
-                          : [
-                              { id: "ink-to-shape", label: t("toolbar.drawInkToShape"), onClick: () => runInkConvert("shape") },
-                              { id: "ink-to-text", label: t("toolbar.drawInkToText"), onClick: () => runInkConvert("text") },
-                              { id: "ink-to-math", label: t("toolbar.drawInkToMath"), onClick: () => runInkConvert("math") },
-                              { id: "delete", label: t("toolbar.delete"), onClick: () => { deleteSelectedInk(); } },
-                            ]
-                      }
-                      testIdPrefix="spreadsheet-ink-lasso-selection"
-                      // A press inside the frame reaches the surface, whose
-                      // lasso gesture moves the strokes it took.
-                      onPressHandle={autosave.readOnly ? undefined : scaleInkLasso}
-                      handleLabel={(handle) => `${t("toolbar.drawLasso")}: ${handle}`}
-                      onPressRotate={autosave.readOnly ? undefined : rotateInkLasso}
-                      rotateLabel={t("toolbar.objectRotate")}
-                      rotation={inkLassoTurn?.degrees ?? 0}
-                    />
-                  ) : null}
-                  {inkRuler ? (
-                    <OfficeInkRuler
-                      ruler={inkRuler}
-                      onChange={setInkRuler}
-                      length={Math.min(6000, Math.ceil(Math.hypot(gridStageSize.totalWidth, gridStageSize.totalHeight) + 200))}
-                      zoom={sheetZoom}
-                      label={t("toolbar.ruler")}
-                      testId="spreadsheet-draw-ruler"
-                    />
-                  ) : null}
-                </div>
-              ) : null}
+                {null}
               <span ref={inkTrackpadStageMarkerRef} hidden />
               <DocumentInkTrackpad
-                open={ribbonTab === "draw" && inkTrackpad && !drawCreateDisabledReason}
+                open={false}
                 preset={inkPresetRef.current}
                 title={t("toolbar.drawTrackpad")}
                 hint={t("toolbar.drawTrackpadHint")}
@@ -95569,27 +85819,7 @@ function SpreadsheetWindow({
                 onStroke={placeSpreadsheetTrackpadStroke}
                 onClose={() => setInkTrackpad(false)}
               />
-              {ribbonTab === "draw" && inkMoreColorsPenId ? (
-                <OfficeColorPalettePopover
-                  anchorRef={{
-                    current: (penFirst.compact ? palettePenRefs : inkPenRefs).current.get(inkMoreColorsPenId) ?? null,
-                  }}
-                  value={officeInkPenById(inkPens, inkMoreColorsPenId).color}
-                  labels={{
-                    themeColors: t("toolbar.themeColors"),
-                    standardColors: t("toolbar.standardColors"),
-                    recentColors: t("spreadsheet.recentColors"),
-                    moreColors: t("toolbar.drawMoreColors"),
-                  }}
-                  onPick={(color) => {
-                    const penId = inkMoreColorsPenId;
-                    setInkMoreColorsPenId(null);
-                    if (color) updateInkPen(penId, { color: color.toLowerCase() });
-                  }}
-                  onDismiss={() => setInkMoreColorsPenId(null)}
-                  testIdPrefix="spreadsheet-ribbon-draw-ink-palette"
-                />
-              ) : null}
+              {null}
               {/* The SmartArt diagram frame (PowerPoint's SmartArt border):
                   drawn around every member while one of them is selected. Its
                   EDGES drag the whole diagram and its HANDLES resize every
@@ -95959,8 +86189,9 @@ function SpreadsheetWindow({
       <PresentationParagraphDialog
         open={shapeParagraphDialog !== null && shapeParagraphDialog.objectId === selectedObjectId}
         source={shapeParagraphDialog?.source ?? { align: "left", lineSpacing: undefined, lineSpacingPoints: undefined, spaceBefore: undefined, spaceAfter: undefined }}
-        // A worksheet shape's row holds a multiple, not an Exactly height.
-        exactWritable={false}
+        // A worksheet shape's row holds a multiple or an Exactly height
+        // (`lineSpacingPoints`, written as `a:lnSpc/a:spcPts`; row 991).
+        exactWritable
         spacingWritable
         indentWritable
         onApply={(result) => {
@@ -96159,35 +86390,16 @@ function SpreadsheetWindow({
           />
         </OfficeDockedPane>
       ) : null}
-      {drawingReorderSession ? (
-        <PresentationReorderObjectsDialog
-          key={drawingReorderSession.key}
-          open
-          layers={drawingReorderSession.layers.map((layer) => ({
-            objectId: layer.objectId,
-            label: layer.label,
-            hidden: layer.hidden,
-            locked: layer.locked,
-            selected: layer.selected,
-            preview: <OfficeReorderLayerPreview box={spreadsheetReorderLayerBox(layer)} />,
-          }))}
-          labels={{
-            title: t("presentation.arrange.reorderObjects"),
-            description: t("presentation.arrange.reorderDescription"),
-            ok: t("presentation.arrange.ok"),
-            cancel: t("toolbar.cancel"),
-            bringForward: t("presentation.contextMenu.bringForward"),
-            sendBackward: t("presentation.contextMenu.sendBackward"),
-            locked: t("presentation.arrange.locked"),
-            hidden: t("presentation.arrange.hidden"),
-            layer: (position, count, label) =>
-              t("presentation.arrange.layerAria", { position, count, label }),
-          }}
-          returnFocusRef={drawingReorderReturnFocusRef}
-          onApply={applyDrawingReorder}
-          onCancel={() => setDrawingReorderSession(null)}
-        />
+      {thesaurusOpen ? (
+        <OfficeDockedPane
+          docks={sheetTaskPaneDocks}
+          edges={SPREADSHEET_TASK_PANE_EDGES}
+          pane="thesaurus"
+        >
+          {null}
+        </OfficeDockedPane>
       ) : null}
+      {null}
       {selectionPaneOpen ? (
         renderSpreadsheetSelectionPane({
           charts,
@@ -97651,7 +87863,7 @@ function SpreadsheetWindow({
                 true,
               ),
               onSelect: () => {
-                setRibbonTab("review");
+                void 0;
                 // Excel narrows the pane to the cell or range right-clicked.
                 changeLogOpenRequestRef.current = {
                   scope: "range",

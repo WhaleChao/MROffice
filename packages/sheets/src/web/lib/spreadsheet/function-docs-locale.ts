@@ -39,6 +39,151 @@ const LOADERS: Readonly<Record<string, () => Promise<LocalizedFunctionDocs>>> = 
       functions: module.FUNCTION_DOCS,
       commonArguments: module.COMMON_ARGUMENTS,
     })),
+  ar: () =>
+    import("./function-descriptions-ar").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  ru: () =>
+    import("./function-descriptions-ru").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  tr: () =>
+    import("./function-descriptions-tr").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  uk: () =>
+    import("./function-descriptions-uk").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  cs: () =>
+    import("./function-descriptions-cs").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  "pt-PT": () =>
+    import("./function-descriptions-pt-PT").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  ro: () =>
+    import("./function-descriptions-ro").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  "sr-Cyrl": () =>
+    import("./function-descriptions-sr-Cyrl").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  "sr-Latn": () =>
+    import("./function-descriptions-sr-Latn").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  el: () =>
+    import("./function-descriptions-el").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  hu: () =>
+    import("./function-descriptions-hu").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  bg: () =>
+    import("./function-descriptions-bg").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  hr: () =>
+    import("./function-descriptions-hr").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  lv: () =>
+    import("./function-descriptions-lv").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  sk: () =>
+    import("./function-descriptions-sk").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  ca: () =>
+    import("./function-descriptions-ca").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  ms: () =>
+    import("./function-descriptions-ms").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  sl: () =>
+    import("./function-descriptions-sl").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  sq: () =>
+    import("./function-descriptions-sq").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  az: () =>
+    import("./function-descriptions-az").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  gl: () =>
+    import("./function-descriptions-gl").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  hy: () =>
+    import("./function-descriptions-hy").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  ur: () =>
+    import("./function-descriptions-ur").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  be: () =>
+    import("./function-descriptions-be").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  eu: () =>
+    import("./function-descriptions-eu").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  si: () =>
+    import("./function-descriptions-si").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  lo: () =>
+    import("./function-descriptions-lo").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  he: () =>
+    import("./function-descriptions-he").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
+  pl: () =>
+    import("./function-descriptions-pl").then((module) => ({
+      functions: module.FUNCTION_DOCS,
+      commonArguments: module.COMMON_ARGUMENTS,
+    })),
   de: () =>
     import("./function-descriptions-de").then((module) => ({
       functions: module.FUNCTION_DOCS,

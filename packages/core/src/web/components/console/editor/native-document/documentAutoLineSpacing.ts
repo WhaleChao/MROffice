@@ -530,6 +530,28 @@ const NOTE_REFERENCE_VIEW = "sup.mrnote-footnote-ref";
 function nativeMarkerStrutOff(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsNativeMarkerStrutOff?: boolean }).__docsNativeMarkerStrutOff === true;
 }
+/** `window.__docsMarkerStrutTallRunOff = true` (A/B): a list paragraph
+ * holding a run Word stands taller than its first gets no marker strut, the
+ * older reading. */
+function markerStrutTallRunOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsMarkerStrutTallRunOff?: boolean }).__docsMarkerStrutTallRunOff === true;
+}
+/**
+ * The face whose Word ascent a run stands to in a list line. Cambria Math in
+ * a line of text stands as Cambria does: Windows Word sets Arial 11 at Auto
+ * 1.2 15.18pt a line, 15.48pt with a Cambria Math "‐" in it (Cambria's
+ * 0.950 em ascent and 0.222 em descent over Arial's 0.938 and 0.212), and
+ * 16.08pt under a 12pt Symbol bullet, the bullet's ascent above Cambria's
+ * (docx-look/probes/vsp13 m1). No Word file of Cambria Math is recorded.
+ */
+function markerLineFace(family: string): string {
+  return !markerStrutTallRunOff() && family.toLowerCase() === "cambria math" ? "Cambria" : family;
+}
+/** `window.__docsWidgetItemShiftOff = true` (A/B): a list item whose number
+ * the page draws itself gets no Word-baseline move, the older reading. */
+function widgetItemShiftOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsWidgetItemShiftOff?: boolean }).__docsWidgetItemShiftOff === true;
+}
 function noteRefLineOff(): boolean {
   return typeof window !== "undefined" && (window as Window & {__docsNoteRefLineOff?: boolean}).__docsNoteRefLineOff === true;
 }
@@ -753,10 +775,22 @@ function sourceTextDOM(view: EditorView, dom: HTMLElement, position: number, blo
     const strut = element.closest(AUTO_LINE_STRUT_SELECTOR);
     return strut !== null && dom.contains(strut);
   };
+  // A superscript or subscript run (the subscript / superscript marks' own
+  // <sub>, <sup>): its words are the paragraph's, mapped to the source below
+  // like any run's, and they take no line box of their own -- the base
+  // stylesheet sets the element on the baseline at line height 0 and moves
+  // its glyphs by position, its leaf is its face's line, and the strut at the
+  // line's top gives the line the run's full size (the script strut above),
+  // as Word sets it. Rejected, every paragraph holding one kept its own strut
+  // on every line beside its leaves: R484-D44's 12 pt Times New Roman
+  // headings "... (X1)" under an 11 pt Normal stood 14.56 pt where Word's
+  // stand 13.81, and the same headings without a subscript 13.81.
+  const scriptRun = (element: Element) =>
+    !scriptProofOff() && element.matches("sub, sup") && !element.matches(".mrnote-footnote-ref") && dom.contains(element);
   for (const element of dom.querySelectorAll(nonTextLayout)) {
     if (!zeroLayoutMark(element) && !listMarker(element) && !inlinePicture(element) &&
       !controlAnchor(element) && !pageBreakMark(element) && !textOnlyFieldView(element) && !noteRef(element) &&
-      !inlineFormula(element) && !ownStrut(element)) return false;
+      !inlineFormula(element) && !ownStrut(element) && !scriptRun(element)) return false;
   }
   // Never neutralize an authored inline line-height, or an unmapped label
   // supplied by a NodeView. This is a paragraph-source proof, not text matching
@@ -909,6 +943,35 @@ const THAI_FALLBACK_FACES = ["Angsana New", "Browallia New"];
  * short, 15.5 pt by the end of a cell). */
 const HANGUL_FALLBACK_FACE = "Batang";
 const HANGUL_TEXT = /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/;
+/** Word's face for Hangul in a run whose East Asian face is Times New Roman
+ * while its Latin face is another: Windows Word draws it in Malgun Gothic, and
+ * the line takes Malgun Gothic's East Asian box -- 19.9 pt where the Verdana
+ * 11.5 pt line is 13.9 pt. A run that names Times New Roman for both, another
+ * Latin East Asian face (Calibri, Verdana, Arial, Tahoma, Georgia, Cambria) or
+ * none is Batang's (docx-look/cjk17/probes jamo: modes 14 and 15 alike,
+ * syllables and compatibility jamo alike, w:lang ko-KR or not). Corpus
+ * R488-D87, an interview transcript in Verdana with w:eastAsia="Times New
+ * Roman": 12 of Word's lines hold a jamo (ㅇ, ㄱ) and stand 6 pt taller, a
+ * page by the end. */
+const HANGUL_EAST_ASIA_TNR_FACE = "Malgun Gothic";
+/** `window.__docsHangulMalgunLineOff = true` asks the older reading (that
+ * Hangul measured as Batang), for an A/B of one build. */
+function hangulMalgunLineOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsHangulMalgunLineOff?: boolean}).__docsHangulMalgunLineOff === true;
+}
+/** The face Word draws Hangul in under a run naming no East Asian face of
+ * its own, from the element of the run's East Asian slot (`stackTokens`: its
+ * face list) and the run's Latin face outside it. */
+export function hangulLatinRunFace(element: Element, stackTokens: readonly string[], fontFamilyOf: (element: Element) => string): string {
+  if (hangulMalgunLineOff()) return HANGUL_FALLBACK_FACE;
+  const unquoted = (token: string | undefined) => (token ?? "").trim().replace(/^["']|["']$/g, "").trim().toLowerCase();
+  if (unquoted(stackTokens[0]) !== "times new roman") return HANGUL_FALLBACK_FACE;
+  const slot = element.closest('[data-office-font-slot="eastAsia"]');
+  const run = slot?.parentElement;
+  if (!run) return HANGUL_FALLBACK_FACE;
+  const latin = unquoted(fontFamilyOf(run).split(",")[0]);
+  return latin && latin !== "times new roman" ? HANGUL_EAST_ASIA_TNR_FACE : HANGUL_FALLBACK_FACE;
+}
 /** `window.__docsHangulBatangLineOff = true` asks the older reading (Hangul
  * under a Latin run measured as that run's face), for an A/B of one build. */
 function hangulBatangLineOff(): boolean {
@@ -1018,6 +1081,12 @@ const AUTO_LINE_STRUT_SELECTOR = "span.document-auto-line-strut";
 
 function strutProofOff(): boolean {
   return typeof window !== "undefined" && (window as Window & {__docsStrutProofOff?: boolean}).__docsStrutProofOff === true;
+}
+
+
+
+function scriptProofOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsScriptProofOff?: boolean}).__docsScriptProofOff === true;
 }
 function emptyLineStrut(pos: number, pixels: number, top = false, bare = false): Decoration {
   return Decoration.widget(pos, (view) => {
@@ -1636,8 +1705,12 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
       ?.getAttribute("data-document-word-east-asian") ?? "").toLowerCase().split(",").filter(Boolean));
     // The A/B switches of the Latin-run fallbacks are part of the key: a part
     // list read under one never answers the other.
-    const fallbackSwitches = `${hangulBatangLineOff() ? 1 : 0}${hanSimSunLineOff() ? 1 : 0}${hanYaHeiLineOff() ? 1 : 0}${complexText ? 1 : 0}`;
-    const cacheKey = `${eastAsianKey}\u0000${[...wordEastAsian].join(",")}\u0000${stackOfElement}\u0000${fallbackSwitches}\u0000${text}`;
+    const fallbackSwitches = `${hangulBatangLineOff() ? 1 : 0}${hanSimSunLineOff() ? 1 : 0}${hanYaHeiLineOff() ? 1 : 0}${complexText ? 1 : 0}${hangulMalgunLineOff() ? 1 : 0}`;
+    // The Latin face of the run around an East Asian slot decides Hangul's
+    // face under a Times New Roman slot (hangulLatinRunFace).
+    const slotRun = element.closest('[data-office-font-slot="eastAsia"]')?.parentElement;
+    const runLatin = slotRun ? fontsOf(slotRun).fontFamily.split(",")[0] : "";
+    const cacheKey = `${eastAsianKey}\u0000${[...wordEastAsian].join(",")}\u0000${stackOfElement}\u0000${runLatin}\u0000${fallbackSwitches}\u0000${text}`;
     const cached = autoLinePartCache.get(cacheKey);
     if (cached) return cached.map((part) => ({...part, from: from + part.from, to: from + part.to}));
     const tokens = stackOfElement.split(",").map((token) => token.trim()).filter(Boolean);
@@ -1654,7 +1727,8 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
     const thaiFace = THAI_FALLBACK_FACES.find((face) =>
       tokens.some((token) => unquotedFamily(token).toLowerCase() === face.toLowerCase()),
     );
-    const hangulFace = index < 0 && HANGUL_TEXT.test(text) && !hangulBatangLineOff() ? HANGUL_FALLBACK_FACE : null;
+    const hangulFace = index < 0 && HANGUL_TEXT.test(text) && !hangulBatangLineOff()
+      ? hangulLatinRunFace(element, tokens, (run) => fontsOf(run).fontFamily) : null;
     const hanFace = index < 0 && HAN_TEXT.test(text) && !hanSimSunLineOff() ? HAN_FALLBACK_FACE : null;
     const complexFace = complexText ? wordComplexScriptFallbackFace(stackOfElement) : null;
     if (index < 0 && !thaiFace && !hangulFace && !hanFace && !complexFace) return whole;
@@ -1786,19 +1860,33 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
     for (const run of runs) {
       const css = fontsOf(run.element);
       const family = run.face ?? officePrimaryFontFamily(css.fontFamily), sizePx = Number.parseFloat(css.fontSize);
+      // A face the page serves itself has no Word ascent on record -- unless
+      // Word reads it as another face whose ascent is (Cambria Math, read as
+      // Cambria): the page serving Cambria Math refused R491-D05's strut.
+      const lineFace = markerLineFace(family);
       if (`${css.fontStyle || "normal"} ${css.fontWeight || "400"}` !== "normal 400" ||
-        (faceOfThePage(doc, family) && !wordFontFileIsRecorded(family)) || !run.box || !(sizePx > 0)) return null;
-      const em = wordFontLineAscent(family, isEastAsianFace(family));
+        (lineFace === family && faceOfThePage(doc, family) && !wordFontFileIsRecorded(family)) || !run.box || !(sizePx > 0)) return null;
+      const em = wordFontLineAscent(lineFace, isEastAsianFace(family));
       if (em === null) return null;
       profiles.push({from: run.from, word: em * sizePx, ascent: run.box.baselinePx,
         descent: run.box.heightPx - run.box.baselinePx + run.remainder});
     }
     const first = profiles.find(profile => profile.from === position + 1);
-    if (!first || profiles.some(profile => profile.word > first.word || profile.ascent > first.ascent)) return null;
-    const rise = markerEm * markerSizePx - first.word;
+    if (!first) return null;
+    // A run in a face Word stands taller than the first (a Cambria Math
+    // hyphen in Arial text) is in the line too: the marker raises the line
+    // only by what it reaches above the tallest of them, from that run's top
+    // (Windows Word, docx-look/probes/vsp13 m1: Arial 11 at Auto 1.2 under a
+    // 12pt Symbol bullet advances 15.90pt a line, 16.08pt with a Cambria
+    // Math "‐" in it, which alone stands 15.48pt; corpus R491-D05's
+    // "WST8/1‐methoxy" item stood 15.37pt, no strut, beside Word's 15.8).
+    const tall = !markerStrutTallRunOff();
+    if (!tall && profiles.some(profile => profile.word > first.word || profile.ascent > first.ascent)) return null;
+    const top = tall ? profiles.reduce((most, profile) => Math.max(most, profile.word), first.word) : first.word;
+    const rise = markerEm * markerSizePx - top;
     if (!(rise > MARKER_RISE_EPSILON_PX)) return null;
     const descent = first.descent;
-    const ascent = first.ascent + rise;
+    const ascent = (tall ? profiles.reduce((most, profile) => Math.max(most, profile.ascent), first.ascent) : first.ascent) + rise;
     // A 1/64px shorter box keeps its bottom inside the text's descent after
     // the engine quantizes (or, in WebKit, truncates) the line height.
     const lineHeight = ascent + descent - 1 / 64;
@@ -2152,9 +2240,16 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
     // A list number raises the first line (marker struts): not one face.
     // A paragraph heading a list item has its move made on the item, marker
     // and all (note-editor.css --doc-list-item-shift).
+    // A number the page draws itself (listDefinitionMarkers' widget) is in
+    // the paragraph, so the item's move carries it as the marker it is:
+    // left out, an item's text stood where the engine centres it, its glyphs
+    // ~1 pt under Word's while the item below stood right (corpus R491-D05,
+    // "1. G6PD test used"; Arial 11 at Auto 1.2, 1.44 px). A paragraph
+    // outside an item keeps the halved-extra shift (its own number line).
     const headedItem = listItemHeadedBy(view.state.doc, position, block);
+    const widget = blockDOM.querySelector(":scope > .docs-list-marker") !== null;
     if (base !== null && runs.length && !block.attrs.dropCap &&
-        !blockDOM.querySelector(":scope > .docs-list-marker") &&
+        (!widget || (headedItem !== null && !widgetItemShiftOff())) &&
         (headedItem !== null || !listMarkerFact(view.state.doc, position, block))) {
       // Faces of one size and style may mix (East Asian text and Latin words
       // in one paragraph): Word's line takes the largest Word ascent of its

@@ -79,7 +79,7 @@ import {
   IconQuickStyles,
   IconShapeFill,
   IconShapeOutline,
-} from "@mrnote/core/web/components/notebook/contents/PresentationRibbonIcons.tsx";
+} from "../PresentationRibbonIcons";
 import presentationChrome from "@mrnote/core/web/lib/presentation/presentation-window-shell.module.css";
 import { DUPLICATE_SLIDE_COMMAND_ID } from "@mrnote/core/web/lib/presentation-command-adapters.ts";
 import officeInsertGallery from "@mrnote/core/web/components/office-ribbon/OfficeInsertGallery.module.css";

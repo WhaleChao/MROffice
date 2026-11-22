@@ -12,6 +12,8 @@ import { TOUCH_MODE_ATTRIBUTE, TOUCH_MODE_KEY } from "./touch-mode-init";
 // The spacing rules travel with the switch: every surface that can turn it
 // on (the editors' rails live on the dev galleries too) has them.
 import "../styles/touch-mode.css";
+// A finger's 44 px hit area for the small chrome controls (pointer: coarse).
+import "../styles/touch-hit-area.css";
 
 /**
  * "Touch mode" for the editors, on this device — Office's Touch/Mouse Mode

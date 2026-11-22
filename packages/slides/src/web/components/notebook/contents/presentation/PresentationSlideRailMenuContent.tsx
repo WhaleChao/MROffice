@@ -37,7 +37,7 @@ import {
   IconSlideLayout,
   IconSlideShowHideSlide,
   IconSlideShowFromCurrent,
-} from "@mrnote/core/web/components/notebook/contents/PresentationRibbonIcons.tsx";
+} from "../PresentationRibbonIcons";
 import { presentationDesktopShortcutLabel } from "../../../../lib/presentation-desktop-shortcuts";
 import { PresentationSectionIcon } from "./PresentationSectionIcons";
 import {

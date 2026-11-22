@@ -116,6 +116,8 @@ export class DocxRootImportPlanningError extends Error {
 
 const FOOTNOTES_ATTR = "footnotes";
 const COMMENT_THREADS_ATTR = "commentThreads";
+/** A comment's or reply's durable id (comments.ts COMMENT_ID_RE). */
+const COMMENT_RECORD_ID_RE = /^cm-[0-9A-F]{8}$/;
 const FOOTNOTE_LIST_NODE = "footnoteList";
 const PAGE_BLOCK_NODE = "pageBlock";
 const PARAGRAPH_NODE = "paragraph";
@@ -827,6 +829,33 @@ export function planDocxRootImports(
   const mergedComments = existingComments.map(cloneJsonValue);
   const usedFootnoteIds = new Set(mergedFootnotes.map((entry) => entry.id));
   const usedCommentIds = new Set(mergedComments.map((thread) => thread.id));
+  // Each comment's and reply's own durable id (Word's paraId, `cm-XXXXXXXX`)
+  // is unique across the document as Word requires: an inserted thread whose
+  // comment reuses one the target holds (the same file inserted into itself,
+  // or two files from one template) gets a new one, or the DOCX writer
+  // refuses the document (duplicate_comment_id).
+  const usedRecordIds = new Set<string>();
+  for (const thread of mergedComments) {
+    for (const comment of (thread as { comments?: unknown[] }).comments ?? []) {
+      const id = isRecord(comment) ? comment.id : undefined;
+      if (typeof id === "string") usedRecordIds.add(id);
+    }
+  }
+  const uniqueRecordId = (requested: unknown): unknown => {
+    if (typeof requested !== "string" || !COMMENT_RECORD_ID_RE.test(requested)) return requested;
+    if (!usedRecordIds.has(requested)) {
+      usedRecordIds.add(requested);
+      return requested;
+    }
+    for (let serial = Number.parseInt(requested.slice(3), 16) + 1; serial < 0x7fffffff; serial += 1) {
+      const candidate = `cm-${serial.toString(16).toUpperCase().padStart(8, "0")}`;
+      if (!usedRecordIds.has(candidate)) {
+        usedRecordIds.add(candidate);
+        return candidate;
+      }
+    }
+    planningError("invalid_document", "Unable to allocate a unique comment id.");
+  };
   const importedGlobalAttrs = new Map<string, unknown>();
   const incomingNodes: DocumentJsonObject[] = [];
   const idRemaps: DocxRootImportIdRemap[] = [];
@@ -925,7 +954,13 @@ export function planDocxRootImports(
         MAX_THREAD_ID_LENGTH,
       );
       commentIds.set(thread.id, mapped);
-      mergedComments.push({ ...cloneJsonValue(thread), id: mapped });
+      const merged = { ...cloneJsonValue(thread), id: mapped } as CommentThreadRecord & { comments?: unknown[] };
+      if (Array.isArray(merged.comments)) {
+        merged.comments = merged.comments.map((comment) =>
+          isRecord(comment) && comment.id !== undefined ? { ...comment, id: uniqueRecordId(comment.id) } : comment,
+        );
+      }
+      mergedComments.push(merged);
     }
 
     const remapped = source.nodes.map((node) =>

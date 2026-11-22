@@ -345,6 +345,8 @@ export function materializeLineStyles<S extends LineStyledSheet>(
   sheet: S,
   from?: { rowCount: number; columnCount: number },
   budget = MAX_LINE_STYLE_MATERIALIZED_CELLS,
+  /** Only the rows and columns before these (a print's occupied range). */
+  within?: { rows: number; cols: number },
 ): S {
   const rowStyles = sheet.rowStyles ?? {};
   const columnStyles = expandLineStyleRuns(storedColumnStyles(sheet)) ?? {};
@@ -390,7 +392,8 @@ export function materializeLineStyles<S extends LineStyledSheet>(
     // A row whose format is the default shows its blanks unformatted: no
     // cell to write, and the column formats stay off it (below).
     if (Object.keys(rowStyles[rowKey]).length === 0) continue;
-    for (let col = 0; col < sheet.columnCount; col += 1) {
+    if (within && row >= within.rows) continue;
+    for (let col = 0; col < Math.min(sheet.columnCount, within?.cols ?? Infinity); col += 1) {
       if (row < fromRows && col < fromCols) continue;
       if (!put(row, col, rowStyles[rowKey])) break rows;
     }
@@ -398,7 +401,8 @@ export function materializeLineStyles<S extends LineStyledSheet>(
   cols: for (const colKey of colKeys) {
     const col = Number(colKey);
     if (!Number.isInteger(col) || col < 0 || col >= sheet.columnCount) continue;
-    for (let row = 0; row < sheet.rowCount; row += 1) {
+    if (within && col >= within.cols) continue;
+    for (let row = 0; row < Math.min(sheet.rowCount, within?.rows ?? Infinity); row += 1) {
       if (rowStyles[String(row)] !== undefined) continue;
       if (row < fromRows && col < fromCols) continue;
       if (!put(row, col, columnStyles[colKey])) break cols;
@@ -620,6 +624,32 @@ export function materializeWorkbookLineStyles<S extends LineStyledSheet>(
     }
     return materializeLineStyles(sheet, undefined, budgets[index]);
   });
+}
+
+/**
+ * A sheet about to print with its line formats' blanks written, as the API's
+ * print paints them (`_tiled_line_painted_blanks`): a window opening a large
+ * workbook writes none past {@link LINE_BLANKS_WRITTEN_UP_TO} and reads them
+ * as needed, so a printed row the file writes nowhere stood at the default
+ * row where Windows Excel stands it at its empty positions' faces (R13-X27:
+ * rows 1-6 under Calibri 11 columns of an Arial 10 workbook print 15 pt, 12.75
+ * here, every page's table 2-3 pt short), and a row format's fill was not
+ * drawn across its blanks (R38-X05's navy title band). Past the API's budget
+ * of 200,000 blanks only the range the file's cells occupy is painted
+ * (`occupiedExtent`); never over a cell. The same sheet when nothing is added.
+ */
+export function printedLineBlanksSheet<S extends LineStyledSheet>(sheet: S): S {
+  if (!(sheet.rowStyles || sheet.columnStyles || storedColumnStyles(sheet))) return sheet;
+  const demand = lineStyleDemand(sheet);
+  if (demand === 0) return sheet;
+  if (demand <= MAX_LINE_STYLE_MATERIALIZED_CELLS) return materializeLineStyles(sheet, undefined, MAX_LINE_STYLE_MATERIALIZED_CELLS);
+  const occupied = (sheet as { occupiedExtent?: { rows?: unknown; cols?: unknown } }).occupiedExtent;
+  const rows = occupied?.rows;
+  const cols = occupied?.cols;
+  if (typeof rows !== "number" || typeof cols !== "number" || !Number.isInteger(rows) || !Number.isInteger(cols) || rows <= 0 || cols <= 0) {
+    return sheet;
+  }
+  return materializeLineStyles(sheet, undefined, MAX_LINE_STYLE_MATERIALIZED_CELLS, { rows, cols });
 }
 
 /** From this many line-format blanks a workbook writes only those of the sheet

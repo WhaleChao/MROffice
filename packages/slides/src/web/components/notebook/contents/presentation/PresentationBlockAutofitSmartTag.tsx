@@ -16,7 +16,7 @@
  * hook order is unchanged.
  */
 
-import { IconTextAutofit } from "@mrnote/core/web/components/notebook/contents/PresentationRibbonIcons.tsx";
+import { IconTextAutofit } from "../PresentationRibbonIcons";
 import presentationContextMenu from "../../../../lib/presentation/presentation-context-menu.module.css";
 import { autofitModeForBlock } from "@mrnote/core/web/lib/presentation-text-buttons.ts";
 import { Check } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";

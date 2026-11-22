@@ -10,7 +10,7 @@ import {
   type DocumentInkPreset,
   type DocumentInkTool,
 } from "@mrnote/core/web/lib/document-ink.ts";
-import type { OfficeInkPenSpec } from "@mrnote/ink/web/lib/office-ink-pens.ts";
+import type { OfficeInkPenSpec } from "@mrnote/core/web/lib/office-ink-pens.ts";
 import { PDF_INK_MAX_WIDTH, type InkPenType } from "@mrnote/core/web/lib/pdf/ink.ts";
 
 /** The tools PDF ink draws with. */

@@ -3,17 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-export const PDF_WPS_BASE_RIBBON_TABS = [
-  "home",
-  "insert",
-  
-  // and Draw with Touch of the Docs Draw tab over the PDF's ink.
-  "draw",
-  "edit",
-  "page",
-  "annotate",
-  "tools",
-] as const;
+export const PDF_WPS_BASE_RIBBON_TABS = ["home", "insert"] as const;
 
 export type PdfWpsBaseRibbonTab = (typeof PDF_WPS_BASE_RIBBON_TABS)[number];
 

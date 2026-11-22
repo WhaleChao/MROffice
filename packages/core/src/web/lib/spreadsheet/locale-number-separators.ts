@@ -35,12 +35,22 @@ export function localeNumberSeparators(locale: string): NumberFormatSeparators |
   return separators;
 }
 
+/** A region the page that opened the editor named for its numbers (an
+ * ONLYOFFICE integration's editorConfig.region): it wins over the viewer's
+ * language, as Excel's region wins over its interface language. */
+let regionOverride: string | null = null;
+
+export function setViewerNumberRegion(region: string | null): void {
+  regionOverride = region || null;
+}
+
 /**
  * The separators a viewer in `locale` draws numbers with, or undefined when
  * they are the code's own "." and "," (en, zh, ja, ko, th, en-GB): the
  * drawing then needs no change at all.
  */
 export function viewerNumberSeparators(locale: string | undefined): NumberFormatSeparators | undefined {
+  if (regionOverride) locale = regionOverride;
   if (!locale) return undefined;
   const separators = localeNumberSeparators(locale);
   if (!separators || (separators.decimal === "." && separators.group === ",")) return undefined;

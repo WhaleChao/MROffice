@@ -2,13 +2,13 @@
 
 <p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
-<p align="center"><b>Die Open-Source-Editoren von MR Office – Dokumente, Tabellen, Präsentationen, PDF, Handschrift und Code – im Browser.</b></p>
+<p align="center"><b>Die Open-Source-Editoren von MR Office, dem Editor, der Microsoft Office am nächsten kommt — Dokumente, Tabellen, Präsentationen, PDF und Code — im Browser.</b></p>
 
 <p align="center"><a href="https://mroffice.ai/de"><b>▶ Online testen</b></a> · <a href="https://mroffice.ai/de/office/download"><b>⬇ Download</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/de/developers">🧑‍💻 Entwickler</a> · <a href="https://mroffice.ai/de/developers/embed">🧩 Einbetten</a> · <a href="https://mroffice.ai/de/developers/mcp">🤖 MCP für KI-Apps</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm-SDK</a> · <a href="https://mroffice.ai/de/developers/oauth">🔑 Mit MR Office anmelden</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
-<p align="center"><a href="https://mroffice.ai/de"><img src="../docs/media/mr-office-demo.webp" alt="Die Open-Source-Editoren von MR Office – Dokumente, Tabellen, Präsentationen, PDF, Handschrift und Code – im Browser." width="100%"></a></p>
+<p align="center"><a href="https://mroffice.ai/de"><img src="../docs/media/mr-office-demo.webp" alt="Die Open-Source-Editoren von MR Office, dem Editor, der Microsoft Office am nächsten kommt — Dokumente, Tabellen, Präsentationen, PDF und Code — im Browser." width="100%"></a></p>
 
 <p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 Die 50-Sekunden-Tour mit Ton ansehen</a></p>
 
@@ -22,12 +22,11 @@
 <td align="center" width="50%"><a href="https://mroffice.ai/de"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
 </tr>
 <tr>
-<td align="center" width="50%"><a href="https://mroffice.ai/de"><img src="../docs/screenshots/ink.png" alt="Handschrift" width="100%"></a><br><b>Handschrift</b></td>
 <td align="center" width="50%"><a href="https://mroffice.ai/de"><img src="../docs/screenshots/code.png" alt="Code" width="100%"></a><br><b>Code</b></td>
 </tr>
 </table>
 
-MR Office ist ein Arbeitsbereich für Notizen, KI und echte Dateien. Dieses Repository veröffentlicht den Quellcode seiner Editoren: dieselben Editoren, die in MR Office laufen, zum Selbstbauen, Ausführen und Einbetten. Es sind Open-Source-Editoren, keine vollständige Open-Source-Office-Suite: Das Lesen und Schreiben von Microsoft-Office-Dateien bleibt in MR Office (siehe unten).
+MR Office ist ein Arbeitsbereich für Notizen, KI und echte Dateien. Dieses Repository veröffentlicht den Quellcode der Editoren: dieselben Editoren, die MR Office ausführt, die du selbst bauen, ausführen und einbetten kannst. Zusammen mit der kostenlosen MR Office Desktop-App oder dem gehosteten Embed öffnen und speichern sie echte Word-, Excel- und PowerPoint-Dateien.
 
 ## Für Entwickler
 
@@ -35,7 +34,7 @@ Alles für Entwickler finden Sie bei **[MR Office Developers](https://mroffice.a
 
 ### Die Editoren in Ihre Web-App einbetten (empfohlen)
 
-MR Office hostet die Editoren; Ihr Server signiert ein kurzlebiges Sitzungstoken, und Ihre Seite öffnet damit den Editor. Er bearbeitet echte Word-, Excel-, PowerPoint- und PDF-Dateien (.docx, .xlsx, .pptx, .pdf), mit gemeinsamer Bearbeitung, Uploads, allen Exportformaten, Drucken und Speicherungen, die per signiertem Callback an Ihren Server gehen. Kostenloser Plan: 1.000 Sitzungen im Monat auf localhost, 100 auf Ihren eigenen Domains, bis zu 2 Apps. Es ist ein gehosteter kommerzieller Dienst, Ihre eigene App ist also nicht an die AGPL-Lizenz dieses Repositorys gebunden.
+MR Office hostet die Editoren; dein Server signiert ein kurzlebiges Sitzungstoken und deine Seite öffnet den Editor. Er bearbeitet echte Word-, Excel-, PowerPoint- und PDF-Dateien (.docx, .xlsx, .pptx, .pdf), mit Co-Editing, Uploads, jedem Exportformat, Drucken und Speicherungen, die per signiertem Callback an deinen Server zurückgesendet werden. Kostenloser Plan: 1.000 Sitzungen pro Monat auf localhost, 100 auf deinen eigenen Domains, bis zu 2 Apps. Als gehosteter Dienst legt er deiner eigenen App keine AGPL-Pflichten auf.
 
 1. Führen Sie im Ordner Ihres Projekts `npx mroffice-embed init` aus (oder legen Sie eine App in der Entwicklerkonsole an): ein Klick auf „Erlauben“ im Browser, und die Schlüssel der App stehen in `.env.local` / `.env`.
 2. Ihr Server erzeugt ein Sitzungstoken mit `createSessionToken` aus `mroffice-embed/server`; der geheime Schlüssel verlässt den Server nie.
@@ -69,28 +68,27 @@ MR Office ist ein OAuth-2.1-Autorisierungsserver (PKCE, Client-ID-Metadatendokum
 
 ### Die Open-Source-Editoren selbst hosten
 
-Die sechs Editoren dieses Repositorys können unter der AGPL-3.0 in Ihr eigenes Produkt eingebaut werden: Nutzen Personen eine geänderte Fassung über ein Netzwerk, müssen Sie ihnen den vollständigen Quellcode anbieten und den Hinweis „MR Office“ (NOTICE.md) beibehalten. Sie öffnen ihre eigenen Formate, CSV, HTML, Markdown und PDF; Word-, Excel- und PowerPoint-Dateien gehören nicht zu den Open-Source-Editoren (die gehostete Einbettung oben kann sie). Eine kommerzielle Lizenz erhalten Sie über support@mr-note.com. [Open-Source-Leitfaden →](https://mroffice.ai/de/developers/open-source)
+Die fünf Editoren in diesem Repository lassen sich unter der AGPL-3.0 in ein eigenes Produkt einbauen: Wenn Personen eine veränderte Version über ein Netzwerk nutzen, musst du ihnen den vollständigen Quellcode anbieten und die Nennung „MR Office“ beibehalten (NOTICE.md). Sie öffnen ihre eigenen Formate, CSV, HTML, Markdown und PDF; für Word-, Excel- und PowerPoint-Dateien nutze das gehostete Embed oben. Eine kommerzielle Lizenz ist unter support@mr-note.com erhältlich. [Open-Source-Leitfaden →](https://mroffice.ai/de/developers/open-source)
 
-Die Editoren gibt es als React-Komponenten auf npm: `npm i mroffice-docs mroffice-core` (dazu `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`); die README jedes Pakets zeigt, wie man es einbettet.
+Die Editoren sind als React-Komponenten auf npm verfügbar: `npm i mroffice-docs mroffice-core` (sowie `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-code`); die README jedes Pakets zeigt, wie man es einbettet.
 
 ## Die Editoren
 
 Was jeder Editor in diesem Repository kann:
 
-- **Dokumente** — eine seitenbasierte Textverarbeitung: Formatvorlagen, Schriften, Listen, Tabellen, Kopf- und Fußzeilen, Abschnitte und Spalten, Formen und Formeln, Deckblätter und Inhaltsverzeichnisse, Kommentare und Änderungsverfolgung sowie Freihand auf der Seite. Speichert im eigenen Format (.mrdoc); öffnet HTML, Markdown und Text.
-- **Tabellen** — Zellen und Formeln, Zahlenformate, bedingte Formatierung, Sortieren und Filtern, fixierte Bereiche und mehrere Blätter, mit Summe und Mittelwert der Auswahl. Rechnen zwischen Zellen (=A1*B1+10) geschieht beim Tippen im Browser; Formeln mit Funktionen (SUMME, WENN, SVERWEIS …) bleiben, wie sie geschrieben sind. Speichert im eigenen Format (.mrsheet); öffnet und speichert CSV und TSV.
-- **Präsentationen** — Folien mit acht eigenen Designs, Layouts, Folienmaster- und Layoutansicht, Text, Formen, Textfeldern, Tabellen, WordArt und Formeln, Kommentaren, Abschnitten, Übergängen und Animationen mit Vorschau sowie Bildschirmpräsentation. Speichert im eigenen Format (.mrslides).
-- **PDF** — PDF-Dateien lesen, durchsuchen, präsentieren und drucken, Text kopieren und vorlesen lassen und markierten Text, solange die Datei geöffnet ist, hervorheben, unter-, durch- oder wellenförmig unterstreichen, mit Notizen und einem Kommentarbereich; Speichern gibt die Datei so zurück, wie sie geöffnet wurde.
-- **Handschrift** — handschriftliche Notizen mit drucksensitiven Stiften, Textmarkern, Radierern, Lasso und Lineal; Freihand wird zu Formen. Speichert im eigenen Format (.mrink).
-- **Code** — ein schlanker Code-Editor mit Syntaxhervorhebung für viele Sprachen, Gliederung sowie Suchen und Ersetzen; JavaScript/TypeScript, Python, SQL, Lua und Shell laufen direkt im Browser.
+- **Dokumente** — eine seitenbasierte Textverarbeitung: Schriftarten, Absatzformatierung, Listen und Formatvorlagen unter Start; Deckblatt und leere Seiten, Seitenumbrüche, Tabellen, Bilder, Formen, SmartArt, Diagramme, Links, Lesezeichen, Kommentare, Kopf- und Fußzeilen und Seitenzahlen, Gleichungen, Symbole, Textfelder und WordArt unter Einfügen. Speichert das eigene Format (.mrdoc); öffnet HTML, Markdown und reinen Text.
+- **Tabellen** — Zellen und Formeln mit Schriftarten, Ausrichtung, Zahlenformaten, bedingter Formatierung, Zellformatvorlagen sowie Einfügen oder Löschen von Zellen unter Start; Tabellen, Bilder, Formen, Symbole, Kontrollkästchen, Diagramme und Sparklines unter Einfügen; mehrere Tabellenblätter, mit Summen und Mittelwerten der Auswahl. Arithmetik zwischen Zellen (=A1*B1+10) wird beim Tippen im Browser berechnet; Formeln mit Funktionen (SUMME, WENN, SVERWEIS …) bleiben wie geschrieben erhalten. Speichert das eigene Format (.mrsheet); öffnet und speichert CSV und TSV.
+- **Präsentationen** — Folien mit Layouts und Abschnitten, Text, Schriftarten und Absätzen sowie Formen mit ihrer Anordnung unter Start; Tabellen, Bilder, Symbole, SmartArt, Diagramme, Textfelder, WordArt, Kopf- und Fußzeilen, Gleichungen, Symbole und Video unter Einfügen; Notizen, Kommentare und Präsentieren. Speichert das eigene Format (.mrslides).
+- **PDF** — PDF-Dateien lesen, präsentieren und drucken: Einzel- und Doppelseitenansicht, fortlaufendes Scrollen, Drehen, Miniaturansichten und Lesemodus, Suchen und Kopieren des Textes sowie Kommentare, solange eine Datei geöffnet ist; beim Speichern wird die Datei so zurückgegeben, wie sie geöffnet wurde.
+- **Code** — ein schlanker Code-Editor mit Syntaxhervorhebung für viele Sprachen, einer Gliederung, Suchen, Schnellöffnen, einem Datei-Explorer und einer Problemliste.
 
-Formeln mit Funktionen berechnen, Diagramme zeichnen und SmartArt anordnen übernimmt die eigene Engine von MR Office in der MR Office Desktop-App: Die Open-Source-Editoren bewahren die Formeln, Diagramme und SmartArt einer Datei und zeigen SmartArt so an, wie es gespeichert wurde.
+Formeln mit Funktionen, Diagramme und SmartArt werden von der Engine von MR Office berechnet und gezeichnet, in der kostenlosen Desktop-App und im gehosteten Dienst; die Editoren hier bewahren jede Formel, jedes Diagramm und jedes SmartArt einer Datei und zeigen SmartArt so an, wie es gespeichert wurde.
 
 ## Die Editoren ausführen
 
 **▶ [Live-Demo ausprobieren – ohne Installation](https://mroffice.ai/de)**
 
-Die sechs Editoren liegen in `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, gemeinsam `@mrnote/core`) und laufen zusammen in `apps/playground`:
+Die fünf Editoren liegen in `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `code`, gemeinsam genutzt wird `@mrnote/core`) und laufen zusammen in `apps/playground`:
 
 ```bash
 npm install
@@ -103,7 +101,7 @@ npm run preview   # http://localhost:5178
 
 ## Desktop-App
 
-[`apps/desktop`](../apps/desktop) enthält **MR Office Editors**: den Quellcode der Hülle der MR-Office-Desktop-App (Electron) mit einer eigenen App-Identität. Mit der kostenlosen MR-Office-Komponente aus den Releases ist es die MR-Office-Desktop-App, mit Word-, Excel-, PowerPoint- und PDF-Dateien, Anmeldung und KI. Ohne die Komponente laufen nur die Open-Source-Editoren; sie öffnen .mrdoc-, .mrsheet-, .mrslides- und .mrink-Dateien sowie CSV, HTML, Markdown und PDF. Hülle und Editoren sind AGPL-Quellcode; die Komponente ist kompiliert, kostenlos nutzbar und nicht Open Source. Nach `npm run build` starten Sie sie mit:
+[`apps/desktop`](../apps/desktop) enthält **MR Office Editors**: den Quellcode der Shell der MR Office Desktop-App (Electron), unter eigener Identität. Mit der kostenlosen MR Office-Komponente aus Releases ist es die MR Office Desktop-App, mit Word-, Excel-, PowerPoint- und PDF-Dateien, Anmeldung und KI. Ohne die Komponente laufen die Open-Source-Editoren eigenständig und öffnen .mrdoc-, .mrsheet- und .mrslides-Dateien, CSV, HTML, Markdown und PDF. Die Shell und die Editoren sind AGPL-Quellcode; die Komponente ist ein kostenloser Download aus Releases. Nach `npm run build` startest du sie mit:
 
 ```bash
 npm run desktop
@@ -111,7 +109,7 @@ npm run desktop
 
 ## Für den vollen Funktionsumfang: die MR Office Desktop-App installieren (kostenlos)
 
-Die MR Office Desktop-App ist kostenlos, enthält diese Editoren und den vollen Dienst und funktioniert offline auf Ihrem eigenen Computer. Sie bietet, was den Open-Source-Editoren fehlt:
+Die MR Office Desktop-App ist kostenlos, enthält diese Editoren und den vollen Dienst und funktioniert offline auf deinem eigenen Computer. Zusätzlich zu den Editoren bietet sie:
 
 - Word-, Excel- und PowerPoint-Dateien (.docx, .xlsx, .pptx) öffnen und speichern
 - Formeln mit Funktionen (SUMME, WENN, SVERWEIS …) berechnen
@@ -123,7 +121,7 @@ Die MR Office Desktop-App ist kostenlos, enthält diese Editoren und den vollen 
 
 ### Word-, Excel-, PowerPoint- und PDF-Dateien
 
-Word-, Excel- und PowerPoint-Dateien (.docx, .xlsx, .pptx) öffnen und speichern sowie PDF-Änderungen in die Datei zurückschreiben bietet die kostenlose MR Office Desktop-App. Sie enthält alle diese Editoren und funktioniert offline auf Ihrem eigenen Computer:
+Arbeite mit echten Word-, Excel- und PowerPoint-Dateien (.docx, .xlsx, .pptx) und speichere PDF-Bearbeitungen direkt in der Datei mit der kostenlosen MR Office Desktop-App, die all diese Editoren enthält und offline auf deinem eigenen Computer funktioniert:
 
 ## Wie die Teile zusammenpassen
 
@@ -131,12 +129,12 @@ Word-, Excel- und PowerPoint-Dateien (.docx, .xlsx, .pptx) öffnen und speichern
 flowchart LR
   subgraph OSS["Open Source · AGPL-3.0"]
     direction LR
-    core["@mrnote/core"] --> E["Die sechs Editoren<br/>Dokumente · Tabellen · Präsentationen · PDF · Handschrift · Code"]
+    core["@mrnote/core"] --> E["Die fünf Editoren<br/>Dokumente · Tabellen · Präsentationen · PDF · Code"]
     E --> PG["apps/playground<br/>Browser"]
     E --> DS["apps/desktop<br/>Desktop-Shell"]
     MCP["apps/mcp<br/>MCP-Server für KI-Apps"]
   end
-  COMP["MR-Office-Komponente: Word-, Excel- und PowerPoint-Dateien · kostenlos, nicht Open Source"] -.-> DS
+  COMP["MR Office Komponente: Word-, Excel- und PowerPoint-Dateien · kostenlos"] -.-> DS
 ```
 
 ## Lizenz

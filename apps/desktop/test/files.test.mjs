@@ -15,7 +15,7 @@ const require = createRequire(import.meta.url);
 const { editorExtension, isOpenablePath, openablePathsFromArgv, readOpenedFiles, safeFileName, saveTarget, writeFileAtomically } = require("../dist/editors/files.js");
 
 test("the editors' files are opened, others are not", () => {
-  for (const name of ["a.mrdoc", "b.MRSHEET", "c.mrslides", "d.mrink", "e.csv", "f.tsv", "g.html", "h.md", "i.pdf", "j.mrdoc.json", "k.py"]) {
+  for (const name of ["a.mrdoc", "b.MRSHEET", "c.mrslides", "e.csv", "f.tsv", "g.html", "h.md", "i.pdf", "j.mrdoc.json", "k.py"]) {
     assert.equal(isOpenablePath(`/tmp/${name}`), true, name);
   }
   for (const name of ["a.docx", "b.xlsx", "c.pptx", "d.exe", "noextension"]) assert.equal(isOpenablePath(`/tmp/${name}`), false, name);

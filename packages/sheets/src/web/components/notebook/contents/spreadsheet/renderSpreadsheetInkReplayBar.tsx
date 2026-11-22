@@ -7,7 +7,7 @@
  */
 import { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import { OfficeSemanticIcon } from "@mrnote/core/web/components/office-ribbon/icons/OfficeSemanticIcon.tsx";
-import { inkReplayStep, type InkReplayTimeline } from "@mrnote/ink/web/lib/office-ink-replay.ts";
+import { inkReplayStep, type InkReplayTimeline } from "@mrnote/core/web/lib/office-ink-replay.ts";
 import { type Dispatch, type SetStateAction } from "react";
 
 /** What renderSpreadsheetInkReplayBar reads from SpreadsheetWindow's render scope. */

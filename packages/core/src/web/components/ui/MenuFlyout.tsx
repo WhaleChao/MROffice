@@ -16,6 +16,7 @@ import {
 import { createPortal } from "react-dom";
 
 import { usePopupPortalTarget } from "./portal-host";
+import { isDocumentRtl, useDocumentDirection } from "../../lib/document-direction";
 
 const EDGE_GUTTER = 8;
 /** The flyout's edge tucks this far under its trigger row, as a macOS menu's. */
@@ -32,13 +33,16 @@ export interface MenuFlyoutAnchor {
  * edge, flipped to its left edge when the window's right edge is too close,
  * and moved up (never above the top gutter) when the bottom edge is.
  * `offset` is the gap to the trigger (negative tucks under it, as a menu's
- * submenu does; a panel beside a button keeps a gap).
+ * submenu does; a panel beside a button keeps a gap). Under an rtl
+ * interface (`rtl`) the sides swap: beside the row's left edge first, as a
+ * Windows menu opens its submenus in a right-to-left language.
  */
 export function placeMenuFlyout(
   anchor: MenuFlyoutAnchor,
   size: { readonly width: number; readonly height: number },
   viewport: { readonly width: number; readonly height: number },
   offset = -FLYOUT_OVERLAP,
+  rtl = false,
 ): { left: number; top: number } {
   const maxLeft = Math.max(
     EDGE_GUTTER,
@@ -49,7 +53,13 @@ export function placeMenuFlyout(
     viewport.height - size.height - EDGE_GUTTER,
   );
   let left = anchor.right + offset;
-  if (left + size.width > viewport.width - EDGE_GUTTER) {
+  if (rtl) {
+    left = anchor.left - size.width - offset;
+    if (left < EDGE_GUTTER) {
+      const flipped = anchor.right + offset;
+      if (flipped + size.width <= viewport.width - EDGE_GUTTER) left = flipped;
+    }
+  } else if (left + size.width > viewport.width - EDGE_GUTTER) {
     const flipped = anchor.left - size.width - offset;
     if (flipped >= EDGE_GUTTER) left = flipped;
   }
@@ -132,12 +142,15 @@ export const MenuFlyout = forwardRef<HTMLDivElement, MenuFlyoutProps>(
         { width, height },
         { width: window.innerWidth, height: window.innerHeight },
         offset,
+        isDocumentRtl(),
       );
       panel.style.left = `${left}px`;
       panel.style.top = `${top}px`;
       panel.style.zIndex = String(layerAbove(trigger));
     }, [trigger, offset]);
 
+    // Grows from the side it opens on (lib/surface-motion).
+    const rtl = useDocumentDirection() === "rtl";
     // The enclosing layer (a standalone window layer), else <body>.
     const layerTarget = usePopupPortalTarget();
     const target = container ?? layerTarget;
@@ -150,7 +163,7 @@ export const MenuFlyout = forwardRef<HTMLDivElement, MenuFlyoutProps>(
         // (lib/surface-motion); a caller may name another kind.
         data-motion-surface="pop"
         {...rest}
-        style={{ ["--surface-origin" as string]: "top left", ...style, position: "fixed" }}
+        style={{ ["--surface-origin" as string]: rtl ? "top right" : "top left", ...style, position: "fixed" }}
       />,
       target,
     );

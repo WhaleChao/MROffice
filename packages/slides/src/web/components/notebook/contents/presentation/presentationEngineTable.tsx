@@ -62,7 +62,7 @@ import { logicalCellPositions, tableLogicalWidth } from "@mrnote/core/web/lib/pr
 import { asRecord } from "@mrnote/core/web/lib/presentation/deck-model.ts";
 import { isImportedPptxBlock } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
 import type { TextRun } from "@mrnote/core/web/lib/presentation-point-runs.ts";
-import { ENGINE_SVG_STYLE, PRESENTATION_TEXT_ENGINE_ATTRIBUTE, PresentationTextEngineSurfaceContext } from "./PresentationEngineTextBody";
+import { EngineSvgRoot, PRESENTATION_TEXT_ENGINE_ATTRIBUTE, PresentationTextEngineSurfaceContext } from "./PresentationEngineTextBody";
 
 const PT_PER_PX = 0.75;
 const EMU_PER_PX = 9_525;
@@ -196,7 +196,8 @@ function cellInput(
           : endFont),
       align,
       marginLeftPt: spaced?.marginLeftPt ?? 0,
-      marginRightPt: 0,
+      // A cell paragraph's right indent (readings row 1028), else none.
+      marginRightPt: spaced?.marginRightPt ?? 0,
       indentPt: spaced?.indentPt ?? 0,
       lineSpacing: { kind: "percent", value: spaced?.lineSpacing ?? lineHeight / 1.2 },
       // Before the first paragraph and after the last none shows, as the
@@ -497,7 +498,7 @@ export function PresentationEngineTableCellText({ cell }: { cell: EngineTableCel
       // (P2-cell: Arial 10 pt in a 40 pt row 14 pt down, not 14.06 by its descent).
       style={{ position: "relative", width: "100%", height: Math.round(cellLinesBottomPt(layout) * PX_PER_PT * 1000) / 1000 }}
     >
-      <svg style={ENGINE_SVG_STYLE}>{nodes}</svg>
+      <EngineSvgRoot>{nodes}</EngineSvgRoot>
     </div>
   );
 }
@@ -585,7 +586,7 @@ function PresentationEngineVerticalCellText({
         height: Math.round(vertical.lengthPt * PX_PER_PT * 1000) / 1000,
       }}
     >
-      <svg style={ENGINE_SVG_STYLE}>{nodes}</svg>
+      <EngineSvgRoot>{nodes}</EngineSvgRoot>
     </div>
   );
 }

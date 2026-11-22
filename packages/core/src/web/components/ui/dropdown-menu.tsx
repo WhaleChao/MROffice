@@ -15,6 +15,7 @@ import {
 
 import { cn } from "../../lib/utils"
 import { usePortalHostContainer } from "./portal-host"
+import { useDocumentDirection } from "../../lib/document-direction"
 
 
 
@@ -33,13 +34,16 @@ const DropdownMenuFocusContext = React.createContext<{
   modal: boolean
 } | null>(null)
 
-const DropdownMenu = ({ modal = true, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) => {
+const DropdownMenu = ({ modal = true, dir, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) => {
   const trigger = React.useRef<HTMLElement | null>(null)
   const interactedOutside = React.useRef(false)
   const value = React.useMemo(() => ({ trigger, interactedOutside, modal }), [modal])
+  // Under an rtl interface a submenu opens on the left and the arrow keys
+  // swap, as Radix does for `dir="rtl"`; an ltr page passes nothing, as before.
+  const documentDir = useDocumentDirection()
   return (
     <DropdownMenuFocusContext.Provider value={value}>
-      <DropdownMenuPrimitive.Root modal={modal} {...props} />
+      <DropdownMenuPrimitive.Root modal={modal} dir={dir ?? documentDir} {...props} />
     </DropdownMenuFocusContext.Provider>
   )
 }

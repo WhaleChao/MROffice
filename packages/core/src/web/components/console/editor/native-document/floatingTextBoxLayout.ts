@@ -397,6 +397,20 @@ function applyPicturePlacement(
   // lower: a picture 0.3" below its paragraph's top leaves the lines above
   // it full width, as Word draws it.
   const topMarginPx = wrapTopMarginPx(placement.topPx, originPx.topPx, distances.topPx);
+  // The top margin the picture carries now, while it stands in the flow
+  // (read before this pass writes anything): a drop within the layout's own
+  // rounding of it is that one (steadyDropPx, as a text box's drop is). The
+  // flow place is read back from the box less this margin, on 1/64 px steps,
+  // and the drop came out a few thousandths off on every pass (R484-D04: a
+  // cover picture's 54.1771, 54.1751, 54.1731 ... 54.1847 px over one
+  // keystroke's passes); each write marked the cover sheet changed, so every
+  // pass measured it again while the plans of pages 6-14 went between two
+  // layouts. `window.__docsSteadyPictureDropOff = true` writes each reading
+  // for pictures only, as before (A/B).
+  const steadyPictureDropOff = typeof window !== "undefined" &&
+    (window as Window & { __docsSteadyPictureDropOff?: boolean }).__docsSteadyPictureDropOff === true;
+  const inFlowTopPx = wrapper.style.position === "relative" && !steadyPictureDropOff ? Number.parseFloat(wrapper.style.marginTop) : Number.NaN;
+  const appliedTopPx = Number.isFinite(inFlowTopPx) ? inFlowTopPx : null;
   const declarations: string[] = [];
   const set = (property: string, value: string) => {
     wrapper.style.setProperty(property, value);
@@ -464,11 +478,11 @@ function applyPicturePlacement(
       : intoSpacePx < 0 && spaceAbovePx > 0
         ? Math.max(distances.topPx - spaceAbovePx, intoSpacePx)
         : 0;
-    set("margin-top", `${marginTopPx}px`);
+    set("margin-top", `${steadyDropPx(marginTopPx, appliedTopPx)}px`);
     // Room for the line Word sends under the picture (the band line swap).
     const swapRoomPx = Number.parseFloat(wrapper.dataset.bandSwapRoom ?? "") || 0;
     set("margin-bottom", `${distances.bottomPx + swapRoomPx}px`);
-    set("margin-left", `${Math.max(0, placement.leftPx - originPx.leftPx)}px`);
+    set("margin-left", `${steadyBandLeftPx(wrapper, Math.max(0, placement.leftPx - originPx.leftPx))}px`);
     set("margin-right", "0");
   } else {
     const side = floatSide(anchor, placement, geometry);
@@ -481,7 +495,8 @@ function applyPicturePlacement(
     set("clear", "none");
     set("display", "block");
     set("max-width", "100%");
-    set("margin-top", `${topMarginPx}px`);
+    const steadyTopPx = steadyDropPx(topMarginPx, appliedTopPx);
+    set("margin-top", `${steadyTopPx}px`);
     set("margin-bottom", `${distances.bottomPx}px`);
     // A strip too narrow for Word's text beside the object holds none: the
     // margin takes it (R89-D29: a 9pt strip left of a full-width drawing
@@ -502,7 +517,7 @@ function applyPicturePlacement(
       set("margin-left", `${single && strip - distances.leftPx < stripMinPx ? Math.max(distances.leftPx, strip) : distances.leftPx}px`);
     }
     const shape = floatWrapShapeOutside(anchor.wrap);
-    set("shape-outside", shape ?? ((single && squareFloatDropShape(topMarginPx, distances.topPx)) || "none"));
+    set("shape-outside", shape ?? ((single && squareFloatDropShape(steadyTopPx, distances.topPx)) || "none"));
     set("shape-margin", shape ? `${Math.max(distances.leftPx, distances.rightPx)}px` : "0px");
   }
   wrapper.setAttribute(PICTURE_FLOAT_CSS_ATTR, declarations.join(";"));
@@ -593,6 +608,60 @@ function appliedDropPx(wrapper: HTMLElement): number | null {
   return Number.isFinite(applied) ? applied : null;
 }
 
+/** `window.__docsInlineMarginOrigin = true`: the float pass reads the inline
+ * top margin for "the margin the box has", as before (A/B). */
+function inlineMarginOriginOn(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsInlineMarginOrigin?: boolean }).__docsInlineMarginOrigin === true;
+}
+
+/**
+ * The top margin `element`'s box was given: its computed value, which is the
+ * inline margin a pass wrote unless a rule overrides it. A sheet's first block
+ * draws with `margin-top: 0 !important` (the space Word drops at a page's top,
+ * note-editor.css), the inline drop of a Top and Bottom picture, text box or
+ * shape opening a page included. Read from the inline style, the box was taken
+ * to have moved by a margin it never got: its flow place came out that much
+ * higher, and the drop grew by as much again on every pass (R484-D04: a
+ * picture placed 408 px down its page, opening sheet 17, carried 302.6, 597.2,
+ * 891.8 ... 8257.1 px, its sheet measured again each pass and the ledger's
+ * edge probe reading the margin as its space before). Every "box less the
+ * margin it had" reading of this pass takes this one.
+ * `window.__docsInlineMarginOrigin = true` reads the inline value, as before
+ * (A/B).
+ */
+export function givenTopMarginPx(element: HTMLElement): number {
+  const inline = Number.parseFloat(element.style.marginTop) || 0;
+  if (typeof window === "undefined" || typeof getComputedStyle !== "function" || inlineMarginOriginOn()) return inline;
+  const computed = Number.parseFloat(getComputedStyle(element).marginTop);
+  const given = Number.isFinite(computed) ? computed : inline;
+  // On a projected page of columns the projector stands the box: at a
+  // column's top it drops the margin, under a block it collapses it with
+  // that block's space after (`marginDroppedPx`).
+  return given - (projectedMarginDroppedPx(element) ?? 0);
+}
+
+/** What the column projector's last plan left out of `element`'s own top
+ * margin, or null when no projected page stands it. */
+function projectedMarginDroppedPx(element: HTMLElement): number | null {
+  const dropped = unequalColumnPlacementForBlock(element)?.marginDroppedPx;
+  return dropped !== undefined && Number.isFinite(dropped) ? dropped : null;
+}
+
+/**
+ * The left margin to write for a band in the flow: the one it has, when the
+ * new one is the same to within the layout's rounding (steadyDropPx). Its flow
+ * place is read back from its box less this margin, on 1/64 px steps, and the
+ * margin came out a thousandth off on every pass (R484-D04: 99.3572, 99.3561,
+ * 99.3550 ... px), each one a style write that marked its sheet changed.
+ * `window.__docsSteadyBandLeftOff = true` writes each reading (A/B).
+ */
+function steadyBandLeftPx(wrapper: HTMLElement, nextPx: number): number {
+  if (typeof window !== "undefined" && (window as Window & { __docsSteadyBandLeftOff?: boolean }).__docsSteadyBandLeftOff === true) return nextPx;
+  if (wrapper.style.position === "absolute" || !wrapper.style.marginLeft.endsWith("px")) return nextPx;
+  const applied = Number.parseFloat(wrapper.style.marginLeft);
+  return steadyDropPx(nextPx, Number.isFinite(applied) ? applied : null);
+}
+
 /** The shape of a square-wrapped box dropped below its flow place: the lines
  * above it keep their width. The drop is margin, which a float's box would
  * otherwise take from them (corpus R283-D21: a full-width box at 681 pt sent
@@ -611,8 +680,10 @@ function previousBlockSpaceAfterPx(wrapper: HTMLElement): number {
 
 /** How far the wrapper's own top margin moved its box from its flow place. */
 function appliedTopMarginShift(wrapper: HTMLElement): number {
-  const applied = Number.parseFloat(wrapper.style.marginTop) || 0;
+  const applied = givenTopMarginPx(wrapper);
   if (wrapper.dataset.floatMode !== "band") return applied;
+  // A projected page already took off what collapsed with the space above.
+  if (projectedMarginDroppedPx(wrapper) !== null && !inlineMarginOriginOn()) return applied;
   // A band drawn up into the space after the block above (a negative margin,
   // `applyPicturePlacement`) moved up by that much.
   if (applied < 0) return applied;
@@ -657,7 +728,7 @@ function layoutBandRuns(
     const scaleY = scale.y || 1;
     const firstRect = first.getBoundingClientRect();
     // Where the paragraph after the run would start with no object at all.
-    const runStartTop = firstRect.top / scaleY - (Number.parseFloat(first.style.marginTop) || 0);
+    const runStartTop = firstRect.top / scaleY - givenTopMarginPx(first);
     let previousBottom = firstRect.bottom / scaleY;
     let lowest = previousBottom;
     for (
@@ -1020,7 +1091,7 @@ function layoutMixedBandRuns(
       return { from: -distances.topPx, to: own.height + distances.bottomPx };
     };
     const firstRect = read(first);
-    const firstApplied = Number.parseFloat(first.style.marginTop) || 0;
+    const firstApplied = givenTopMarginPx(first);
     // Where the paragraph after the first object's own would start with no
     // object at all.
     const runStartTop = firstRect.top - firstApplied;
@@ -1222,7 +1293,7 @@ function liftShapeBandToItsParagraphTop(band: HTMLElement, hosts: Map<string, HT
     return;
   }
   const scaleY = paginationLayoutScale(band).y || 1;
-  const applied = lifted ? Number.parseFloat(band.style.marginTop) || 0 : 0;
+  const applied = lifted ? givenTopMarginPx(band) : 0;
   const naturalTop = band.getBoundingClientRect().top / scaleY - applied;
   const hostRect = host.getBoundingClientRect();
   const offsetPx = Math.max(0, Number.parseFloat(shape.style.marginTop) || 0);
@@ -2203,6 +2274,15 @@ function flowTopOnSheet(
 ): number {
   const host = wrapper.dataset.floatHostAnchor ? hosts.get(wrapper.dataset.floatHostAnchor) : null;
   if (!host || host.closest("article[data-page-sheet]") !== sheet) return fallbackTopPx;
+  // Nor in another column of a projected page: the object stands where the
+  // flow carried it past its paragraph, as one on the next page does. Placed
+  // from a paragraph a column away, its drop was that paragraph's height on
+  // the page and gone when the object went over to the next page, and the
+  // page ledger, reading the drop as its space before, sent it back and forth
+  // (R460-D16: Figure 3's box, 96 px on page 5's top, 700 px under its
+  // paragraph's column on page 4). `window.__docsHostAcrossColumnsMeasured =
+  // true` places it from that paragraph, as before (A/B).
+  if (hostInAnotherColumn(wrapper, host)) return fallbackTopPx;
   // On a column-projected page the paragraph is placed below the floats in
   // front of it; it starts, for them, where the flow put it (as a paragraph
   // a float pushes aside does). Read from its moved box, each placement
@@ -2210,6 +2290,14 @@ function flowTopOnSheet(
   // picture 0.26" below its paragraph ran down to the page's foot (R30-D07).
   const pushedPx = unequalColumnPlacementForBlock(host)?.floatPushPx ?? 0;
   return (host.getBoundingClientRect().top - sheet.getBoundingClientRect().top) / (scaleY || 1) - pushedPx - hostSpaceBeforePx(host);
+}
+
+function hostInAnotherColumn(wrapper: HTMLElement, host: HTMLElement): boolean {
+  if (typeof window !== "undefined" && (window as Window & { __docsHostAcrossColumnsMeasured?: boolean }).__docsHostAcrossColumnsMeasured === true) return false;
+  const own = unequalColumnPlacementForBlock(wrapper);
+  const hosted = unequalColumnPlacementForBlock(host);
+  if (!own || !hosted) return false;
+  return own.columnIndex !== hosted.columnIndex || own.regionColumns !== hosted.regionColumns;
 }
 
 /**
@@ -2852,7 +2940,7 @@ function applyPlacement(
     // paragraph was drawn at the paragraph's first line).
     if (run !== "member") wrapper.style.marginTop = `${dropPx}px`;
     if (run === null) wrapper.style.marginBottom = `${distances.bottomPx}px`;
-    wrapper.style.marginLeft = `${Math.max(0, placement.leftPx - originPx.leftPx)}px`;
+    wrapper.style.marginLeft = `${steadyBandLeftPx(wrapper, Math.max(0, placement.leftPx - originPx.leftPx))}px`;
     frame.style.shapeOutside = "";
     return;
   }
@@ -3498,7 +3586,7 @@ function layout(view: EditorView): LayoutObjects | null {
     const applied = inFlow && wrapper.getAttribute(FLOAT_BOTH_SIDES_ATTR) !== "true"
       ? {
           left: wrapper.style.float === "right" ? 0 : Number.parseFloat(wrapper.style.marginLeft) || 0,
-          top: Number.parseFloat(wrapper.style.marginTop) || 0,
+          top: givenTopMarginPx(wrapper),
         }
       : { left: 0, top: 0 };
     const originPx = {
@@ -3944,7 +4032,7 @@ function layoutShapes(
     const containerRect = onSheet ? onSheet.rect : container.getBoundingClientRect();
     // A side float is measured from its place in the flow, before the top
     // margin the last pass gave it (none while it is out of the flow).
-    const appliedTopPx = overlay || wrapper.style.position === "absolute" ? 0 : Number.parseFloat(wrapper.style.marginTop) || 0;
+    const appliedTopPx = overlay || wrapper.style.position === "absolute" ? 0 : givenTopMarginPx(wrapper);
     const originPx = {
       leftPx: (wrapperRect.left - containerRect.left) / (scale.x || 1),
       topPx: (wrapperRect.top - containerRect.top) / (scale.y || 1) - appliedTopPx,

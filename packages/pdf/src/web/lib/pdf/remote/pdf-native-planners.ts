@@ -360,6 +360,8 @@ function bindPdfNativePlanners(pageId: string | null) {
       remote<typeof TextDecoration.planPdfNativeTextDecoration>(pageId, "planPdfNativeTextDecoration"),
     planPdfNativeTextObjectDelete:
       remote<typeof TextObjectDelete.planPdfNativeTextObjectDelete>(pageId, "planPdfNativeTextObjectDelete"),
+    readPdfNativeSameContentDeleteStreams:
+      remote<typeof TextObjectDelete.readPdfNativeSameContentDeleteStreams>(pageId, "readPdfNativeSameContentDeleteStreams"),
     planPdfNativeEmbeddedImageReorder:
       remote<typeof ImageReorder.planPdfNativeEmbeddedImageReorder>(pageId, "planPdfNativeEmbeddedImageReorder"),
     planMraiNativeEmbeddedImageClipEscape:

@@ -51,6 +51,7 @@ import { planRowSliceHead, rowSliceClosedSeamJoinPx, rowSliceRestPx, rowSliceSea
 import {
   containerContinuationJoinMargin,
   containerDeepCutKey,
+  edgeTextblock,
   isContainerContinuationTail,
   isSplittableContainer,
   planContainerHead,
@@ -80,7 +81,7 @@ import { continuousBreaksStartingPage, isForcedBreakBlock, trailingBreakOf } fro
 import { DOMSerializer } from "@tiptap/pm/model";
 import { estimatedBlockFlow, estimatedBlockHeightPx } from "../provisionalEstimate";
 import { measureOutsideEditorObservation } from "../../documentLayoutStatus";
-import { blockLinePitchPx, COLUMN_REGIONS_ATTR, COLUMN_TABLE_FRAME, columnPagePlacedTable, sheetNoteColumns, unequalColumnPlacementForBlock, unequalColumnProjectionForSheet } from "../unequalColumnProjection";
+import { blockLinePitchPx, COLUMN_REGIONS_ATTR, COLUMN_TABLE_FRAME, columnPagePlacedTable, sheetNoteColumns, unequalColumnPlacementForBlock, unequalColumnProjectionForSheet, type ColumnLineBreak } from "../unequalColumnProjection";
 
 /** The text blocks balanced by lines in a multi-column section. */
 const TEXT_PITCH_BLOCKS = "p, h1, h2, h3, h4, h5, h6";
@@ -94,7 +95,7 @@ import { countEngineCut, engineBlockHeightPx, engineBlockLineCount, engineCutCom
 import { collapseMargins, collapsedInnerMarginPx, type AuthoredMarginPx } from "../marginCollapse";
 import { paginationLayoutRect, paginationLayoutScale } from "../paginationGeometry";
 import { BAND_RUN_RIDE_ATTR, BAND_RUN_ROOM_ATTR, FLOAT_PAGE_ROOM_ATTR } from "../../../../../../lib/office-float-anchor";
-import { bandBodyFloorPx } from "../bandFloatExclusion";
+import { bandBodyFloorPx, bandBoxesBySheet, type BandBoxesBySheet } from "../bandFloatExclusion";
 import { normalizeWordCompatibilityMode } from "../../documentOverflowPunctuation";
 import { SheetMeasureMemo, querySheetsAll, sheetsOf } from "../sheetMeasureMemo";
 import { LINE_GRID_FIT_TOLERANCE_PX } from "../pageRebalance";
@@ -455,6 +456,25 @@ function regionHeightsOf(measures: readonly LedgerFragmentMeasure[]): number[] |
     heights = heights ? heights.map((height, column) => height + own[column]) : [...own];
   }
   return heights;
+}
+
+/** A list's breaks over all its fragments (`LedgerAtom.regionBreaksPx`):
+ * each fragment's after the ones before it, the seam between two one more.
+ * Null unless every fragment in flow has them. */
+function regionBreaksOf(measures: readonly LedgerFragmentMeasure[]): ColumnLineBreak[] | null {
+  let breaks: ColumnLineBreak[] | null = null;
+  let offsetPx = 0;
+  for (const measure of measures) {
+    if (measure.hidden || measure.outOfFlow) continue;
+    const own = measure.regionBreaksPx;
+    const heightPx = measure.regionHeightsPx?.[0];
+    if (!own || heightPx === undefined) return null;
+    if (breaks) breaks.push({ endPx: offsetPx, nextPx: offsetPx });
+    else breaks = [];
+    for (const cut of own) breaks.push({ endPx: offsetPx + cut.endPx, nextPx: offsetPx + cut.nextPx });
+    offsetPx += heightPx;
+  }
+  return breaks;
 }
 
 /** `window.__docsListKeepNextOff = true` (A/B): a list's paragraphs keep
@@ -1225,6 +1245,30 @@ function contextualKeyOf(node: PmNode): string | null {
 }
 
 /**
+ * The "same style" identities a block meets its neighbours with. A list's
+ * are its paragraphs': the first item's above it, the last item's below.
+ * Read as the list node ("bulletList", never contextual), two List Paragraph
+ * lists one after the other, or a list and the List Paragraph after it, were
+ * charged their 6 pt where a page seam parts them (the page-edge rules draw
+ * it at zero, the plan pulled nothing across), where Word sets none.
+ * `window.__docsListAtomContextualOff = true` reads the list node (A/B).
+ */
+function atomContextualSpacing(kind: LedgerAtomKind, first: PmNode, last: PmNode): Pick<LedgerAtom, "contextualKey" | "contextualSpacing" | "contextualKeyAfter" | "contextualSpacingAfter"> {
+  const list = kind === "container" && /^(bulletList|orderedList|taskList)$/.test(first.type.name) && !listAtomContextualOff();
+  const opening = (list ? edgeTextblock(first, "first") : null) ?? first;
+  const own = { contextualKey: contextualKeyOf(opening), contextualSpacing: opening.attrs?.contextualSpacing === true };
+  if (!list) return own;
+  const closing = edgeTextblock(last, "last");
+  if (!closing || closing === opening) return own;
+  return { ...own, contextualKeyAfter: contextualKeyOf(closing), contextualSpacingAfter: closing.attrs?.contextualSpacing === true };
+}
+
+function listAtomContextualOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsListAtomContextualOff?: boolean }).__docsListAtomContextualOff === true;
+}
+
+/**
  * A floating table raised above the paragraph it is placed from (a negative
  * `w:tblpY`) that a page can hold moves to the next page whole, where it does
  * not fit: Word 16 leaves page 1 unused even with room for three rows
@@ -1386,12 +1430,18 @@ export function buildLedger(
   const pageStarters = continuousBreaksStartingPage(doc);
   const columns = sheets.map((sheet) => Math.max(1, sheetColumnCount(sheet)));
   const bandFloored = sheets.map(() => false);
+  // The overlay's band boxes, read once for all the sheets (not per sheet;
+  // `window.__docsBandBoxesOnceOff = true`: per sheet, as before).
+  const bandBoxesOnce =
+    (view.dom.ownerDocument.defaultView as (Window & { __docsBandBoxesOnceOff?: boolean }) | null)?.__docsBandBoxesOnceOff !== true;
+  let bandBoxes: BandBoxesBySheet | null | undefined;
   const capacities = sheets.map((sheet, index) => {
     const capacity = readCapacity(view, sheet);
     if (columns[index] > 1) return capacity * columns[index];
     // A header or footer object with no strip beside it ends the body's text
     // at its top (bandBodyFloorPx).
-    const floor = bandBodyFloorPx(view, index, sheet);
+    if (bandBoxesOnce && bandBoxes === undefined) bandBoxes = bandBoxesBySheet(view);
+    const floor = bandBodyFloorPx(view, index, sheet, bandBoxes);
     if (floor === null || !(floor < capacity)) return capacity;
     bandFloored[index] = true;
     return floor;
@@ -1647,6 +1697,7 @@ export function buildLedger(
         ? { linePitchPx: blockLinePitchPx(part.dom) }
         : {}),
       ...(region?.columns && region.trackHeightsPx ? { regionHeightsPx: region.trackHeightsPx } : {}),
+      ...(region?.columns && region.breaksPx ? { regionBreaksPx: region.breaksPx } : {}),
       // A block held whole on a page of unequal columns: its height in each
       // column, so the planner tries it at the one it would stand in.
       ...(!region?.columns && !hidden && placement?.wholeTrackHeightsPx && placement.wholeTrackHeightsPx.length === columns[part.sheet]
@@ -2223,8 +2274,7 @@ export function buildLedger(
       spaceBeforePx: margins.before,
       spaceAfterPx: margins.after,
       ...(hidden ? {} : tableFrameLead(first.dom)),
-      contextualKey: contextualKeyOf(first.node),
-      contextualSpacing: first.node.attrs?.contextualSpacing === true,
+      ...atomContextualSpacing(block.kind, first.node, last.node),
       forcedBreakAfter: ((isForcedBreakBlock(last.node) || pageStarters.has(last.node)) && !absorbedBreak) ||
         (block.kind === "table" &&
           overPageHeaderTable(block, (capacities[first.sheet] ?? 0) / (columns[first.sheet] ?? 1))),
@@ -2261,6 +2311,7 @@ export function buildLedger(
       ...(measures[0].linePitchPx ? { linePitchPx: measures[0].linePitchPx } : {}),
       ...(regionHeightsOf(measures) ? { regionHeightsPx: regionHeightsOf(measures)! } : {}),
       ...(regionHeightsOf(measures) && block.parts.length === 1 ? { regionWhole: true } : {}),
+      ...(regionBreaksOf(measures) ? { regionBreaksPx: regionBreaksOf(measures)! } : {}),
       ...(anchored ? { anchored } : {}),
       ...(roomPx > 0 ? { roomPx } : {}),
       ...(block.kind === "table" && tableFreshRowPx(block) > 0 ? { freshRowPx: tableFreshRowPx(block) } : {}),

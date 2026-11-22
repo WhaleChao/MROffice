@@ -28,14 +28,8 @@ import {
   Image as ImageIcon,
 } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import { STAMP_PRESETS } from "../../../../../lib/pdf/stamps-annotation";
-import {
-  SIGNATURE_MAX_IMAGE_BYTES,
-  SIGNATURE_UPLOAD_MIME_TYPES,
-  validateSignatureImageFile,
-  sanitizeSignatureImage,
-} from "@mrnote/core/web/lib/pdf/signatures.ts";
-import { fitOfficePictureBlob } from "@mrnote/core/web/lib/office-picture-envelope.ts";
-import { pdfStampPictureForWriter } from "../../../../../lib/pdf/stamp-picture-check";
+import { SIGNATURE_UPLOAD_MIME_TYPES } from "@mrnote/core/web/lib/pdf/signatures.ts";
+import { pdfStampPictureFromFile } from "../../../../../lib/pdf/stamp-picture-file";
 import type { PdfManagedStampCommandOrigin } from "./readerStamp";
 import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 
@@ -189,108 +183,28 @@ export function PdfStampPickerDialog({
                   event.target.value = "";
                   if (!file) return;
                   const stampUploadRun = ++stampUploadRunRef.current;
-                  const check = validateSignatureImageFile(file);
-                  // A picture past the stamp's 1 MB is fitted to it (decoded
-                  // from the file and re-encoded smaller), as a picture an
-                  // Excel sheet or a slide holds inline is, not refused.
-                  const fitted =
-                    !check.ok && check.reason === "size"
-                      ? fitOfficePictureBlob(
-                          file,
-                          file.type.toLowerCase() === "image/png" ? "image/png" : "image/jpeg",
-                          undefined,
-                          Math.floor(SIGNATURE_MAX_IMAGE_BYTES / 3) * 4 + 32,
-                        )
-                      : null;
-                  if (!check.ok && !fitted) {
-                    setStampUploadError(true);
-                    return;
-                  }
-                  type FittedReader = {
-                    result: unknown;
-                    onload: (() => void) | null;
-                    onerror: (() => void) | null;
-                    readAsDataURL: (blob: Blob) => void;
-                  };
-                  const reader: FittedReader | FileReader = fitted
-                    ? {
-                        result: null,
-                        onload: null,
-                        onerror: null,
-                        readAsDataURL(this: FittedReader) {
-                          void fitted.then(
-                            (dataUrl) => {
-                              this.result = dataUrl;
-                              if (dataUrl) this.onload?.();
-                              else this.onerror?.();
-                            },
-                            () => this.onerror?.(),
-                          );
-                        },
-                      }
-                    : new FileReader();
-                  reader.onload = () => {
+                  // The file as the page's writer takes it, fitted to the
+                  // stamp's 1 MB when larger (stamp-picture-file.ts, shared
+                  // with the live editor's insertPicture).
+                  void pdfStampPictureFromFile(
+                    file,
+                    () => stampUploadRunRef.current === stampUploadRun,
+                  ).then((taken) => {
                     if (stampUploadRunRef.current !== stampUploadRun) return;
-                    const image = sanitizeSignatureImage(reader.result);
-                    if (!image) {
+                    if (!taken) {
                       setStampUploadError(true);
                       return;
                     }
-                    const preview = new Image();
-                    preview.onload = () => {
-                      if (stampUploadRunRef.current !== stampUploadRun)
-                        return;
-                      const aspectRatio =
-                        preview.naturalWidth / preview.naturalHeight;
-                      if (!Number.isFinite(aspectRatio) || aspectRatio <= 0) {
-                        setStampUploadError(true);
-                        return;
-                      }
-                      // The picture as the PDF's writer takes it: a file a
-                      // browser draws though its data is damaged or cut
-                      // short (or larger than the writer reads) is put on
-                      // the page as the browser draws it, encoded again;
-                      // taken as it was, the writer refused its row, the
-                      // page's PDF was not written and every later write
-                      // was refused with it (stamp-picture-check.ts).
-                      void pdfStampPictureForWriter({
-                        dataUrl: image,
-                        width: preview.naturalWidth,
-                        height: preview.naturalHeight,
-                        maxBytes: SIGNATURE_MAX_IMAGE_BYTES,
-                      }).then((taken) => {
-                        if (stampUploadRunRef.current !== stampUploadRun)
-                          return;
-                        const picture = taken
-                          ? sanitizeSignatureImage(taken)
-                          : null;
-                        if (!picture) {
-                          setStampUploadError(true);
-                          return;
-                        }
-                        setStampUploadError(false);
-                        setArmedStamp({
-                          kind: "image",
-                          image: picture,
-                          aspectRatio,
-                          origin: stampPickerOrigin,
-                        });
-                        setStampPickerImageOnly(false);
-                        setStampPickerOpen(false);
-                      });
-                    };
-                    preview.onerror = () => {
-                      if (stampUploadRunRef.current !== stampUploadRun)
-                        return;
-                      setStampUploadError(true);
-                    };
-                    preview.src = image;
-                  };
-                  reader.onerror = () => {
-                    if (stampUploadRunRef.current !== stampUploadRun) return;
-                    setStampUploadError(true);
-                  };
-                  reader.readAsDataURL(file);
+                    setStampUploadError(false);
+                    setArmedStamp({
+                      kind: "image",
+                      image: taken.image,
+                      aspectRatio: taken.aspectRatio,
+                      origin: stampPickerOrigin,
+                    });
+                    setStampPickerImageOnly(false);
+                    setStampPickerOpen(false);
+                  });
                 }}
               />
             {stampUploadError ? (

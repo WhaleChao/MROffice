@@ -38,7 +38,7 @@ import {
   type OfficeThemeFontCollection,
 } from "./office-theme-catalog";
 import { officeThemeFontSet, type OfficeThemeFontSet } from "./office-theme-fonts";
-import type { OfficeThemeFileTheme } from "./office-theme-file";
+import type { OfficeThemeFileTheme } from "@/lib/office-theme-file";
 import type { SpreadsheetNativeThemeColors } from "./spreadsheet/color-palette";
 import {
   normalizeSpreadsheetNativeThemeColors,

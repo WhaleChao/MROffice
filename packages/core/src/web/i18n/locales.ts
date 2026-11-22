@@ -28,25 +28,68 @@ export const LOCALES = [
   "it",
   "nl",
   "no",
+  "pl",
   "pt-BR",
   "fi",
   "sv",
   "vi",
+  "he",
   "th",
   "ko",
   "ja",
   "zh",
   "zh-TW",
+  "ar",
+  "ru",
+  "tr",
+  "uk",
+  "cs",
+  "pt-PT",
+  "ro",
+  "sr-Cyrl",
+  "sr-Latn",
+  "el",
+  "hu",
+  "bg",
+  "hr",
+  "lv",
+  "sk",
+  "ca",
+  "ms",
+  "sl",
+  "sq",
+  "az",
+  "gl",
+  "hy",
+  "ur",
+  "be",
+  "eu",
+  "si",
+  "lo",
 ] as const;
 
 /**
- * Hebrew ("he") and Arabic ("ar") are shelved for now: they are the roster's
- * only RTL locales, and shipping them means auditing every editor surface
- * under `dir="rtl"` first. Their translated catalogues live in git history
- * (`0928d7172`, messages/he + messages/ar) — restoring them is: re-add the
- * tuple entries + LOCALE_META rows here and in locale-list.json, restore the
- * catalogue directories, regenerate message-manifest.json. The `dir`
- * machinery (localeDirection, `<html dir>`) stays in place for that day.
+ * Adding a locale is a data-only change:
+ *  1. its tag in the tuple above, and a LOCALE_META row below (endonym,
+ *     English name, `dir`, and `fallback` for a regional or delta catalogue:
+ *     pt-PT → pt-BR, as es-419 → es);
+ *  2. the same tag, at the same position, in i18n/locale-list.json (the .mjs
+ *     Next config, server.mjs and the desktop app read it);
+ *  3. its catalogue directory, messages/<tag>/ (a delta catalogue carries
+ *     only what differs from its fallback, and is listed in
+ *     scripts/i18n-delta-locales.mjs);
+ *  4. `node scripts/generate-i18n-manifest.mjs`, which rewrites
+ *     i18n/message-manifest.json and the dev catalogue URLs.
+ * Everything that maps a language tag (Accept-Language, a document's
+ * language, an embed's `lang`) reads the variants through
+ * i18n/locale-tags, so `sr-RS` reaches sr-Cyrl, `pt-AO` pt-PT and `iw` he
+ * the moment those tags are on the roster. Per-language tables (screen
+ * tips, function help, templates) fall back along `messageChain`, else to
+ * English.
+ *
+ * Right-to-left locales are supported: `dir: "rtl"` in LOCALE_META sets
+ * `<html dir>` (localeDirection) and the roster test checks it against the
+ * tag's script (ar, he, fa, ur).
  */
 
 export type Locale = (typeof LOCALES)[number];
@@ -97,9 +140,11 @@ export const LOCALE_META: Record<Locale, LocaleMeta> = {
     english: "Portuguese (Brazil)",
     dir: "ltr",
   },
+  pl: { native: "Polski", english: "Polish", dir: "ltr" },
   fi: { native: "Suomi", english: "Finnish", dir: "ltr" },
   sv: { native: "Svenska", english: "Swedish", dir: "ltr" },
   vi: { native: "Tiếng Việt", english: "Vietnamese", dir: "ltr" },
+  he: { native: "עברית", english: "Hebrew", dir: "rtl" },
   th: { native: "ภาษาไทย", english: "Thai", dir: "ltr" },
   ko: { native: "한국어", english: "Korean", dir: "ltr" },
   ja: { native: "日本語", english: "Japanese", dir: "ltr" },
@@ -110,6 +155,33 @@ export const LOCALE_META: Record<Locale, LocaleMeta> = {
     dir: "ltr",
     fallback: "zh",
   },
+  ar: { native: "العربية", english: "Arabic", dir: "rtl" },
+  ru: { native: "Русский", english: "Russian", dir: "ltr" },
+  tr: { native: "Türkçe", english: "Turkish", dir: "ltr" },
+  uk: { native: "Українська", english: "Ukrainian", dir: "ltr" },
+  cs: { native: "Čeština", english: "Czech", dir: "ltr" },
+  "pt-PT": { native: "Português (Portugal)", english: "Portuguese (Portugal)", dir: "ltr", fallback: "pt-BR" },
+  ro: { native: "Română", english: "Romanian", dir: "ltr" },
+  "sr-Cyrl": { native: "Српски (ћирилица)", english: "Serbian (Cyrillic)", dir: "ltr" },
+  "sr-Latn": { native: "Srpski (latinica)", english: "Serbian (Latin)", dir: "ltr" },
+  el: { native: "Ελληνικά", english: "Greek", dir: "ltr" },
+  hu: { native: "Magyar", english: "Hungarian", dir: "ltr" },
+  bg: { native: "Български", english: "Bulgarian", dir: "ltr" },
+  hr: { native: "Hrvatski", english: "Croatian", dir: "ltr" },
+  lv: { native: "Latviešu", english: "Latvian", dir: "ltr" },
+  sk: { native: "Slovenčina", english: "Slovak", dir: "ltr" },
+  ca: { native: "Català", english: "Catalan", dir: "ltr" },
+  ms: { native: "Bahasa Melayu", english: "Malay", dir: "ltr" },
+  sl: { native: "Slovenščina", english: "Slovenian", dir: "ltr" },
+  sq: { native: "Shqip", english: "Albanian", dir: "ltr" },
+  az: { native: "Azərbaycan dili", english: "Azerbaijani", dir: "ltr" },
+  gl: { native: "Galego", english: "Galician", dir: "ltr" },
+  hy: { native: "Հայերեն", english: "Armenian", dir: "ltr" },
+  ur: { native: "اردو", english: "Urdu", dir: "rtl" },
+  be: { native: "Беларуская", english: "Belarusian", dir: "ltr" },
+  eu: { native: "Euskara", english: "Basque", dir: "ltr" },
+  si: { native: "සිංහල", english: "Sinhala", dir: "ltr" },
+  lo: { native: "ລາວ", english: "Lao", dir: "ltr" },
 };
 
 export function isLocale(value: unknown): value is Locale {

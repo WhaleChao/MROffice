@@ -79,6 +79,44 @@ export function officeFaceLineEm(family: unknown): number {
   return ascent + descent;
 }
 
+/** The faces whose hhea line gap runs past their win box (GDI's external
+ * leading, em), read from Windows' font files (xlsx backlog
+ * bl12/bin/extlead.py; Times New Roman's line gap is the Windows face's 87
+ * units, not 0 as in Office for Mac's copy); every other face in the table
+ * has none. Metric clones carry their face's. */
+const FACE_EXTERNAL_LEADING: Readonly<Record<string, number>> = {
+  arial: 0.0327,
+  arimo: 0.0327,
+  "liberation sans": 0.0327,
+  "times new roman": 0.0425,
+  tinos: 0.0425,
+  "liberation serif": 0.0425,
+  "arial narrow": 0.0151,
+  "century gothic": 0.0347,
+  "lucida sans": 0.0391,
+};
+
+/**
+ * A face's line with its external leading, in em (Arial 1.150, Calibri
+ * 1.221): how far apart Windows Excel sets a worksheet chart's wrapped
+ * category names (xlsx backlog bl10/x21, bl12/fonts, 9 pt names: Arial and
+ * Times New Roman 10.34-10.35 pt apart, Calibri 10.97-11.0, Century Gothic
+ * 11.01-11.04, Verdana 10.94-10.95).
+ */
+export function officeFaceLeadedLineEm(family: unknown): number {
+  let leading = 0;
+  if (typeof family === "string") {
+    for (const raw of family.split(",")) {
+      const name = raw.replace(/["']/g, "").trim().toLowerCase();
+      if (FACE_BOX[name]) {
+        leading = FACE_EXTERNAL_LEADING[name] ?? 0;
+        break;
+      }
+    }
+  }
+  return officeFaceLineEm(family) + leading;
+}
+
 /** A major tick mark's length, in the unit of `size` (the axis's label size). */
 export function officeTickLength(size: number, family?: unknown): number {
   return (faceBox(family)[0] / 3) * size;

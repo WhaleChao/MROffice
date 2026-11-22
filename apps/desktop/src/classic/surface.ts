@@ -30,7 +30,7 @@ const OFFICE_HOME = "/app/recent";
 /** The web app's locales (apps/web/i18n/locale-list.json; the test holds them together). */
 export const WEB_LOCALES: readonly string[] = [
   "en", "id", "da", "de", "en-GB", "es", "es-419", "fr", "it", "nl",
-  "no", "pt-BR", "fi", "sv", "vi", "th", "ko", "ja", "zh", "zh-TW",
+  "no", "pl", "pt-BR", "fi", "sv", "vi", "he", "th", "ko", "ja", "zh", "zh-TW", "ar", "ru", "tr", "uk", "cs", "pt-PT", "ro", "sr-Cyrl", "sr-Latn", "el", "hu", "bg", "hr", "lv", "sk", "ca", "ms", "sl", "sq", "az", "gl", "hy", "ur", "be", "eu", "si", "lo",
 ];
 const LOCALE_PREFIX = new RegExp(`^/(?:${WEB_LOCALES.join("|")})(?=/|$)`);
 const LEFT_ALONE = /^\/(?:_next|api|render|pyodide|fonts|proofing|marketing)(?:\/|$)|\.[A-Za-z0-9]{1,8}$/;

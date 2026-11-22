@@ -647,6 +647,25 @@ export function withBandDashFormat(attrs: unknown, shown: string): string {
   return options?.bandFormat === "ArabicDash" && /^[0-9]{1,6}$/.test(shown) ? `- ${shown} -` : shown;
 }
 
+/** Whether a kept FORMCHECKBOX field states no form data at all (the
+ * server keeps the field whole, with no `form`): Word draws such a field as
+ * nothing. `window.__docsFormlessCheckBoxOff = true` draws its empty box as
+ * before. */
+function formlessCheckBoxDrawsNothing(preserved: unknown): boolean {
+  if (
+    typeof window !== "undefined" &&
+    (window as Window & { __docsFormlessCheckBoxOff?: boolean }).__docsFormlessCheckBoxOff === true
+  ) {
+    return false;
+  }
+  return (
+    !!preserved &&
+    typeof preserved === "object" &&
+    !Array.isArray(preserved) &&
+    !Array.isArray((preserved as { form?: unknown }).form)
+  );
+}
+
 /** Whether a kept FORMCHECKBOX field's form data (`preservedField.form`,
  * the w:ffData items the server carries) says the box is checked: its
  * `checked` element, else its `default`. */
@@ -724,7 +743,12 @@ export function resolveDocumentFieldDisplay(
       // box form field stores no result: Word draws its box from the form
       // data (checked, else its default).
       if (!attrs.cachedValue && /^\s*FORMCHECKBOX\b/i.test(attrs.instruction)) {
-        return formCheckBoxChecked((value as { preservedField?: unknown }).preservedField) ? "\u2612" : "\u2610";
+        const kept = (value as { preservedField?: unknown }).preservedField;
+        // One Word wrote without its form data (no w:ffData) is drawn as
+        // nothing: Word has no box to draw (corpus R493-D10, its PDF: one
+        // box a row, from the field with form data beside it).
+        if (formlessCheckBoxDrawsNothing(kept)) return "";
+        return formCheckBoxChecked(kept) ? "\u2612" : "\u2610";
       }
       // A legacy drop-down shows the entry its form data names (w:ddList
       // w:result, else the first), which Word writes no result runs for

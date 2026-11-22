@@ -21,7 +21,7 @@ import {
   inkReplayStep,
   inkReplayTimeline,
   type InkReplayTimeline,
-} from "@mrnote/ink/web/lib/office-ink-replay.ts";
+} from "@mrnote/core/web/lib/office-ink-replay.ts";
 import {
   presentationInkReplayTimelineInput,
   type PresentationInkReplayStroke,

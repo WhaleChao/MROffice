@@ -4,18 +4,14 @@
 
 On npm as [`mroffice-docs`](https://www.npmjs.com/package/mroffice-docs): compiled, with its types and stylesheet, no build setup needed (`npm i mroffice-docs mroffice-core`; built from this tree by `npm run pack:npm`, scripts/npm/).
 
-The document editor of [MR Office](https://mroffice.ai): a paged word processor (MR Office's NoteEditor on Tiptap/ProseMirror) with the Office-style ribbon, running in the browser on a local file.
+The document editor of [MR Office](https://mroffice.ai): a paged word processor (MR Office's NoteEditor on Tiptap/ProseMirror) with the Office-style Home and Insert ribbon, running in the browser on a local file.
 
 ## What works in the open-source build
 
 | Feature | Status |
 |---|---|
-| New document; open `.mrdoc` (MR Office's document JSON) and `.html` | Available, verified |
-| Paged editing: styles, fonts, lists, tables, headers and footers, sections, columns, page setup | Available |
-| Insert: pictures, shapes, text boxes, equations, symbols, charts, SmartArt | Available (charts and SmartArt draw in the browser) |
-| Review: comments and track changes (kept in the document), find and replace, word count | Available |
-| Draw: pens, highlighters, erasers on the page | Available (see @mrnote/handwriting = packages/ink) |
+| New document; open `.mrdoc` (MR Office's document JSON), `.html`, Markdown and plain text | Available, verified |
+| Home: undo and redo, clipboard, fonts, paragraph formatting, lists and styles | Available, verified (bold applied to a selection) |
+| Insert: cover and blank pages, page breaks, tables, pictures, shapes, SmartArt, charts, links, bookmarks, comments, headers, footers and page numbers, equations, symbols, text boxes and WordArt | Available, verified (a 3 × 3 table inserted) |
 | Save | Available: writes `.mrdoc` (the editor's own JSON, reopened as it was) |
-| Open or save **Word (.docx)** | Not in the open-source editor: the MR Office desktop app (free, [download](https://github.com/XinaTian/MROffice/releases)), open and save Word files |
-| Export PDF, mail merge to .docx, cloud fonts | Need the service; not available |
-| AI (Copilot, AI pictures, rewrite), collaboration, version history | Part of the MR Office service; not included |
+| Word (.docx) files | Open and save them with the MR Office desktop app (free, [download](https://github.com/XinaTian/MROffice/releases)) |

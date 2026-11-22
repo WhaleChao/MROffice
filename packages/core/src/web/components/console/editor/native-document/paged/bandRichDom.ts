@@ -60,7 +60,7 @@ import type {
   BandRichWordArt,
   BandFieldToken,
 } from "../headerFooter";
-import { bandFieldCachedText, formatNativeFieldNumber } from "../headerFooter";
+import { bandFieldCachedText, formatNativeFieldNumber, normalizeBandRichBlocks } from "../headerFooter";
 import { wordPositionedFrame } from "../wordFramePosition";
 import {
   normalizePositionalTab,
@@ -1361,7 +1361,15 @@ function bandMemberPaintOff(doc: Document): boolean {
   return (doc.defaultView as (Window & { __docsBandMemberPaintOff?: boolean }) | null)?.__docsBandMemberPaintOff === true;
 }
 
-function appendBandGroupMembers(doc: Document, box: HTMLElement, shape: BandRichShape): void {
+/** `window.__docsBandMemberStoryOff = true` (A/B): a header or footer group
+ * member draws its words only, never its own story (a page field among them
+ * shows the number the file was saved with on every page). */
+function bandMemberStoryOff(doc: Document): boolean {
+  const view = doc.defaultView as (Window & { __docsBandMemberStoryOff?: boolean }) | null;
+  return view?.__docsBandMemberStoryOff === true;
+}
+
+function appendBandGroupMembers(doc: Document, box: HTMLElement, shape: BandRichShape, context?: BandTokenContext): void {
   const width = shape.groupCoordinateWidthEmu ?? shape.widthEmu;
   const height = shape.groupCoordinateHeightEmu ?? shape.heightEmu;
   box.style.position = "relative";
@@ -1428,7 +1436,32 @@ function appendBandGroupMembers(doc: Document, box: HTMLElement, shape: BandRich
       groupCoordinateHeightEmu: shape.groupCoordinateHeightEmu,
     }));
     cell.appendChild(svg);
-    if (member.text) {
+    // A member's own story (Word's text box flow: a page number field among
+    // its words, corpus R490-D01's round header badge), drawn by this band's
+    // renderer with the page's own numbers, as a header text box's story is.
+    const storyBlocks =
+      paintOwn && context && member.textStory && !bandMemberStoryOff(doc)
+        ? normalizeBandRichBlocks(member.textStory, false, true)
+        : null;
+    if (storyBlocks && context) {
+      const body = member.textBody;
+      const emuPx = (emu: number | undefined) => (typeof emu === "number" && Number.isFinite(emu) ? ptToPx(emu / 12_700) : 0);
+      const story = buildBandRichDom(doc, storyBlocks, context);
+      story.dataset.bandShapeMemberStory = "true";
+      const holder = doc.createElement("span");
+      holder.className = "sheet-band-rich__shape-text";
+      holder.style.position = "absolute";
+      holder.style.left = `${emuPx(body?.insetLeftEmu)}px`;
+      holder.style.right = `${emuPx(body?.insetRightEmu)}px`;
+      holder.style.top = `${emuPx(body?.insetTopEmu)}px`;
+      holder.style.bottom = `${emuPx(body?.insetBottomEmu)}px`;
+      holder.style.display = "flex";
+      holder.style.flexDirection = "column";
+      holder.style.justifyContent = body?.anchor === "ctr" ? "center" : body?.anchor === "b" ? "flex-end" : "flex-start";
+      holder.appendChild(story);
+      if (bandMemberTextMirrored(shape, member)) holder.style.transform = "scaleX(-1)";
+      cell.appendChild(holder);
+    } else if (member.text) {
       const label = doc.createElement("span");
       label.className = "sheet-band-rich__shape-text";
       const runs = paintOwn ? member.textRuns?.filter((run) => typeof run.text === "string") ?? [] : [];
@@ -1531,7 +1564,7 @@ export function buildBandChart(doc: Document, chart: BandRichChart, index: numbe
   return box;
 }
 
-export function buildBandShape(doc: Document, shape: BandRichShape, index: number): HTMLElement {
+export function buildBandShape(doc: Document, shape: BandRichShape, index: number, context?: BandTokenContext): HTMLElement {
   const box = doc.createElement("span");
   box.className = "sheet-band-rich__shape";
   box.setAttribute("data-band-shape", String(index));
@@ -1570,7 +1603,7 @@ export function buildBandShape(doc: Document, shape: BandRichShape, index: numbe
   if (shape.groupMembers?.length) {
     // A GROUP draws its members, each at its own place in the group's child
     // space, by the same painter -- a drawing canvas's logo pieces, its rule.
-    appendBandGroupMembers(doc, box, shape);
+    appendBandGroupMembers(doc, box, shape, context);
     return box;
   }
   paintShape(svg, shape);
@@ -1874,7 +1907,7 @@ export function buildBandRichDom(
         root.appendChild(buildBandWordArt(doc, art));
       }
       for (const [shapeIndex, shape] of (block.shapes ?? []).entries()) {
-        const drawing = buildBandShape(doc, shape, shapeIndex);
+        const drawing = buildBandShape(doc, shape, shapeIndex, context);
         const anchor = shape.floatAnchor;
         if (!anchor) {
           paragraph.appendChild(drawing);

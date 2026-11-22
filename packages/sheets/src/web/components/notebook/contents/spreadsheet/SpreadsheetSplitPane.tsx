@@ -724,7 +724,8 @@ export function SpreadsheetSplitPane(props: SpreadsheetSplitPaneProps) {
       data-hide-gridlines={painter.showGridlines ? undefined : "true"}
       data-column-headings={columnHeadings ? "true" : undefined}
       data-row-headings={rowHeadings ? "true" : undefined}
-      dir={rtl ? "rtl" : undefined}
+      // Stated either way: an rtl interface must not flip an ltr sheet.
+      dir={rtl ? "rtl" : "ltr"}
       onScroll={onScroll}
       onPointerDown={onPointerDown}
       onMouseDown={(event) => {

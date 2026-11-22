@@ -328,16 +328,28 @@ export function orderFilterValues(
     .map((entry) => entry.value);
 }
 
-/**
- * The distinct display values of a column IN EXCEL'S LIST ORDER — what the
- * AutoFilter dropdown shows. Same set as {@link distinctColumnValues}, sorted
- * by {@link orderFilterValues} using the first cell seen for each value as its
- * authenticated key, so numbers, logicals and errors keep their type.
- *
- * @param rows the data rows (exclude the header row before calling)
- * @param colIndex the column to enumerate
- * @param options text order: case sensitivity, locale and Chinese method
- */
+
+
+
+
+export const EXCEL_FILTER_VALUE_CHARS = 255;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export function filterListValues<T extends SortFilterRow>(
   rows: readonly T[],
   colIndex: number,
@@ -354,6 +366,7 @@ export function filterListValues<T extends SortFilterRow>(
     keys.add(key);
     
     const value = key === "" ? "" : filterValueText(raw);
+    if (value.length > EXCEL_FILTER_VALUE_CHARS) continue;
     representative.set(value, cell && value === raw ? cell : { ...(cell ?? {}), value });
     order.push(value);
   }

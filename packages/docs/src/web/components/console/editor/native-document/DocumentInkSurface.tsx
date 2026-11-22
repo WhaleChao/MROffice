@@ -62,10 +62,10 @@ import {
   wetInkSettleMs,
   wetInkWaitsForPen,
 } from "@mrnote/core/web/lib/office-wet-ink.ts";
-import { useInkTouchShield } from "@mrnote/ink/web/lib/ink-touch-shield.ts";
-import { useWetInkLayer, wetInkSvgElement, type WetInkPainter } from "@mrnote/ink/web/lib/office-wet-ink-layer.ts";
+import { useInkTouchShield } from "@mrnote/core/web/lib/ink-touch-shield.ts";
+import { useWetInkLayer, wetInkSvgElement, type WetInkPainter } from "@mrnote/core/web/lib/office-wet-ink-layer.ts";
 import { pencilScribblePossible, useInkScribbleGuard } from "@mrnote/core/web/lib/ink-scribble-guard.ts";
-import { INK_LIVE_PENCIL_SEED, InkLiveCanvas, type InkLivePainter, type InkLiveScreen, type InkLiveStyle } from "@mrnote/ink/web/lib/office-ink-live.ts";
+import { INK_LIVE_PENCIL_SEED, InkLiveCanvas, type InkLivePainter, type InkLiveScreen, type InkLiveStyle } from "@mrnote/core/web/lib/office-ink-live.ts";
 import { appendInkEffectSvg, inkEffectSvgPlan } from "@mrnote/core/web/lib/office-ink-effects.ts";
 import { paintDocumentInkPreview } from "@mrnote/core/web/components/console/editor/native-document/documentShapeExtension.ts";
 import { DOCUMENT_SHAPE_EMU_PER_PX } from "@mrnote/core/web/lib/document-shapes.ts";
@@ -98,7 +98,7 @@ import {
   inkLaserTrailLive,
   paintInkLaserTrail,
   type InkLaserTrail,
-} from "@mrnote/ink/web/lib/office-ink-laser.ts";
+} from "@mrnote/core/web/lib/office-ink-laser.ts";
 import {
   INK_CAPTURE_MAX_POINTS,
   inkCornerDegreesForTool,
@@ -127,10 +127,10 @@ import {
   documentInkScratchablePaths,
   type DocumentInkClientPoint,
 } from "@mrnote/core/web/components/console/editor/native-document/documentInk.ts";
-import { inkPresetForTilt } from "@mrnote/ink/web/lib/office-ink-tilt.ts";
+import { inkPresetForTilt } from "@mrnote/core/web/lib/office-ink-tilt.ts";
 import { createInkPenDynamics, type InkPenDynamics } from "@mrnote/core/web/lib/office-ink-pen-dynamics.ts";
 import { inkPenGestures } from "@mrnote/core/web/lib/office-ink-pen-gestures.ts";
-import { inkPendingStrokeSamples } from "@mrnote/ink/web/lib/ink-press-deferral.ts";
+import { inkPendingStrokeSamples } from "@mrnote/core/web/lib/ink-press-deferral.ts";
 import { inkPathIdsUnderScratchOut, inkScratchOutEnabled, inkScratchOutTakes, inkToolScratchesOut, isInkScratchOut } from "@mrnote/core/web/lib/office-ink-scratch-out.ts";
 import { documentViewScale } from "@mrnote/core/web/components/console/editor/native-document/documentObjectResize.ts";
 import { snapDocumentClientPoint } from "@mrnote/core/web/components/console/editor/native-document/documentObjectSnap.ts";
