@@ -16,7 +16,7 @@ import { sortKeyOf, compareCells, type SortFilterRow, sortRows } from "../../../
 import { type SheetViewSortKeyInput } from "../../../../lib/spreadsheet/sheet-views";
 import { type SheetModel } from "./spreadsheetSheetModel";
 import { type SheetViewMappedCellMutation, type SheetViewMappedDrawingMutation, type SheetViewMappedLineMutation, type SheetViewMappedPageMutation, type SheetViewSession } from "./spreadsheetSheetViews";
-import { type GridRect } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
+import { type GridRect } from "../../../../lib/spreadsheet/grid-nav";
 
 /** What useSpreadsheetSortByActiveColumnLocale reads from SpreadsheetWindow's render scope. */
 export interface SpreadsheetSortByActiveColumnLocaleInputs {

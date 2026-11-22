@@ -41,6 +41,11 @@ import type {
   PresentationBlock,
 } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
 import type { LetterPlay } from "../../components/notebook/contents/presentation/PresentationRunsText";
+import {
+  effectSmoothEasing,
+  type PresentationAnimationEffectSettings,
+} from "@mrnote/core/web/lib/presentation-anim-effect-settings.ts";
+import { effectSettingsDefaults } from "@mrnote/core/web/lib/presentation-anim-effect-defaults.ts";
 import { blockGeometryStyle } from "./selection-geometry";
 
 /**
@@ -114,6 +119,13 @@ export interface BlockPlayState {
   settledRecipeStyle?: CSSProperties;
   /** The letter-by-letter play of the block's text on this mount. */
   letterPlay?: LetterPlay;
+  /** Effect Options timing of the last animating occurrence. */
+  timing?: EffectCssTiming;
+  /**
+   * After animation: when (ms into this mount) the object is taken away --
+   * Hide After Animation, or an entrance that rewinds when done playing.
+   */
+  afterHideAtMs?: number;
   /**
    * An imported By Paragraph build: the play state of each paragraph of this
    * block's text that a step names (zero-based). The block itself stays on
@@ -150,9 +162,13 @@ export const MAX_PARAGRAPH_PLAY_ROWS = 500;
  */
 export function timelineVisibleAfterStep(
   category: string | undefined,
-  state: { visible: boolean; animate: boolean },
+  state: { visible: boolean; animate: boolean; afterHidden?: boolean; afterShown?: boolean },
   priorVisible: boolean,
 ): boolean {
+  // Effect Options once the step has played: After animation hides the
+  // object, a rewound entrance leaves it out, a rewound exit brings it back.
+  if (state.afterHidden) return false;
+  if (state.afterShown) return true;
   if (category === "entrance") return state.visible || priorVisible;
   if (category === "exit") return !state.visible ? false : state.animate ? true : priorVisible;
   return priorVisible;
@@ -336,11 +352,80 @@ export function presentationParagraphFlyOffsetVars(
 }
 
 /** One animating occurrence of a block on the current mount. */
+/**
+ * How an occurrence's keyframe runs under its Effect Options: Smooth start /
+ * end as an easing, Repeat and Auto-reverse as iterations and direction,
+ * Rewind when done playing as a fill that does not hold the end.
+ */
+export interface EffectCssTiming {
+  /** Replaces the effect's own easing (Smooth start / end were changed). */
+  timingFunction?: string;
+  iterationCount: string;
+  direction: "normal" | "alternate";
+  /** Rewind when done playing: the end frame is not held. */
+  rewind: boolean;
+}
+
+/** The CSS timing of a step's Effect Options, or undefined for the defaults. */
+export function effectCssTiming(step: {
+  animation: TimelineAnimation;
+  effectOption?: PresentationAnimationEffectOption;
+  effectSettings?: PresentationAnimationEffectSettings;
+}): EffectCssTiming | undefined {
+  const settings = step.effectSettings;
+  if (!settings) return undefined;
+  const { accel, decel, repeat, autoReverse, rewind } = settings;
+  if (accel === undefined && decel === undefined && repeat === undefined && !autoReverse && !rewind) {
+    return undefined;
+  }
+  const defaults = effectSettingsDefaults(step.animation, step.effectOption);
+  const smoothChanged = accel !== undefined || decel !== undefined;
+  const easing = smoothChanged
+    ? (effectSmoothEasing(accel ?? defaults.accel, decel ?? defaults.decel) ?? "linear")
+    : undefined;
+  const plays =
+    typeof repeat === "string" ? Infinity : (repeat ?? 1000) / 1000;
+  const iterations = plays * (autoReverse ? 2 : 1);
+  return {
+    ...(easing ? { timingFunction: easing } : {}),
+    iterationCount: Number.isFinite(iterations) ? String(Math.round(iterations * 1000) / 1000) : "infinite",
+    direction: autoReverse ? "alternate" : "normal",
+    rewind: Boolean(rewind),
+  };
+}
+
+/** The keyframe that takes an object away when its effect ends (After
+ * animation: Hide After Animation; an entrance that rewinds). */
+export const PRESENTATION_AFTER_HIDE_KEYFRAME = "mrai-ppt-after-hide";
+export const PRESENTATION_AFTER_HIDE_KEYFRAME_CSS = `@keyframes ${PRESENTATION_AFTER_HIDE_KEYFRAME}{from,to{visibility:hidden}}`;
+
+/**
+ * The colour a Dim names, on this slide's theme: a hex as it is, a theme
+ * colour through the default colour map (bg1 = lt1, tx1 = dk1, bg2 = lt2,
+ * tx2 = dk2), Office grey when the theme does not state it.
+ */
+export function resolveEffectDimColor(
+  dimColor: string | undefined,
+  slots: Partial<Record<string, string>> | undefined,
+  accents: readonly string[],
+): string | undefined {
+  if (!dimColor) return undefined;
+  if (dimColor.startsWith("#")) return dimColor;
+  const slot =
+    ({ bg1: "lt1", tx1: "dk1", bg2: "lt2", tx2: "dk2" } as Record<string, string>)[dimColor] ?? dimColor;
+  const accent = /^accent([1-6])$/.exec(slot);
+  return slots?.[slot] ?? (accent ? accents[Number(accent[1]) - 1] : undefined) ?? "#7f7f7f";
+}
+
 interface BlockPlayEffect {
   animation: TimelineAnimation;
   effectOption?: PresentationAnimationEffectOption;
   delayMs: number;
   durationMs: number;
+  /** Effect Options timing of this occurrence (Repeat, Smooth start …). */
+  timing?: EffectCssTiming;
+  /** The occurrence plays on the block's words / letters, not the block. */
+  letters?: true;
   motionKeyframe?: string;
   /** The occurrence's recipe keyframe, when its effect is drawn from one. */
   recipeKeyframe?: string;

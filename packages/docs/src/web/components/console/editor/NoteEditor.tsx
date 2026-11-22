@@ -5,13 +5,14 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-import { onlyofficeInitialZoom, onlyofficeOpensReflowed } from "@mrnote/core/web/lib/embed/onlyoffice-frame.ts";
+import { onlyofficeInitialZoom, onlyofficeMakesActionLinks, onlyofficeOpensReflowed, requestOnlyofficeActionLink } from "@mrnote/core/web/lib/embed/onlyoffice-frame.ts";
+import { ONLYOFFICE_SPELLCHECK_EVENT, onlyofficeSpellcheckAtOpen } from "@mrnote/core/web/lib/embed/onlyoffice-layout.ts";
 import { reloadPage as reloadWebPage } from "@mrnote/core/web/lib/reload-reason.ts";
 import { registerEditorDraftHandover } from "@mrnote/core/web/lib/editor-draft-handover.ts";
 import { refuseStrayNativeDragExcept } from "@mrnote/core/web/lib/native-drag-guard.ts";
 import { DocumentPeerInkLayer } from "./native-document/DocumentPeerInkLayer";
 import { documentLiveSurface, useDocumentLiveTransforms } from "@mrnote/core/web/components/console/editor/native-document/documentLiveTransform.ts";
-import { publishDocumentFieldIdentity } from "@mrnote/core/web/components/console/editor/native-document/documentFieldExtension.tsx";
+import { publishDocumentFieldIdentity } from "./native-document/documentFieldExtension";
 import { OfficeSemanticIcon } from "@mrnote/core/web/components/office-ribbon/icons/OfficeSemanticIcon.tsx";
 import { officeAutosaveEnabled, officeAutosaveLabels } from "@mrnote/core/web/lib/office-autosave-preference.ts";
 import { DocumentDisplayFontRepair } from "./native-document/DocumentDisplayFontRepair";
@@ -77,7 +78,7 @@ import {
   type PageCausalUpgradeHolder,
 } from "@mrnote/core/web/hooks/useAutosavedPageDocument.ts";
 import { useDraftCommitOnLeave } from "@mrnote/core/web/lib/draft-commit-on-leave.ts";
-import { commitOpenEquationDrafts } from "@mrnote/core/web/components/console/editor/extensions/equationDraftCommit.ts";
+import { commitOpenEquationDrafts } from "./extensions/equationDraftCommit";
 import { AUTH_SESSION_HELD_EVENT, AUTH_SESSION_RESTORED_EVENT, apiDelete, apiGet, apiPost, isApiRequestError, isAuthSessionHeld, registerUnsavedWorkHold, type ApiRequestError } from "@mrnote/core/web/lib/api.ts";
 import { openReauthWindow, reauthLoginUrl, watchSessionRestore } from "@mrnote/core/web/lib/session-reauth.ts";
 import { uploadPageAttachment } from "@mrnote/core/web/lib/page-attachment-upload.ts";
@@ -95,7 +96,7 @@ import {
   normalizeHydratedDocumentPageAttrs,
 } from "@mrnote/core/web/components/console/editor/extensions/DocumentPageSetup.ts";
 import { toast } from "@mrnote/core/web/hooks/use-toast.ts";
-import { INK_TAKEN_BY_ROOM_EVENT } from "@mrnote/core/web/components/console/editor/native-document/inkLossWatch.ts";
+import { INK_TAKEN_BY_ROOM_EVENT } from "./native-document/inkLossWatch";
 import { registerInkErasureAwareness } from "@mrnote/core/web/lib/collab/ink-erasure-journal.ts";
 import { useChangedState } from "@mrnote/core/web/hooks/useChangedState.ts";
 import { useSaveElapsed } from "@mrnote/core/web/hooks/useSaveElapsed.ts";
@@ -145,7 +146,6 @@ import { EditorLoadingState } from "@mrnote/core/web/components/ui/editor-loadin
 import BacklinksPanel from "@mrnote/core/web/components/console/editor/BacklinksPanel.tsx";
 import CommentsPanel from "@mrnote/core/web/components/console/editor/CommentsPanel.tsx";
 import DocumentOutlinePanel from "./DocumentOutlinePanel";
-import TrackChangesPanel from "@mrnote/core/web/components/console/editor/TrackChangesPanel.tsx";
 import {
   OPEN_AI_REVIEW_EVENT,
   takePendingAiReviewOpen,
@@ -156,8 +156,6 @@ import CitationPicker from "@mrnote/core/web/components/console/editor/CitationP
 import CrossReferencePicker, {
   type CrossReferenceNoteTarget,
 } from "@mrnote/core/web/components/console/editor/CrossReferencePicker.tsx";
-import MergeFieldPicker from "@mrnote/core/web/components/console/editor/MergeFieldPicker.tsx";
-import MailMergeRecipientsDialog from "./native-document/MailMergeRecipientsDialog";
 import {
   DocumentBookmarkDialog,
   type DocumentBookmarkDialogEntry,
@@ -204,7 +202,7 @@ import {
   consumePendingEvidenceLocate,
   type EvidenceLocateRequest,
 } from "@mrnote/core/web/lib/evidence-locator.ts";
-import type { EvidenceQuoteLocateInput } from "@mrnote/core/web/components/console/editor/native-document/evidenceLocatorExtension.ts";
+import type { EvidenceQuoteLocateInput } from "./native-document/evidenceLocatorExtension";
 import {
   isEditorEditable,
   documentProtectionAllowsSaves,
@@ -215,7 +213,7 @@ import {
 } from "@mrnote/core/web/components/console/editor/native-document/documentProtection.ts";
 import { useEmbedAccess } from "@mrnote/core/web/lib/embed/use-embed-access.ts";
 import { setCommentOnlyLane } from "@mrnote/core/web/components/console/editor/native-document/commentOnlyLane.ts";
-import { editableRangesPresent } from "@mrnote/core/web/components/console/editor/native-document/rangePermissionExtension.ts";
+import { editableRangesPresent } from "./native-document/rangePermissionExtension";
 import {
   INSERT_CITATION_EVENT,
   OPEN_CITATION_SOURCE_MANAGER_EVENT,
@@ -240,20 +238,8 @@ import {
   type MailMergeDialogAction,
   type OpenMailMergeDialogDetail,
   type OpenMergeFieldPickerDetail,
-} from "@mrnote/core/web/components/console/editor/native-document/mergeFieldExtension.tsx";
-import {
-  getMergeRecord,
-  resolveMailMergeSettings,
-  withMailMergeSettings,
-  type MailMergeData,
-  type MailMergeRecord,
-  type MergeConditionOp,
-} from "@mrnote/core/web/lib/document/mailMerge.ts";
-import {
-  buildMailMergeDocxBatch,
-  trustedMailMergeDownloadErrorMessage,
-} from "@mrnote/core/web/lib/document/mailMergeDocx.ts";
-import { downloadBlobFile } from "@mrnote/core/web/lib/download-file.ts";
+} from "./native-document/mergeFieldExtension";
+import { resolveMailMergeSettings, withMailMergeSettings, type MailMergeData, type MailMergeRecord, type MergeConditionOp } from "@mrnote/core/web/lib/document/mailMerge.ts";
 import type { TipTapNode } from "@/lib/document-export/tiptap-json";
 import {
   collectHeadings,
@@ -275,7 +261,7 @@ import {
   type CslSource,
 } from "@mrnote/core/web/components/console/editor/native-document/citations.ts";
 import { createNativeDocumentCommandBus } from "./native-document/commandBus";
-import { DocumentWorkbookPersistenceContext } from "@mrnote/core/web/components/console/editor/extensions/DocumentWorkbookPersistence.tsx";
+import { DocumentWorkbookPersistenceContext } from "./extensions/DocumentWorkbookPersistence";
 import { selectionNearInlineContent } from "@mrnote/core/web/components/console/editor/native-document/safeTextSelection.ts";
 import { documentCaretPlaceFrom, documentCaretPosition, documentCaretTopBlock, documentHandoverPlace, type DocumentCaretPlace } from "./native-document/documentCaretPlace";
 import { heldKeysFrom, heldKeysGiven, holdKeysThroughHandover, keyHeldForDocument, typeHeldKeys, viewTakesInputNow, type HandoverKeys, type HeldKeysTarget } from "@mrnote/core/web/lib/editor/held-keys.ts";
@@ -320,7 +306,7 @@ import {
   validateNativeDocumentCommandForApply,
   type NativeDocumentCommandRejectionReason,
 } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
-import { createNativeDocumentPluginRegistry } from "@mrnote/core/web/components/console/editor/native-document/pluginRegistry.ts";
+import { createNativeDocumentPluginRegistry } from "./native-document/pluginRegistry";
 import {
   createDocumentLifecycleObservationEmitter,
   reportDocumentLifecycleDiagnostic,
@@ -456,7 +442,7 @@ import {
   type CollaborativeDocumentAttrsPatch,
   type CollaborativeDocumentSectionMutation,
 } from "@mrnote/core/web/components/console/editor/native-document/collaborationDocumentAttrs.ts";
-import { SECTION_CHAIN_HISTORY_REPAIR_META } from "@mrnote/core/web/components/console/editor/native-document/sectionChainHistoryRepair.ts";
+import { SECTION_CHAIN_HISTORY_REPAIR_META } from "./native-document/sectionChainHistoryRepair";
 import {
   type WatermarkConfig,
 } from "@mrnote/core/web/components/console/editor/native-document/watermark.ts";
@@ -475,7 +461,7 @@ import {
   INITIAL_PAGINATION_SETTLING_ATTR,
   REBALANCE_META,
 } from "@mrnote/core/web/components/console/editor/native-document/paged/pageRebalanceExtension.ts";
-import { HEADING_ANCHOR_IDLE_BACKFILL_META } from "@mrnote/core/web/components/console/editor/native-document/headingAnchors.ts";
+import { HEADING_ANCHOR_IDLE_BACKFILL_META } from "./native-document/headingAnchors";
 import {
   documentRootDefaults,
   sameDocumentAuthorContent,
@@ -517,7 +503,7 @@ import { cachedDocsLayoutReceipt, cachedDocsLayoutSizes } from "@mrnote/core/web
 import { layoutSnapshotsAwaited, preloadLayoutSnapshots } from "@mrnote/core/web/lib/docs-layout-snapshot-store.ts";
 import { documentIsLongForLayoutSnapshot, forgetOpenedParts, layoutSnapshotsEnabled, noteRestoredPart, rowFontsHold, seedPartMeasures, snapshotReceiptFor, type KeptPartLayout } from "@mrnote/core/web/components/console/editor/native-document/paged/layoutSnapshot.ts";
 import { hydrationWasRestored, markRestoredLayout, markRestoredSnapshot, notePartArrived, noteRestoredSheets } from "@mrnote/core/web/components/console/editor/native-document/paged/restoredLayoutMark.ts";
-import { dispatchKeepingReader } from "@mrnote/core/web/components/console/editor/native-document/paged/readerAnchor.ts";
+import { dispatchKeepingReader } from "./native-document/paged/readerAnchor";
 import { restorePaginationProjection } from "@mrnote/core/web/components/console/editor/native-document/paged/paginationProjectionReceipt.ts";
 import type { ClassicPendingEdits } from "@mrnote/core/web/lib/classic-start/pending.ts";
 import { yieldBetweenSaveSteps } from "@mrnote/core/web/lib/collab/save-yield.ts";
@@ -532,7 +518,7 @@ import {
   isPlainPasteShortcut,
   normalizePastedPlainText,
   plainTextFromClipboard,
-} from "@mrnote/core/web/components/console/editor/native-document/plainTextPaste.ts";
+} from "./native-document/plainTextPaste";
 import {
   DEFAULT_PASTE_MODE,
   mergeDestinationMarks,
@@ -2506,7 +2492,6 @@ export default function NoteEditor({
     columns: [],
     rows: [],
   });
-  const [mergePreviewRecord, setMergePreviewRecord] = useState(0);
   // "Go to bookmark" panel (Word/WPS "Go To"). The bookmark snapshot is read off
   // the editor when the panel opens so the list reflects the live document.
   // Additive — a document with no bookmarks is unaffected whether the panel is
@@ -2578,11 +2563,20 @@ export default function NoteEditor({
   useEffect(() => retainOfficeInactiveSelection(), []);
 
   useEffect(() => {
-    try {
-      setSpellcheckOn(window.localStorage.getItem("mrnote.spellcheck") === "1");
-    } catch {
-      /* storage unavailable: stay off */
+    // An ONLYOFFICE config's features.spellcheck (embed) decides it at open,
+    // and File > Advanced Settings switches it.
+    const fixed = onlyofficeSpellcheckAtOpen();
+    if (fixed !== null) setSpellcheckOn(fixed);
+    else {
+      try {
+        setSpellcheckOn(window.localStorage.getItem("mrnote.spellcheck") === "1");
+      } catch {
+        /* storage unavailable: stay off */
+      }
     }
+    const follow = (event: Event) => setSpellcheckOn((event as CustomEvent<{ on?: boolean }>).detail?.on === true);
+    window.addEventListener(ONLYOFFICE_SPELLCHECK_EVENT, follow);
+    return () => window.removeEventListener(ONLYOFFICE_SPELLCHECK_EVENT, follow);
   }, []);
 
   // AutoCorrect / smart typography while typing (curly quotes, em-dash,
@@ -8138,59 +8132,6 @@ export default function NoteEditor({
     [editor, pageId],
   );
 
-  // Re-attach the document-level attribute stores after a setContent hydration.
-  // setContent restores the doc's CHILDREN (incl. the comment anchor marks, the
-  // footnoteRef / citation nodes, and the footnoteList / bibliography nodes) but
-  // DROPS the top-level doc attrs, so each store must be re-applied from the
-  // loaded content. Covers comment threads (Word/WPS comments), the footnote note
-  // bodies + mode, and the citation source store + style. Each restore is guarded
-  // so a test/mock editor without the owning extension (no matching command) is a
-  // safe no-op, and a document that carries none of these stores is unaffected.
-  // Finish & Merge produces a ZIP of ordinary editable DOCX files (one per
-  // exact selected record). This read-only export boundary never dispatches an
-  // editor transaction, so success or failure cannot alter the template,
-  // recipient store, autosave draft, or undo history.
-  const downloadMergedDocxBatch = useCallback(
-    async (recordNumbers: readonly number[]) => {
-      if (onGuestExportRequest) {
-        onGuestExportRequest();
-        return;
-      }
-      if (!isUsableEditor(editor) || typeof window === "undefined") return;
-      try {
-        const result = await buildMailMergeDocxBatch(
-          mergePagedRuntimeContinuationsJson(
-            editor.getJSON(),
-          ) as unknown as TipTapNode,
-          mergeData,
-          title || t("pages.untitled"),
-          recordNumbers,
-        );
-        // Invalid/zero ranges deliberately resolve to zero output. The dialog
-        // normally prevents them, while this guard keeps the export API exact.
-        if (!result.blob || result.files.length === 0) return;
-        if (!downloadBlobFile(result.filename, result.blob)) {
-          throw new Error(t("toolbar.exportDownloadUnavailable"));
-        }
-        toast({
-          title: t("mailMerge.finishSuccess", { count: result.files.length }),
-        });
-      } catch (error) {
-        toast({
-          title: t("mailMerge.finishFailed"),
-          description: trustedMailMergeDownloadErrorMessage(
-            error,
-            t("mailMerge.finishFailed"),
-            t("toolbar.exportDownloadUnavailable"),
-            t("toolbar.exportDocxNeedsConnection"),
-          ),
-          variant: "destructive",
-        });
-      }
-    },
-    [editor, mergeData, onGuestExportRequest, t, title],
-  );
-
   const restoreCommentThreads = useCallback(
     (content: Record<string, unknown>) => restoreDocumentStores(editor, content),
     [editor],
@@ -8629,24 +8570,6 @@ export default function NoteEditor({
       window.removeEventListener(INSERT_CROSS_REFERENCE_EVENT, handler);
   }, [editor]);
 
-  // The toolbar's "Insert merge field" button opens the column picker. We snapshot
-  // the live recipient-data columns off the editor at open time so the list
-  // reflects the current data source (empty before recipients are attached — the
-  // picker then offers a free-text field). Guarded so a mock editor without the
-  // DocumentMailMerge extension is a safe no-op.
-  const closeMergeFieldPicker = useCallback(() => {
-    const returnFocus = mergeFieldPickerReturnFocusRef.current;
-    mergeFieldPickerReturnFocusRef.current = null;
-    setMergeFieldPickerOpen(false);
-    window.requestAnimationFrame(() => {
-      if (returnFocus?.isConnected) {
-        returnFocus.focus({ preventScroll: true });
-        return;
-      }
-      if (isUsableEditor(editor)) editor.view.focus();
-    });
-  }, [editor]);
-
   useEffect(() => {
     if (typeof window === "undefined") return;
     const handler = (event: Event) => {
@@ -8670,19 +8593,6 @@ export default function NoteEditor({
     };
     window.addEventListener(INSERT_MERGE_FIELD_EVENT, handler);
     return () => window.removeEventListener(INSERT_MERGE_FIELD_EVENT, handler);
-  }, [editor]);
-
-  const closeMergeRecipientsDialog = useCallback(() => {
-    const returnFocus = mergeRecipientsReturnFocusRef.current;
-    mergeRecipientsReturnFocusRef.current = null;
-    setMergeRecipientsOpen(false);
-    window.requestAnimationFrame(() => {
-      if (returnFocus?.isConnected) {
-        returnFocus.focus({ preventScroll: true });
-        return;
-      }
-      if (isUsableEditor(editor)) editor.view.focus();
-    });
   }, [editor]);
 
   // The toolbar's "Recipients" button opens the mail-merge dialog (paste data /
@@ -8882,6 +8792,8 @@ export default function NoteEditor({
   useEffect(() => {
     const dom = editorDom(editor);
     if (dom) dom.setAttribute("spellcheck", spellcheckOn ? "true" : "false");
+    // An ONLYOFFICE session's setting is the integration's (kept by its own key).
+    if (onlyofficeSpellcheckAtOpen() !== null) return;
     try {
       window.localStorage.setItem(
         "mrnote.spellcheck",
@@ -12624,13 +12536,9 @@ export default function NoteEditor({
     restorePanelFocus(editor, returnFocus);
   }, [editor]);
   const toggleTrackChangesPanel = useCallback(() => {
-    if (trackChangesOpen) {
-      closeTrackChangesPanel();
-      return;
-    }
     trackChangesReturnFocusRef.current = stablePanelReturnFocusTarget();
     setTrackChangesOpen(true);
-  }, [closeTrackChangesPanel, trackChangesOpen]);
+  }, [closeTrackChangesPanel, false]);
   // An AI change's review asked for this page: the Reviewing Pane opens on
   // its AI changes, at the group (asked before this editor was mounted too).
   useEffect(() => {
@@ -12722,7 +12630,7 @@ export default function NoteEditor({
         toggle: toggleCommentsPanel,
       },
       trackChanges: {
-        open: trackChangesOpen,
+        open: false,
         toggle: toggleTrackChangesPanel,
       },
       outline: {
@@ -12748,7 +12656,7 @@ export default function NoteEditor({
     [
       commentsOpen,
       toggleCommentsPanel,
-      trackChangesOpen,
+      false,
       toggleTrackChangesPanel,
       outlineOpen,
       toggleOutlinePanel,
@@ -13874,16 +13782,7 @@ export default function NoteEditor({
               />
             </DocumentDockedPane>
           ) : null}
-          {trackChangesOpen && usableEditor ? (
-            <DocumentDockedPane docks={taskPaneDocks} pane="reviewing">
-              <TrackChangesPanel
-                editor={usableEditor}
-                onClose={closeTrackChangesPanel}
-                pageId={guestMode ? null : pageId}
-                aiReviewRequest={aiReviewRequest}
-              />
-            </DocumentDockedPane>
-          ) : null}
+          {null}
           {citationPickerOpen && usableEditor ? (
             <div
               className="citation-picker-overlay"
@@ -14025,130 +13924,8 @@ export default function NoteEditor({
               onClose={closeCrossReferencePicker}
             />
           ) : null}
-          {mergeFieldPickerOpen && usableEditor ? (
-            <div
-              className="merge-field-picker-overlay"
-              data-testid="merge-field-picker-overlay"
-            >
-              <MergeFieldPicker
-                columns={mergeData.columns}
-                canInsert={editorMayEdit}
-                onPick={(field) => {
-                  const commands = getEditorCommands<{
-                    insertMergeField?: (field: string) => boolean;
-                  }>(usableEditor);
-                  if (
-                    !executeEditorCommand(commands?.insertMergeField, field)
-                  ) {
-                    return;
-                  }
-                  mergeFieldPickerReturnFocusRef.current = null;
-                  setMergeFieldPickerOpen(false);
-                  usableEditor.commands.focus();
-                }}
-                onInsertCondition={(condition) => {
-                  const commands = getEditorCommands<{
-                    insertMergeCondition?: (condition: {
-                      column: string;
-                      op: MergeConditionOp;
-                      value: string;
-                      trueText: string;
-                      falseText: string;
-                    }) => boolean;
-                  }>(usableEditor);
-                  if (
-                    !executeEditorCommand(
-                      commands?.insertMergeCondition,
-                      condition,
-                    )
-                  ) {
-                    return;
-                  }
-                  mergeFieldPickerReturnFocusRef.current = null;
-                  setMergeFieldPickerOpen(false);
-                  usableEditor.commands.focus();
-                }}
-                onClose={closeMergeFieldPicker}
-              />
-            </div>
-          ) : null}
-          {mergeRecipientsOpen && usableEditor ? (
-            <div
-              className="mail-merge-dialog-overlay"
-              data-testid="mail-merge-dialog-overlay"
-            >
-              <MailMergeRecipientsDialog
-                data={mergeData}
-                previewRecord={mergePreviewRecord}
-                initialAction={mergeDialogAction}
-                canEdit={editorMayEdit}
-                onApplyData={(data) => {
-                  // Commit the parsed data to the doc store, refresh our local
-                  // snapshot, and reset the preview to "off" (the old record
-                  // index may no longer be valid against the new row count).
-                  const commands = getEditorCommands<{
-                    setMailMergeData?: (data: MailMergeData) => boolean;
-                    setMailMergePreview?: (
-                      record: MailMergeRecord | null,
-                    ) => boolean;
-                  }>(usableEditor);
-                  if (!executeEditorCommand(commands?.setMailMergeData, data)) {
-                    return;
-                  }
-                  setMergeData(getMailMergeData(usableEditor.state));
-                  setMergePreviewRecord(0);
-                  executeEditorCommand(commands?.setMailMergePreview, null);
-                }}
-                onPreview={(recordNumber) => {
-                  // 0 (or out-of-range) clears the overlay → fields show their
-                  // «placeholder» again; a valid index overlays that record's
-                  // values on every merge field (display-only).
-                  const rec = getMergeRecord(mergeData, recordNumber);
-                  setMergePreviewRecord(rec ? rec.number : 0);
-                  const commands = getEditorCommands<{
-                    setMailMergePreview?: (
-                      record: MailMergeRecord | null,
-                    ) => boolean;
-                  }>(usableEditor);
-                  executeEditorCommand(commands?.setMailMergePreview, rec);
-                }}
-                onInsertAddressBlock={(data) => {
-                  const commands = getEditorCommands<{
-                    insertMergeAddressBlock?: (value: MailMergeData) => boolean;
-                  }>(usableEditor);
-                  if (
-                    executeEditorCommand(
-                      commands?.insertMergeAddressBlock,
-                      data,
-                    )
-                  ) {
-                    mergeRecipientsReturnFocusRef.current = null;
-                    setMergeRecipientsOpen(false);
-                    usableEditor.commands.focus();
-                  }
-                }}
-                onInsertGreetingLine={(data) => {
-                  const commands = getEditorCommands<{
-                    insertMergeGreetingLine?: (value: MailMergeData) => boolean;
-                  }>(usableEditor);
-                  if (
-                    executeEditorCommand(
-                      commands?.insertMergeGreetingLine,
-                      data,
-                    )
-                  ) {
-                    mergeRecipientsReturnFocusRef.current = null;
-                    setMergeRecipientsOpen(false);
-                    usableEditor.commands.focus();
-                  }
-                }}
-                onFinish={(recordNumbers) =>
-                  downloadMergedDocxBatch(recordNumbers)
-                }
-                onClose={closeMergeRecipientsDialog}
-              />
-            </div>
-          ) : null}
+          {null}
+          {null}
           {bookmarkPanelOpen && usableEditor ? (
             <DocumentBookmarkDialog
               open
@@ -14208,6 +13985,11 @@ export default function NoteEditor({
                 }
                 return moved;
               }}
+              onGetLink={
+                onlyofficeMakesActionLinks()
+                  ? (name) => requestOnlyofficeActionLink({ type: "bookmark", data: name })
+                  : undefined
+              }
               onClose={() => {
                 setBookmarkPanelOpen(false);
                 // Return focus to the editor so the caret stays usable.

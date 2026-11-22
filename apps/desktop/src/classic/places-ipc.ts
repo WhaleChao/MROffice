@@ -31,7 +31,7 @@ import { OPENABLE_TYPES } from "../files";
 import { documentThumbnail } from "./document-thumbnail";
 import { followRenamedOriginals, originalLinksStore, pageOfUnchangedFile } from "./local-files";
 import { PlaceThumbnails } from "./place-thumbnails";
-import { type PlaceRoot, Places, placeRoots } from "./places";
+import { type PlaceListing, type PlaceRoot, Places, placeRoots } from "./places";
 
 /** Whether a picture is one flat colour: the blank thumbnail python-docx's and
  * python-pptx's templates carry into every file made from them. */
@@ -168,9 +168,25 @@ export function registerPlaces(
     return thumbnails.thumbnail(target, size);
   });
 
-  ipcMain.handle("mrai:places-list", async (event, dir: unknown) => {
+  // One reading of a folder at a time: while macOS is still asking the person
+  // about a protected folder (Desktop, Documents, Downloads) the reading
+  // waits, and every further one (the window coming to the front, a change
+  // note) would wait beside it on one of Node's four file threads -- four
+  // waiting readings and no folder anywhere is listed until the person
+  // answers. A place the tree shows as a row of its own is not listed again
+  // inside another (Desktop inside the home folder).
+  const listings = new Map<string, Promise<PlaceListing>>();
+  ipcMain.handle("mrai:places-list", (event, dir: unknown): Promise<PlaceListing> | PlaceListing => {
     if (!fromApp(event)) return { ok: false, error: "invalid" };
-    return places.list(dir);
+    if (typeof dir !== "string") return places.list(dir);
+    const reading = listings.get(dir);
+    if (reading) return reading;
+    const beside = rootReals();
+    const own = places.resolve(dir);
+    if (own) beside.delete(own);
+    const started = places.list(dir, undefined, beside).finally(() => listings.delete(dir));
+    listings.set(dir, started);
+    return started;
   });
 
   // --- watching the folders a window shows ------------------------------------------

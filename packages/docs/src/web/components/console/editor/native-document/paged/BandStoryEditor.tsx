@@ -35,11 +35,11 @@ import {
   BandStoryExtras,
   bandStoryRuleExtensions,
 } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRunMark.ts";
-import type { DocumentFieldExtensionOptions } from "@mrnote/core/web/components/console/editor/native-document/documentFieldExtension.tsx";
+import type { DocumentFieldExtensionOptions } from "../documentFieldExtension";
 import type { FieldContext } from "@mrnote/core/web/components/console/editor/native-document/documentFieldValues.ts";
 import { BandLineLayout } from "./bandLineLayout";
 import type { BandTokenContext } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
-import { BandTabLayout } from "@mrnote/core/web/components/console/editor/native-document/paged/bandTabLayout.ts";
+import { BandTabLayout } from "./bandTabLayout";
 import { BandStoryPictures } from "./bandStoryPictures";
 
 /** Transactions that only refresh the document-attr mirror carry this meta. */

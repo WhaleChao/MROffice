@@ -16,7 +16,7 @@ import { setRangeLocked, setRangeFormulaHidden, type SheetProtectionPermission }
 import { type SheetModel } from "./spreadsheetSheetModel";
 import { type SheetViewMappedCellMutation, type SheetViewMappedDrawingMutation, type SheetViewMappedLineMutation, type SheetViewMappedPageMutation } from "./spreadsheetSheetViews";
 import { type SparseAxisSizeResolver } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
-import { type GridRect } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
+import { type GridRect } from "../../../../lib/spreadsheet/grid-nav";
 import { type Dispatch, type SetStateAction } from "react";
 
 /** What useSpreadsheetSetCellStyleForSelection reads from SpreadsheetWindow's render scope. */

@@ -16,7 +16,7 @@ import {
   DOCUMENT_SIGNATURE_LINE_MAX_NAME_CHARS,
   DOCUMENT_SIGNATURE_LINE_MAX_TITLE_CHARS,
   type DocumentSignatureLineDraft,
-} from "@mrnote/core/web/components/console/editor/native-document/documentSignatureLineExtension.tsx";
+} from "./documentSignatureLineExtension";
 
 export interface DocumentSignatureLineDialogProps {
   readonly canEdit?: boolean;

@@ -21,6 +21,11 @@
  * `$`, the interpolated key value of a formula key.
  */
 import recipesJson from "./presentation-effect-recipes.json";
+import {
+  effectSettingsPlayDurationMs,
+  effectTextUnitCount,
+  type PresentationAnimationEffectSettings,
+} from "./presentation-anim-effect-settings";
 import { RUN_FONT_FAMILIES, runFontFamilyName } from "./presentation-runs";
 import { cssFontFamilyList } from "./css-font-family";
 
@@ -1107,9 +1112,29 @@ export function effectPlayDurationMs(
     effectOption?: string | null;
     durationMs: number;
     paragraphs?: unknown;
+    effectSettings?: PresentationAnimationEffectSettings;
   },
   block: { type?: unknown; text?: unknown } | undefined,
 ): number {
+  if (step.effectSettings) {
+    // Effect Options: By word / By letter over the step's text, repeats,
+    // auto-reverse (the API's timing model, `_duration`).
+    let unitCount = 1;
+    const unit = step.effectSettings.textUnit;
+    if (unit && block && (block.type === "text" || block.type === "shape") && typeof block.text === "string") {
+      let text = block.text;
+      const range = step.paragraphs as { start?: unknown; end?: unknown } | undefined;
+      if (range && typeof range.start === "number" && typeof range.end === "number") {
+        text = text.split("\n").slice(range.start, range.end + 1).join("\n");
+      }
+      unitCount = effectTextUnitCount(text, unit);
+    }
+    return effectSettingsPlayDurationMs(
+      effectPlayDurationMs({ ...step, effectSettings: undefined }, block),
+      step.effectSettings,
+      unitCount,
+    );
+  }
   const recipe = effectRecipe(step.animation, step.effectOption);
   const stepMs = recipe ? effectRecipeLetterStepMs(recipe, step.durationMs) : null;
   if (stepMs === null || step.paragraphs) return step.durationMs;

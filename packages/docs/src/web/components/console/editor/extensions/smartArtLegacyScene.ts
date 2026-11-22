@@ -28,7 +28,7 @@ import {
   type LegacySmartArtScene,
 } from "@mrnote/core/web/lib/office-smartart/legacy-scene.ts";
 import type { SmartArtPreviewRequest } from "@mrnote/core/web/lib/engine-host/smartart-types.ts";
-import { legacySmartArtSceneSource } from "@mrnote/core/web/components/console/editor/extensions/SmartArtBlock.tsx";
+import { legacySmartArtSceneSource } from "./SmartArtBlock";
 
 const LEGACY_SMARTART_NODE = "smartArt";
 /** The `previews` method's own bound (engine-host/engines/smartart.ts). */

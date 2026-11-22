@@ -45,8 +45,8 @@ import {
   type PageNumberFormat,
 } from "@mrnote/core/web/components/console/editor/native-document/pageNumberFormat.ts";
 import { washoutPictureStyle, watermarkCss, type DocumentWatermark } from "@mrnote/core/web/components/console/editor/native-document/watermark.ts";
-import { stripFormattingMarks } from "@mrnote/core/web/components/console/editor/native-document/formattingMarksExtension.ts";
-import { applyRevisionPolicyToDom } from "@mrnote/core/web/lib/document-export/revision-policy.ts";
+import { stripFormattingMarks } from "./formattingMarksExtension";
+import { applyRevisionPolicyToDom } from "../../../../lib/document-export/revision-policy";
 
 /** Document-default CSS variables that the ProseMirror root inherits. */
 export const PRINT_TYPOGRAPHY_PROPERTIES = [

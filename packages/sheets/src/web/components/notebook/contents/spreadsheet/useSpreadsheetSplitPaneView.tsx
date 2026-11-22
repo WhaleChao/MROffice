@@ -13,7 +13,7 @@ import { splitPaneScrollFor, type SplitPaneScrollState } from "../../../../lib/s
 import { type SheetModel } from "./spreadsheetSheetModel";
 import { columnLabel, spreadsheetRangeA1 } from "./spreadsheetRangeA1";
 import { splitPaneSelectionHydration, splitPaneAuthorityFingerprint } from "./spreadsheetSheetViews";
-import { type GridRect } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
+import { type GridRect } from "../../../../lib/spreadsheet/grid-nav";
 import { type Dispatch, type SetStateAction } from "react";
 import { spreadsheetCellEditorAt } from "./spreadsheetCellLookup";
 

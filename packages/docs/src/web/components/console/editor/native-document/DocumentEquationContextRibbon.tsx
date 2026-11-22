@@ -20,7 +20,7 @@ import { type EquationPlacement } from "@mrnote/core/web/components/console/edit
 // The tab's pieces live with the shared tab; Docs' callers keep importing
 // them from here.
 
-import { openEquationEditors } from "@mrnote/core/web/components/console/editor/extensions/openEquationEditors.ts";
+import { openEquationEditors } from "../extensions/openEquationEditors";
 import type { EquationInsertPayload } from "@mrnote/core/web/components/console/editor/native-document/DocumentEquationGalleryMenu.tsx";
 
 const EQUATION_NODE_TYPES = new Set(["mathBlock", "inlineMath"]);

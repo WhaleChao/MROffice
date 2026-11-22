@@ -17,9 +17,9 @@ import {
 import { CROSS_REF_NODE_NAME, liveCrossRefDisplay } from "@mrnote/core/web/components/console/editor/native-document/crossReferenceExtension.tsx";
 import { isInlineDrawingNode } from "@mrnote/core/web/components/console/editor/native-document/documentObjectNodes.ts";
 import { documentListLabels } from "./documentListLabels";
-import { documentIndexPlainText } from "@mrnote/core/web/components/console/editor/native-document/documentIndexLayout.ts";
+import { documentIndexPlainText } from "./documentIndexLayout";
 import { DOCUMENT_FIELD_NODE_NAME } from "@mrnote/core/web/components/console/editor/native-document/documentFieldValues.ts";
-import { documentFieldViewText } from "@mrnote/core/web/components/console/editor/native-document/documentFieldExtension.tsx";
+import { documentFieldViewText } from "./documentFieldExtension";
 import { FOOTNOTE_MARK_NAME } from "@mrnote/core/web/components/console/editor/native-document/footnotes.ts";
 import { isContinuationTail, SPLITTABLE_BLOCK_TYPE } from "@mrnote/core/web/components/console/editor/native-document/paged/blockSplitting.ts";
 import { PAGE_BLOCK_NODE } from "@mrnote/core/web/components/console/editor/native-document/paged/paginationProjectionKeys.ts";

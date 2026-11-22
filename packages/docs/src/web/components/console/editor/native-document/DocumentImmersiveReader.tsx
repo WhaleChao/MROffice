@@ -44,9 +44,9 @@ import {
   numFmtForLevel,
 } from "@mrnote/core/web/components/console/editor/native-document/listNumbering.ts";
 import { resolveDocumentFieldDisplay, withBandDashFormat } from "@mrnote/core/web/components/console/editor/native-document/documentFieldValues.ts";
-import { documentFieldViewText } from "@mrnote/core/web/components/console/editor/native-document/documentFieldExtension.tsx";
+import { documentFieldViewText } from "./documentFieldExtension";
 import { documentListLabels } from "./documentListLabels";
-import { PROOFING_LANGUAGE_MARK } from "@mrnote/core/web/components/console/editor/native-document/proofingLanguageExtension.ts";
+import { PROOFING_LANGUAGE_MARK } from "./proofingLanguageExtension";
 import { DELETION_MARK_NAME } from "@mrnote/core/web/components/console/editor/native-document/trackChanges.ts";
 import { BOOKMARK_POINT_NODE_NAME } from "@mrnote/core/web/components/console/editor/native-document/bookmarks.ts";
 import styles from "./DocumentImmersiveReader.module.css";

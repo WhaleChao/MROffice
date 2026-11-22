@@ -161,7 +161,7 @@ export function insertStructuredBreak(tr: Transaction, breakNode: PmNode): Struc
     const textBefore = $from.parent.textContent;
     const at = insertBreakSplittingTable(state, tr, table, breakNode);
     if (at === null) return { kind: "refused", reason: "tableRow" };
-    const tailTablePos = at + breakNode.nodeSize;
+    const tailTablePos = at.tablePos;
     const tailTable = tr.doc.nodeAt(tailTablePos);
     let target: number | null = null;
     if (rowStart !== null && tailTable?.type.name === "table") {
@@ -258,7 +258,7 @@ export function insertTopLevelBreak(tr: Transaction, breakNode: PmNode): Structu
     if (table.pos !== $from.before(topDepth)) return { kind: "refused", reason: "container" };
     const at = insertBreakSplittingTable(state, tr, table, breakNode);
     if (at === null) return { kind: "refused", reason: "tableRow" };
-    tr.setSelection(TextSelection.near(tr.doc.resolve(at + breakNode.nodeSize), 1));
+    tr.setSelection(TextSelection.near(tr.doc.resolve(at.tablePos), 1));
     return { kind: "placed" };
   }
   if (!$from.parent.isTextblock) return { kind: "refused", reason: "container" };

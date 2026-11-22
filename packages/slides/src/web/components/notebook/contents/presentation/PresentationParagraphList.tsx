@@ -24,7 +24,7 @@ import { PARAGRAPH_MARKER_EM, type PresentationFontSizeUnit } from "../../../../
 import {
   PresentationAutofitScaleContext,
   PresentationLetterPlayContext,
-  letterCount,
+  letterPlayUnitCount,
   PresentationRunsText,
 } from "./PresentationRunsText";
 import {
@@ -139,7 +139,7 @@ export function PresentationParagraphList({
     let count = 0;
     for (const paragraph of paragraphs) {
       letterBases.push(count);
-      count += letterCount(paragraph.text ?? "");
+      count += letterPlayUnitCount(paragraph.text ?? "", letterPlay);
     }
   }
   const rows = planPresentationParagraphRows({

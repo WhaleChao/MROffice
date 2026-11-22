@@ -12,7 +12,7 @@ import {
 } from "../../../../lib/spreadsheet/drawing-buttons";
 import { useCallback, type RefObject } from "react";
 import { useTranslations } from "@mrnote/core/host/next-intl.tsx";
-import { type SpreadsheetNavigationElementSelection, type SpreadsheetNavigationElementActionId } from "./SpreadsheetNavigationPane";
+import { type SpreadsheetNavigationElementSelection, type SpreadsheetNavigationElementActionId } from "@/components/notebook/contents/spreadsheet/SpreadsheetNavigationPane";
 import { rebindPivotCharts } from "@mrnote/core/web/lib/spreadsheet/pivot-chart.ts";
 import { normalizeSlicers } from "../../../../lib/spreadsheet/slicer";
 import { type SheetProtectionPermission } from "@mrnote/core/web/lib/spreadsheet/protection.ts";

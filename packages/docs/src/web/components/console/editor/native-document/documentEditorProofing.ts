@@ -49,8 +49,8 @@ import {
   documentParagraphLanguage,
   readDocumentLanguageStyles,
   type DocumentLanguageStyles,
-} from "@mrnote/core/web/components/console/editor/native-document/documentParagraphLanguage.ts";
-import { PROOFING_LANGUAGE_MARK } from "@mrnote/core/web/components/console/editor/native-document/proofingLanguageExtension.ts";
+} from "./documentParagraphLanguage";
+import { PROOFING_LANGUAGE_MARK } from "./proofingLanguageExtension";
 import { TABLE_REPEATED_HEADER_ATTR } from "@mrnote/core/web/components/console/editor/native-document/paged/tablePagination.ts";
 import { matchAllBehind } from "@mrnote/core/web/lib/regexp-behind.ts";
 

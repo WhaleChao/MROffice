@@ -18,7 +18,7 @@
  * one pronunciation gets the one its word uses (银行 yín háng, 行走 xíng zǒu).
  * Text with Japanese kana is left alone: its readings are not pinyin.
  */
-import type { PhoneticGuideSegment } from "@mrnote/core/web/components/console/editor/native-document/rubyProperties.ts";
+import type { PhoneticGuideSegment } from "./rubyProperties";
 
 /** One reading per code point of the text ("" where there is none). */
 export type PhoneticReadingProvider = (text: string) => string[];

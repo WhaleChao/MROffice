@@ -52,6 +52,7 @@ import {
   effectRecipeLetterStepMs,
   effectRecipeSettledStyle,
 } from "@mrnote/core/web/lib/presentation-effect-recipes.ts";
+import { effectTextUnitStepMs } from "@mrnote/core/web/lib/presentation-anim-effect-settings.ts";
 import {
   BASIC_TRANSITION_DURATION_MS,
   clampTransitionDuration,
@@ -102,6 +103,11 @@ import {
   PRESENTATION_TIMELINE_EFFECT_KEYFRAMES_CSS,
   settledEmphasisFrame,
   timelineAnimationKeyframeName,
+  effectCssTiming,
+  playTimingFunction,
+  resolveEffectDimColor,
+  PRESENTATION_AFTER_HIDE_KEYFRAME,
+  PRESENTATION_AFTER_HIDE_KEYFRAME_CSS,
   type BlockPlayState,
   type RecipeColorLayer,
 } from "../../../../lib/presentation/block-play";
@@ -634,25 +640,54 @@ export function PresentationSlideView({
       // place on the slide and injected with the motion-path keyframes.
       let recipeKeyframe: string | undefined;
       let stepLetterPlay: LetterPlay | undefined;
+      // Effect Options: how the occurrence's keyframe runs (Repeat,
+      // Auto-reverse, Smooth start / end, Rewind), and when After animation
+      // takes the object away within this click.
+      let stepTiming = state.animate ? effectCssTiming(step) : undefined;
+      let afterHideAtMs: number | undefined;
+      const stepTarget = slide.blocks.find((candidate) => candidate.id === step.blockId);
+      const stepHasText =
+        stepTarget !== undefined &&
+        (stepTarget.type === "text" || stepTarget.type === "shape") &&
+        typeof (stepTarget as { text?: unknown }).text === "string" &&
+        ((stepTarget as { text?: string }).text ?? "").trim().length > 0;
+      // Animate text By word / By letter (Effect Options).
+      const textUnitStepMs = effectTextUnitStepMs(step.effectSettings, state.durationMs);
+      const textUnit =
+        textUnitStepMs !== null && stepHasText && !step.paragraphs
+          ? step.effectSettings?.textUnit
+          : undefined;
       if (state.animate) {
-        const recipe = effectRecipe(step.animation, step.effectOption);
+        const settings = step.effectSettings;
+        const baseRecipe = effectRecipe(step.animation, step.effectOption);
+        // Smooth start / end changed on a recipe effect: its samples bake the
+        // easing in, so they are drawn again with the chosen shares.
+        const recipe =
+          baseRecipe && settings && (settings.accel !== undefined || settings.decel !== undefined)
+            ? {
+                ...baseRecipe,
+                ac: (settings.accel ?? Math.round((baseRecipe.ac ?? 0) * 100_000)) / 100_000,
+                dc: (settings.decel ?? Math.round((baseRecipe.dc ?? 0) * 100_000)) / 100_000,
+              }
+            : baseRecipe;
         const recipeClass = effectRecipeClass(step.animation);
         if (recipe && recipeClass) {
-          const target = slide.blocks.find((candidate) => candidate.id === step.blockId);
-          const blockBox = effectRecipeBoxOf(target, bounds);
+          if (stepTiming?.timingFunction) {
+            const { timingFunction: _baked, ...rest } = stepTiming;
+            stepTiming = rest;
+          }
+          const blockBox = effectRecipeBoxOf(stepTarget, bounds);
           // An effect that iterates over text plays on each letter of a block
           // that has text; a letter is a small box at the block's place.
           const letterStepMs = effectRecipeLetterStepMs(recipe, state.durationMs);
-          const hasText =
-            target !== undefined &&
-            (target.type === "text" || target.type === "shape") &&
-            typeof (target as { text?: unknown }).text === "string" &&
-            ((target as { text?: string }).text ?? "").trim().length > 0;
-          const letters = letterStepMs !== null && hasText && !step.paragraphs;
-          const box = letters ? { ...blockBox, w: 0.02, h: 0.045 } : blockBox;
+          const letters = (letterStepMs !== null || textUnit !== undefined) && stepHasText && !step.paragraphs;
+          const box = letters ? { ...blockBox, w: textUnit === "word" ? 0.08 : 0.02, h: 0.045 } : blockBox;
           const keyframe =
             effectRecipeKeyframeName(step.animation, step.effectOption, box) +
-            (letters ? "-letter" : "");
+            (letters ? "-letter" : "") +
+            (recipe !== baseRecipe
+              ? `-s${Math.round((recipe.ac ?? 0) * 100_000)}-${Math.round((recipe.dc ?? 0) * 100_000)}`
+              : "");
           if (!keyframeByName.has(keyframe)) {
             keyframeByName.set(
               keyframe,
@@ -664,12 +699,47 @@ export function PresentationSlideView({
               keyframe,
               durationMs: state.durationMs,
               delayMs: state.delayMs,
-              stepMs: letterStepMs ?? 0,
+              stepMs: textUnit !== undefined ? (textUnitStepMs ?? 0) : (letterStepMs ?? 0),
               hiddenUntilStart: recipeClass === "entr",
+              ...(textUnit ? { unit: textUnit } : {}),
+              ...(stepTiming ? { timing: stepTiming } : {}),
             };
           } else recipeKeyframe = keyframe;
+        } else if (textUnit) {
+          // A hand-drawn effect By word / By letter: each unit runs the
+          // effect's own keyframe.
+          const keyframe = timelineAnimationKeyframeName(step.animation, step.effectOption);
+          if (keyframe) {
+            stepLetterPlay = {
+              keyframe,
+              durationMs: state.durationMs,
+              delayMs: state.delayMs,
+              stepMs: textUnitStepMs ?? 0,
+              hiddenUntilStart: presentationAnimationEffect(step.animation)?.category === "entrance",
+              unit: textUnit,
+              timingFunction: stepTiming?.timingFunction ?? playTimingFunction(undefined),
+              ...(stepTiming ? { timing: stepTiming } : {}),
+            };
+          }
+        }
+        const category = presentationAnimationEffect(step.animation)?.category;
+        if (
+          settings &&
+          (settings.afterEffect === "hide" || (settings.rewind && category === "entrance")) &&
+          typeof settings.repeat !== "string"
+        ) {
+          afterHideAtMs = state.delayMs + effectPlayDurationMs(step, stepTarget);
+          keyframeByName.set(PRESENTATION_AFTER_HIDE_KEYFRAME, PRESENTATION_AFTER_HIDE_KEYFRAME_CSS);
         }
       }
+      // After animation: a colour, once a later click has come.
+      const dimColor = state.dimmed
+        ? resolveEffectDimColor(
+            step.effectSettings?.dimColor,
+            slideTheme?.colorSlots,
+            resolveThemeAccentColors(slideTheme),
+          )
+        : undefined;
       // A recipe effect that changes the object TO a theme colour: the layers
       // that draw it while it plays, and what it leaves once held.
       const recipeForColor = effectRecipe(step.animation, step.effectOption);
@@ -790,6 +860,8 @@ export function PresentationSlideView({
               recipeKeyframe,
               ...(colorTarget ? { effectColor: colorTarget } : {}),
               ...(colorLayer ? { colorLayer } : {}),
+              ...(stepTiming ? { timing: stepTiming } : {}),
+              ...(stepLetterPlay ? { letters: true as const } : {}),
             },
           ]
         : existing?.effects;
@@ -806,6 +878,8 @@ export function PresentationSlideView({
         animation: state.animate ? step.animation : existing?.animation,
         recipeKeyframe: state.animate ? recipeKeyframe : existing?.recipeKeyframe,
         letterPlay: stepLetterPlay ?? existing?.letterPlay,
+        timing: state.animate ? stepTiming : existing?.timing,
+        afterHideAtMs: afterHideAtMs ?? (state.animate ? undefined : existing?.afterHideAtMs),
         effectOption: state.animate
           ? step.effectOption
           : existing?.effectOption,
@@ -814,7 +888,9 @@ export function PresentationSlideView({
             ? colorTarget
             : existing?.effectColor,
         settledFillColor:
-          recipeHeld?.color && recipeLayer?.fill
+          dimColor && !stepHasText
+            ? dimColor
+            : recipeHeld?.color && recipeLayer?.fill
             ? recipeHeld.color
             : state.colorEffectSettled &&
                 colorTarget &&
@@ -830,7 +906,9 @@ export function PresentationSlideView({
               ? colorTarget
               : existing?.settledStrokeColor,
         settledTextColor:
-          recipeHeld?.color && recipeLayer?.text
+          dimColor && stepHasText
+            ? dimColor
+            : recipeHeld?.color && recipeLayer?.text
             ? recipeHeld.color
             : state.colorEffectSettled &&
                 colorTarget &&
@@ -896,6 +974,7 @@ export function PresentationSlideView({
     bounds.width,
     bounds.height,
     defaultAnimationFillColor,
+    slideTheme,
     background,
   ]);
   return (

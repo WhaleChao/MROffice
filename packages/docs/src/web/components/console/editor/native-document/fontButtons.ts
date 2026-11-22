@@ -22,12 +22,12 @@ import {
   type FontDialogStyle,
   type FontDialogUnderline,
 } from "@mrnote/core/web/components/console/editor/native-document/DocumentFontDialogFontPage.tsx";
-import { HIDDEN_TEXT_MARK } from "@mrnote/core/web/components/console/editor/native-document/hiddenTextExtension.ts";
+import { HIDDEN_TEXT_MARK } from "./hiddenTextExtension";
 import {
   EMPHASIS_DOTS_MARK_NAME,
   type EmphasisDotStyle,
-} from "@mrnote/core/web/components/console/editor/native-document/emphasisDotsExtension.ts";
-import { TEXT_POSITION_MARK_NAME } from "@mrnote/core/web/components/console/editor/native-document/textPositionExtension.ts";
+} from "./emphasisDotsExtension";
+import { TEXT_POSITION_MARK_NAME } from "./textPositionExtension";
 
 /**
  * Home > Font buttons whose logic is more than one editor command. The ribbon

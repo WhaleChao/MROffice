@@ -110,7 +110,7 @@ import { InkAtRest } from "./paged/inkAtRest";
 import { inkPointerArbiter } from "../../../../lib/ink-pointer-policy";
 import { SHEET_DORMANT_ATTR } from "./paged/sheetDormancy";
 import { measureOutsideEditorObservation } from "./documentLayoutStatus";
-import { COLUMN_BAND_EXCLUSION_ATTR, COLUMN_REGIONS_ATTR, FLOAT_HOST_BEFORE_ATTR, unequalColumnPlacementForBlock } from "./paged/unequalColumnProjection";
+import { COLUMN_BAND_EXCLUSION_ATTR, COLUMN_REGIONS_ATTR, FLOAT_HOST_BEFORE_ATTR, unequalColumnPlacementForBlock, type UnequalColumnPlacement } from "./paged/unequalColumnProjection";
 import { TextBoxFrameChromeView, recordTextBoxFramePaint } from "./textBoxFrameChrome";
 
 export const FLOATING_TEXT_BOX_META = "floatingTextBoxFlow";
@@ -1309,6 +1309,37 @@ function liftShapeBandToItsParagraphTop(band: HTMLElement, hosts: Map<string, HT
   }
 }
 
+/**
+ * The "column" origin of an object on a page whose section the column
+ * projector lays out (unequal columns, a balanced region): the column the
+ * object's block was projected into, as a table frame there takes it
+ * (tablePageFrame). The sheet's geometry knows only the page's text column,
+ * so an object anchored in the second of three columns was placed from the
+ * first: R455-D56's masthead logo box (277.35 pt right of its column, in the
+ * second of 3261 | 5572 | 1483 twips) drew at 312 pt, Word at 480 pt.
+ * `window.__docsProjectedColumnOriginOff = true` keeps the page's column (A/B).
+ */
+function withProjectedColumnOrigin(wrapper: HTMLElement, geometry: FloatPageGeometry): FloatPageGeometry {
+  if (typeof window !== "undefined" &&
+    (window as Window & { __docsProjectedColumnOriginOff?: boolean }).__docsProjectedColumnOriginOff === true) return geometry;
+  let block: HTMLElement | null = wrapper;
+  let placement = unequalColumnPlacementForBlock(wrapper);
+  while (!placement && block?.parentElement && !block.parentElement.matches("article[data-page-sheet]")) {
+    block = block.parentElement;
+    placement = unequalColumnPlacementForBlock(block);
+  }
+  return geometryInProjectedColumn(geometry, placement);
+}
+
+/** `geometry` with its "column" origin the projected column `placement` stands in (one of several). */
+export function geometryInProjectedColumn(
+  geometry: FloatPageGeometry,
+  placement: Pick<UnequalColumnPlacement, "inlineStartPx" | "widthPx" | "regionColumns"> | null,
+): FloatPageGeometry {
+  if (!placement || !((placement.regionColumns ?? 1) > 1) || !(placement.widthPx > 0)) return geometry;
+  return { ...geometry, columnLeftPx: geometry.marginLeftPx + placement.inlineStartPx, columnWidthPx: placement.widthPx };
+}
+
 function layoutPictures(
   view: EditorView,
   pictures: readonly HTMLElement[],
@@ -1409,6 +1440,7 @@ function layoutPictures(
         ? Math.min(cell ? hostTopPx : bandHostTopAcrossSheetPx(wrapper, sheet, hosts, originPx.topPx, scale.y) ?? hostTopPx, originPx.topPx)
         : hostTopPx;
     geometry = withAnchorCharacterOrigins(view, wrapper, anchor, geometry, container, hosts, flowTopPx, scale);
+    if (!cell) geometry = withProjectedColumnOrigin(wrapper, geometry);
     // The lines above in the cell are not the page's: no band reaching them.
     const shadow = cell
       ? null
@@ -3597,6 +3629,7 @@ function layout(view: EditorView): LayoutObjects | null {
       ? flowTopIn(wrapper, cell, hosts, originPx.topPx, scale.y)
       : flowTopOnSheet(wrapper, sheet, hosts, originPx.topPx, scale.y);
     geometry = withAnchorCharacterOrigins(view, wrapper, anchor, geometry, container, hosts, flowTopPx, scale);
+    if (!cell) geometry = withProjectedColumnOrigin(wrapper, geometry);
     // A box placed above its place in the flow (from the page or the margin,
     // or a negative offset from its paragraph) wraps lines it can only reach
     // through a shadow in the text above, as a picture does.
@@ -3713,6 +3746,8 @@ interface OverlayPlacementInputs {
   marginLeft: string;
   marginTop: string;
   left: string;
+  /** The projected column's left the "column" origin is taken from (`withProjectedColumnOrigin`). */
+  projectedColumnLeft?: number | null;
 }
 const overlayPlacements = new WeakMap<HTMLElement, OverlayPlacementInputs>();
 /** Each ink stage's drawing canvas, looked up once. */
@@ -3842,7 +3877,8 @@ function sameOverlayInputs(a: OverlayPlacementInputs | undefined, b: OverlayPlac
     a.columnTop === b.columnTop &&
     a.marginLeft === b.marginLeft &&
     a.marginTop === b.marginTop &&
-    a.left === b.left
+    a.left === b.left &&
+    (a.projectedColumnLeft ?? null) === (b.projectedColumnLeft ?? null)
   );
 }
 
@@ -4050,6 +4086,7 @@ function layoutShapes(
         : originPx.topPx;
     const flowTopPx = flowTopIn(wrapper, container, hosts, fallbackTopPx, scale.y, rectOf);
     geometry = withAnchorCharacterOrigins(view, wrapper, anchor, geometry, container, hosts, flowTopPx, scale);
+    if (!cell) geometry = withProjectedColumnOrigin(wrapper, geometry);
     // Kept for the Layout Options a shape takes next (Move with Text / Fix
     // Position on Page): its origins on the page. Ink is never one of them.
     if (!wrapper.hasAttribute("data-ink-tool")) {
@@ -4079,6 +4116,7 @@ function layoutShapes(
         marginLeft: canvas?.style.marginLeft ?? "",
         marginTop: canvas?.style.marginTop ?? "",
         left: stage.style.left,
+        projectedColumnLeft: geometry.columnLeftPx ?? null,
       };
       if (sameOverlayInputs(overlayPlacements.get(wrapper), inputs)) continue;
       const placed = overlayStagePosition(anchor, geometry, flowTopPx, originPx);

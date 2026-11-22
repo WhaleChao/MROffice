@@ -18,7 +18,7 @@ import { type SpreadsheetViewMode } from "../../../../lib/spreadsheet/view-optio
 import { type SheetModel } from "./spreadsheetSheetModel";
 import { SPREADSHEET_EXPORT_STATUS_MESSAGE, SPREADSHEET_PRINT_STATUS_FORMAT } from "./spreadsheetWindowConstants";
 import { type JSX, useEffect, useState, type ComponentProps } from "react";
-import { type GridRect } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
+import { type GridRect } from "../../../../lib/spreadsheet/grid-nav";
 import { type PivotOutputCell } from "@mrnote/core/web/lib/spreadsheet/pivot-output.ts";
 import { type ResolvedSpreadsheetVisibleControl } from "../../../../lib/spreadsheet/visible-command-authority";
 import { type ExcelDateSystemArg } from "@mrnote/core/web/lib/spreadsheet/excel-1900-calendar.ts";

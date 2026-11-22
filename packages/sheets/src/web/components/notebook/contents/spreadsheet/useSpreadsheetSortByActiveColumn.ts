@@ -17,7 +17,7 @@ import { defaultNamedSheetViewRef, type SheetViewSortKeyInput } from "../../../.
 import { type SheetModel } from "./spreadsheetSheetModel";
 import { MAX_SHEET_ROWS, MAX_SHEET_COLS } from "./spreadsheetGridConstants";
 import { type SheetViewScopedAction, type SheetViewMappedCellMutation, type SheetViewMappedDrawingMutation, type SheetViewMappedLineMutation, type SheetViewMappedPageMutation, type SheetViewSession } from "./spreadsheetSheetViews";
-import { type GridRect } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
+import { type GridRect } from "../../../../lib/spreadsheet/grid-nav";
 
 /** A cell key's row and column when it is spelled `row:col` in plain
  * decimal (no sign, no leading zero), else null: read digit by digit, as

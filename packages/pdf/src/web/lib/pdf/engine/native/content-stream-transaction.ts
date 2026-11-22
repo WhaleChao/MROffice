@@ -22065,6 +22065,31 @@ function mergedRestoreDictionary(
   return latin1Bytes(`<< ${[...result.values()].map((entry) => `${entry.name} ${entry.value}`).join(" ")} >>`);
 }
 
+/** The keys of a stream dictionary that say how its bytes are stored, not
+ * what they are. */
+const STREAM_STORAGE_KEYS = new Set(["Length", "Filter", "DecodeParms", "DL"]);
+
+/**
+ * Whether two objects are one stream stored another way: the same decoded
+ * content and the same dictionary but for its storage keys. A version the
+ * server wrote whole (a save its incremental writer could not take:
+ * `pdf_incremental_patchback mode=full`) stores every stream again -- other
+ * compression, another length -- and a step of the working copy whose object
+ * stands so read as changed by a later edit and could not be undone
+ * (pdf-walk-1000 rp1014: a line's typing undone after the Undo of a box made
+ * of another line was written whole by the server).
+ */
+function sameStreamStoredOtherwise(left: ParsedIndirectObject, right: ParsedIndirectObject): boolean {
+  if (!left.streamBytes || !right.streamBytes || !bytesEqual(left.streamBytes, right.streamBytes)) return false;
+  const kept = (object: ParsedIndirectObject) => {
+    const text = asLatin1(object.bytes);
+    return topLevelDictionaryEntries(text).filter((entry) => !STREAM_STORAGE_KEYS.has(entry.key))
+      .map((entry) => `${entry.key} ${text.slice(entry.valueStart, entry.valueEnd).replace(/\s+/g, " ").trim()}`)
+      .sort().join("\n");
+  };
+  return kept(left) === kept(right);
+}
+
 export function planMraiNativeObjectRestore(input: Readonly<{
   headBytes: Uint8Array;
   beforeLength: number;
@@ -22114,9 +22139,22 @@ export function planMraiNativeObjectRestore(input: Readonly<{
     const [expected, desired] = direction === "undo" ? [written, prior] : [prior, written];
     let body = indirectObjectBody(desired);
     if (!bytesEqual(standing, indirectObjectBody(expected))) {
-      const merged = mergedRestoreDictionary(indirectObjectBody(expected), body, standing);
-      if (!merged) fail("invalid-request", "A later edit changed what this step would restore.");
-      body = merged;
+      const storedOtherwise = (() => {
+        try {
+          const expectedDecoded = direction === "undo"
+            ? parseIndirectObject(after, afterParsed, objectNumber, entry.generation, undefined, "decoded")
+            : parseIndirectObject(before, beforeParsed, objectNumber, previous.generation, undefined, "decoded");
+          return sameStreamStoredOtherwise(expectedDecoded,
+            parseIndirectObject(headBytes, headParsed, objectNumber, current.generation, undefined, "decoded"));
+        } catch {
+          return false;
+        }
+      })();
+      if (!storedOtherwise) {
+        const merged = mergedRestoreDictionary(indirectObjectBody(expected), body, standing);
+        if (!merged) fail("invalid-request", "A later edit changed what this step would restore.");
+        body = merged;
+      }
     }
     revisions.push(Object.freeze({
       objectNumber,

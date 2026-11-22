@@ -32,7 +32,7 @@ import {
   applyRevisionPolicyToDom,
   projectTrackedChanges,
   type RevisionExportPolicy,
-} from "@mrnote/core/web/lib/document-export/revision-policy.ts";
+} from "./revision-policy";
 import { OfflineHtmlExportError } from "./html-export-error";
 import {
   STATIC_SEMANTIC_LIST_CLASS,

@@ -87,7 +87,7 @@ import {
   canHideInSelectionPane,
   isSelectionPaneHidden,
   setObjectsHidden,
-} from "@mrnote/core/web/components/console/editor/native-document/documentObjectVisibility.ts";
+} from "./native-document/documentObjectVisibility";
 import dockStyles from "@mrnote/core/web/components/console/editor/native-document/DocumentShapeFormatPane.module.css";
 import styles from "./DocumentSelectionPane.module.css";
 

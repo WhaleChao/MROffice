@@ -47,7 +47,7 @@ import type {
 import {
   paginateBlockLayout,
   type PaginationBreakKind,
-} from "@mrnote/core/web/lib/document-export/page-paginate.ts";
+} from "../../../../lib/document-export/page-paginate";
 import {
   pageContentHeightPx,
   pageSetupSurfaceStyle,
@@ -72,10 +72,10 @@ import {
   paginationControlKind,
   stripEditorChrome,
   typesetPendingMath,
-} from "@mrnote/core/web/components/console/editor/native-document/typesetCloneMeasurement.ts";
+} from "./typesetCloneMeasurement";
 import { StableHtmlDiv } from "@mrnote/core/web/lib/stable-inner-html.tsx";
 
-export { measureTypesetCloneBlockHeights } from "@mrnote/core/web/components/console/editor/native-document/typesetCloneMeasurement.ts";
+export { measureTypesetCloneBlockHeights } from "./typesetCloneMeasurement";
 
 /** Measures the rendered height (CSS px) of each cloned top-level block. */
 export type MeasureHeights = (blocks: HTMLElement[]) => number[];

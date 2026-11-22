@@ -61,7 +61,7 @@ import type { FootnoteRichBody } from "@mrnote/core/web/components/console/edito
 import { citationDisplayText } from "@mrnote/core/web/components/console/editor/native-document/citationExtension.tsx";
 import { CITATION_MARK_NAME } from "@mrnote/core/web/components/console/editor/native-document/citations.ts";
 import { CONTENT_CONTROL_MARK_NAME, isContentControlFillLocked } from "@mrnote/core/web/components/console/editor/native-document/contentControls.ts";
-import { controlRangeAt } from "@mrnote/core/web/components/console/editor/native-document/contentControlExtension.tsx";
+import { controlRangeAt } from "./native-document/contentControlExtension";
 import {
   SPLITTABLE_BLOCK_TYPE,
   SPLIT_CONTINUES_ATTR,

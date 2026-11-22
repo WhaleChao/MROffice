@@ -23,7 +23,7 @@ import { withSheetSmartArtAuthorMarks } from "../../../../lib/spreadsheet/smarta
 import { MAX_SHEET_ROWS, MAX_SHEET_COLS } from "./spreadsheetGridConstants";
 import { type SheetViewMappedCellMutation, type SheetViewMappedDrawingMutation, type SheetViewMappedLineMutation, type SheetViewMappedPageMutation } from "./spreadsheetSheetViews";
 import { type NamedCellStyle } from "../../../../lib/spreadsheet/cell-styles";
-import { type GridRect } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
+import { type GridRect } from "../../../../lib/spreadsheet/grid-nav";
 import { type Dispatch, type SetStateAction } from "react";
 import { type FormatCellsBorderLinesPatch } from "@mrnote/core/web/lib/spreadsheet/format-cells-border.ts";
 

@@ -97,6 +97,7 @@ import {
   presentationParagraphFlyOffsetVars,
   playKeyframeName,
   playTimingFunction,
+  PRESENTATION_AFTER_HIDE_KEYFRAME,
   activeBlockColorEffect,
   presentationFlyOffsetVars,
   PRESENTATION_BLOCK_BASE_TRANSFORM_VAR,
@@ -407,7 +408,7 @@ function PresentationBlockViewDrawing({
     : fillParent
     ? null
     : timelineControlled
-      ? play?.animate && !motionKeyframe && !composedOccurrences
+      ? play?.animate && !motionKeyframe && !composedOccurrences && !play.letterPlay
         ? blockAnimationClassName(play.animation)
         : null
       : blockAnimationClassName(block.animation);
@@ -535,15 +536,26 @@ function PresentationBlockViewDrawing({
     // is exactly the sequence order.
     const parts: string[] = [];
     composedOccurrences.forEach((occurrence, index) => {
-      const fill = index === 0 ? "both" : "forwards";
-      const effectName = playKeyframeName(
-        occurrence.animation,
-        occurrence.effectOption,
-        occurrence.recipeKeyframe,
-      );
+      const timing = occurrence.timing;
+      // Rewind when done playing: the end frame is not held.
+      const fill = timing?.rewind
+        ? index === 0
+          ? "backwards"
+          : "none"
+        : index === 0
+          ? "both"
+          : "forwards";
+      // An occurrence By word / By letter plays on the text's units.
+      const effectName = occurrence.letters
+        ? null
+        : playKeyframeName(
+            occurrence.animation,
+            occurrence.effectOption,
+            occurrence.recipeKeyframe,
+          );
       if (effectName) {
         parts.push(
-          `${effectName} ${occurrence.durationMs}ms ${playTimingFunction(occurrence.recipeKeyframe)} ${occurrence.delayMs}ms ${fill}`,
+          `${effectName} ${occurrence.durationMs}ms ${timing?.timingFunction ?? playTimingFunction(occurrence.recipeKeyframe)} ${occurrence.delayMs}ms${timing ? ` ${timing.iterationCount} ${timing.direction}` : ""} ${fill}`,
         );
       }
       if (occurrence.motionKeyframe) {
@@ -584,35 +596,69 @@ function PresentationBlockViewDrawing({
       // entrance keyframe keeps `both` to match its standalone behaviour. Both
       // share the step's duration + delay so they stay in sync.
       //
-      const entranceName = play.animate
+      const entranceName = play.animate && !play.letterPlay
         ? playKeyframeName(play.animation, play.effectOption, play.recipeKeyframe)
         : null;
-      const motionAnim = `${motionKeyframe} ${durationMs}ms ease-in-out ${delayMs}ms forwards`;
+      const timing = play.timing;
+      const repeat = timing ? ` ${timing.iterationCount} ${timing.direction}` : "";
+      const motionAnim = `${motionKeyframe} ${durationMs}ms ${timing?.timingFunction ?? "ease-in-out"} ${delayMs}ms${repeat} ${timing?.rewind ? "none" : "forwards"}`;
       const entranceAnim = entranceName
-        ? `${entranceName} ${durationMs}ms ${playTimingFunction(play.recipeKeyframe)} ${delayMs}ms both`
+        ? `${entranceName} ${durationMs}ms ${timing?.timingFunction ?? playTimingFunction(play.recipeKeyframe)} ${delayMs}ms${repeat} ${timing?.rewind ? "backwards" : "both"}`
         : null;
       style = {
         ...staticStyle,
         animation: entranceAnim ? `${entranceAnim}, ${motionAnim}` : motionAnim,
       };
     } else {
-      const effectName = playKeyframeName(
-        play.animation,
-        play.effectOption,
-        play.recipeKeyframe,
-      );
+      // A step By word / By letter plays on the text's units, not the block.
+      const effectName = play.letterPlay
+        ? null
+        : playKeyframeName(play.animation, play.effectOption, play.recipeKeyframe);
+      const timing = play.timing;
       style = {
         ...staticStyle,
         ...(effectName
           ? {
               animationName: effectName,
-              animationTimingFunction: playTimingFunction(play.recipeKeyframe),
-              animationFillMode: "both",
+              animationTimingFunction: timing?.timingFunction ?? playTimingFunction(play.recipeKeyframe),
+              animationFillMode: timing?.rewind ? "backwards" : "both",
               animationDelay: `${delayMs}ms`,
               animationDuration: `${durationMs}ms`,
+              ...(timing
+                ? {
+                    animationIterationCount: timing.iterationCount,
+                    animationDirection: timing.direction,
+                  }
+                : {}),
             }
           : {}),
       };
+    }
+  }
+  if (!fillParent && timelineControlled && play?.animate && play.afterHideAtMs !== undefined) {
+    // After animation: Hide After Animation (or an entrance that rewinds)
+    // takes the object away the moment its effect has played.
+    const hide = `${PRESENTATION_AFTER_HIDE_KEYFRAME} 1ms linear ${Math.max(0, Math.round(play.afterHideAtMs))}ms 1 normal forwards`;
+    const current = style as Record<string, unknown> | undefined;
+    if (typeof current?.animation === "string") {
+      style = { ...style, animation: `${current.animation}, ${hide}` };
+    } else if (typeof current?.animationName === "string") {
+      const {
+        animationName,
+        animationTimingFunction,
+        animationFillMode,
+        animationDelay,
+        animationDuration,
+        animationIterationCount,
+        animationDirection,
+        ...rest
+      } = current as Record<string, string | undefined>;
+      style = {
+        ...(rest as CSSProperties),
+        animation: `${animationName} ${animationDuration} ${animationTimingFunction} ${animationDelay} ${animationIterationCount ?? "1"} ${animationDirection ?? "normal"} ${animationFillMode}, ${hide}`,
+      };
+    } else {
+      style = { ...style, animation: hide };
     }
   }
   if (!fillParent && play?.backgroundLoop) {

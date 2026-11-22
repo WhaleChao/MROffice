@@ -19,6 +19,7 @@ import {
   type WordAutofitTableWidth,
 } from "../../../../lib/document-word-table-autofit";
 import { nativeTableGridWidths } from "./nativeTableGridView";
+import { isGridFillerCell } from "./tableGridFiller";
 import { MRNOTE_BLOCK_ID_ATTR } from "./blockIds";
 import { INLINE_PICTURE_NODE_NAME } from "./documentObjectNodes";
 import { fontFaceNewsCount } from "../../../../lib/font-face-news";
@@ -520,6 +521,8 @@ interface CellContent {
   readonly element: HTMLElement | null;
   /** Grid columns the cell spans. */
   readonly span: number;
+  /** A grid filler (`w:gridBefore` / `w:gridAfter`): no Word cell stands there. */
+  readonly filler?: boolean;
 }
 
 /** A cell block's narrowest and widest, and what they were read under. */
@@ -626,6 +629,7 @@ function readCellContent(
             marginRight: margins.right,
             element: cellDom instanceof HTMLElement ? cellDom : null,
             span: Number(cell.attrs.colspan) || 1,
+            filler: isGridFillerCell(cell),
           };
           cells.set(key, entry);
         }
@@ -1058,6 +1062,10 @@ function contentColumns(
     { length: columnCount },
     () => ({ minPx: 0, maxPx: 0, chromePx: 0 }),
   );
+  // A table keeping its grid: a grid filler is no cell (Word draws the row
+  // short there), and a merged cell over columns no cell of their own holds
+  // shares what it asks by the grid (`enlargeColumns`).
+  const grid = table.floorGrid && !autofitSpanGridOff() ? table.floorGrid : null;
   // Cells of one column first; a merged cell then enlarges the columns it
   // spans as far as its own content asks (ISO 29500 ST_TblLayoutType).
   const merged: { column: number; span: number; min: number; max: number; chrome: number }[] = [];
@@ -1065,6 +1073,7 @@ function contentColumns(
     const column = Number(key.slice(key.indexOf(":") + 1));
     const target = columns[column];
     if (!target) continue;
+    if (grid && entry.filler) continue;
     const padding = (entry.marginLeft === null || entry.marginRight === null) && entry.element
       ? getComputedStyle(entry.element)
       : null;
@@ -1087,21 +1096,46 @@ function contentColumns(
   }
   for (const cell of merged.sort((a, b) => a.span - b.span)) {
     const spanned = columns.slice(cell.column, cell.column + cell.span);
-    enlargeColumns(spanned, "minPx", cell.min);
-    enlargeColumns(spanned, "maxPx", cell.max);
+    const weights = grid?.slice(cell.column, cell.column + cell.span);
+    enlargeColumns(spanned, "minPx", cell.min, weights);
+    enlargeColumns(spanned, "maxPx", cell.max, weights);
   }
   return columns;
 }
 
 /** Columns a merged cell spans, grown in proportion to what they hold until
- * together they reach the cell's width. */
-function enlargeColumns(columns: { minPx: number; maxPx: number }[], side: "minPx" | "maxPx", needed: number): void {
+ * together they reach the cell's width. Where one of them holds nothing of its
+ * own (no cell stands in that column alone) and the table keeps its grid
+ * (`weights`), they grow in proportion to their grid widths: Word gives a
+ * merged cell's narrowest content to its columns by their widths. Shared by
+ * what they held, every pixel went to the one column a grid filler held, and
+ * a 284-twip column under "References" (1560 twips over 1276 + 284) drew
+ * 44 pt where Word draws 14.2, every other column narrower (R493-D22: three
+ * cells a line longer, the last paragraph alone on a page Word does not have).
+ * `window.__docsAutofitSpanGridOff` shares by what they held, as before. */
+function enlargeColumns(
+  columns: { minPx: number; maxPx: number }[],
+  side: "minPx" | "maxPx",
+  needed: number,
+  weights?: readonly number[],
+): void {
   const held = columns.reduce((sum, column) => sum + column[side], 0);
   if (!(needed > held) || !columns.length) return;
-  for (const column of columns) {
-    column[side] += (needed - held) * (held > 0 ? column[side] / held : 1 / columns.length);
+  const weightTotal = weights?.length === columns.length ? weights.reduce((sum, value) => sum + Math.max(0, value), 0) : 0;
+  const byGrid = weightTotal > 0 && columns.some((column) => !(column[side] > 0));
+  for (const [index, column] of columns.entries()) {
+    column[side] += (needed - held) * (byGrid
+      ? Math.max(0, weights![index]) / weightTotal
+      : held > 0 ? column[side] / held : 1 / columns.length);
     column.maxPx = Math.max(column.maxPx, column.minPx);
   }
+}
+
+/** `window.__docsAutofitSpanGridOff = true`: a merged cell's columns grow by
+ * what they hold and a grid filler counts as a cell, as before (A/B). */
+function autofitSpanGridOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsAutofitSpanGridOff?: boolean }).__docsAutofitSpanGridOff === true;
 }
 
 /** `window.__docsAutofitMarginLinesOld = true`: a Word cell's column also

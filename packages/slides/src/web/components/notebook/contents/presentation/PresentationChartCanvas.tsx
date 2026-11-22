@@ -24,7 +24,7 @@ import {
 } from "react";
 import type { PresentationChartBlock } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
 import { presentationBuiltInStyleLook, type PresentationChartDisplay } from "@mrnote/core/web/lib/presentation-chart-display.ts";
-import ChartBlockV2Canvas from "@mrnote/core/web/components/console/editor/extensions/ChartBlockV2Canvas.tsx";
+import ChartBlockV2Canvas from "@mrnote/docs/web/components/console/editor/extensions/ChartBlockV2Canvas.tsx";
 import { captureChartPrintSnapshot } from "@mrnote/core/web/components/console/editor/extensions/chartPrintSnapshot.ts";
 import { readPresentationChartRenderAttrs } from "@mrnote/core/web/lib/presentation-native-chart-view.ts";
 import { presentationChartAreaStyleCssWithoutLine } from "@mrnote/core/web/lib/presentation-chart-area-style.ts";

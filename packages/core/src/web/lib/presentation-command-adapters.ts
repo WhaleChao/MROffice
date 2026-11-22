@@ -97,6 +97,8 @@ import {
   editTimelineSequence,
   editTimelineStepEffectColor,
   editTimelineStepEffectOption,
+  editTimelineStepEffectSettings,
+  timelineStepsEqual,
   editTimelineStepObjectTrigger,
   editTimelineStepTextSequence,
   editTimelineStepTiming,
@@ -115,6 +117,11 @@ import {
   timelineTextParagraphIndexes,
   type TimelineTextSequence,
 } from "./presentation-anim-timeline";
+import {
+  canonicalEffectSettings,
+  type PresentationAnimationEffectSettings,
+} from "./presentation-anim-effect-settings";
+import { effectSettingsDefaults } from "./presentation-anim-effect-defaults";
 import { PRESENTATION_OBJECT_GEOMETRY_MAX_EMU } from "./presentation-geometry-limit";
 
 export const DUPLICATE_SLIDE_COMMAND_ID = "slides.duplicate" as const;
@@ -979,12 +986,47 @@ export interface PresentationAnimationTextSequenceCommandPayload {
   readonly sequence: TimelineTextSequence;
 }
 
+/**
+ * The Effect Options dialog's Effect and Timing tabs (Smooth start / end,
+ * Auto-reverse, Repeat, Rewind, After animation, Animate text): the step's
+ * whole `effectSettings`, made canonical for its effect here.
+ */
+export interface PresentationAnimationEffectSettingsCommandPayload {
+  readonly operation: "set-effect-settings";
+  readonly slideModelId: string;
+  readonly index: number;
+  readonly expectedStep: TimelineStep;
+  /** Undefined returns the effect to the gallery's defaults. */
+  readonly settings: PresentationAnimationEffectSettings | undefined;
+  /** The dialog's Timing page (Start, Delay, Duration), in the same change. */
+  readonly timing?: AnimationTimingValue;
+  /** The dialog's Direction, in the same change. */
+  readonly effectOption?: PresentationAnimationEffectOption;
+}
+
 export type PresentationAnimationEffectCommandPayload =
   | PresentationAnimationEffectAppendCommandPayload
   | PresentationAnimationEffectOptionCommandPayload
   | PresentationAnimationEffectColorCommandPayload
   | PresentationAnimationObjectTriggerCommandPayload
-  | PresentationAnimationTextSequenceCommandPayload;
+  | PresentationAnimationTextSequenceCommandPayload
+  | PresentationAnimationEffectSettingsCommandPayload;
+
+/** The payloads that edit one existing occurrence (not Add Animation). */
+function isOccurrenceEdit(
+  payload: PresentationAnimationEffectCommandPayload | undefined,
+): payload is Exclude<
+  PresentationAnimationEffectCommandPayload,
+  PresentationAnimationEffectAppendCommandPayload
+> {
+  return (
+    payload?.operation === "set-effect-option" ||
+    payload?.operation === "set-effect-color" ||
+    payload?.operation === "set-object-trigger" ||
+    payload?.operation === "set-text-sequence" ||
+    payload?.operation === "set-effect-settings"
+  );
+}
 
 /** The next sequence one exact occurrence edit produces, or null. */
 function editedAnimationOccurrence(
@@ -997,13 +1039,28 @@ function editedAnimationOccurrence(
   >,
 ): TimelineStep[] | null {
   switch (payload.operation) {
-    case "set-effect-option":
-      return editTimelineStepEffectOption(
+    case "set-effect-option": {
+      const next = editTimelineStepEffectOption(
         sequence,
         payload.index,
         payload.expectedStep,
         payload.option,
       );
+      // Another option can be another measured effect with easing of its
+      // own (Zoom's): the Effect Options stay canonical for it.
+      return next
+        ? next.map((step) => {
+            if (!step.effectSettings) return step;
+            const settings = canonicalEffectSettings(
+              step.effectSettings,
+              effectSettingsDefaults(step.animation, step.effectOption),
+            );
+            if (settings) return { ...step, effectSettings: settings };
+            const { effectSettings: _dropped, ...rest } = step;
+            return rest;
+          })
+        : null;
+    }
     case "set-effect-color":
       return editTimelineStepEffectColor(
         sequence,
@@ -1019,6 +1076,56 @@ function editedAnimationOccurrence(
         payload.triggerBlockId,
         blockIds,
       );
+    case "set-effect-settings": {
+      // The Effect Options dialog's OK: Direction, Effect Options and Timing
+      // as one change of the one occurrence it opened on.
+      let next: readonly TimelineStep[] = sequence;
+      let changed = false;
+      const original = sequence[payload.index];
+      if (!original || !timelineStepsEqual(original, payload.expectedStep)) return null;
+      if (payload.effectOption !== undefined) {
+        const withOption = editTimelineStepEffectOption(
+          next,
+          payload.index,
+          original,
+          payload.effectOption,
+        );
+        if (withOption) {
+          next = withOption;
+          changed = true;
+        }
+      }
+      const current = next[payload.index];
+      const settings = canonicalEffectSettings(
+        payload.settings,
+        effectSettingsDefaults(current.animation, current.effectOption),
+      );
+      // Animate text needs words to step through.
+      if (
+        settings?.textUnit &&
+        !(typeof block.text === "string" && block.text.trim().length > 0)
+      ) {
+        return null;
+      }
+      const withSettings = editTimelineStepEffectSettings(next, payload.index, current, settings);
+      if (withSettings) {
+        next = withSettings;
+        changed = true;
+      }
+      if (payload.timing) {
+        const withTiming = editTimelineStepTiming(
+          next,
+          payload.index,
+          next[payload.index],
+          payload.timing,
+        );
+        if (withTiming) {
+          next = withTiming;
+          changed = true;
+        }
+      }
+      return changed ? [...next] : null;
+    }
     case "set-text-sequence":
       return block.type === "text"
         ? editTimelineStepTextSequence(
@@ -1119,12 +1226,7 @@ export function createPresentationAnimationEffectCommandAdapter<
   const execute = (
     payload: PresentationAnimationEffectCommandPayload,
   ): boolean => {
-    if (
-      payload.operation === "set-effect-option" ||
-      payload.operation === "set-effect-color" ||
-      payload.operation === "set-object-trigger" ||
-      payload.operation === "set-text-sequence"
-    ) {
+    if (isOccurrenceEdit(payload)) {
       const slides = accessors.getSlides();
       const slideIndex = accessors.getActiveIndex();
       const slide = slides[slideIndex];
@@ -1205,13 +1307,7 @@ export function createPresentationAnimationEffectCommandAdapter<
       effectOption: EDIT_ANIMATION_EFFECT_OPTION_FEATURE_ID,
     }),
     canExecute: (payload?: PresentationAnimationEffectCommandPayload) => {
-      if (
-        !payload ||
-        (payload.operation !== "set-effect-option" &&
-          payload.operation !== "set-effect-color" &&
-          payload.operation !== "set-object-trigger" &&
-          payload.operation !== "set-text-sequence")
-      ) {
+      if (!isOccurrenceEdit(payload)) {
         return target(payload?.kind) !== null;
       }
       const slides = accessors.getSlides();

@@ -18,7 +18,7 @@ import { type SheetModel } from "./spreadsheetSheetModel";
 import { columnLabel } from "./spreadsheetRangeA1";
 import { type Workbook, type WorkbookSheetInput } from "@mrnote/core/web/lib/spreadsheet/formula-engine.ts";
 import { type PivotOutputPlan } from "@mrnote/core/web/lib/spreadsheet/pivot-output.ts";
-import { type GridRect } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
+import { type GridRect } from "../../../../lib/spreadsheet/grid-nav";
 import { type Dispatch, type SetStateAction } from "react";
 
 /** What useSpreadsheetWatchWindow reads from SpreadsheetWindow's render scope. */

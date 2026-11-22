@@ -16,7 +16,7 @@ import { SPREADSHEET_HEADER_WIDTH_PX, SPREADSHEET_HEADER_HEIGHT_PX, MAX_SHEET_RO
 import { SELECTION_FILL_HANDLE_GRAB, SELECTION_BORDER_GRAB } from "./spreadsheetWindowConstants";
 import { type CellRange } from "../../../../lib/spreadsheet/block-clear";
 import { type SheetExtent } from "../../../../lib/spreadsheet/range-preview";
-import { type GridRect } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
+import { type GridRect } from "../../../../lib/spreadsheet/grid-nav";
 import { type Dispatch, type SetStateAction } from "react";
 import { spreadsheetCanvasRunCellAt, spreadsheetCellNodeAt } from "./spreadsheetCellLookup";
 

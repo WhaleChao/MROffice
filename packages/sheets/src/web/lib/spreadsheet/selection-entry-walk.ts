@@ -27,7 +27,7 @@
  * anchor are the ones the walk wrote; any other selection write ends it.
  */
 
-import type { GridRect } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
+import type { GridRect } from "./grid-nav";
 import type { MergeSpan } from "@mrnote/core/web/lib/spreadsheet/merge-cells.ts";
 
 export interface EntryWalkCell {

@@ -788,7 +788,14 @@ export function planUnequalColumnFlow(
       heightPx = heightFor(Math.min(columnIndex, tracks.length - 1));
       creditPx = creditFor(columnIndex);
     }
-    if (topPx + heightPx - creditPx > footOf(columnIndex)) {
+    // A column break ends the column it stands in: drawn nothing tall, it is
+    // never itself carried on to the next column by the space after the
+    // paragraph before it. Carried there, the column it then opened was
+    // ended too and everything after it stood one column on (R455-D56's
+    // masthead, its second column's lines drawn in the third once the logo
+    // no longer stood in its flow). `window.__docsColumnBreakStaysOff`.
+    const breakStays = block.forceNextColumnAfter === true && !(heightPx > 0.5) && cursorPx > 0 && !columnBreakStaysOff();
+    if (!breakStays && topPx + heightPx - creditPx > footOf(columnIndex)) {
       const availablePx = Math.max(0, footOf(columnIndex) - topPx);
       // Keep lines together: never cut where it stands after other text; it
       // opens the next column whole (cut only once it is taller than one).
@@ -1968,6 +1975,11 @@ function sheetDrawScale(sheet: HTMLElement): number {
  * pixels: R02-D14's 6.52px label and 20.81px pair of lines stacked at 28px
  * a block instead of 27.33, 24px over a column, and its last block's second
  * line went to the next column (34 pages where Word has 33). */
+function columnBreakStaysOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsColumnBreakStaysOff?: boolean }).__docsColumnBreakStaysOff === true;
+}
+
 function laidOutHeightPx(block: HTMLElement, scale: number): number {
   const drawn = block.getBoundingClientRect().height;
   if (!(drawn > 0) || !(scale > 0)) return Math.max(0, block.offsetHeight);

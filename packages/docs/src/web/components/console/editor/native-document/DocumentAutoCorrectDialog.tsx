@@ -19,7 +19,7 @@ import {
   setAutoCorrectSettings,
   type AutoCorrectEntry,
   type AutoCorrectSettings,
-} from "@mrnote/core/web/components/console/editor/native-document/autoCorrectSettings.ts";
+} from "./autoCorrectSettings";
 
 /**
  * Word's AutoCorrect dialog (Tools > AutoCorrect Options on the Mac; File >

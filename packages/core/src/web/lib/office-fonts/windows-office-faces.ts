@@ -65,6 +65,30 @@ const INSTALLED: ReadonlySet<string> = new Set((data.windowsInstalled ?? []).map
 /** Style words a producer appends to a family name ("Avenir Next Demi Bold"). */
 export const STYLE_TAIL = /[\s-]+(?:thin|hairline|extra[\s-]?light|ultra[\s-]?light|light|lt|semi[\s-]?light|book|regular|rg|normal|roman|medium|md|med|semi[\s-]?bold|demi[\s-]?bold|demi|bold|bd|extra[\s-]?bold|ultra[\s-]?bold|heavy|black|italic|italics|oblique|condensed|cond|cn)$/i;
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const OFFICE_DRAWN_THOUGH_PDF_LACKS: readonly string[] = ["bahnschrift"];
+
+function officeDrawsThoughPdfLacks(name: string): boolean {
+  return OFFICE_DRAWN_THOUGH_PDF_LACKS.some((family) => name === family || name.startsWith(`${family} `) || name.startsWith(`${family}-`));
+}
+
 /**
  * The face Windows Office draws `family` in, or undefined where Office has it
  * (or the name is an East Asian or complex-script face, which keeps its
@@ -77,6 +101,7 @@ export const STYLE_TAIL = /[\s-]+(?:thin|hairline|extra[\s-]?light|ultra[\s-]?li
 export function windowsOfficeFace(family: string | null | undefined, adapter: WindowsMissingFaceAdapter): WindowsOfficeFace | undefined {
   if (!family) return undefined;
   let name = normalize(family);
+  if (officeDrawsThoughPdfLacks(name)) return undefined;
   for (let guard = 0; guard < 4 && name; guard++) {
     if (BY_SCRIPT.has(name)) return undefined;
     const fixed = FIXED.get(name);

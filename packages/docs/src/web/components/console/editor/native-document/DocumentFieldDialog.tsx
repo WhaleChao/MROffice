@@ -28,7 +28,7 @@ import {
   documentFieldCodeError,
   type DocumentFieldCodeContext,
   type WordCodeField,
-} from "@mrnote/core/web/components/console/editor/native-document/documentFieldCodes.ts";
+} from "./documentFieldCodes";
 import styles from "./DocumentFieldDialog.module.css";
 
 /**

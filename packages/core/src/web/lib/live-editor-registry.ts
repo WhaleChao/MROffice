@@ -177,6 +177,8 @@ export interface LivePdfEditor {
   /** Insert > Image with this picture, centred on the page shown at the
    * command's default size; false when refused (read-only, not a picture). */
   insertPicture?(file: File): Promise<boolean>;
+  /** The form's roles (Forms > Manage Roles), in the order its fields name them. */
+  formRoles?(): readonly { readonly name: string; readonly color: string }[];
 }
 
 export interface LivePdfAnnotation {

@@ -37,13 +37,13 @@ import {
   MAX_RUBY_TEXT_LENGTH,
   RUBY_NODE_NAME,
   sanitizeRubyText,
-} from "@mrnote/core/web/components/console/editor/native-document/rubyAnnotationExtension.tsx";
+} from "./rubyAnnotationExtension";
 import {
   phoneticGuideSegmentsFromText,
   readDocumentRubyProperties,
   type DocumentRubyProperties,
   type PhoneticGuideSegment,
-} from "@mrnote/core/web/components/console/editor/native-document/rubyProperties.ts";
+} from "./rubyProperties";
 
 /** The longest selection the dialog lists (characters of base text). */
 export const MAX_PHONETIC_GUIDE_TEXT_LENGTH = 300;

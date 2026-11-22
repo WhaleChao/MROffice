@@ -5,7 +5,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-import { onlyofficeInitialZoom } from "@mrnote/core/web/lib/embed/onlyoffice-frame.ts";
+import { onlyofficeInitialZoom, onlyofficeNotesAtOpen, onlyofficeRulerAtOpen } from "@mrnote/core/web/lib/embed/onlyoffice-frame.ts";
+import { ONLYOFFICE_SPELLCHECK_EVENT, onlyofficeSpellcheckAtOpen } from "@mrnote/core/web/lib/embed/onlyoffice-layout.ts";
 import { registerLiveEditor, type LivePresentationEditor } from "@mrnote/core/web/lib/live-editor-registry.ts";
 import { reloadPage } from "@mrnote/core/web/lib/reload-reason.ts";
 import { listLevelGreyedForSmartArtShape } from "../../../lib/presentation-smartart-shape-selection";
@@ -193,7 +194,6 @@ import {
   withPresentationGridDefaults,
   type PresentationViewSettings,
 } from "@mrnote/core/web/lib/presentation-grid.ts";
-import { PresentationGridSettingsDialog } from "./presentation/PresentationGridSettingsDialog";
 import {
   presentationDesktopShortcutFor,
   presentationDesktopShortcutLabel,
@@ -258,12 +258,7 @@ import { houseIconStandaloneSvg } from "@mrnote/core/web/components/office-ribbo
 import { IconAlignObjects, IconBringForward, IconBringToFront, IconMediaCaptions, IconObjectFormatPane, IconObjectHeight, IconObjectWidth, IconResetPicture, IconLockAspect, IconShapeEffects, IconTableAutoFit, IconTableBorders, IconTableDelete, IconTableDistributeColumns, IconTableDistributeRows, IconTableInsertAbove, IconTableInsertBelow, IconTableInsertLeft, IconTableInsertRight, IconTableMergeCells, IconTableSplitCells, IconGroupObjects, IconAnimationMotionPath, IconReviewComment, IconRotateObjects, IconSendBackward, IconSendToBack, IconSlideShowFromCurrent, IconSelectionPane, IconSelectObjects, IconUngroupObjects } from "./PresentationRibbonIcons";
 import { useLocale, useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import { useMemoizedTranslator } from "@mrnote/core/web/lib/i18n/memoizedTranslator.ts";
-import {
-  layoutCardsOf,
-  requestLayoutCards,
-  useMastersWithLayoutCards,
-  withLayoutCards,
-} from "../../../lib/presentation-layout-cards";
+import { layoutCardsOf, requestLayoutCards, withLayoutCards } from "../../../lib/presentation-layout-cards";
 import { useDeskWindowUnloadable } from "@mrnote/core/web/lib/desk-window-unload.ts";
 import { getPageYjsTransportSnapshot } from "@mrnote/core/web/lib/collab/ws-provider.ts";
 import { gapSaveFace, pageGapState, subscribePageGapIncomplete } from "@mrnote/core/web/lib/collab/gap-repair.ts";
@@ -410,6 +405,7 @@ import type { DocumentChartAreaStyleKey } from "@mrnote/core/web/components/cons
 import { OfficePictureEffectsMenu } from "@mrnote/core/web/components/office-ribbon/OfficePictureEffectsMenu.tsx";
 import { OFFICE_GLOW_ACCENTS, OFFICE_GLOW_SIZES_PT, officeGlowVariation } from "@mrnote/core/web/lib/office-picture-effects.ts";
 import { effectPlayDurationMs } from "@mrnote/core/web/lib/presentation-effect-recipes.ts";
+import { type PresentationAnimationEffectOptionsResult } from "@/components/notebook/contents/presentation/PresentationAnimationEffectOptionsDialog";
 import { readPresentationEmbeddedFontsAnswer } from "../../../lib/presentation-embedded-fonts";
 import type {
   OfficeBevelPreset,
@@ -491,12 +487,12 @@ import {
   type OfficeShapeFormatPaneTab,
 } from "@mrnote/core/web/components/office-ribbon/OfficeShapeFormatPane.tsx";
 const DocumentChartWorkbookWindow = lazyNamed(
-  () => import("@mrnote/core/web/components/console/editor/extensions/DocumentChartWorkbookWindow.tsx"),
+  () => import("@mrnote/docs/web/components/console/editor/extensions/DocumentChartWorkbookWindow.tsx"),
   "DocumentChartWorkbookWindow",
 );
-import { activateChartWorkbookWindow } from "@mrnote/core/web/lib/spreadsheet/chart-workbook-window-session.ts";
+import { activateChartWorkbookWindow } from "@mrnote/sheets/web/lib/spreadsheet/chart-workbook-window-session.ts";
 const DocumentChartWorkbookEditor = lazyNamed(
-  () => import("@mrnote/core/web/components/console/editor/extensions/DocumentChartWorkbookEditor.tsx"),
+  () => import("@mrnote/docs/web/components/console/editor/extensions/DocumentChartWorkbookEditor.tsx"),
   "DocumentChartWorkbookEditor",
 );
 import { chartWorkbookNeedsResults, chartWorkbookWithoutSeries, type DocumentChartWorkbook } from "@mrnote/core/web/components/console/editor/extensions/documentChartWorkbook.ts";
@@ -602,7 +598,7 @@ import {
   applyPresentationPictureFrameStyle,
   type PresentationPictureFrameStyle,
 } from "@mrnote/core/web/components/notebook/contents/ribbon/PresentationPictureStyleGallery.tsx";
-import { OfficeHomeCheckbox, OfficeHomeNumberField } from "@mrnote/core/web/components/office-ribbon/OfficeHomeRibbon.tsx";
+import { OfficeHomeNumberField } from "@mrnote/core/web/components/office-ribbon/OfficeHomeRibbon.tsx";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "@mrnote/core/web/components/office-ribbon/OfficeShapeCatalogPanel.tsx";
 // Kept for stylesheet order only (its named imports moved out of this file).
@@ -639,14 +635,7 @@ import {
   officeNamedThemeColor,
   officeThemeColorGrid,
 } from "@mrnote/core/web/lib/office-theme-color-grid.ts";
-import {
-  presentationThemeGridColors,
-  presentationThemeMarkedCustom,
-  presentationThemeSlotPicks,
-  reconcilePresentationBlocksThemeColors,
-  presentationBlocksWithPickedThemeColors,
-  type PresentationThemeColorPick,
-} from "@mrnote/core/web/lib/presentation-theme-color-binding.ts";
+import { presentationThemeGridColors, presentationThemeSlotPicks, reconcilePresentationBlocksThemeColors, presentationBlocksWithPickedThemeColors, type PresentationThemeColorPick } from "@mrnote/core/web/lib/presentation-theme-color-binding.ts";
 const PresentationLinkDialog = lazyNamed(() => import("./presentation/PresentationLinkDialog"), "PresentationLinkDialog");
 import { PresentationHeaderFooterDialog } from "./presentation/PresentationHeaderFooterDialog";
 const PresentationColumnsDialog = lazyNamed(() => import("./presentation/PresentationColumnsDialog"), "PresentationColumnsDialog");
@@ -673,13 +662,8 @@ import {
   presentationObjectActionSettings,
   type PresentationObjectActionSettings,
 } from "../../../lib/presentation-action-settings";
-import { DocumentPictureCompressionDialog } from "@mrnote/docs/web/components/console/editor/native-document/DocumentPictureCompressionDialog.tsx";
-import {
-  compressDocumentPictureDataUrl,
-  type DocumentPictureCompressionPresetId,
-} from "@mrnote/core/web/components/console/editor/native-document/documentPictureCompression.ts";
-import { DocumentProofingLanguageDialog } from "@mrnote/docs/web/components/console/editor/native-document/DocumentProofingLanguageDialog.tsx";
-import type { ProofingLanguageValue } from "@mrnote/core/web/components/console/editor/native-document/proofingLanguageExtension.ts";
+import { type DocumentPictureCompressionPresetId } from "@mrnote/core/web/components/console/editor/native-document/documentPictureCompression.ts";
+import type { ProofingLanguageValue } from "@mrnote/docs/web/components/console/editor/native-document/proofingLanguageExtension.ts";
 import {
   OfficeCommentThread,
   type OfficeCommentMessageAdapter,
@@ -916,7 +900,8 @@ import {
 import { downloadBlobFile, startDownloadWhenAllowed } from "@mrnote/core/web/lib/download-file.ts";
 import { buildPresentationHtmlShow, type HtmlShowSlide } from "../../../lib/presentation/html-show";
 import { printPdfBlob } from "@mrnote/core/web/lib/print-pdf.ts";
-import { getPage, getPageFontBindings, listPages, type PageItem } from "@mrnote/core/web/lib/notebook-sdk.ts";
+import { createPage, getPage, getPageFontBindings, listPages, type PageItem } from "@mrnote/core/web/lib/notebook-sdk.ts";
+import { openNotebookPageWindow } from "@mrnote/core/web/__cut__/m0459ec30b8.ts";
 import { requestChatPrefill } from "@mrnote/core/web/__cut__/m809fa6700a.ts";
 import {
   prepareAuthoredPresentationReuseSlides,
@@ -932,23 +917,13 @@ import {
 } from "../../../lib/presentation-ink-to-shape";
 import { officeInkPenById, officeInkPenProfileFromStorage, serializeOfficeInkPenProfile, withOfficeInkPen, withOfficeInkPenRemoved, type OfficeInkPenProfile } from "@mrnote/core/web/lib/office-ink-pens.ts";
 import { PRESENTATION_INK_DEFAULT_PENS, PRESENTATION_INK_PEN_PROFILE_STORAGE_KEY, PRESENTATION_INK_PEN_SPEC, presentationInkStrokePx } from "../../../lib/presentation-ink-pens";
-import { accumulate as accumulateTimings, applyRehearsedAdvanceTimings, nextAutoAdvance, normalizePresentationSlideShowSettings, presentationLoops, presentationShowsMediaControls, presentationShowsNarrations, presentationShowsAnimations, presentationShowsScrollBar, presentationSlideShowRange, presentationSlideShowSettingsWithSetup, presentationSlideShowType, presentationSlideShowSettingsWithUseTimings, presentationUsesTimings, totalDuration, DEFAULT_DWELL_MS, type PresentationNativeSlideShowSelection, type PresentationSlideShowRange, type PresentationSlideShowSlides, presentationSlideShowCustomShowId, presentationSlideShowSettingsWithoutCustomShow, type PresentationSlideShowSettings, type PresentationSlideShowType } from "@mrnote/core/web/lib/presentation/rehearse-timings.ts";
+import { accumulate as accumulateTimings, applyRehearsedAdvanceTimings, nextAutoAdvance, normalizePresentationSlideShowSettings, presentationLoops, presentationShowsMediaControls, presentationShowsNarrations, presentationShowsAnimations, presentationShowsScrollBar, presentationSlideShowRange, presentationSlideShowType, presentationSlideShowSettingsWithUseTimings, presentationUsesTimings, totalDuration, DEFAULT_DWELL_MS, type PresentationNativeSlideShowSelection, type PresentationSlideShowRange, type PresentationSlideShowSlides, presentationSlideShowCustomShowId, presentationSlideShowSettingsWithoutCustomShow, type PresentationSlideShowSettings, type PresentationSlideShowType } from "@mrnote/core/web/lib/presentation/rehearse-timings.ts";
 import {
   rehearsedClickDelaysMs,
   slideGroupBuildsMs,
   timedClickPlan,
 } from "../../../lib/presentation/slide-click-schedule";
-import {
-  addPresentationCustomShow,
-  copyPresentationCustomShow,
-  deletePresentationCustomShow,
-  nextPresentationCustomShowId,
-  normalizePresentationCustomShows,
-  renamePresentationCustomShow,
-  setPresentationCustomShowSlides,
-  slidesForPresentationCustomShow,
-  type PresentationCustomShows,
-} from "@mrnote/core/web/lib/presentation-custom-shows.ts";
+import { normalizePresentationCustomShows, slidesForPresentationCustomShow, type PresentationCustomShows } from "@mrnote/core/web/lib/presentation-custom-shows.ts";
 import {
   MAX_PRESENTATION_NARRATION_RECORDING_BYTES,
   preferredPresentationNarrationRecorderMime,
@@ -1222,7 +1197,6 @@ import {
   useOfficeTaskPaneColumnPresence,
 } from "@mrnote/core/web/components/office-ribbon/officeTaskPaneMotion.ts";
 import PresentationAccessibilityPanel from "../../../lib/presentation/PresentationAccessibilityPanel";
-import PresentationDesignerPane from "../../../lib/presentation/PresentationDesignerPane";
 import PresentationFindPane, {
   type PresentationFindFocusRequest,
 } from "../../../lib/presentation/PresentationFindPane";
@@ -1269,7 +1243,7 @@ import {
 import { inlinePackageSounds } from "../../../lib/presentation-package-sounds";
 import { apiDelete, apiFetchRaw, apiGet, apiPost, isApiRequestError, type ApiRequestError } from "@mrnote/core/web/lib/api.ts";
 import { createReplaceFontsPrewarm } from "../../../lib/presentation-replace-font-prewarm";
-import { type OfficeThesaurusEntry } from "@mrnote/core/web/components/office-ribbon/OfficeThesaurusPane.tsx";
+import { type OfficeThesaurusEntry } from "@/components/office-ribbon/OfficeThesaurusPane";
 import { canRequestNativeSlideCopy, hasNativePresentationObject, isPresentationNativeCopyStale, isPresentationNativeCopyUnsupported, presentationCopyAuthoredContentMatches, requestPresentationNativeCopy, requestPresentationNativeSlideCopy } from "@mrnote/core/web/lib/presentation-native-object-copy.ts";
 import { pageDocumentJsonEquals } from "@mrnote/core/web/lib/page-save-acknowledgement.ts";
 import { presentationNativeSavedContentMatches } from "@mrnote/core/web/lib/presentation-native-save.ts";
@@ -1302,7 +1276,6 @@ import {
   type PresentationDesignerRankRequest,
   type PresentationDesignerThemeChoice,
 } from "../../../lib/presentation/usePresentationDesigner";
-import { setPresentationDesignerPreference } from "../../../lib/presentation-designer-preferences";
 import { pictureObjectDisplaySrc } from "@mrnote/core/web/lib/page-picture-objects.ts";
 import { readDesignerPicture } from "../../../lib/presentation-designer-picture";
 import {
@@ -1357,26 +1330,7 @@ import {
   normalizePresentationMediaCaptionTracks,
   preparePresentationMediaCaptionFile,
 } from "@mrnote/core/web/lib/presentation-media-captions.ts";
-import {
-  DEFAULT_LAYOUT_ID,
-  LAYOUT_DEFINITIONS,
-  blocksLeftOnSlide,
-  layoutFrameSourceForTheme,
-  clearAuthoredBlockFormatting,
-  isLayoutId,
-  layoutBlocks,
-  nativeLayoutCanApply,
-  nativeLayoutCatalogEntryForValue,
-  nativeLayoutGalleryEntries,
-  nativeLayoutIdFromType,
-  nativeLayoutRef,
-  parseNativeLayoutRef,
-  layoutPlaceholders,
-  normalizeLayoutId,
-  normalizeSlideLayoutRef,
-  type LayoutDefinition,
-  type LayoutId,
-} from "@mrnote/core/web/lib/presentation-layouts.ts";
+import { LAYOUT_DEFINITIONS, blocksLeftOnSlide, layoutFrameSourceForTheme, clearAuthoredBlockFormatting, isLayoutId, layoutBlocks, nativeLayoutCanApply, nativeLayoutCatalogEntryForValue, nativeLayoutGalleryEntries, nativeLayoutIdFromType, nativeLayoutRef, parseNativeLayoutRef, layoutPlaceholders, normalizeLayoutId, normalizeSlideLayoutRef, type LayoutDefinition, type LayoutId } from "@mrnote/core/web/lib/presentation-layouts.ts";
 import {
   DEFAULT_BLOCK_ANIMATION,
   buildSlideLinkHref,
@@ -1428,24 +1382,7 @@ import {
   distributeBlocksToSlideOrSelection,
   distributeMinimumTargets,
 } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
-import {
-  presentationDefaultNewSlideLayout,
-  presentationDeckHasNativePptxSource,
-  presentationDuplicateSlideIsWritable,
-  presentationNewSlideFromLayoutIsWritable,
-  presentationSlideHasNativePptxSource,
-  presentationSlideLayoutCommandsAreWritable,
-  presentationSlideNativeLayoutReceipt,
-  presentationSlideResetIsWritable,
-  reflowSlideToLayout,
-  headerFooterAfterDialog,
-  slideWithNotes,
-  SPEAKER_NOTES_MAX_LENGTH,
-  type PresentationHeaderFooterDialogDraft,
-  slideAfterReset,
-  slideWithLayout,
-  slidesWithNewSlideFromLayout,
-} from "@mrnote/core/web/lib/presentation-slide-buttons.ts";
+import { presentationDefaultNewSlideLayout, presentationDeckHasNativePptxSource, presentationDuplicateSlideIsWritable, presentationNewSlideFromLayoutIsWritable, presentationSlideHasNativePptxSource, presentationSlideLayoutCommandsAreWritable, presentationSlideNativeLayoutReceipt, presentationSlideResetIsWritable, headerFooterAfterDialog, slideWithNotes, SPEAKER_NOTES_MAX_LENGTH, type PresentationHeaderFooterDialogDraft, slideAfterReset, slideWithLayout, slidesWithNewSlideFromLayout } from "@mrnote/core/web/lib/presentation-slide-buttons.ts";
 import {
   formatTextBlockRunSelection,
   type LiveTextSelection,
@@ -1540,12 +1477,6 @@ import {
 } from "../../../lib/presentation/collab-caret";
 import { holdRemoteCaret } from "../../../lib/presentation/remote-caret-hold";
 import { blockWithLink } from "../../../lib/presentation-link-buttons";
-import {
-  mastersWithName,
-  mastersWithTextStyle,
-  mastersWithThemeField,
-  slideWithoutMaster,
-} from "../../../lib/presentation-master-buttons";
 // The SmartArt Design commands are the shared buttons' plans (the same ones
 // the headless command host runs); the layout each needs is the server's.
 import {
@@ -1575,7 +1506,7 @@ import {
   presentationChartBlockForInsert,
   presentationFindChartTitleWritable,
 } from "../../../lib/presentation-chart-buttons";
-import { presentationPresetChoiceId, presentationThemeSelectionIsWritable, slideBackgroundKind, slidesRestyledForTheme, slidesWithServedTableStyleLooks, slideWithBackgroundKind, slideWithHiddenBackgroundGraphics, slideWithoutBackground, themeAfterPreset } from "../../../lib/presentation-design-buttons";
+import { slideBackgroundKind, slidesRestyledForTheme, slidesWithServedTableStyleLooks, slideWithBackgroundKind, slideWithHiddenBackgroundGraphics, slideWithoutBackground, themeAfterPreset } from "../../../lib/presentation-design-buttons";
 import {
   presentationCommentAuthoringBlock,
   PRESENTATION_COMMENT_AUTHORING_BLOCK_MESSAGE,
@@ -1667,21 +1598,15 @@ import "@mrnote/sheets/web/components/notebook/contents/spreadsheet/SpreadsheetT
 import "@mrnote/sheets/web/components/notebook/contents/spreadsheet/SpreadsheetThemeAxisGallery.module.css";
 import "@mrnote/sheets/web/components/notebook/contents/spreadsheet/SpreadsheetThemeGallery.module.css";
 import { type OfficeThemeFontsDraft } from "@/components/office-ribbon/OfficeCreateThemeFontsDialog";
-import { DEFAULT_THEME_FONT_FAMILY, MAX_THEME_ACCENT_COLORS, THEME_FONT_FAMILY_CSS, deckThemesEqual, defaultPresentationTheme, presentationThemeDefaultShapeStyle, normalizeTheme, normalizeThemeFontFamily, blockIsTitle, themeFontSchemeFamily, resolveSlideBackground, resolveThemeSelection, resolveThemeAccentColors, resolveTitleTextStyle, presentationHyperlinkStyle, presentationBodyFontStyle, type DeckTheme, type PresentationThemeVariantId } from "@mrnote/core/web/lib/presentation-theme.ts";
+import { DEFAULT_THEME_FONT_FAMILY, THEME_FONT_FAMILY_CSS, defaultPresentationTheme, presentationThemeDefaultShapeStyle, normalizeThemeFontFamily, blockIsTitle, themeFontSchemeFamily, resolveSlideBackground, resolveThemeAccentColors, resolveTitleTextStyle, presentationHyperlinkStyle, presentationBodyFontStyle, type DeckTheme, type PresentationThemeVariantId } from "@mrnote/core/web/lib/presentation-theme.ts";
 import {
   PRESENTATION_OFFICE_THEMES,
   presentationOfficeTheme,
   presentationOfficeThemeLabel,
 } from "@mrnote/core/web/lib/presentation-office-themes.ts";
-import { officeMasterGivenName, officeMasterStatesBackground, officeMasterViewEntries, slideNumberRanges, officeMasterSelection, officeLayoutGalleryDefinition, officeLayoutGalleryGroups, type OfficeMasterTextLevel, type OfficeMasterViewEntry } from "../../../lib/presentation-office-master";
-import { officeSlideMasterKey } from "../../../lib/presentation-office-master-routing";
+import { officeMasterGivenName, officeMasterStatesBackground, officeMasterSelection, officeLayoutGalleryDefinition, officeLayoutGalleryGroups, type OfficeMasterTextLevel, type OfficeMasterViewEntry } from "../../../lib/presentation-office-master";
 import { officeAvailableLayoutIds, officeLayoutHasFooters, type OfficeDeckEdit } from "../../../lib/presentation-office-layout-edit";
-import {
-  OFFICE_PLACEHOLDER_KINDS,
-  OFFICE_PRIMARY_MASTER_KEY,
-  parseOfficeMasterLayoutRef,
-  type OfficePlaceholderKind,
-} from "@mrnote/core/web/lib/presentation-office-master-model.ts";
+import { OFFICE_PRIMARY_MASTER_KEY, parseOfficeMasterLayoutRef, type OfficePlaceholderKind } from "@mrnote/core/web/lib/presentation-office-master-model.ts";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "./presentation/PresentationSlideMasterView";
 import {
@@ -1691,9 +1616,7 @@ import {
 import { withPresentationBlackWhiteStyle, type PresentationBlackWhiteMode } from "@mrnote/core/web/lib/presentation/presentation-black-white-mode.ts";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "./presentation/PresentationOfficeMasterTextStyleBar";
-const PresentationMasterBackgroundPane = lazyNamed(() => import("./presentation/PresentationMasterBackgroundPane"), "PresentationMasterBackgroundPane");
 const PresentationMasterRenameDialog = lazyNamed(() => import("./presentation/PresentationMasterRenameDialog"), "PresentationMasterRenameDialog");
-const PresentationMasterLayoutDialog = lazyNamed(() => import("./presentation/PresentationMasterLayoutDialog"), "PresentationMasterLayoutDialog");
 import { officeLayoutHidesBackgroundGraphics } from "../../../lib/presentation-office-master-structure";
 const PresentationOutlineImportDialog = lazyNamed(() => import("./presentation/PresentationOutlineImportDialog"), "PresentationOutlineImportDialog");
 import {
@@ -1703,26 +1626,7 @@ import {
   placeholderListCommand,
   placeholderListInheritance,
 } from "../../../lib/presentation-office-body-ladder";
-import {
-  MAX_MASTER_LAYOUTS,
-  MAX_MASTERS,
-  isLayoutGraphicOnSlide,
-  layoutBlocksInheritedBySlides,
-  masterBlocksInheritedBySlides,
-  nativeLayoutGraphicsForSlide,
-  slideWithNativeLayoutBackground,
-  slideWithNativeLayoutGraphics,
-  normalizeMasterLayoutId,
-  normalizeMasterId,
-  normalizeMasters,
-  resolveSlideNativeLayout,
-  resolveSlideMaster,
-  mergeMasterTheme,
-  mastersTakingThemePick,
-  presentationSlideChartBodyFont,
-  type SlideMaster,
-  type SlideMasterLayout,
-} from "@mrnote/core/web/lib/presentation-master.ts";
+import { isLayoutGraphicOnSlide, layoutBlocksInheritedBySlides, masterBlocksInheritedBySlides, nativeLayoutGraphicsForSlide, slideWithNativeLayoutBackground, slideWithNativeLayoutGraphics, resolveSlideNativeLayout, resolveSlideMaster, mergeMasterTheme, mastersTakingThemePick, presentationSlideChartBodyFont, type SlideMaster, type SlideMasterLayout } from "@mrnote/core/web/lib/presentation-master.ts";
 import {
   resolveSlideRenderBlocks,
   isInheritedBlock,
@@ -2320,30 +2224,12 @@ export {
 export type {
   MorphSpec,
 } from "./presentation/PresentationPresentOverlay";
-import {
-  SlideMiniThumbnail,
-  masterLayoutPreviewSlide,
-  masterPreviewSlide,
-} from "./presentation/PresentationSlideThumbnails";
+import { SlideMiniThumbnail } from "./presentation/PresentationSlideThumbnails";
 export {
   SlideMiniThumbnail,
 } from "./presentation/PresentationSlideThumbnails";
 import { PRESENTATION_AI_BLOCK_SELECTOR, CHART_WORKBOOK_RESULTS_COMMIT, EQUATION_BOX_FIT_COMMIT, PAGE_MEDIA_REPAIR_COMMIT, TEXT_LAYER_REPAIR_COMMIT, TABLE_FRAME_FIT_COMMIT, FIT_QUIET_MS, FIT_QUIET_POLL_MS, TEXT_BOX_FIT_COMMIT, PRESENTATION_SELECTION_CHROME_LAYER, PICTURE_ERASE_RADIUS, PRESENTATION_COPILOT_V1_ENABLED, MAX_PRESENTATION_HISTORY, SNAP_THRESHOLD_PX, MARQUEE_DRAG_THRESHOLD_PX, PRESENTATION_ANIMATION_PREVIEW_BACKDROP_Z_INDEX, PRESENTATION_ANIMATION_PREVIEW_LAYER_Z_INDEX, PLACEHOLDER_PICTURE_COMMIT, DESIGNER_IDEA_COMMIT, LAYOUT_GRAPHICS_COMMIT, DESIGNER_TITLE_THEMES, PRESENTATION_ALT_TEXT_MAX_LENGTH } from "../../../lib/presentation/window-constants";
-import {
-  presentationEditFailureMessage,
-  uniformPresentationSelectionValue,
-  presentationSelectionLayerCapability,
-  EMPTY_PRESENTATION_FRAME_SIZE_DRAFTS,
-  selectionPaneTypeIcon,
-  isPresentationOfficeGraphic,
-  useFilePickerCancel,
-  useFilePickerFocusFallback,
-  presentationPictureCompressionSource,
-  ignoreTaskPaneDockLabel,
-  type SystemClipboardPasteAuthority,
-  type PresentationFrameAxis,
-  type PresentationCustomShowDraft,
-} from "../../../lib/presentation/window-helpers";
+import { presentationEditFailureMessage, uniformPresentationSelectionValue, presentationSelectionLayerCapability, EMPTY_PRESENTATION_FRAME_SIZE_DRAFTS, selectionPaneTypeIcon, isPresentationOfficeGraphic, useFilePickerCancel, useFilePickerFocusFallback, ignoreTaskPaneDockLabel, type SystemClipboardPasteAuthority, type PresentationFrameAxis, type PresentationCustomShowDraft } from "../../../lib/presentation/window-helpers";
 const PresentationInsertRibbonTab = lazyNamed(() => import("./presentation/PresentationInsertRibbonTab"), "PresentationInsertRibbonTab");
 import {
   PRESENTATION_WEB_RIBBON_TABS,
@@ -2362,14 +2248,11 @@ import { PresentationRibbonStrip } from "./presentation/PresentationRibbonStrip"
 import { PresentationHomeRibbonTab } from "./presentation/PresentationHomeRibbonTab";
 const PresentationCommentsPane = lazyNamed(() => import("./presentation/PresentationCommentsPane"), "PresentationCommentsPane");
 const PresentationSmartArtTextPane = lazyNamed(() => import("./presentation/PresentationSmartArtTextPane"), "PresentationSmartArtTextPane");
-const PresentationTeleprompterPane = lazyNamed(() => import("./presentation/PresentationTeleprompterPane"), "PresentationTeleprompterPane");
-const PresentationSlideMasterPane = lazyNamed(() => import("./presentation/PresentationSlideMasterPane"), "PresentationSlideMasterPane");
 const PresentationBackgroundPane = lazyNamed(() => import("./presentation/PresentationBackgroundPane"), "PresentationBackgroundPane");
 import { PresentationStatusBar } from "./presentation/PresentationStatusBar";
 import { PresentationBlockInspector } from "./presentation/PresentationBlockInspector";
 import { PresentationSmartArtObjectContextMenu } from "./presentation/PresentationSmartArtObjectContextMenu";
 import { PresentationSlideRailMenuContent } from "./presentation/PresentationSlideRailMenuContent";
-import { PresentationThemePropertiesPanel } from "./presentation/PresentationThemePropertiesPanel";
 import { PresentationThumbnailRail } from "./presentation/PresentationThumbnailRail";
 import {
   PresentationNormalViewSplitters,
@@ -2427,10 +2310,9 @@ import { PresentationGuidesOverlay } from "./presentation/PresentationGuidesOver
 import { PresentationFreeformDrawLayer } from "./presentation/PresentationFreeformDrawLayer";
 import { paintPresentationWetStroke, type PresentationWetStroke } from "./presentation/PresentationDrawToolSurface";
 const PresentationReadingViewLayer = lazyNamed(() => import("./presentation/PresentationReadingViewLayer"), "PresentationReadingViewLayer");
-const PresentationMasterViewLayer = lazyNamed(() => import("./presentation/PresentationMasterViewLayer"), "PresentationMasterViewLayer");
 /** The split-out parts, in the order they are loaded while idle: what a
  * selection opens first, then the tabs, then the panes and dialogs. */
-const PRESENTATION_DEFERRED_PARTS = [PresentationInsertRibbonTab, PresentationCommentsPane, PresentationBackgroundPane, PresentationLinkDialog, PresentationSmartArtTextPane, PresentationColumnsDialog, PresentationReadingViewLayer, PresentationMasterViewLayer, PresentationSlideMasterPane, PresentationMasterBackgroundPane, PresentationMasterLayoutDialog, PresentationMasterRenameDialog, PresentationTeleprompterPane, PresentationOutlineImportDialog, PresentationVideoExportDialog, PresentationSelectionCopilot, DocumentChartWorkbookWindow, DocumentChartWorkbookEditor, DocumentImmersiveReader] as const;
+const PRESENTATION_DEFERRED_PARTS = [PresentationInsertRibbonTab, PresentationCommentsPane, PresentationBackgroundPane, PresentationLinkDialog, PresentationSmartArtTextPane, PresentationColumnsDialog, PresentationReadingViewLayer, PresentationMasterRenameDialog, PresentationOutlineImportDialog, PresentationVideoExportDialog, PresentationSelectionCopilot, DocumentChartWorkbookWindow, DocumentChartWorkbookEditor, DocumentImmersiveReader] as const;
 /** A Ribbon tab's part, by the tab's key (a pointer on the tab loads it). */
 const PRESENTATION_RIBBON_TAB_PARTS: Readonly<Record<string, { preload(): Promise<void> }>> = { insert: PresentationInsertRibbonTab };
 import { buildObjectContextMenuEntries } from "./presentation/buildObjectContextMenuEntries";
@@ -3235,44 +3117,8 @@ export default function PresentationWindow({
   // in an effect that committed the whole editor a second time.
   if (ribbonTab !== webRibbonTab) setRibbonTab(webRibbonTab);
   const rehearsalReturnFocusRef = useRef<HTMLElement | null>(null);
-  const slideShowSetupReturnFocusRef = useRef<HTMLElement | null>(null);
-  const [slideShowSetupOpen, setSlideShowSetupOpen] = useState(false);
-  const [slideShowSetupUseTimings, setSlideShowSetupUseTimings] =
-    useState(true);
-  const [slideShowSetupLoop, setSlideShowSetupLoop] = useState(false);
-  const [slideShowSetupWithoutAnimation, setSlideShowSetupWithoutAnimation] =
-    useState(false);
-  const [slideShowSetupShowNarration, setSlideShowSetupShowNarration] =
-    useState(false);
-  const [slideShowSetupShowType, setSlideShowSetupShowType] =
-    useState<PresentationSlideShowType>("speaker");
-  const [slideShowSetupShowScrollbar, setSlideShowSetupShowScrollbar] =
-    useState(false);
-  const [slideShowSetupShowSlidesKind, setSlideShowSetupShowSlidesKind] =
-    useState<PresentationNativeSlideShowSelection["kind"]>("all");
-  const [slideShowSetupRangeStart, setSlideShowSetupRangeStart] = useState(1);
-  const [slideShowSetupCustomShowId, setSlideShowSetupCustomShowId] = useState<
-    number | null
-  >(null);
-  const [slideShowSetupRangeEnd, setSlideShowSetupRangeEnd] = useState(1);
-  const [slideShowSetupExplicit, setSlideShowSetupExplicit] = useState({
-    loop: false,
-    showAnimation: false,
-    showNarration: false,
-    showScrollbar: false,
-    showSlides: false,
-    showType: false,
-  });
-  const customShowDialogReturnFocusRef = useRef<HTMLElement | null>(null);
-  const customShowDialogGenerationRef = useRef<number | null>(null);
-  const [customShowDialogOpen, setCustomShowDialogOpen] = useState(false);
   // File > Export > Create a Video / Create an Animated GIF.
   const [videoExportFormat, setVideoExportFormat] = useState<"mp4" | "gif" | null>(null);
-  const [selectedCustomShowId, setSelectedCustomShowId] = useState<
-    number | null
-  >(null);
-  const [customShowDraft, setCustomShowDraft] =
-    useState<PresentationCustomShowDraft | null>(null);
   // PowerPoint's Animation Pane is independent view state: closed on mount and
   // toggleable even when the active slide has no object/effect selection.
   const [animationPaneOpen, setAnimationPaneOpen] = useState(false);
@@ -3507,13 +3353,6 @@ export default function PresentationWindow({
     width: DEFAULT_IMAGE_BORDER_WIDTH,
     style: "solid",
   });
-  const pictureCompressionReturnFocusRef = useRef<HTMLElement | null>(null);
-  const [pictureCompressionTarget, setPictureCompressionTarget] = useState<{
-    readonly blockId: string;
-    readonly source: string;
-    readonly displayWidth: number;
-    readonly displayHeight: number;
-  } | null>(null);
   const accessibilityReturnFocusRef = useRef<HTMLElement | null>(null);
   const selectionPaneReturnFocusRef = useRef<HTMLElement | null>(null);
   // The right-hand task pane dock (lib/presentation/presentationTaskPaneDock).
@@ -4080,12 +3919,6 @@ export default function PresentationWindow({
   const [homeFontSizeDraft, setHomeFontSizeDraft] = useState<string | null>(
     null,
   );
-  // In-flight typing in the master view's title/body size boxes. Keyed by level
-  // so the two boxes cannot show each other's half-typed value.
-  const [masterFontSizeDraft, setMasterFontSizeDraft] = useState<{
-    key: string;
-    value: string;
-  } | null>(null);
   const [activeFindMatchKey, setActiveFindMatchKey] = useState<string | null>(
     null,
   );
@@ -4178,6 +4011,9 @@ export default function PresentationWindow({
   const [homeNumberGalleryOpen, setHomeNumberGalleryOpen] = useState(false);
   const [homeTextColorRecents, setHomeTextColorRecents] = useState<string[]>([]);
   const [animationEffectOptionsMenuOpen, setAnimationEffectOptionsMenuOpen] =
+    useState(false);
+  // Animations ▸ Animation ▸ dialog box launcher: the Effect Options dialog.
+  const [animationEffectOptionsDialogOpen, setAnimationEffectOptionsDialogOpen] =
     useState(false);
   // Home > Shape Fill / Shape Outline: the open menu, so a swatch press in
   // the shared palette closes it as a menu item would.
@@ -5334,9 +5170,11 @@ export default function PresentationWindow({
   // PowerPoint View → Show state. Each aid is independent, session-only, and
   // mirrored to a ref so the shared command reads live state at dispatch time.
   // The drag-time smart guides (`snapGuides`) remain a separate transient layer.
-  const [viewAidState, setViewAidState] = useState<PresentationViewAidState>(
-    INITIAL_PRESENTATION_VIEW_AIDS,
-  );
+  const [viewAidState, setViewAidState] = useState<PresentationViewAidState>(() => {
+    // An ONLYOFFICE config's customization.hideRulers (embed): the ruler as it opens.
+    const ruler = onlyofficeRulerAtOpen("presentation");
+    return ruler === null ? INITIAL_PRESENTATION_VIEW_AIDS : Object.freeze({ ...INITIAL_PRESENTATION_VIEW_AIDS, ruler });
+  });
   const viewAidStateRef = useRef(viewAidState);
   const showRuler = viewAidState.ruler;
   const showGridlines = viewAidState.gridlines;
@@ -7560,15 +7398,6 @@ export default function PresentationWindow({
       activeSlideVisibleBlocks,
     ],
   );
-  // The active master's PLACEHOLDER TEXT (the `master-${id}-text` block's text),
-  // for the authoring input below. "" when the master has no placeholder text.
-  const activeMasterText = useMemo(() => {
-    if (!activeMaster) return "";
-    const value = activeMaster.blocks?.find(
-      (block) => block.id === `master-${activeMaster.id}-text`,
-    )?.text;
-    return typeof value === "string" ? value : "";
-  }, [activeMaster]);
   const activeEffectiveTheme = useMemo(
     () => mergeMasterTheme(theme, activeMaster),
     [theme, activeMaster],
@@ -7615,19 +7444,6 @@ export default function PresentationWindow({
       ...hyperlink,
     } as CSSProperties;
   }, [activeSlide, activeEffectiveTheme, activeMaster]);
-  // Gallery state comes from the persisted identity receipt. Exact legacy
-  // preset recovery is handled by the pure resolver; colour coincidence never
-  // changes an identified theme into another catalog entry.
-  const activeThemePresetId = useMemo<string>(() => {
-    const selection = resolveThemeSelection(theme);
-    return selection?.selectionKind === "catalog"
-      ? presentationPresetChoiceId(selection.themeId)
-      : selection?.selectionKind === "office"
-        ? `office:${selection.themeId}`
-        : theme
-          ? "custom"
-          : "classic";
-  }, [theme]);
   // The Office theme the deck carries (Design > Themes > Office), if any.
   const activeOfficeTheme = useMemo(() => {
     const identity = theme?.identity;
@@ -7635,16 +7451,6 @@ export default function PresentationWindow({
       ? presentationOfficeTheme(identity.themeId)
       : undefined;
   }, [theme]);
-  const importedDeckHasNativeThemeTarget = importedDeckHasNativePptxSource;
-  const importedThemeSourceMissing =
-    importedDeckHasNativeThemeTarget && !theme?.identity?.source;
-  const themeSelectionDisabled =
-    !presentationThemeSelectionIsWritable(slides, theme);
-  const themeSelectionUnavailableReason = themeSelectionDisabled
-    ? importedThemeSourceMissing
-      ? t("presentation.editTargetNotFound")
-      : t("presentation.theme.multipleNativeUnsupported")
-    : null;
   // Theme-derived style for the standalone slide-title input(s). `{}` when no
   // theme so the title keeps its built-in styling, exactly as before.
   const editorTitleStyle = useMemo<CSSProperties>(() => {
@@ -8269,17 +8075,6 @@ export default function PresentationWindow({
     hasEditablePictureColor(contextualImageBlock.source) &&
     (contextualImageBlock.recolor === undefined ||
       isNativeImageRecolorMode(contextualImageBlock.recolor));
-  const selectedPictureCompressionSource = contextualImageBlock
-    ? presentationPictureCompressionSource(contextualImageBlock)
-    : null;
-  const selectedPictureCompressionEditable =
-    contextualImageBlock !== null &&
-    selectedBlockIds.size === 1 &&
-    selectedBlockIds.has(contextualImageBlock.id) &&
-    canEditBlockContent(contextualImageBlock) &&
-    selectedPictureCompressionSource !== null &&
-    (geometryNumber(contextualImageBlock, "width") ?? 0) > 0 &&
-    (geometryNumber(contextualImageBlock, "height") ?? 0) > 0;
   const selectedPictureSizeEditable =
     contextualImageBlock !== null &&
     selectedBlockIds.size === 1 &&
@@ -9619,34 +9414,6 @@ export default function PresentationWindow({
     printSettings, sensitivity, slideShowSettings, customSlideShows,
   }), [slides, activeSlide.id, theme, masters, sections, headerFooter,
     printSettings, sensitivity, slideShowSettings, customSlideShows]);
-  const customShowRegistry = useMemo(
-    () =>
-      normalizePresentationCustomShows(
-        customSlideShows,
-        slides.map((slide) => slide.id),
-      ),
-    [customSlideShows, slides],
-  );
-  const selectedCustomShow = useMemo(
-    () =>
-      selectedCustomShowId === null
-        ? null
-        : (customShowRegistry.shows.find(
-            (show) => show.id === selectedCustomShowId,
-          ) ?? null),
-    [customShowRegistry, selectedCustomShowId],
-  );
-  const customShowDialogStale =
-    false;
-  const customShowDraftValid = Boolean(
-    customShowDraft &&
-      customShowDraft.name.trim().length > 0 &&
-      customShowDraft.slideIds.length > 0 &&
-      customShowDraft.slideIds.every((slideId) =>
-        slides.some((slide) => slide.id === slideId),
-      ) &&
-      !customShowDialogStale,
-  );
   const appliedFontAcknowledgementRef = useRef<unknown>(null);
   const fontCanonicalSaveRef = useRef<{
     generation: number; before: Record<string, unknown>; after: Record<string, unknown>; saved: unknown;
@@ -10353,36 +10120,6 @@ export default function PresentationWindow({
     (nextTheme: DeckTheme | undefined, options?: { replaceMasterBackgrounds?: boolean }) => void
   >(() => undefined);
 
-  /**
-   * Apply a deck-level theme change through the unified deck commit so a theme
-   * tile or variant is one save and one Undo/Redo step. The theme is normalized
-   * at the serialize edge by `buildContent`; slides stay untouched, so existing
-   * per-slide / per-block overrides keep winning over the theme.
-   */
-  const applyDeckTheme = useCallback(
-    (nextTheme: DeckTheme | undefined, options?: { replaceMasterBackgrounds?: boolean }) => {
-      if (
-        !presentationThemeSelectionIsWritable(
-          slidesRef.current,
-          themeRef.current,
-        )
-      ) {
-        return;
-      }
-      const normalized = normalizeTheme(nextTheme);
-      // A re-selected tile or variant is a true no-op: do not manufacture a
-      // dirty/save event that patchback would later have to misclassify.
-      if (
-        deckThemesEqual(themeRef.current, normalized) &&
-        !(options?.replaceMasterBackgrounds && mastersTakingThemePick(mastersRef.current))
-      ) {
-        return;
-      }
-      commitDeckThemeRef.current(normalized, options);
-    },
-    [],
-  );
-
   const openHeaderFooterDialog = useCallback(
     (
       trigger: HTMLElement | null,
@@ -10490,107 +10227,6 @@ export default function PresentationWindow({
   useLayoutEffect(() => {
     applyViewSettingsRef.current = applyViewSettings;
   }, [applyViewSettings]);
-
-  /**
-   * Apply a preset theme by id. `none` clears the theme back to the built-in
-   * defaults; any other id applies that preset's palette wholesale. An unknown
-   * id is ignored (defensive — the select only offers known ids).
-   */
-  const applyThemePreset = useCallback(
-    (presetId: string) => {
-      if (
-        !presentationThemeSelectionIsWritable(
-          slidesRef.current,
-          themeRef.current,
-        )
-      ) {
-        return;
-      }
-      const next = themeAfterPreset(themeRef.current, presetId);
-      // Design > Themes puts the theme's master in: a master's own
-      // background and Master Font go (`mastersTakingThemePick`).
-      if (next) applyDeckTheme(next.theme, { replaceMasterBackgrounds: true });
-    },
-    [applyDeckTheme],
-  );
-
-  /**
-   * Patch a single deck-theme field, merging onto the current theme. A
-   * `null`/empty value clears that one field (the others survive); if the merge
-   * leaves no valid fields, the whole theme is cleared so default decks stay
-   * byte-clean.
-   */
-  const updateThemeField = useCallback(
-    (patch: Partial<DeckTheme>) => {
-      const merged: DeckTheme = { ...(themeRef.current ?? {}) };
-      for (const [key, value] of Object.entries(patch)) {
-        if (value === undefined || value === null || value === "") {
-          delete merged[key as keyof DeckTheme];
-        } else {
-          (merged as Record<string, unknown>)[key] = value;
-        }
-      }
-      // Choosing a theme font directly supersedes a Fonts-gallery pick and
-      // the theme's own font scheme.
-      if ("fontFamily" in patch) {
-        delete merged.fontSchemeId;
-        delete merged.fontScheme;
-      }
-      // A colour set by hand is no longer the Colors-gallery scheme.
-      if (
-        ["background", "titleColor", "bodyTextColor", "accentColors", "colorSlots"].some(
-          (key) => key in patch,
-        )
-      ) {
-        delete merged.colorSchemeId;
-      }
-      applyDeckTheme(presentationThemeMarkedCustom(merged, themeRef.current));
-    },
-    [applyDeckTheme],
-  );
-
-  /**
-   * Edit the deck theme's accent palette. `next` is the desired list; it is
-   * routed through `updateThemeField`, which (via `normalizeTheme`) re-validates,
-   * dedupes, and caps it — an empty / all-invalid list drops the field so a
-   * default deck stays byte-clean. Slides/blocks are untouched: accents are a
-   * convenience palette, never part of the render-resolution chain.
-   */
-  const setThemeAccentColors = useCallback(
-    (next: string[]) => {
-      updateThemeField({ accentColors: next });
-    },
-    [updateThemeField],
-  );
-
-  /** Replace one accent swatch in-place (used by the per-swatch colour input). */
-  const updateThemeAccentColor = useCallback(
-    (index: number, color: string) => {
-      const current = resolveThemeAccentColors(themeRef.current);
-      if (index < 0 || index >= current.length) return;
-      const next = current.slice();
-      next[index] = color;
-      setThemeAccentColors(next);
-    },
-    [setThemeAccentColors],
-  );
-
-  /** Drop one accent swatch from the palette. */
-  const removeThemeAccentColor = useCallback(
-    (index: number) => {
-      const current = resolveThemeAccentColors(themeRef.current);
-      if (index < 0 || index >= current.length) return;
-      setThemeAccentColors(current.filter((_, i) => i !== index));
-    },
-    [setThemeAccentColors],
-  );
-
-  /** Append a fresh accent swatch (up to the cap). Seeds a neutral grey. */
-  const addThemeAccentColor = useCallback(() => {
-    const current = resolveThemeAccentColors(themeRef.current);
-    if (current.length >= MAX_THEME_ACCENT_COLORS) return;
-    setThemeAccentColors([...current, "#64748b"]);
-  }, [setThemeAccentColors]);
 
   /**
    * Cap a history stack to the most recent MAX_PRESENTATION_HISTORY snapshots.
@@ -11565,303 +11201,6 @@ export default function PresentationWindow({
     narrationRecorderStatus,
     false,
   ]);
-  const closeCustomShowManager = useCallback(() => {
-    setCustomShowDialogOpen(false);
-    setCustomShowDraft(null);
-    customShowDialogGenerationRef.current = null;
-  }, []);
-  const beginNewCustomShow = useCallback(() => {
-    const slideIds = slidesRef.current.map((slide) => slide.id);
-    const showId = nextPresentationCustomShowId(
-      customSlideShowsRef.current,
-    );
-    if (showId === null || slideIds.length === 0) return;
-    setCustomShowDraft({
-      mode: "new",
-      showId,
-      name: "",
-      slideIds: [],
-      availableSlideId: slideIds[0],
-      selectedSequenceIndex: -1,
-    });
-  }, []);
-  const beginEditCustomShow = useCallback(() => {
-    if (selectedCustomShowId === null) return;
-    const slideIds = slidesRef.current.map((slide) => slide.id);
-    const show = normalizePresentationCustomShows(
-      customSlideShowsRef.current,
-      slideIds,
-    ).shows.find((candidate) => candidate.id === selectedCustomShowId);
-    if (!show) return;
-    setCustomShowDraft({
-      mode: "edit",
-      showId: show.id,
-      name: show.name,
-      slideIds: [...show.slideIds],
-      availableSlideId: slideIds[0] ?? "",
-      selectedSequenceIndex: show.slideIds.length > 0 ? 0 : -1,
-    });
-  }, [selectedCustomShowId]);
-  const addSlideToCustomShowDraft = useCallback(() => {
-    setCustomShowDraft((draft) => {
-      if (!draft || !slidesRef.current.some(
-        (slide) => slide.id === draft.availableSlideId,
-      )) {
-        return draft;
-      }
-      const slideIds = [...draft.slideIds, draft.availableSlideId];
-      return {
-        ...draft,
-        slideIds,
-        selectedSequenceIndex: slideIds.length - 1,
-      };
-    });
-  }, []);
-  const removeSlideFromCustomShowDraft = useCallback(() => {
-    setCustomShowDraft((draft) => {
-      if (
-        !draft ||
-        draft.selectedSequenceIndex < 0 ||
-        draft.selectedSequenceIndex >= draft.slideIds.length
-      ) {
-        return draft;
-      }
-      const slideIds = draft.slideIds.filter(
-        (_slideId, index) => index !== draft.selectedSequenceIndex,
-      );
-      return {
-        ...draft,
-        slideIds,
-        selectedSequenceIndex:
-          slideIds.length === 0
-            ? -1
-            : Math.min(draft.selectedSequenceIndex, slideIds.length - 1),
-      };
-    });
-  }, []);
-  const moveCustomShowDraftSlide = useCallback((direction: -1 | 1) => {
-    setCustomShowDraft((draft) => {
-      if (!draft) return draft;
-      const from = draft.selectedSequenceIndex;
-      const to = from + direction;
-      if (from < 0 || to < 0 || to >= draft.slideIds.length) return draft;
-      const slideIds = [...draft.slideIds];
-      const [moved] = slideIds.splice(from, 1);
-      slideIds.splice(to, 0, moved);
-      return { ...draft, slideIds, selectedSequenceIndex: to };
-    });
-  }, []);
-  const commitCustomShowDraft = useCallback(() => {
-    const draft = customShowDraft;
-    if (
-      !draft ||
-      customShowDialogGenerationRef.current !==
-        deckContentGenerationRef.current
-    ) {
-      return;
-    }
-    const slideIds = slidesRef.current.map((slide) => slide.id);
-    const current = normalizePresentationCustomShows(
-      customSlideShowsRef.current,
-      slideIds,
-    );
-    let next: PresentationCustomShows | null = null;
-    if (draft.mode === "new") {
-      next = addPresentationCustomShow(current, slideIds, {
-        id: draft.showId,
-        name: draft.name,
-        slideIds: draft.slideIds,
-      });
-    } else {
-      const renamed = renamePresentationCustomShow(
-        current,
-        slideIds,
-        draft.showId,
-        draft.name,
-      );
-      next = renamed
-        ? setPresentationCustomShowSlides(
-            renamed,
-            slideIds,
-            draft.showId,
-            draft.slideIds,
-          )
-        : null;
-    }
-    if (!next || JSON.stringify(next) === JSON.stringify(current)) {
-      if (next) setCustomShowDraft(null);
-      return;
-    }
-    commitDeck(
-      slidesRef.current,
-      mastersRef.current,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      next,
-    );
-    customShowDialogGenerationRef.current = deckContentGenerationRef.current;
-    setSelectedCustomShowId(draft.showId);
-    setCustomShowDraft(null);
-  }, [commitDeck, customShowDraft]);
-  const deleteSelectedCustomShow = useCallback(() => {
-    if (
-      selectedCustomShowId === null ||
-      customShowDialogGenerationRef.current !==
-        deckContentGenerationRef.current
-    ) {
-      return;
-    }
-    const slideIds = slidesRef.current.map((slide) => slide.id);
-    const current = normalizePresentationCustomShows(
-      customSlideShowsRef.current,
-      slideIds,
-    );
-    if (!current.shows.some((show) => show.id === selectedCustomShowId)) {
-      return;
-    }
-    const next = deletePresentationCustomShow(
-      current,
-      slideIds,
-      selectedCustomShowId,
-    );
-    commitDeck(
-      slidesRef.current,
-      mastersRef.current,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      next,
-    );
-    customShowDialogGenerationRef.current = deckContentGenerationRef.current;
-    setSelectedCustomShowId(next.shows[0]?.id ?? null);
-    setCustomShowDraft(null);
-  }, [commitDeck, selectedCustomShowId]);
-  const copySelectedCustomShow = useCallback(() => {
-    if (
-      selectedCustomShowId === null ||
-      customShowDialogGenerationRef.current !==
-        deckContentGenerationRef.current
-    ) {
-      return;
-    }
-    const slideIds = slidesRef.current.map((slide) => slide.id);
-    const copied = copyPresentationCustomShow(
-      normalizePresentationCustomShows(customSlideShowsRef.current, slideIds),
-      slideIds,
-      selectedCustomShowId,
-      (name) => t("presentation.slideshow.customShowCopyName", { name }),
-    );
-    if (!copied) return;
-    commitDeck(
-      slidesRef.current,
-      mastersRef.current,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      copied.shows,
-    );
-    customShowDialogGenerationRef.current = deckContentGenerationRef.current;
-    setSelectedCustomShowId(copied.id);
-  }, [commitDeck, selectedCustomShowId, t]);
-  const cancelSlideShowSetup = useCallback(() => {
-    setSlideShowSetupOpen(false);
-  }, []);
-  const applySlideShowSetup = useCallback(() => {
-    const current = slideShowSettingsRef.current;
-    const slideCount = Math.max(1, slidesRef.current.length);
-    // An opaque custom show (a page stored before PPT-B013 names none) stays
-    // as the file has it until a show is picked (`explicit.showSlides`).
-    const keepOpaqueCustomShow =
-      slideShowSetupShowSlidesKind === "custom" &&
-      (slideShowSetupCustomShowId === null || !slideShowSetupExplicit.showSlides) &&
-      presentationSlideShowCustomShowId(current) === null;
-    const showSlides: PresentationSlideShowSlides =
-      slideShowSetupShowSlidesKind === "range"
-        ? {
-            kind: "range",
-            start: slideShowSetupRangeStart,
-            end: slideShowSetupRangeEnd,
-          }
-        : slideShowSetupShowSlidesKind === "custom" &&
-            !keepOpaqueCustomShow &&
-            slideShowSetupCustomShowId !== null
-          ? { kind: "custom", id: slideShowSetupCustomShowId }
-          : { kind: "all" };
-    if (
-      showSlides.kind === "range" &&
-      (showSlides.start < 1 ||
-        showSlides.end < showSlides.start ||
-        showSlides.end > slideCount)
-    ) {
-      return;
-    }
-    const currentRange = presentationSlideShowRange(current);
-    const currentCustomShowId = presentationSlideShowCustomShowId(current);
-    const rangeMatches =
-      showSlides.kind === "custom"
-        ? currentCustomShowId === showSlides.id
-        : currentCustomShowId === null &&
-          currentRange.kind === showSlides.kind &&
-          (currentRange.kind === "all" ||
-            (showSlides.kind === "range" &&
-              currentRange.start === showSlides.start &&
-              currentRange.end === showSlides.end));
-    if (
-      presentationUsesTimings(current) === slideShowSetupUseTimings &&
-      (presentationSlideShowType(current) === "kiosk" ||
-        presentationLoops(current)) === slideShowSetupLoop &&
-      presentationShowsAnimations(current) ===
-        !slideShowSetupWithoutAnimation &&
-      presentationShowsNarrations(current) === slideShowSetupShowNarration &&
-      presentationSlideShowType(current) === slideShowSetupShowType &&
-      presentationShowsScrollBar(current) ===
-        (slideShowSetupShowType === "window" && slideShowSetupShowScrollbar) &&
-      rangeMatches &&
-      !Object.values(slideShowSetupExplicit).some(Boolean)
-    ) {
-      setSlideShowSetupOpen(false);
-      return;
-    }
-    commitDeck(
-      slidesRef.current,
-      mastersRef.current,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      presentationSlideShowSettingsWithSetup(current, {
-        explicit: slideShowSetupExplicit,
-        useTimings: slideShowSetupUseTimings,
-        loop: slideShowSetupLoop,
-        showAnimation: !slideShowSetupWithoutAnimation,
-        showNarration: slideShowSetupShowNarration,
-        showType: slideShowSetupShowType,
-        showScrollbar: slideShowSetupShowScrollbar,
-        showSlides,
-      }),
-    );
-    setSlideShowSetupOpen(false);
-  }, [
-    commitDeck,
-    slideShowSetupLoop,
-    slideShowSetupRangeEnd,
-    slideShowSetupRangeStart,
-    slideShowSetupExplicit,
-    slideShowSetupShowNarration,
-    slideShowSetupShowScrollbar,
-    slideShowSetupCustomShowId,
-    slideShowSetupShowSlidesKind,
-    slideShowSetupShowType,
-    slideShowSetupUseTimings,
-    slideShowSetupWithoutAnimation,
-  ]);
   const pictureArrangeCommitRef = useRef(commitSlides);
   const pictureReplaceCommitRef = useRef(commitSlides);
   const placeholderPictureRef = useRef<{ key: string; blocks: PresentationBlock[] } | null>(null);
@@ -11901,22 +11240,6 @@ export default function PresentationWindow({
       closeReplaceFontsDialog();
     },
     [closeReplaceFontsDialog, commitDeck],
-  );
-
-  /**
-   * Apply a deck-level masters change through the unified commit so it becomes a
-   * fully-undoable history step alongside the (untouched) slides. The masters
-   * are re-normalized (drop invalid / duplicate / dangling-id entries, cap
-   * count) at the edge before committing. Slides are carried unchanged here, so
-   * a slide's `masterId` keeps resolving against the new list (a deleted master
-   * degrades to "no master" at render time).
-   */
-  const applyDeckMasters = useCallback(
-    (nextMasters: readonly SlideMaster[]) => {
-      const normalized = normalizeMasters(nextMasters);
-      commitDeck(slidesRef.current, normalized);
-    },
-    [commitDeck],
   );
 
   /**
@@ -12061,240 +11384,6 @@ export default function PresentationWindow({
       return next;
     });
   }, []);
-
-  /**
-   * Create a new master with a generated id + a default name, append it, and
-   * return its id so the caller can immediately assign the active slide to it.
-   * Capped at MAX_MASTERS (a no-op returning `undefined` when full).
-   */
-  const createMaster = useCallback((): string | undefined => {
-    const current = mastersRef.current;
-    if (current.length >= MAX_MASTERS) return undefined;
-    const id = crypto.randomUUID();
-    const name = t("presentation.master.defaultName", {
-      index: current.length + 1,
-    });
-    // A native master owns a FAMILY of child layouts. Seed the complete editor
-    // catalog so authoring behaves like PowerPoint/WPS rather than flattening a
-    // master into one preset. The generated opaque ids remain stable in page
-    // JSON; imported decks retain their OOXML part-path ids instead.
-    const layouts: SlideMasterLayout[] = LAYOUT_DEFINITIONS.slice(
-      0,
-      MAX_MASTER_LAYOUTS,
-    ).map((layout) => ({
-      id: `${id}:layout:${layout.id}`,
-      name: t(
-        `presentation.layout.${layout.nameKey}` as "presentation.layout.blank",
-      ),
-      builtInLayoutId: layout.id,
-    }));
-    applyDeckMasters([...current, { id, name, layouts }]);
-    return id;
-  }, [applyDeckMasters, t]);
-
-  /** Rename a master (blank falls back to the master id at the serialize edge). */
-  const renameMaster = useCallback(
-    (masterId: string, name: string) => {
-      applyDeckMasters(mastersWithName(mastersRef.current, masterId, name));
-    },
-    [applyDeckMasters],
-  );
-
-  /**
-   * Set (or clear) a master's inherited layout id. Passing `undefined` removes
-   * the layout contribution so the master falls through to the per-slide /
-   * default layout chain again.
-   */
-  const updateMasterLayout = useCallback(
-    (masterId: string, layoutId: LayoutId | undefined) => {
-      applyDeckMasters(
-        mastersRef.current.map((master) => {
-          if (master.id !== masterId) return master;
-          const next: SlideMaster = { ...master };
-          if (layoutId) next.layoutId = layoutId;
-          else delete next.layoutId;
-          return next;
-        }),
-      );
-    },
-    [applyDeckMasters],
-  );
-
-  /**
-   * Patch a single field of a master's style-override theme, merging onto the
-   * master's current theme. A `null`/empty value clears that one field; an empty
-   * resulting theme is dropped so the master stays byte-clean. Editing here
-   * cascades to every slide using the master (unless the slide overrides).
-   */
-  const updateMasterThemeField = useCallback(
-    (masterId: string, patch: Partial<DeckTheme>) => {
-      applyDeckMasters(mastersWithThemeField(mastersRef.current, masterId, patch));
-    },
-    [applyDeckMasters],
-  );
-
-  /**
-   * Set (or clear) the master's PLACEHOLDER TEXT — a single inherited text block
-   * (id `master-${masterId}-text`) that propagates to every slide using the
-   * master (see `resolveSlideRenderBlocks`). A non-empty value writes/updates that
-   * one block; an empty (or whitespace-only) value REMOVES it. Any other blocks
-   * on the master are preserved. An empty resulting `blocks` array is dropped (via
-   * `normalizeMaster` at the commit edge) so the master stays byte-clean. Editing
-   * here cascades to every non-overriding slide; a slide with its own block of the
-   * same id keeps winning.
-   */
-  const updateMasterText = useCallback(
-    (masterId: string, text: string) => {
-      const blockId = `master-${masterId}-text`;
-      applyDeckMasters(
-        mastersRef.current.map((master) => {
-          if (master.id !== masterId) return master;
-          // Drop the existing placeholder-text block (if any), keeping the rest.
-          const rest = (master.blocks ?? []).filter(
-            (block) => block.id !== blockId,
-          );
-          const trimmed = text.trim();
-          const nextBlocks = trimmed
-            ? [...rest, { id: blockId, type: "text", text }]
-            : rest;
-          const next: SlideMaster = { ...master };
-          if (nextBlocks.length > 0) next.blocks = nextBlocks;
-          else delete next.blocks;
-          return next;
-        }),
-      );
-    },
-    [applyDeckMasters],
-  );
-
-  /**
-   * Delete a master AND clear the dangling `masterId` from every slide that
-   * referenced it, atomically. Both the next masters list and the cleared-ref
-   * slides are computed up front and pushed through {@link commitDeck} as ONE
-   * undoable history entry, so an undo restores the deleted master AND the
-   * cleared `masterId`s together (no ref/state desync, single commit + persist).
-   */
-  const deleteMaster = useCallback(
-    (masterId: string) => {
-      const deleted = mastersRef.current.find(
-        (master) => master.id === masterId,
-      );
-      const deletedLayoutIds = new Set(
-        deleted?.layouts?.map((layout) => layout.id) ?? [],
-      );
-      const nextMasters = normalizeMasters(
-        mastersRef.current.filter((master) => master.id !== masterId),
-      );
-      // Clear explicit or layout-inferred references to the deleted master.
-      const nextSlides = slidesRef.current.map((slide) =>
-        slide.masterId === masterId ||
-        (slide.layoutId !== undefined && deletedLayoutIds.has(slide.layoutId))
-          ? slideWithoutMaster(slide)
-          : slide,
-      );
-      commitDeck(nextSlides, nextMasters);
-    },
-    [commitDeck],
-  );
-
-  /**
-   * Assign (or clear) the ACTIVE slide's master reference. Passing `undefined`
-   * (or an unknown id) clears the reference so the slide reverts to the
-   * theme-only chain. The slide inherits the master's layout + style overrides
-   * as defaults; the slide's own overrides keep winning.
-   */
-  const assignActiveSlideMaster = useCallback(
-    (masterId: string | undefined) => {
-      const normalized = normalizeMasterId(masterId);
-      // Only accept an id that matches an existing master; anything else clears.
-      const valid =
-        normalized &&
-        mastersRef.current.some((master) => master.id === normalized)
-          ? normalized
-          : undefined;
-      const nextSlides = slidesRef.current.map((slide, index) => {
-        if (index !== activeIndexRef.current) return slide;
-        if (valid) {
-          const targetMaster = mastersRef.current.find(
-            (master) => master.id === valid,
-          );
-          const layoutStillBelongs =
-            slide.layoutId !== undefined &&
-            targetMaster?.layouts?.some(
-              (layout) => layout.id === slide.layoutId,
-            );
-          if (layoutStillBelongs) return { ...slide, masterId: valid };
-          const next = { ...slide, masterId: valid };
-          delete next.layoutId;
-          return next;
-        }
-        return slideWithoutMaster(slide);
-      });
-      commitSlides(nextSlides);
-    },
-    [commitSlides],
-  );
-
-  /** Assign the active slide to one native child layout under a master. */
-  const assignActiveSlideMasterLayout = useCallback(
-    (masterId: string, layoutId: string | undefined) => {
-      const normalizedMasterId = normalizeMasterId(masterId);
-      const normalizedLayoutId = normalizeMasterLayoutId(layoutId);
-      const targetMaster = mastersRef.current.find(
-        (master) => master.id === normalizedMasterId,
-      );
-      const validLayout = targetMaster?.layouts?.find(
-        (layout) => layout.id === normalizedLayoutId,
-      );
-      if (!targetMaster || !validLayout) return;
-      const nextSlides = slidesRef.current.map((slide, index) => {
-        if (index !== activeIndexRef.current) return slide;
-        const next = reflowSlideToLayout(
-          slide,
-          validLayout.builtInLayoutId ?? DEFAULT_LAYOUT_ID,
-          activeSlideBounds,
-        );
-        return {
-          ...next,
-          masterId: targetMaster.id,
-          layoutId: validLayout.id,
-        };
-      });
-      commitSlides(nextSlides);
-    },
-    [activeSlideBounds, commitSlides],
-  );
-
-  /**
-   * Edit ONE master's own text styles (PowerPoint's Slide Master view: select
-   * the master, then set the size / colour / bold of the title or body
-   * placeholder text from the Home tab — Microsoft Support, "Change the
-   * default font in PowerPoint" and "Change the font size").
-   *
-   * The values land on `master.theme`, the override bundle `mergeMasterTheme`
-   * already layers over the deck theme, so Close Master View shows the cascade
-   * through the SAME resolver the canvas uses. Inheritance is per-ATTRIBUTE
-   * (SHAPE-IMPORT-AUDIT.md §70): a layout placeholder that declares its own
-   * size keeps it and still takes the colour from here, which is exactly what
-   * `resolveBlockTextStyle` already does field by field.
-   *
-   * API side: `_pptx_slide_master_text_style_patches` reads this bundle and
-   * writes `p:sldMaster/p:txStyles/…/a:defRPr`; a master left alone produces no
-   * patch and its part stays byte-identical.
-   */
-  const updateMasterTextStyle = useCallback(
-    (masterId: string, patch: Partial<DeckTheme>) => {
-      const normalizedId = normalizeMasterId(masterId);
-      if (!normalizedId) return;
-      // Not edited = not written, on this side too: a no-op click must not push
-      // an undo step or queue a save the API would then have to recognise as a
-      // master edit that changes nothing.
-      const nextMasters = mastersWithTextStyle(mastersRef.current, normalizedId, patch);
-      if (!nextMasters) return;
-      commitDeck(slidesRef.current, nextMasters);
-    },
-    [commitDeck],
-  );
 
   /**
    * Persist a full {slides, masters} snapshot (used by undo/redo, which restore
@@ -13118,23 +12207,6 @@ export default function PresentationWindow({
   const enterPresentMode = useCallback(() => {
     enterPresentModeFromLiveSlide(false);
   }, [enterPresentModeFromLiveSlide]);
-
-  const startSelectedCustomShow = useCallback(() => {
-    if (selectedCustomShowId === null) return;
-    const sequence = slidesForPresentationCustomShow(
-      customSlideShowsRef.current,
-      selectedCustomShowId,
-      slidesRef.current,
-    )?.filter((slide) => !isSlideHidden(slide));
-    if (!sequence?.length) return;
-    setCustomPresentShowId(selectedCustomShowId);
-    closeCustomShowManager();
-    initializePresentSession(0, sequence);
-  }, [
-    closeCustomShowManager,
-    initializePresentSession,
-    selectedCustomShowId,
-  ]);
 
   const exitPresentMode = useCallback(() => {
     setPresentMode(false);
@@ -15206,29 +14278,17 @@ export default function PresentationWindow({
     viewport.addEventListener("wheel", onWheel, { passive: false });
     return () => viewport.removeEventListener("wheel", onWheel);
   }, [activateSlideFromRail, presentMode, viewMode, taskPaneDockHost]);
-  // The Slide Master pane (docked at the right of the stage in master view)
-  // can be put away with its close button; it is back on the next entry.
-  const [masterPaneOpen, setMasterPaneOpen] = useState(true);
   useEffect(() => {
-    if (viewMode === "master") setMasterPaneOpen(true);
   }, [viewMode]);
-  // Slide Master view of an Office theme deck (PPT-B030): the selected card
-  // of the thumbnail pane, the master text-style level the bar edits, and the
-  // master's Format Background pane.
-  const [officeMasterKey, setOfficeMasterKey] = useState("master");
-  const [officeMasterTextTarget, setOfficeMasterTextTarget] =
-    useState<OfficeMasterTextLevel>({ style: "title", level: "1" });
   const [masterBackgroundPaneOpen, setMasterBackgroundPaneOpen] = useState(false);
   useEffect(() => {
-    if (viewMode !== "master") setMasterBackgroundPaneOpen(false);
+    setMasterBackgroundPaneOpen(false);
   }, [viewMode]);
   const viewModeRef = useRef<PresentationViewMode>("rail");
   // Slide Master view opens on its own tab and Close Master View leaves it
   // (PPT-B030); the tab exists only while the view is open.
   useEffect(() => {
-    if (viewMode === "master") {
-      setRibbonTab(PRESENTATION_SLIDE_MASTER_RIBBON_TAB);
-    } else {
+    {
       setRibbonTab((current) =>
         current === PRESENTATION_SLIDE_MASTER_RIBBON_TAB ? lastBaseRibbonTabRef.current : current,
       );
@@ -15265,7 +14325,7 @@ export default function PresentationWindow({
       : viewMode === "sorter" ||
           viewMode === "notes" ||
           viewMode === "reading" ||
-          viewMode === "master"
+          false
         ? viewMode
         : null;
   const setViewMode = useCallback((next: PresentationViewMode) => {
@@ -15674,7 +14734,8 @@ export default function PresentationWindow({
   // Notes button pressed, PowerPoint for Mac 16.86; PPT-E009); the toggle
   // collapses it so the canvas reclaims the space. Notes are a bottom pane,
   // not part of the slide canvas.
-  const [notesVisible, setNotesVisible] = useState(true);
+  // An ONLYOFFICE config's customization.hideNotes (embed) closes it at open.
+  const [notesVisible, setNotesVisible] = useState(() => onlyofficeNotesAtOpen() ?? true);
   // A deck whose file closed the Notes pane (`p:normalViewPr
   // @horzBarState="maximized"`) opens with it closed, as PowerPoint opens it.
   const fileClosedNotesPane = viewSettings?.normalView?.notesHidden === true;
@@ -16018,7 +15079,14 @@ export default function PresentationWindow({
     () => ({ ...normalViewPanes.style, ...commentsDock.style }),
     [commentsDock.style, normalViewPanes.style],
   );
-  const [showProofingErrors, setShowProofingErrors] = useState(true);
+  // An ONLYOFFICE config's features.spellcheck (embed): its state at open,
+  // and File > Advanced Settings' switch.
+  const [showProofingErrors, setShowProofingErrors] = useState(() => onlyofficeSpellcheckAtOpen() ?? true);
+  useEffect(() => {
+    const follow = (event: Event) => setShowProofingErrors((event as CustomEvent<{ on?: boolean }>).detail?.on !== false);
+    window.addEventListener(ONLYOFFICE_SPELLCHECK_EVENT, follow);
+    return () => window.removeEventListener(ONLYOFFICE_SPELLCHECK_EVENT, follow);
+  }, []);
   const [showReviewMarkup, setShowReviewMarkup] = useState(true);
   const [showAdvancedReviewMarkup, setShowAdvancedReviewMarkup] = useState(false);
   useEffect(() => {
@@ -40416,6 +39484,25 @@ export default function PresentationWindow({
     animationDirectionalEffectOptionsEditable ||
     animationColorEffectOptionsEditable ||
     animationTextSequenceEditable;
+  // The Effect Options dialog opens on the selected effect when its options
+  // can change at all (one that is not, toggled, would be refused).
+  const animationEffectOptionsDialogAvailable =
+    selectedAnimationIndex !== null &&
+    selectedAnimationTimingStep !== null &&
+    animationEffectCommand.canExecute({
+      operation: "set-effect-settings",
+      slideModelId: activeSlide.id,
+      index: selectedAnimationIndex,
+      expectedStep: copyTimelineStep(selectedAnimationTimingStep),
+      settings: selectedAnimationTimingStep.effectSettings?.autoReverse
+        ? (({ autoReverse: _off, ...rest }) => (Object.keys(rest).length ? rest : undefined))(
+            selectedAnimationTimingStep.effectSettings,
+          )
+        : { ...selectedAnimationTimingStep.effectSettings, autoReverse: true },
+    });
+  useEffect(() => {
+    if (!animationEffectOptionsDialogAvailable) setAnimationEffectOptionsDialogOpen(false);
+  }, [animationEffectOptionsDialogAvailable]);
   useEffect(() => {
     if (!animationEffectOptionsEditable) {
       setAnimationEffectOptionsMenuOpen(false);
@@ -42470,143 +41557,6 @@ export default function PresentationWindow({
       tableCellFocus?.blockId,
     ],
   );
-
-  /**
-   * Every layout of every master, as slide-shaped previews for 母版视图.
-   *
-   * A layout's `blocks` are the content slides INHERIT — the thing a master view
-   * exists to show. Wrapping them in a slide shape lets the real slide renderer
-   * paint them, so an imported deck's master shows its actual background and
-   * placeholders rather than a diagram of where they would be.
-   */
-  // Built only while 母版视图 is open: outside it this costs nothing, and the
-  // React compiler memoizes the result for us (a manual useMemo here could not
-  // be preserved, because the block normalizer may mint an id).
-  // The master view's masters with the layout cards an import read without
-  // (`catalogCard: "pending"`) drawn in as the server draws them, asked for
-  // while the master view is shown (lib/presentation-layout-cards). For the
-  // thumbnails only: the page keeps stating the cards as it read them.
-  const masterViewPreviewMasters = useMastersWithLayoutCards(
-    guestMode ? null : pageId,
-    masters,
-    !guestMode && viewMode === "master",
-    fontReplacements,
-  );
-  const masterViewLayouts = viewMode !== "master" ? [] : ((): Array<{
-    masterId: string;
-    masterName: string;
-    master: SlideMaster;
-    layout: SlideMasterLayout;
-    slide: SlideModel;
-    usage: number;
-    selected: boolean;
-  }> => {
-    // A slide records its native layout in `layoutId` (what
-    // `assignActiveSlideMasterLayout` writes) alongside its `masterId`.
-    const usageByLayout = new Map<string, number>();
-    for (const slide of slides) {
-      const key = `${slide.masterId ?? ""}:${slide.layoutId ?? ""}`;
-      usageByLayout.set(key, (usageByLayout.get(key) ?? 0) + 1);
-    }
-    const entries: Array<{
-      masterId: string;
-      masterName: string;
-      master: SlideMaster;
-      layout: SlideMasterLayout;
-      slide: SlideModel;
-      usage: number;
-      selected: boolean;
-    }> = [];
-    for (const master of masterViewPreviewMasters) {
-      for (const layout of master.layouts ?? []) {
-        entries.push({
-          masterId: master.id,
-          masterName: master.name,
-          master,
-          layout,
-          slide: masterLayoutPreviewSlide(master, layout, activeSlide),
-          usage: usageByLayout.get(`${master.id}:${layout.id}`) ?? 0,
-          selected:
-            activeSlide.masterId === master.id &&
-            activeNativeLayout?.id === layout.id,
-        });
-      }
-    }
-    return entries;
-  })();
-
-  /**
-   * The master's own card, one per master, drawn before its layouts the way
-   * PowerPoint's thumbnail pane puts the master above them (§73). Read-only:
-   * it takes part in no cascade, the planner ignores it, and clicking it
-   * changes nothing -- the master is not a layout a slide can be assigned.
-   */
-  const masterViewMasters =
-    viewMode !== "master"
-      ? []
-      : masterViewPreviewMasters.map((master) => ({
-          master,
-          slide: masterPreviewSlide(master, activeSlide),
-          layoutCount: master.layouts?.length ?? 0,
-          usage: slides.filter((slide) => slide.masterId === master.id).length,
-          selected: activeSlide.masterId === master.id,
-        }));
-
-  /**
-   * An Office theme deck's master and layouts for Slide Master view
-   * (PPT-B030): a from-scratch deck has no `masters`, its one master is the
-   * theme's, drawn from the theme's own layout frames with PowerPoint's master
-   * prompts.
-   */
-  const officeMasterPrompts = useMemo(
-    () => ({
-      title: t("presentation.master.promptTitle"),
-      subtitle: t("presentation.master.promptSubtitle"),
-      textLevels: t("presentation.master.promptText").split("\n"),
-      // An inserted Chart, Table, SmartArt, Media or Online Image placeholder
-      // shows its kind on the master card (PPT-B030).
-      kinds: Object.fromEntries(
-        (["chart", "table", "smartart", "media", "online-image"] as const).map((kind) => [
-          kind,
-          t(`presentation.slideMaster.placeholderKind.${kind}` as "presentation.slideMaster.placeholderKind.chart"),
-        ]),
-      ),
-    }),
-    [t],
-  );
-  // An Office theme deck keeps its master editor when Reuse Slides (Keep
-  // Source Formatting) brought another deck's master in: that master's cards
-  // follow the Office ones, kept as they are (see `officeMasterReusedSelected`).
-  // Before, any reused master turned the whole view into the imported deck's
-  // read-only card grid.
-  const officeMasterEntries =
-    viewMode === "master"
-      ? officeMasterViewEntries(theme, slides, officeMasterPrompts)
-      : [];
-  // A reused master's card (or one of its layouts') is selected: the Slide
-  // Master commands are the Office master's, so they stand down.
-  const officeMasterReusedSelected =
-    officeMasterEntries.length > 0 && officeMasterKey.startsWith("reused-");
-  // Slide Master view's structural commands on the selected card (PPT-B030).
-  const officeMasterSelectedEntry =
-    officeMasterEntries.find((entry) => entry.key === officeMasterKey) ?? officeMasterEntries[0];
-  const officeMasterLayoutWritable =
-    officeMasterEntries.length > 0 && !autosave.readOnly && !themeSelectionDisabled &&
-    !officeMasterReusedSelected;
-  // The master the selected card belongs to (PPT-B030): master one, or one
-  // Insert Slide Master added, whose theme is Office's default.
-  const officeMasterSelectedMasterKey = officeMasterSelectedEntry?.masterKey ?? OFFICE_PRIMARY_MASTER_KEY;
-  const officePlaceholderKindLabels = Object.fromEntries(
-    OFFICE_PLACEHOLDER_KINDS.map((kind) => [
-      kind,
-      t(`presentation.slideMaster.placeholderKind.${kind}` as "presentation.slideMaster.placeholderKind.content"),
-    ]),
-  ) as Record<OfficePlaceholderKind, string>;
-  /** One undo step for an edit of the master's layouts and the slides on them. */
-  const commitOfficeDeckEdit = (edit: OfficeDeckEdit<SlideModel> | null) => {
-    if (!edit || autosave.readOnly) return;
-    commitDeck(edit.slides, mastersRef.current, undefined, edit.theme);
-  };
   /**
    * A layout's name in the layout galleries and menus: the name Rename
    * Layout gave it in Slide Master view (PPT-B030), else PowerPoint's own.
@@ -42684,111 +41634,6 @@ export default function PresentationWindow({
   /** A gallery group's heading: master one's is the deck's heading, an inserted master's its name. */
   const layoutGalleryGroupHeading = (masterKey: string): string =>
     masterKey === OFFICE_PRIMARY_MASTER_KEY ? layoutGalleryHeading : officeSlideMasterDisplayName(masterKey);
-  /** PowerPoint's thumbnail hover: which slides use the master or layout. */
-  const officeMasterUsageLabel = (
-    entry: OfficeMasterViewEntry,
-    deckSlides: readonly SlideModel[],
-  ): string => {
-    // A master's card counts the slides on its own layouts once the deck has
-    // several masters (PPT-B030).
-    const numbers = deckSlides.flatMap((slide, index) =>
-      (entry.kind === "master"
-        ? officeSlideMasterKey(slide, theme) === entry.masterKey
-        : slide.layout === entry.layoutId)
-        ? [index + 1]
-        : [],
-    );
-    if (numbers.length === 0) return t("presentation.master.usedByNone");
-    if (numbers.length === deckSlides.length) return t("presentation.master.usedByAll");
-    return t("presentation.master.usedBySlides", { slides: slideNumberRanges(numbers) });
-  };
-
-  /**
-   * The master the master view's text-style controls address, and the values
-   * they show.
-   *
-   * PowerPoint's Slide Master view puts the caret in a thumbnail pane where
-   * the master is selected before you touch the Home tab; we have no such
-   * pane, so the target is the master the ACTIVE slide inherits from, falling
-   * back to the deck's first master when the slide names none (a one-master
-   * deck is the ordinary shape of an imported package).
-   *
-   * The SHOWN value is the master's bundle layered over the deck theme —
-   * `mergeMasterTheme`, the same resolver the canvas renders through — so a
-   * master that overrides nothing displays what the slides actually inherit
-   * instead of an empty box.
-   */
-  const masterTextStyleTarget =
-    viewMode !== "master" ? undefined : (activeMaster ?? masters[0]);
-  const masterTextStyleEffective =
-    mergeMasterTheme(theme, masterTextStyleTarget) ?? {};
-  /**
-   * The two levels the panel edits, each carrying the value to SHOW and the
-   * `DeckTheme` fragment to write. Explicit fragments rather than a computed
-   * key so the patch stays a typed `Partial<DeckTheme>` instead of a string
-   * index signature.
-   *
-   * There is deliberately no bold toggle: `normalizeTheme` keeps `titleBold` /
-   * `bodyBold` only when they are `true`, so the page model cannot say
-   * "explicitly NOT bold" — a toggle here could be switched on and never off.
-   * The writer handles both (`PptxThemePatch` already sets bold through the
-   * same `_apply_master_text_style_level`); it is the model that is missing a
-   * field, and that is named as remainder rather than papered over with a
-   * control that half works.
-   */
-  const masterTextStyleLevels = [
-    {
-      key: "title",
-      label: t("presentation.master.levelTitle"),
-      fontSize: masterTextStyleEffective.titleFontSize,
-      color: masterTextStyleEffective.titleColor,
-      withFontSize: (titleFontSize: number): Partial<DeckTheme> => ({
-        titleFontSize,
-      }),
-      withColor: (titleColor: string): Partial<DeckTheme> => ({ titleColor }),
-    },
-    {
-      key: "body",
-      label: t("presentation.master.levelBody"),
-      fontSize: masterTextStyleEffective.bodyFontSize,
-      color: masterTextStyleEffective.bodyTextColor,
-      withFontSize: (bodyFontSize: number): Partial<DeckTheme> => ({
-        bodyFontSize,
-      }),
-      withColor: (bodyTextColor: string): Partial<DeckTheme> => ({
-        bodyTextColor,
-      }),
-    },
-  ];
-
-  /**
-   * Native master/layout PARTS this deck's slides reference while the page
-   * itself carries no master catalog.
-   *
-   * An imported PPTX arrives with `masterId` / `layoutId` on every slide — real
-   * `ppt/slideMasters/*.xml` and `ppt/slideLayouts/*.xml` part paths — but the
-   * import projection emits no deck-level `masters` array, so
-   * `masterViewLayouts` is empty for a deck that unmistakably HAS masters.
-   * Saying "this deck defines no master layouts yet" there would be false.
-   * This names what the slides point at instead, so the gap degrades visibly.
-   */
-  const masterViewNativeReferences =
-    viewMode !== "master" || masterViewLayouts.length > 0 || masterViewMasters.length > 0
-      ? []
-      : ((): Array<{ masterId: string; layoutId: string; usage: number }> => {
-          const counts = new Map<string, number>();
-          for (const slide of slides) {
-            const masterId = slide.masterId;
-            const layoutId = slide.layoutId;
-            if (typeof masterId !== "string" || !masterId) continue;
-            const key = `${masterId} ${layoutId ?? ""}`;
-            counts.set(key, (counts.get(key) ?? 0) + 1);
-          }
-          return [...counts.entries()].map(([key, usage]) => {
-            const [masterId, layoutId] = key.split(" ");
-            return { masterId, layoutId, usage };
-          });
-        })();
 
   // Set one column/row or the complete active selection to a native size (px).
   // PowerPoint/WPS apply the Layout size box to every selected axis slot. The
@@ -44048,54 +42893,6 @@ export default function PresentationWindow({
       flipV,
     };
   }, [pictureEditSession?.blockId, pictureEditSession?.slideId]);
-  const closePictureCompression = useCallback(
-    () => setPictureCompressionTarget(null),
-    [],
-  );
-  const submitPictureCompression = useCallback(
-    async (
-      presetId: DocumentPictureCompressionPresetId,
-      signal: AbortSignal,
-    ): Promise<"compressed" | "unchanged" | "rejected"> => {
-      const frozen = null;
-      if (!frozen || signal.aborted) return "rejected";
-      try {
-        const result = await compressDocumentPictureDataUrl({
-          source: frozen.source,
-          displayWidth: frozen.displayWidth,
-          displayHeight: frozen.displayHeight,
-          presetId,
-        });
-        if (signal.aborted) return "rejected";
-        if (result.status === "unchanged") return "unchanged";
-        if (signal.aborted) return "rejected";
-        const accepted = commitLiveActiveBlocks((blocks) => {
-          const selection = resolvePresentationSelectionAuthority(
-            blocks,
-            selectedBlockIdRef.current,
-            selectedBlockIdsRef.current,
-          );
-          const live = selection.primary;
-          if (
-            selection.disposition !== "single" ||
-            live?.id !== frozen.blockId ||
-            live.type !== "image" ||
-            !canEditBlockContent(live) ||
-            presentationPictureCompressionSource(live) !== frozen.source
-          ) {
-            return null;
-          }
-          return blocks.map((block) =>
-            block === live ? { ...live, src: result.dataUrl } : block,
-          );
-        });
-        return accepted ? "compressed" : "rejected";
-      } catch {
-        return "rejected";
-      }
-    },
-    [canManipulateBlock, commitLiveActiveBlocks, null],
-  );
 
   // The deck's words as this window gave them to the AI, by read (the last
   // few): an AI rewrite comes back naming the read it was made from
@@ -44729,71 +43526,6 @@ export default function PresentationWindow({
       return true;
     },
     [autosave.readOnly, getSingleLiveSelectedBlock],
-  );
-  const closeProofingLanguageDialog = useCallback(() => {
-    setProofingLanguageTarget(null);
-  }, []);
-  const submitProofingLanguage = useCallback(
-    (value: ProofingLanguageValue, options?: { preserveLanguages?: boolean }): boolean => {
-      const target = proofingLanguageTarget;
-      const liveSlide = slidesRef.current[activeIndexRef.current];
-      const liveBlock = liveSlide?.blocks.find(
-        (block): block is PresentationTextBlock =>
-          block.id === target?.block.id && block.type === "text",
-      );
-      if (
-        !target ||
-        !liveSlide ||
-        liveSlide.id !== target.slideId ||
-        liveBlock !== target.block ||
-        selectedBlockIdRef.current !== target.block.id ||
-        autosave.readOnly ||
-        isTextEditLocked(liveBlock)
-      ) {
-        return false;
-      }
-      const proofingLanguage = value.val ?? value.eastAsia ?? value.bidi;
-      const current = proofingStateForTextBlockSelection(
-        liveBlock,
-        target.selection,
-      );
-      // A mixed selection whose language was left "(mixed)": only the
-      // checking switch changes and every word keeps its own language
-      // (the shared dialog's `preserveLanguages`, PPT-B276).
-      const preserveLanguages = options?.preserveLanguages === true;
-      if (preserveLanguages) {
-        if (current.noProof === value.noProof) return true;
-        return commitLiveTextBlockChange(target.block.id, (textBlock) => {
-          if (textBlock !== target.block) return null;
-          return formatTextBlockRunSelection(
-            textBlock,
-            target.block.id,
-            target.selection,
-            { noProof: value.noProof },
-          );
-        });
-      }
-      if (
-        !current.mixed &&
-        (current.proofingLanguage ?? null) === proofingLanguage &&
-        current.noProof === value.noProof
-      ) {
-        return true;
-      }
-      return commitLiveTextBlockChange(target.block.id, (textBlock) => {
-        if (textBlock !== target.block) return null;
-        return formatTextBlockRunSelection(
-          textBlock,
-          target.block.id,
-          target.selection,
-          {
-            proofingLanguage: proofingLanguage ?? "",
-            noProof: value.noProof,
-          },
-        );
-      });
-    },
-    [autosave.readOnly, commitLiveTextBlockChange, proofingLanguageTarget],
   );
   /* ---------------------------------------------------------------------
    * FEATURE COMMAND REGISTRY — the document editor's ribbon architecture,
@@ -47799,8 +46531,7 @@ export default function PresentationWindow({
       : null;
   const activeRibbonTabUnchecked: PresentationWebRibbonTab =
     activeExplicitContextualRibbonTab ??
-    ((webRibbonTab === PRESENTATION_SLIDE_MASTER_RIBBON_TAB && viewMode === "master") ||
-    isPresentationBaseRibbonTab(webRibbonTab) ||
+    (isPresentationBaseRibbonTab(webRibbonTab) ||
     contextualRibbonTabs.includes(
       webRibbonTab as PresentationContextualRibbonTab,
     )
@@ -47971,15 +46702,7 @@ export default function PresentationWindow({
     ReadonlyArray<OfficeRibbonTabDescriptor<PresentationWebRibbonTab>>
   >(
     () => [
-      ...(viewMode === "master"
-        ? [
-            {
-              key: PRESENTATION_SLIDE_MASTER_RIBBON_TAB,
-              label: presentationWebRibbonTabLabels[PRESENTATION_SLIDE_MASTER_RIBBON_TAB],
-              controlId: "PPTCTL.RIBBON.TAB.SLIDE_MASTER",
-            },
-          ]
-        : []),
+      ...([]),
       ...PRESENTATION_WEB_RIBBON_TABS.map((key) => ({
         key,
         label: presentationWebRibbonTabLabels[key],
@@ -51091,7 +49814,9 @@ export default function PresentationWindow({
                       : autosave.error && autosave.saveStatus === "unsaved" ? "error" : deckSaveStatus,
                     statusLabel: guestMode ? t("pages.unsaved") : deckShowsSynced ? t("pages.synced")
                       : autosave.notConnected ? t("pages.notConnectedKeptOnDevice")
-                      : autosave.guaranteedRetrying === "held" ? t("pages.savedOnDeviceReconnecting")
+                      // The server keeps a copy too (SAVE-GUARANTEE S2): said.
+                      : autosave.guaranteedRetrying === "held"
+                        ? t(autosave.serverBackupHoldId ? "pages.savedOnDeviceServerBackup" : "pages.savedOnDeviceReconnecting")
                       : t(`pages.${deckSaveStatus}` as "pages.saving"),
                     failureReason: !guestMode && autosave.error ? autosave.error : undefined,
                     failureTestId: "presentation-save-failure-reason",
@@ -51777,6 +50502,9 @@ export default function PresentationWindow({
           onCancel={() => setTableCellMarginsDialogOpen(false)}
         />
       ) : null}
+      {selectedAnimationTimingStep && selectedAnimationIndex !== null ? (
+        null
+      ) : null}
       <PresentationHeaderFooterDialog
         open={headerFooterDialogOpen}
         entry={headerFooterDialogEntry}
@@ -51799,266 +50527,7 @@ export default function PresentationWindow({
           setHeaderFooterDialogOpen(false);
         }}
       />
-      <OfficeDialogShell
-        open={false}
-        title={t("presentation.slideshow.customShowManage")}
-        description={t("presentation.slideshow.customShowDescription")}
-        defaultActionLabel={t("common.close")}
-        cancelActionLabel={t("toolbar.cancel")}
-        onDefaultAction={closeCustomShowManager}
-        onCancel={closeCustomShowManager}
-        returnFocusRef={customShowDialogReturnFocusRef}
-        className="sm:max-w-[720px]"
-        testIdPrefix="presentation-custom-show"
-      >
-        {customShowDialogStale ? (
-          <p
-            role="alert"
-            className={dialogParts.message} data-tone="error"
-            data-testid="presentation-custom-show-stale"
-          >
-            {t("presentation.slideshow.customShowStale")}
-          </p>
-        ) : null}
-        {customShowDraft ? (
-          <div
-            className="grid gap-4"
-            data-testid="presentation-custom-show-editor"
-          >
-            <label className={`${dialogParts.field} grid gap-1`}>
-              {t("presentation.slideshow.customShowName")}
-              <input
-                type="text"
-                maxLength={255}
-                value={customShowDraft.name}
-                onChange={(event) =>
-                  setCustomShowDraft((draft) =>
-                    draft ? { ...draft, name: event.target.value } : draft,
-                  )
-                }
-                // Enter in the name box is the draft's own Save, as OK is in
-                // PowerPoint's Define Custom Show; an invalid draft stays
-                // open. It never reaches the dialog's Close, which would
-                // discard the draft (PPT-B030).
-                onKeyDown={(event) => {
-                  if (
-                    event.key !== "Enter" ||
-                    event.nativeEvent.isComposing ||
-                    event.nativeEvent.keyCode === 229
-                  ) {
-                    return;
-                  }
-                  event.preventDefault();
-                  if (customShowDraftValid) commitCustomShowDraft();
-                }}
-                data-testid="presentation-custom-show-name"
-              />
-            </label>
-            <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr]">
-              <label className={`${dialogParts.field} grid gap-1`}>
-                {t("presentation.slideshow.customShowAvailableSlides")}
-                <select
-                  size={Math.min(8, Math.max(4, slides.length))}
-                  value={customShowDraft.availableSlideId}
-                  onChange={(event) =>
-                    setCustomShowDraft((draft) =>
-                      draft
-                        ? { ...draft, availableSlideId: event.target.value }
-                        : draft,
-                    )
-                  }
-                  className="min-h-44"
-                  data-testid="presentation-custom-show-available"
-                >
-                  {slides.map((slide, index) => (
-                    <option key={slide.id} value={slide.id}>
-                      {index + 1}. {presentationSlideDisplayTitle(slide) || t("presentation.untitledSlide")}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="flex items-center justify-center">
-                <button
-                  type="button"
-                  className={`${dialogParts.compactButton} inline-flex items-center justify-center`}
-                  onClick={addSlideToCustomShowDraft}
-                  disabled={!customShowDraft.availableSlideId}
-                  data-testid="presentation-custom-show-add-slide"
-                >
-                  {t("presentation.slideshow.customShowAdd")}
-                </button>
-              </div>
-              <label className={`${dialogParts.field} grid gap-1`}>
-                {t("presentation.slideshow.customShowSlides")}
-                <select
-                  size={Math.min(
-                    8,
-                    Math.max(4, customShowDraft.slideIds.length),
-                  )}
-                  value={
-                    customShowDraft.selectedSequenceIndex < 0
-                      ? ""
-                      : String(customShowDraft.selectedSequenceIndex)
-                  }
-                  onChange={(event) =>
-                    setCustomShowDraft((draft) =>
-                      draft
-                        ? {
-                            ...draft,
-                            selectedSequenceIndex: Number(event.target.value),
-                          }
-                        : draft,
-                    )
-                  }
-                  className="min-h-44"
-                  data-testid="presentation-custom-show-sequence"
-                >
-                  {customShowDraft.slideIds.map((slideId, index) => {
-                    const slideIndex = slides.findIndex(
-                      (slide) => slide.id === slideId,
-                    );
-                    const slide = slideIndex >= 0 ? slides[slideIndex] : null;
-                    return (
-                      <option key={`${slideId}:${index}`} value={index}>
-                        {slideIndex + 1}. {(slide && presentationSlideDisplayTitle(slide)) || t("presentation.untitledSlide")}
-                      </option>
-                    );
-                  })}
-                </select>
-              </label>
-            </div>
-            <div className="flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                className={dialogParts.compactButton}
-                disabled={customShowDraft.selectedSequenceIndex < 0}
-                onClick={removeSlideFromCustomShowDraft}
-                data-testid="presentation-custom-show-remove-slide"
-              >
-                {t("presentation.slideshow.customShowRemove")}
-              </button>
-              <button
-                type="button"
-                className={dialogParts.compactButton}
-                disabled={customShowDraft.selectedSequenceIndex <= 0}
-                onClick={() => moveCustomShowDraftSlide(-1)}
-                data-testid="presentation-custom-show-move-up"
-              >
-                {t("presentation.slideshow.customShowMoveUp")}
-              </button>
-              <button
-                type="button"
-                className={dialogParts.compactButton}
-                disabled={
-                  customShowDraft.selectedSequenceIndex < 0 ||
-                  customShowDraft.selectedSequenceIndex >=
-                    customShowDraft.slideIds.length - 1
-                }
-                onClick={() => moveCustomShowDraftSlide(1)}
-                data-testid="presentation-custom-show-move-down"
-              >
-                {t("presentation.slideshow.customShowMoveDown")}
-              </button>
-              <button
-                type="button"
-                className={dialogParts.compactButton}
-                onClick={() => setCustomShowDraft(null)}
-                data-testid="presentation-custom-show-edit-cancel"
-              >
-                {t("toolbar.cancel")}
-              </button>
-              <button
-                type="button"
-                className={dialogParts.primaryButton}
-                disabled={!customShowDraftValid}
-                onClick={commitCustomShowDraft}
-                data-testid="presentation-custom-show-edit-save"
-              >
-                {t("common.save")}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="grid gap-3">
-            <label className={`${dialogParts.field} grid gap-1`}>
-              {t("presentation.slideshow.customShowList")}
-              <select
-                size={Math.min(
-                  8,
-                  Math.max(4, customShowRegistry.shows.length),
-                )}
-                value={selectedCustomShowId ?? ""}
-                onChange={(event) =>
-                  setSelectedCustomShowId(Number(event.target.value))
-                }
-                className="min-h-44"
-                data-testid="presentation-custom-show-list"
-              >
-                {customShowRegistry.shows.map((show) => (
-                  <option key={show.id} value={show.id}>
-                    {show.name} ({show.slideIds.length})
-                  </option>
-                ))}
-              </select>
-            </label>
-            {customShowRegistry.shows.length === 0 ? (
-              <p
-                className={dialogParts.hint}
-                data-testid="presentation-custom-show-empty"
-              >
-                {t("presentation.slideshow.customShowEmpty")}
-              </p>
-            ) : null}
-            <div className="flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                className={dialogParts.compactButton}
-                disabled={customShowDialogStale || slides.length === 0}
-                onClick={beginNewCustomShow}
-                data-testid="presentation-custom-show-new"
-              >
-                {t("presentation.slideshow.customShowNew")}
-              </button>
-              <button
-                type="button"
-                className={dialogParts.primaryButton}
-                disabled={customShowDialogStale || !selectedCustomShow}
-                onClick={startSelectedCustomShow}
-                data-testid="presentation-custom-show-start"
-              >
-                {t("presentation.slideshow.customShowStart")}
-              </button>
-              <button
-                type="button"
-                className={dialogParts.compactButton}
-                disabled={customShowDialogStale || !selectedCustomShow}
-                onClick={beginEditCustomShow}
-                data-testid="presentation-custom-show-edit"
-              >
-                {t("presentation.slideshow.customShowEdit")}
-              </button>
-              <button
-                type="button"
-                className={dialogParts.compactButton} data-tone="danger"
-                disabled={customShowDialogStale || !selectedCustomShow}
-                onClick={deleteSelectedCustomShow}
-                data-testid="presentation-custom-show-delete"
-              >
-                {t("presentation.slideshow.customShowDelete")}
-              </button>
-              <button
-                type="button"
-                className={dialogParts.compactButton}
-                disabled={customShowDialogStale || !selectedCustomShow}
-                onClick={copySelectedCustomShow}
-                data-testid="presentation-custom-show-copy"
-              >
-                {t("presentation.slideshow.customShowCopy")}
-              </button>
-            </div>
-          </div>
-        )}
-      </OfficeDialogShell>
+      {null}
       <OfficeZoomDialog
         open={presentationZoomDialogOpen}
         title={t("presentation.view.zoomDialogTitle")}
@@ -52084,269 +50553,7 @@ export default function PresentationWindow({
         returnFocusRef={zoomRibbonTriggerRef}
         testIdPrefix="presentation-zoom-dialog"
       />
-      <OfficeDialogShell
-        open={false}
-        title={t("presentation.slideshow.setUpShowDialog")}
-        description={t("presentation.slideshow.setupDescription")}
-        defaultActionLabel={t("presentation.slideshow.setupOk")}
-        cancelActionLabel={t("toolbar.cancel")}
-        onDefaultAction={applySlideShowSetup}
-        onCancel={cancelSlideShowSetup}
-        defaultActionDisabled={
-          slideShowSetupShowSlidesKind === "range" &&
-          (slideShowSetupRangeStart < 1 ||
-            slideShowSetupRangeEnd < slideShowSetupRangeStart ||
-            slideShowSetupRangeEnd > slides.length)
-        }
-        returnFocusRef={slideShowSetupReturnFocusRef}
-        testIdPrefix="presentation-slideshow-setup"
-      >
-        <fieldset className="grid gap-2">
-          <legend className={dialogParts.sectionTitle}>
-            {t("presentation.slideshow.showType")}
-          </legend>
-          {(
-            [
-              ["speaker", "presentation.slideshow.presentedBySpeaker"],
-              ["window", "presentation.slideshow.browsedByIndividual"],
-              ["kiosk", "presentation.slideshow.browsedAtKiosk"],
-            ] as const
-          ).map(([value, label]) => (
-            <label key={value} className={`${dialogParts.check} flex items-center gap-2`}>
-              <input
-                type="radio"
-                name="presentation-slideshow-show-type"
-                value={value}
-                checked={slideShowSetupShowType === value}
-                onChange={() => {
-                  if (
-                    value === "window" &&
-                    slideShowSetupShowType !== "window" &&
-                    !slideShowSetupExplicit.showScrollbar
-                  ) {
-                    setSlideShowSetupShowScrollbar(true);
-                  }
-                  setSlideShowSetupShowType(value);
-                  setSlideShowSetupExplicit((current) => ({
-                    ...current,
-                    showType: true,
-                    ...(value === "kiosk" ? { loop: true } : {}),
-                  }));
-                  if (value === "kiosk") setSlideShowSetupLoop(true);
-                }}
-                data-control-id={`PPTCTL.DIALOG.SET_UP_SHOW.TYPE.${value.toUpperCase()}`}
-                data-testid={`presentation-slideshow-setup-type-${value}`}
-              />
-              {t(label)}
-            </label>
-          ))}
-          <OfficeHomeCheckbox
-            checked={slideShowSetupShowScrollbar}
-            controlId="PPTCTL.DIALOG.SET_UP_SHOW.TYPE.WINDOW.SCROLLBAR"
-            disabled={slideShowSetupShowType !== "window"}
-            label={t("presentation.slideshow.showScrollbar")}
-            onCheckedChange={(checked) => {
-              setSlideShowSetupShowScrollbar(checked);
-              setSlideShowSetupExplicit((current) => ({
-                ...current,
-                showScrollbar: true,
-              }));
-            }}
-            testId="presentation-slideshow-setup-show-scrollbar"
-          />
-        </fieldset>
-        <fieldset className="grid gap-3">
-          <legend className={dialogParts.sectionTitle}>
-            {t("presentation.slideshow.showOptions")}
-          </legend>
-          <OfficeHomeCheckbox
-            checked={slideShowSetupLoop}
-            controlId="PPTCTL.DIALOG.SET_UP_SHOW.OPTIONS.LOOP"
-            label={t("presentation.slideshow.loopContinuously")}
-            disabled={slideShowSetupShowType === "kiosk"}
-            onCheckedChange={(checked) => {
-              setSlideShowSetupLoop(checked);
-              setSlideShowSetupExplicit((current) => ({
-                ...current,
-                loop: true,
-              }));
-            }}
-            testId="presentation-slideshow-setup-loop"
-          />
-          {/* Desktop words it negatively: "Show without narration" is
-              !p:showPr@showNarration (PPT-B013). */}
-          <OfficeHomeCheckbox
-            checked={!slideShowSetupShowNarration}
-            controlId="PPTCTL.DIALOG.SET_UP_SHOW.OPTIONS.NARRATION"
-            label={t("presentation.slideshow.showWithoutNarration")}
-            onCheckedChange={(checked) => {
-              setSlideShowSetupShowNarration(!checked);
-              setSlideShowSetupExplicit((current) => ({
-                ...current,
-                showNarration: true,
-              }));
-            }}
-            testId="presentation-slideshow-setup-without-narration"
-          />
-          <OfficeHomeCheckbox
-            checked={slideShowSetupWithoutAnimation}
-            controlId="PPTCTL.DIALOG.SET_UP_SHOW.OPTIONS.WITHOUT_ANIMATION"
-            label={t("presentation.slideshow.showWithoutAnimation")}
-            onCheckedChange={(checked) => {
-              setSlideShowSetupWithoutAnimation(checked);
-              setSlideShowSetupExplicit((current) => ({
-                ...current,
-                showAnimation: true,
-              }));
-            }}
-            testId="presentation-slideshow-setup-without-animation"
-          />
-        </fieldset>
-        <fieldset className="grid gap-2">
-          <legend className={dialogParts.sectionTitle}>
-            {t("presentation.slideshow.showSlides")}
-          </legend>
-          <label className={`${dialogParts.check} flex items-center gap-2`}>
-            <input
-              type="radio"
-              name="presentation-slideshow-show-slides"
-              checked={slideShowSetupShowSlidesKind === "all"}
-              onChange={() => {
-                setSlideShowSetupShowSlidesKind("all");
-                setSlideShowSetupExplicit((current) => ({
-                  ...current,
-                  showSlides: true,
-                }));
-              }}
-              data-control-id="PPTCTL.DIALOG.SET_UP_SHOW.SLIDES.ALL"
-              data-testid="presentation-slideshow-setup-slides-all"
-            />
-            {t("presentation.slideshow.allSlides")}
-          </label>
-          <label className={`${dialogParts.check} flex items-center gap-2`}>
-            <input
-              type="radio"
-              name="presentation-slideshow-show-slides"
-              checked={slideShowSetupShowSlidesKind === "range"}
-              onChange={() => {
-                setSlideShowSetupShowSlidesKind("range");
-                setSlideShowSetupExplicit((current) => ({
-                  ...current,
-                  showSlides: true,
-                }));
-              }}
-              data-control-id="PPTCTL.DIALOG.SET_UP_SHOW.SLIDES.RANGE"
-              data-testid="presentation-slideshow-setup-slides-range"
-            />
-            {t("presentation.slideshow.fromSlide")}
-            <input
-              type="number"
-              min={1}
-              max={Math.max(1, slides.length)}
-              value={slideShowSetupRangeStart}
-              disabled={slideShowSetupShowSlidesKind !== "range"}
-              onChange={(event) => {
-                setSlideShowSetupRangeStart(Number(event.target.value));
-                setSlideShowSetupExplicit((current) => ({
-                  ...current,
-                  showSlides: true,
-                }));
-              }}
-              aria-label={t("presentation.slideshow.fromSlide")}
-              className="w-16"
-              data-testid="presentation-slideshow-setup-range-start"
-            />
-            {t("presentation.slideshow.toSlide")}
-            <input
-              type="number"
-              min={1}
-              max={Math.max(1, slides.length)}
-              value={slideShowSetupRangeEnd}
-              disabled={slideShowSetupShowSlidesKind !== "range"}
-              onChange={(event) => {
-                setSlideShowSetupRangeEnd(Number(event.target.value));
-                setSlideShowSetupExplicit((current) => ({
-                  ...current,
-                  showSlides: true,
-                }));
-              }}
-              aria-label={t("presentation.slideshow.toSlide")}
-              className="w-16"
-              data-testid="presentation-slideshow-setup-range-end"
-            />
-          </label>
-          {/* Custom show: (PPT-B013) -- p:showPr/p:custShow@id. PowerPoint
-              greys the row when the deck has no custom show. */}
-          <label className={`${dialogParts.check} flex items-center gap-2`}>
-            <input
-              type="radio"
-              name="presentation-slideshow-show-slides"
-              checked={slideShowSetupShowSlidesKind === "custom"}
-              disabled={customSlideShows.shows.length === 0}
-              onChange={() => {
-                setSlideShowSetupShowSlidesKind("custom");
-                setSlideShowSetupCustomShowId(
-                  (current) => current ?? customSlideShows.shows[0]?.id ?? null,
-                );
-                setSlideShowSetupExplicit((current) => ({
-                  ...current,
-                  showSlides: true,
-                }));
-              }}
-              data-control-id="PPTCTL.DIALOG.SET_UP_SHOW.SLIDES.CUSTOM"
-              data-testid="presentation-slideshow-setup-slides-custom"
-            />
-            {t("presentation.slideshow.customShowSelect")}
-            <select
-              value={slideShowSetupCustomShowId ?? ""}
-              disabled={
-                slideShowSetupShowSlidesKind !== "custom" ||
-                customSlideShows.shows.length === 0
-              }
-              onChange={(event) => {
-                setSlideShowSetupCustomShowId(Number(event.target.value));
-                setSlideShowSetupExplicit((current) => ({
-                  ...current,
-                  showSlides: true,
-                }));
-              }}
-              aria-label={t("presentation.slideshow.customShowSelect")}
-              data-testid="presentation-slideshow-setup-custom-show"
-            >
-              {customSlideShows.shows.map((show) => (
-                <option key={show.id} value={show.id}>
-                  {show.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </fieldset>
-        {/* Advance slides: the desktop's radio pair for
-            p:showPr@useTimings (Manually / Using timings, if present). */}
-        <fieldset className="grid gap-2">
-          <legend className={dialogParts.sectionTitle}>
-            {t("presentation.slideshow.advanceSlides")}
-          </legend>
-          {(
-            [
-              [false, "manual", "presentation.slideshow.advanceManually"],
-              [true, "timings", "presentation.slideshow.advanceUsingTimings"],
-            ] as const
-          ).map(([useTimings, id, label]) => (
-            <label key={id} className={`${dialogParts.check} flex items-center gap-2`}>
-              <input
-                type="radio"
-                name="presentation-slideshow-advance"
-                checked={slideShowSetupUseTimings === useTimings}
-                onChange={() => setSlideShowSetupUseTimings(useTimings)}
-                data-control-id={`PPTCTL.DIALOG.SET_UP_SHOW.ADVANCE.${id.toUpperCase()}`}
-                data-testid={`presentation-slideshow-setup-advance-${id}`}
-              />
-              {t(label)}
-            </label>
-          ))}
-        </fieldset>
-      </OfficeDialogShell>
+      {null}
       {/* PPT-B016: Rehearse Timings ends in PowerPoint's message box, "The
           total time for your slide show was 0:00:09. Do you want to save the
           new slide timings?" with Yes / No. Yes keeps the timings and turns
@@ -52626,46 +50833,7 @@ export default function PresentationWindow({
               </div>
             </div>
           ) : null}
-          {viewMode === "master" ? (
-            <Suspense fallback={null}><PresentationMasterViewLayer
-              ctl={{
-                t,
-                slides,
-                theme,
-                themeRef,
-                masters,
-                masterFontSizeDraft,
-                setMasterFontSizeDraft,
-                slidesRef,
-                autosave,
-                themeSelectionDisabled,
-                applyDeckTheme,
-                assignActiveSlideMasterLayout,
-                updateMasterTextStyle,
-                masterPaneOpen,
-                setMasterPaneOpen,
-                officeMasterKey,
-                setOfficeMasterKey,
-                officeMasterTextTarget,
-                setOfficeMasterTextTarget,
-                dispatchPresentationView,
-                masterViewLayouts,
-                masterViewMasters,
-                officeMasterPrompts,
-                officeMasterEntries,
-                officeMasterReusedSelected,
-                officeMasterLayoutWritable,
-                officeMasterSelectedMasterKey,
-                officePlaceholderKindLabels,
-                commitOfficeDeckEdit,
-                officeSlideMasterDisplayName,
-                officeMasterUsageLabel,
-                masterTextStyleTarget,
-                masterTextStyleLevels,
-                masterViewNativeReferences,
-              }}
-            /></Suspense>
-          ) : null}
+          {null}
           {viewMode === "reading" ? (
             <Suspense fallback={null}><PresentationReadingViewLayer
               ctl={{
@@ -52717,38 +50885,7 @@ export default function PresentationWindow({
           {/* MRAI's own master pane (assign / create masters) serves decks
               that carry authored or imported masters; an Office theme deck's
               one master is edited through the Slide Master tab (PPT-B030). */}
-          {viewMode === "master" && masterPaneOpen && officeMasterEntries.length === 0 ? (
-            /* The Slide Master pane. PowerPoint edits a master through the
-               Slide Master tab and its small dialogs (Rename Master, Master
-               Layout); this editor mounts no Slide Master ribbon tab, so the
-               master's properties live in the same docked task pane the
-               Format Background command draws in, at the right of the stage.
-               Editing a master cascades to every slide using it; a slide or
-               block that overrides keeps its override (override > master >
-               deck theme > default). */
-            <Suspense fallback={null}><PresentationSlideMasterPane
-              ctl={{
-                t,
-                masterPropertiesRef,
-                theme,
-                masters,
-                previewMasters: masterViewPreviewMasters,
-                activeSlide,
-                activeMaster,
-                activeNativeLayout,
-                activeMasterText,
-                createMaster,
-                renameMaster,
-                updateMasterLayout,
-                updateMasterThemeField,
-                updateMasterText,
-                deleteMaster,
-                assignActiveSlideMaster,
-                assignActiveSlideMasterLayout,
-                setMasterPaneOpen,
-              }}
-            /></Suspense>
-          ) : null}
+          {null}
           <div
             ref={slidePropertiesRef}
             className="presentation-window__slide-props"
@@ -52805,24 +50942,7 @@ export default function PresentationWindow({
               controls. The chosen theme supplies DEFAULT background / font /
               title+body colours for every slide+block that lacks its own
               override. Persisted once at the deck level. */}
-          <PresentationThemePropertiesPanel
-            ctl={{
-              t,
-              locale,
-              themePropertiesRef,
-              theme,
-              activeThemePresetId,
-              activeOfficeTheme,
-              themeSelectionDisabled,
-              themeSelectionUnavailableReason,
-              applyDeckTheme,
-              applyThemePreset,
-              updateThemeField,
-              updateThemeAccentColor,
-              removeThemeAccentColor,
-              addThemeAccentColor,
-            }}
-          />
+          {null}
           {/* Header & Footer is an atomic dialog command. This compact deck
               properties entry only reopens that dialog; it never exposes a
               second live-write path. */}
@@ -56725,6 +54845,26 @@ export default function PresentationWindow({
             }}
             onClose={() => setVersionHistoryOpen(false)}
             dockClassName={presentationChrome.taskPane}
+            // A deck body the server kept instead of a save (SAVE-GUARANTEE
+            // S2): opened as a new deck beside this one, never over it.
+            changesToMerge={{
+              fileTitle: autosave.page?.title || t("pages.untitled"),
+              onOpenAsPage: async (content, createdAt) => {
+                const notebookId = autosave.page?.notebook_id;
+                if (!notebookId) throw new Error(t("pages.saveFailed"));
+                const time = createdAt
+                  ? new Date(createdAt).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }) : "";
+                const title = t("versions.changesToMergePageTitle", {
+                  title: autosave.page?.title || t("pages.untitled"), time,
+                });
+                const created = await createPage(notebookId, { title, page_type: "presentation", content_json: content });
+                if (windowManagerActions) {
+                  openNotebookPageWindow(windowManagerActions, {
+                    notebookId, pageId: created.id, title: created.title || title, pageType: "presentation",
+                  });
+                }
+              },
+            }}
           />
         </div>,
       ) : null}
@@ -57355,28 +55495,8 @@ export default function PresentationWindow({
           }}
         /></Suspense>
       ) : null}
-      {proofingLanguageTarget ? (
-        <DocumentProofingLanguageDialog
-          open
-          locale={locale}
-          productName="PowerPoint"
-          initialValue={proofingLanguageTarget.initialValue}
-          mixed={proofingLanguageTarget.mixed}
-          returnFocusRef={proofingLanguageReturnFocusRef}
-          onSubmit={submitProofingLanguage}
-          onClose={closeProofingLanguageDialog}
-        />
-      ) : null}
-      <DocumentPictureCompressionDialog
-        open={false}
-        canEdit={
-          !autosave.readOnly && selectedPictureCompressionEditable
-        }
-        locale={locale}
-        returnFocusRef={pictureCompressionReturnFocusRef}
-        onSubmit={submitPictureCompression}
-        onClose={closePictureCompression}
-      />
+      {null}
+      {null}
       <PageExportLossConfirmDialog
         pending={downloadedExportLosses}
         // A deck that only says it was saved as .pptm (its macros kept)
@@ -57405,25 +55525,7 @@ export default function PresentationWindow({
       {designIdeasOpen ? dockTaskPane(
         // PowerPoint's Designer pane (Design > Designer): the ideas for this
         // slide as cards, docked with the other task panes.
-        <PresentationDesignerPane
-          ideas={designer.ideas}
-          busy={designer.busy}
-          reason={designer.reason}
-          appliedId={designer.appliedId}
-          renderPreview={(idea) => (
-            <SlideMiniThumbnail slide={idea.previewSlide ?? idea.slide} theme={idea.theme ?? theme} masters={masters} eager />
-          )}
-          onApply={designer.apply}
-          onClose={designer.close}
-          preferences={designer.preferences}
-          onPreferenceChange={setPresentationDesignerPreference}
-          dock={{
-            tabs: taskPaneDock.tabs("designer"),
-            tabsLabel: taskPaneTabsLabel,
-            hidden: !taskPaneDock.isFront("designer"),
-            className: presentationChrome.taskPane,
-          }}
-        />,
+        null,
       ) : null}
       {findReplaceOpen ? dockTaskPane(
         // PowerPoint's Find / Replace (Home > Editing) as a results pane:
@@ -57636,18 +55738,7 @@ export default function PresentationWindow({
           onCancel={() => setColumnsDialogTarget(null)}
         /></Suspense>
       ) : null}
-      {gridSettingsOpen ? (
-        <PresentationGridSettingsDialog
-          open
-          settings={viewSettings}
-          unit={sizeUnit}
-          onApply={(patch) => {
-            setGridSettingsOpen(false);
-            if (Object.keys(patch).length > 0) applyViewSettings(patch);
-          }}
-          onCancel={() => setGridSettingsOpen(false)}
-        />
-      ) : null}
+      {null}
       {dateTimeDialogTarget ? (
         <PresentationDateTimeDialog
           open

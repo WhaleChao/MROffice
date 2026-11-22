@@ -6,6 +6,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { ySyncPluginKey } from "@tiptap/y-tiptap";
+import { onlyofficeRulerAtOpen } from "@mrnote/core/web/lib/embed/onlyoffice-frame.ts";
 import { PAGED_HISTORY_APPLIED_META } from "@mrnote/core/web/lib/collab/paged-history-meta.ts";
 import { canonicalDocumentFontSizePx } from "@mrnote/core/web/components/console/editor/native-document/documentFontSize.ts";
 import { msSinceTyping } from "@mrnote/core/web/lib/typing-session.ts";
@@ -23,7 +24,7 @@ import { cachedComputedStyle } from "@mrnote/core/web/lib/computed-style-cache.t
 import {
   resolveInternalLinkTarget,
   scrollTocHeadingIntoView,
-} from "@mrnote/core/web/components/console/editor/native-document/tocNavigationExtension.ts";
+} from "./native-document/tocNavigationExtension";
 import {
   documentShapeHoldsStory,
   documentShapeStoryCommandCleanup,
@@ -97,7 +98,6 @@ import {OfficeShapeSizeFields} from "@mrnote/core/web/components/office-ribbon/O
 import { OfficeWordArtInsertGallery } from "@mrnote/core/web/components/office-ribbon/OfficeWordArtStyleGallery.tsx";
 import { OFFICE_WORDART_STYLE_RECIPES, type OfficeWordArtRecipe } from "@mrnote/core/web/lib/office-wordart-style-catalog.ts";
 import { saveOfficeShapeAsPicture } from "@mrnote/core/web/lib/office-save-as-picture.ts";
-import { OfficeZoomDialog } from "@mrnote/core/web/components/office-ribbon/OfficeZoomDialog.tsx";
 import {
   type OfficeChartAxisOptions, type OfficeChartAxisKey,
 } from "@mrnote/core/web/lib/office-charts/axis-options.ts";
@@ -227,7 +227,7 @@ import { LoaderCircle } from "lucide-react";
 import { ArrowDownAZ, ArrowRightLeft, ArrowUpAZ, Ban, BarChart3, Boxes, Bookmark, BookmarkCheck, Check, ChevronDown, Circle, Code2, Diamond, Paintbrush, Pencil, Download, FileDown, FileText, Hash, Info, LayoutGrid, History, Printer, PaintBucket, ListFilter, MessageSquare, Plus, PanelRight, Pilcrow, Redo2, RefreshCw, Triangle, Table2, Trash2, Unlink, Undo2, X, Shapes } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import type { HouseIcon } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import { editorViewDom } from "@mrnote/core/web/components/console/editor/native-document/editorViewDom.ts";
-import { usePageCountIsEstimate } from "@mrnote/core/web/components/console/editor/native-document/paged/pageCountSettled.ts";
+import { usePageCountIsEstimate } from "./native-document/paged/pageCountSettled";
 import { holdWholePages } from "@mrnote/core/web/components/console/editor/native-document/paged/pageHollowSheets.ts";
 import { querySheetsAll } from "@mrnote/core/web/components/console/editor/native-document/paged/sheetMeasureMemo.ts";
 
@@ -351,7 +351,7 @@ import DocumentBordersMenu from "./native-document/DocumentBordersMenu";
 import DocumentTableBordersMenu, {
   type DocumentTableBordersMenuHandle,
 } from "./native-document/DocumentTableBordersMenu";
-import { readDocumentPictureStyleTarget } from "@mrnote/core/web/components/console/editor/native-document/DocumentPictureStyleGallery.tsx";
+import { readDocumentPictureStyleTarget } from "./native-document/DocumentPictureStyleGallery";
 import { readDocumentEquationSelection, type DocumentEquationSelection } from "./native-document/DocumentEquationContextRibbon";
 import {
   DocumentTablePropertiesDialog,
@@ -392,7 +392,7 @@ import {
   documentFieldAttrsFromCode,
   nativeFieldIsPlain,
   selectedDocumentFields,
-} from "@mrnote/core/web/components/console/editor/native-document/documentFieldCodes.ts";
+} from "./native-document/documentFieldCodes";
 import { DocumentFieldIcon } from "./native-document/DocumentFieldIcon";
 import {
   TEXT_FROM_FILE_ACCEPT,
@@ -407,23 +407,17 @@ import {
   createDocumentSignatureLineAttrs,
   DOCUMENT_SIGNATURE_LINE_NODE_NAME,
   type DocumentSignatureLineDraft,
-} from "@mrnote/core/web/components/console/editor/native-document/documentSignatureLineExtension.tsx";
+} from "./native-document/documentSignatureLineExtension";
 import { DocumentTableDrawOverlay } from "./native-document/DocumentTableDrawOverlay";
 import type { DocumentTableDrawMode } from "./native-document/documentTableDraw";
 import { DocumentTranscriptionDialog } from "./native-document/DocumentTranscriptionDialog";
-import { DocumentProofingLanguageDialog } from "./native-document/DocumentProofingLanguageDialog";
-import {
-  readDocumentProofingLanguageTarget,
-  setDocumentProofingLanguage,
-  type DocumentProofingLanguageTarget,
-  type ProofingLanguageValue,
-} from "@mrnote/core/web/components/console/editor/native-document/proofingLanguageExtension.ts";
+import { readDocumentProofingLanguageTarget, type DocumentProofingLanguageTarget, type ProofingLanguageValue } from "./native-document/proofingLanguageExtension";
 import {
   commitDocumentTableProperties,
   readDocumentTablePropertiesTarget,
   type DocumentTablePropertiesChanges,
   type DocumentTablePropertiesTarget,
-} from "@mrnote/core/web/components/console/editor/native-document/tableProperties.ts";
+} from "./native-document/tableProperties";
 import {
   readDocumentTableSplitCellsTarget,
   splitDocumentTableCell,
@@ -493,7 +487,7 @@ import {
   type DocumentChartEditDataEventDetail,
   type DocumentChartLayoutPreviewEventDetail,
   type DocumentChartStylePreviewEventDetail,
-} from "@mrnote/core/web/components/console/editor/extensions/ChartBlock.tsx";
+} from "./extensions/ChartBlock";
 import { DocumentChartInsertGallery } from "./extensions/DocumentChartInsertGallery";
 import { DocumentSmartArtInsertGallery } from "./extensions/DocumentSmartArtInsertGallery";
 import { chartPreset } from "@mrnote/core/web/components/console/editor/extensions/chartPresets.tsx";
@@ -511,7 +505,7 @@ import {
 } from "@mrnote/core/web/lib/office-charts/chart-template-store.ts";
 import { CHART_INSERT_ENHANCEMENT_FAMILIES, CHART_INSERT_OFFICE_FAMILIES } from "@mrnote/core/web/components/office-ribbon/OfficeChartInsertGallery.tsx";
 import { documentChartStyleAttrs, documentChartStyleLabel, type DocumentChartStyleId } from "@mrnote/core/web/components/console/editor/native-document/documentChartStyles.ts";
-import { sanitizeSmartArtAltText, type DocumentSmartArtEditItemsEventDetail } from "@mrnote/core/web/components/console/editor/extensions/SmartArtBlock.tsx";
+import { sanitizeSmartArtAltText, type DocumentSmartArtEditItemsEventDetail } from "./extensions/SmartArtBlock";
 import {
   canonicalSmartArtLayoutId,
   OFFICE_SMARTART_DEFAULT_LAYOUT_ID,
@@ -628,8 +622,8 @@ import {
 import { smartArtUnusedItemIds, type SmartArtKind, type SmartArtNodePaint, type SmartArtStyle } from "@mrnote/core/web/lib/office-smartart/model.ts";
 import type { SmartArtStyleId } from "@mrnote/core/web/lib/office-smartart/styles-model.ts";
 
-import { mermaidStarterSource } from "@mrnote/core/web/components/console/editor/extensions/MermaidBlock.tsx";
-import { codeChartStarterSource } from "@mrnote/core/web/components/console/editor/extensions/CodeChartBlock.tsx";
+import { mermaidStarterSource } from "./extensions/MermaidBlock";
+import { codeChartStarterSource } from "./extensions/CodeChartBlock";
 import {
   createDrawingSceneTemplate,
   type DrawingSceneKind,
@@ -642,12 +636,11 @@ import {
   type NamedStyleDefinition,
   documentDefaultParagraphSpacing,
 } from "@mrnote/core/web/components/console/editor/extensions/DocumentPageSetup.ts";
-import { sectionDifferentFirstPageAt } from "@mrnote/core/web/components/console/editor/extensions/DocumentPageSetup.ts";
 import { documentAutoLineSpacingKey } from "@mrnote/core/web/components/console/editor/native-document/documentAutoLineSpacing.ts";
 import { PAGE_SPAN_META } from "@mrnote/core/web/components/console/editor/native-document/paged/pageSpanExtension.ts";
-import { isOverflowPunctuationHangTransaction } from "@mrnote/core/web/components/console/editor/native-document/overflowPunctuationHang.ts";
-import { isDocumentEngineLineBreaksTransaction } from "@mrnote/core/web/components/console/editor/native-document/documentEngineLineBreaks.ts";
-import { isDistributedLastLinesTransaction } from "@mrnote/core/web/components/console/editor/native-document/distributedLastLines.ts";
+import { isOverflowPunctuationHangTransaction } from "./native-document/overflowPunctuationHang";
+import { isDocumentEngineLineBreaksTransaction } from "./native-document/documentEngineLineBreaks";
+import { isDistributedLastLinesTransaction } from "./native-document/distributedLastLines";
 import {
   sameToolbarReadContext,
   toolbarReadContext,
@@ -869,87 +862,36 @@ import {
   analyzeReadability,
   type ReadabilityStats,
 } from "@mrnote/core/web/lib/document-readability.ts";
-import CompareDocumentsPanel from "@mrnote/core/web/components/console/editor/CompareDocumentsPanel.tsx";
-import SourceDocumentsPane from "@mrnote/core/web/components/console/editor/SourceDocumentsPane.tsx";
-import { DEFAULT_SOURCE_DOCUMENTS_MODE, type CompareResultSources, type SourceDocumentsMode } from "@mrnote/core/web/lib/document/sourceDocuments.ts";
+import { type CompareResultSources, type SourceDocumentsMode } from "@/lib/document/sourceDocuments";
 import { useCloseOnEscape } from "@mrnote/core/web/components/console/editor/useCloseOnEscape.ts";
 import { useEditorSurfaceEditable } from "@mrnote/core/web/components/console/editor/useEditorSurfaceEditable.ts";
-import { commitOpenEquationDrafts } from "@mrnote/core/web/components/console/editor/extensions/equationDraftCommit.ts";
+import { commitOpenEquationDrafts } from "./extensions/equationDraftCommit";
 import {
   OFFICE_SHAPE_TEXT_FIELD_ATTRIBUTE,
   OFFICE_SHAPE_TEXT_HISTORY_EVENT,
   officeShapeTextHistory,
   type OfficeShapeTextHistory,
 } from "@mrnote/core/web/components/office-ribbon/OfficeShapeTextField.tsx";
-import {
-  DocumentPageSetupDialog,
-  type PageSetupDialogValue,
-} from "./native-document/DocumentPageSetupDialog";
-import {
-  applySectionLayoutPatchTo,
-  sectionApplyToPointForwardAvailable,
-} from "@mrnote/core/web/components/console/editor/native-document/sectionApplyTo.ts";
-import { activeSectionLayout, applyCurrentSectionLayoutPatch, lineNumberStartAt, runColumnsButton, runCustomPageMarginsButton, runCustomPageSizeButton, runLineNumbersDialog, runPageMarginsButton, runPageOrientationButton, runPageSizeButton, runVerticalAlignmentButton, toolbarLineNumbersFromSection } from "./native-document/layoutButtons";
-import { watermarkTextArea } from "./native-document/designButtons";
+import { type PageSetupDialogValue } from "./native-document/DocumentPageSetupDialog";
+import { activeSectionLayout, applyCurrentSectionLayoutPatch, runColumnsButton, runCustomPageMarginsButton, runCustomPageSizeButton, runPageMarginsButton, runPageOrientationButton, runPageSizeButton, runVerticalAlignmentButton } from "./native-document/layoutButtons";
 import { pageNumberDialogContext, runPageNumberFormatDialog, runPageNumbersDialog, runPageNumberStoryWrite as runSharedPageNumberStoryWrite, runRemovePageNumbers } from "./native-document/headerFooterButtons";
 import { liveCommentReviewState } from "./native-document/reviewButtons";
-import {
-  BIBLIOGRAPHY_CONTENT,
-  applyNoteSettings,
-  noteApplyScopeContext,
-  type NoteApplyScope,
-  type NoteApplyScopeContext,
-  authorityCachedValue as sharedAuthorityCachedValue,
-  canInsertBibliography,
-  captionDefaultsFor,
-  rememberCaptionLabel,
-  captionListNode,
-  firstTableOfContentsTarget,
-  markAuthorityEntryFromDialog,
-  markIndexEntryFromDialog,
-  indexCachedValue as sharedIndexCachedValue,
-  removeReferenceAtom,
-  rewriteCaptionList,
-  rewriteDocumentField,
-  buildTableOfContentsFromField,
-  rewriteTableOfContents,
-  selectedAuthorityTableTarget,
-  selectedBibliographyTarget,
-  captionListLabelMatches,
-  selectedCaptionListTarget,
-  selectedCaptionTarget,
-  selectedDocumentIndexTarget,
-  selectedTableOfContentsTarget,
-  insertTableOfContentsCommand,
-  tableOfContentsNode,
-  tableOfContentsPlacedAfterTableNotice,
-  updateCaptionList,
-  updateTableOfContents,
-  type ReferenceAtomSelectionTarget,
-  manualTableOfContentsContent,
-  firstManualTableOfContentsTarget,
-} from "@mrnote/core/web/components/console/editor/native-document/referencesButtons.ts";
+import { BIBLIOGRAPHY_CONTENT, noteApplyScopeContext, type NoteApplyScope, type NoteApplyScopeContext, authorityCachedValue as sharedAuthorityCachedValue, canInsertBibliography, captionDefaultsFor, captionListNode, firstTableOfContentsTarget, indexCachedValue as sharedIndexCachedValue, removeReferenceAtom, rewriteDocumentField, buildTableOfContentsFromField, rewriteTableOfContents, selectedAuthorityTableTarget, selectedBibliographyTarget, captionListLabelMatches, selectedCaptionListTarget, selectedCaptionTarget, selectedDocumentIndexTarget, selectedTableOfContentsTarget, insertTableOfContentsCommand, tableOfContentsNode, tableOfContentsPlacedAfterTableNotice, type ReferenceAtomSelectionTarget, manualTableOfContentsContent, firstManualTableOfContentsTarget } from "@mrnote/core/web/components/console/editor/native-document/referencesButtons.ts";
 import { convertTableToText, findSelectedTable, findTableContextTarget, runTableAutoFit, setCellMargins, tableAutoFitWindowWidth, documentTableCellMarginsAttrs, tableAutoResizes } from "./native-document/tableButtons";
 import { type LiveImageAltTarget, commitLiveImageAltText, commitLiveImageAttachment, commitLiveImagePictureSource, documentPictureAltPaneKey, imageHasResettablePictureFormatting, liveImageAltTarget, liveImagePlacementTarget, liveImportedImageAnchor, resetLiveImagePictureFormatting, sameLiveImageAltTarget, setLiveImageAlign, setLiveImageAspectRatioLock, setLiveImageDimension, livePictureDrawnSize, setLiveImageFloat, toggleLiveImageHostList, updateLiveImageFormatting, flipPicture, rotatePicture, canonicalDocumentPictureMime, documentAttachmentPictureChangeAuthority, documentPictureChangeAuthority, type DocumentPictureMime } from "./native-document/pictureButtons";
 import { commitLiveDocumentShapePatch, documentShapeCentimetersToPx, documentShapePxToCentimeters, linkLiveDocumentTextBoxes, liveDocumentShapeMemberId, liveDocumentShapeTarget, liveDocumentSmartArtGraphicSelected, liveShapeTextTarget, setLiveDocumentShapeExactRotation, setLiveDocumentShapeFlip, setLiveDocumentShapeFormat, setLiveDocumentShapePaint, pickLiveDocumentShapeFillPicture, setLiveDocumentShapePosition, setLiveDocumentShapeRotation, setLiveDocumentShapeSize, setLiveDocumentShapeWrap, setLiveDocumentShapeZOrder, liveDocumentShapeZOrderAtBoundary, startLiveDocumentShapeEditPoints, toggleLiveDocumentShapeAspectRatio, commitLiveDocumentSmartArt, liveDocumentFileSmartArtNode, liveDocumentShapeSmartArtTarget, type LiveDocumentShapeSmartArtTarget } from "@mrnote/core/web/components/console/editor/native-document/shapeButtons.ts";
 import { enterSelectedTextBoxForEquation, liveTextBoxFrameTarget } from "./native-document/textBoxFrameCommands";
 import { documentChartPlacementState, setLiveDocumentChartPlacement, type DocumentChartPlacementCommand } from "@mrnote/core/web/components/console/editor/native-document/chartPlacement.ts";
-import { OfficeFloatLayoutDialog, type OfficeFloatLayoutDialogLabels } from "@mrnote/core/web/components/office-ribbon/OfficeFloatLayoutDialog.tsx";
-import { liveDocumentFloatLayoutTarget } from "./native-document/floatLayoutTarget";
+import { type OfficeFloatLayoutDialogLabels } from "@/components/office-ribbon/OfficeFloatLayoutDialog";
 import { type DocumentChartQuickLayoutId, type LiveDocumentChartTarget, canonicalDocumentChartNodeAttrs, commitDocumentChartStyleId, commitLiveDocumentChartAttrs, dispatchDocumentChartNodeViewEvent, documentChartQuickLayoutAttrs, documentChartTypeAttrs, liveDocumentChartTarget, sameLiveDocumentChartTarget, setLiveDocumentChartModel, setLiveDocumentChartType, DOCUMENT_CHART_TRANSPOSE_FAMILIES, documentChartActiveColorPaletteId, documentChartNativeLook, documentChartStylePaint, documentChartThemeAccents, documentChartWithColorPalette, setLiveDocumentChartColorPalette } from "@mrnote/core/web/components/console/editor/native-document/chartButtons.ts";
-import {
-  normalizeWordDocumentSettings,
-  wordDefaultTabStopTwips,
-} from "@mrnote/core/web/components/console/editor/native-document/wordDocumentSettings.ts";
+import { wordDefaultTabStopTwips } from "@mrnote/core/web/components/console/editor/native-document/wordDocumentSettings.ts";
 import { DocumentTabsDialog } from "./native-document/DocumentTabsDialog";
-import { DocumentWatermarkDialog } from "./native-document/DocumentWatermarkDialog";
 import {
   DocumentHyperlinkDialog,
   type DocumentHyperlinkRequest,
 } from "./native-document/DocumentHyperlinkDialog";
 import { DocumentPropertiesDialog } from "./native-document/DocumentPropertiesDialog";
 import { normalizeCustomProperties, type CustomProperty } from "@mrnote/core/web/components/console/editor/native-document/documentCustomProperties.ts";
-import { DocumentPageBordersDialog } from "./native-document/DocumentBordersShadingPanels";
 import {
   documentNoteBodies,
   documentPageCount,
@@ -985,9 +927,7 @@ import DocumentTextEffectsPane from "./native-document/DocumentTextEffectsPane";
 import { DocumentFocusModeExit } from "./native-document/DocumentFocusModeExit";
 import { DocumentFitTextDialog } from "./native-document/DocumentFitTextDialog";
 import { presentationMeasurementUnit } from "@mrnote/core/web/lib/presentation-measurement.ts";
-import DocumentEditorPane, {
-  type DocumentEditorPaneView,
-} from "./native-document/DocumentEditorPane";
+import { type DocumentEditorPaneView } from "./native-document/DocumentEditorPane";
 import VersionHistoryPanel from "@mrnote/core/web/components/console/editor/VersionHistoryPanel.tsx";
 import {
   OfficeCommandSearch,
@@ -1010,28 +950,22 @@ import {
 } from "@mrnote/core/web/components/console/editor/native-document/paragraphStyles.ts";
 import { clampImageWidthPercent, normalizeImageAlign, normalizeImageBorderColor, normalizeImageBorderStyle, normalizeImageBorderWidth, normalizeImageCropPercent, normalizeImageFloat, normalizeImageFlip, normalizeImageRotation, MAX_IMAGE_ALT_CHARS, type ImageAlign, type ImageBorderStyle, type ImageFloat, type ImageRotation, type ImageWidthPreset } from "@mrnote/core/web/components/console/editor/native-document/imageControls.ts";
 import { isNativeImageRecolorMode, normalizeImageAdjust, normalizeImageOpacity, normalizeImageSaturation, type NativeImageRecolorMode } from "@mrnote/core/web/lib/presentation-image-effects.ts";
-import { EMU_PER_PX } from "@mrnote/core/web/components/console/editor/native-document/ImageResizeNodeView.ts";
-import { enterDocumentImageCrop, exitDocumentImageCrop, isDocumentImageCropActive, type DocumentImageCropInsets, type DocumentImageCropResult, type DocumentImageFrame } from "@mrnote/core/web/components/console/editor/native-document/documentImageCrop.ts";
+import { EMU_PER_PX } from "./native-document/ImageResizeNodeView";
+import { enterDocumentImageCrop, exitDocumentImageCrop, isDocumentImageCropActive, type DocumentImageCropInsets, type DocumentImageCropResult, type DocumentImageFrame } from "./native-document/documentImageCrop";
 import type { PictureCropAspectRatioId } from "@mrnote/core/web/lib/presentation-crop-group.ts";
 import { CUSTOM_PAGE_MARGIN_MAX_IN, CUSTOM_PAGE_SIZE_MAX_IN, rememberLastCustomMargins, type LastCustomMargins, type MarginGalleryPresetId, type MarginTwips, PAGE_ORIENTATION_VALUES, PX_PER_INCH, pageMarginsSelectionFromSectionTwips, pageGeometryTwips, pageSizeSelectionFromSectionTwips, normalizeCustomPageMargins, normalizeCustomPageSize, normalizeLineNumbers, normalizePageBackgroundColor, normalizeInkPaper, type InkPaper, normalizePageBorder, resolvePageDimensionsPx, resolvePageMargins, resolvePageMarginsPx, resolvePageOrientation, resolvePageSize, type CustomPageMarginsInches, type CustomPageSizeInches, type LineNumberRestart, type LineNumbers, type PageBorder, type PageMargins, type PageOrientation, type PageSize } from "@mrnote/core/web/components/console/editor/native-document/pageSetup.ts";
 import { mathLatexForRender, previewTypesetsAsDisplay, renderKatexCached } from "@mrnote/core/web/components/console/editor/extensions/lazyKatex.ts";
 import { resolveColumns, resolveColumnSeparator, resolveDir, resolveManuscriptGrid, resolveWritingMode, type ColumnCount, type ManuscriptGrid, type TextDirection, type WritingMode } from "@mrnote/core/web/components/console/editor/native-document/documentLayout.ts";
-import { effectiveSectionPageBorders, normalizeSectionLayouts, resolveSectionAtSelection, shownSectionLayoutAtSelection, type SectionLayout, type SectionLayoutPatch, type SectionVerticalAlignment } from "@mrnote/core/web/components/console/editor/native-document/sectionLayouts.ts";
+import { normalizeSectionLayouts, resolveSectionAtSelection, shownSectionLayoutAtSelection, type SectionLayout, type SectionLayoutPatch, type SectionVerticalAlignment } from "@mrnote/core/web/components/console/editor/native-document/sectionLayouts.ts";
 import { type DocumentPageBorderMenuCommands } from "./native-document/DocumentPageBorderMenu";
-import { pageBorderAllEdgesTogglePatch, pageBorderApplyToPatch, pageBorderColorPen, pageBorderPenPatch, pageBorderSideTogglePatch, type PageBorderApplyScope, type PageBordersPatch } from "./native-document/documentPageBorder";
+import { type PageBorderApplyScope, type PageBordersPatch } from "./native-document/documentPageBorder";
 import type { SectionStoryVariant } from "@mrnote/core/web/components/console/editor/native-document/sectionStoryGraph.ts";
 import type {
   HeaderFooterEditingContext,
   HeaderFooterNavigationTarget,
 } from "./native-document/paged/SheetBandEditLayer";
 import { normalizeAutoHyphenation } from "@mrnote/core/web/components/console/editor/native-document/documentHyphenation.ts";
-import {
-  MAX_HEADER_FOOTER_LENGTH,
-  documentFootersOwnPageNumber,
-  sanitizeHeaderFooterText,
-  normalizeBandRichTabStops,
-  bandParagraphStyleId,
-} from "@mrnote/core/web/components/console/editor/native-document/headerFooter.ts";
+import { MAX_HEADER_FOOTER_LENGTH, documentFootersOwnPageNumber, sanitizeHeaderFooterText, bandParagraphStyleId } from "@mrnote/core/web/components/console/editor/native-document/headerFooter.ts";
 import { DEFAULT_PAGE_NUMBER_FORMAT, DEFAULT_PAGE_NUMBER_START, normalizePageNumberFormat, normalizePageNumberStart, normalizePageNumberStartSection, type PageNumberFormat } from "@mrnote/core/web/components/console/editor/native-document/pageNumberFormat.ts";
 import {
   DocumentPageNumberFormatDialog,
@@ -1133,10 +1067,7 @@ import {
   type DocumentTableCellMarginsScope,
   type DocumentTableCellMarginsValue,
 } from "./native-document/DocumentTableCellMarginsDialog";
-import {
-  DocumentLineNumbersDialog,
-  type DocumentLineNumbersValue,
-} from "./native-document/DocumentLineNumbersDialog";
+import { type DocumentLineNumbersValue } from "./native-document/DocumentLineNumbersDialog";
 import { type DocumentTableFormulaSettings } from "./native-document/DocumentTableFormulaDialog";
 import { OfficeSymbolDialog } from "@mrnote/core/web/components/office-ribbon/OfficeSymbolDialog.tsx";
 import {
@@ -1166,8 +1097,8 @@ import {
   runNumberingButton,
   runNumberingLibraryButton,
 } from "./native-document/listButtons";
-import { canIndentWholeList, indentWholeList } from "@mrnote/core/web/components/console/editor/native-document/listWholeIndent.ts";
-import { liftListItemKeepingLists } from "@mrnote/core/web/components/console/editor/native-document/listLevelCommands.ts";
+import { canIndentWholeList, indentWholeList } from "./native-document/listWholeIndent";
+import { liftListItemKeepingLists } from "./native-document/listLevelCommands";
 import {
   applyHyperlink,
   applyPictureHyperlink,
@@ -1186,7 +1117,7 @@ import {
   wordArtInsertion,
 } from "./native-document/insertButtons";
 import { documentTableAutoFitWidthPx } from "@mrnote/core/web/components/console/editor/native-document/tableAutoFitWidth.ts";
-import { documentTableMergeFormulaPlan } from "@mrnote/core/web/components/console/editor/native-document/tableFormulaPlugin.ts";
+import { documentTableMergeFormulaPlan } from "./native-document/tableFormulaPlugin";
 import {
   applyNamedStyleButton,
   captureNamedStyleAspects as captureNamedStyleAspectsFrom,
@@ -1227,8 +1158,8 @@ import {
   TEXT_POSITION_MARK_NAME,
   normalizeTextPositionHalfPoints,
   textPositionPointsToHalfPoints,
-} from "@mrnote/core/web/components/console/editor/native-document/textPositionExtension.ts";
-import { outermostOrderedList } from "@mrnote/core/web/components/console/editor/native-document/orderedListExtension.ts";
+} from "./native-document/textPositionExtension";
+import { outermostOrderedList } from "./native-document/orderedListExtension";
 import {
   OFFICE_SYMBOL_RECENT_STORAGE_KEY,
   parseRecentOfficeSymbols,
@@ -1288,32 +1219,9 @@ const UNDERLINE_STYLE_ICON_NAMES: Record<
   dotDotDash: "underlineStyleDotted",
   wavy: "underlineStyleWavy",
 };
-import {
-  INDEX_ENTRY_MARK_NAME,
-  indexConcordanceRanges,
-  composeIndexTerm,
-  normalizeIndexEntryAttributes,
-  sanitizeIndexTerm,
-  type IndexEntryCommandInput,
-  type IndexEntryReferenceMode,
-} from "@mrnote/core/web/components/console/editor/native-document/indexEntryExtension.ts";
-import {
-  AUTHORITY_ENTRY_MARK_NAME,
-  collectAuthorityEntries,
-  normalizeAuthorityEntryAttributes,
-  sanitizeAuthorityCitation,
-  type AuthorityEntryCommandInput,
-} from "@mrnote/core/web/components/console/editor/native-document/authorityEntryExtension.ts";
-import {
-  AUTHORITY_ALL_CATEGORIES,
-  AUTHORITY_CATEGORY_NUMBERS,
-  DEFAULT_AUTHORITY_TABLE_SETTINGS,
-  normalizeAuthorityCategory,
-  normalizeAuthorityTableSettings,
-  WORD_NEW_AUTHORITY_TABLE_SETTINGS,
-  type AuthorityCategoryChoice,
-  type AuthorityCategoryNumber,
-} from "@mrnote/core/web/components/console/editor/native-document/documentAuthoritySettings.ts";
+import { INDEX_ENTRY_MARK_NAME, normalizeIndexEntryAttributes, sanitizeIndexTerm, type IndexEntryCommandInput, type IndexEntryReferenceMode } from "@mrnote/core/web/components/console/editor/native-document/indexEntryExtension.ts";
+import { AUTHORITY_ENTRY_MARK_NAME, normalizeAuthorityEntryAttributes, sanitizeAuthorityCitation, type AuthorityEntryCommandInput } from "@mrnote/core/web/components/console/editor/native-document/authorityEntryExtension.ts";
+import { AUTHORITY_ALL_CATEGORIES, DEFAULT_AUTHORITY_TABLE_SETTINGS, normalizeAuthorityTableSettings, WORD_NEW_AUTHORITY_TABLE_SETTINGS, type AuthorityCategoryChoice, type AuthorityCategoryNumber } from "@mrnote/core/web/components/console/editor/native-document/documentAuthoritySettings.ts";
 import {
   tableNodeToRows,
   textTableSelectionText,
@@ -1323,7 +1231,7 @@ import {
   QUICK_TABLE_GRID_ROWS,
   quickTableGridNavigationTarget,
   type QuickTableGridPosition,
-} from "@mrnote/core/web/components/console/editor/native-document/tableGridFit.ts";
+} from "./native-document/tableGridFit";
 import { DocumentInsertTableDialog } from "./native-document/DocumentInsertTableDialog";
 import {
   DocumentTableConversionDialog,
@@ -1347,58 +1255,15 @@ import {
   getCitationStyle,
   type OpenCitationPickerDetail,
 } from "@mrnote/core/web/components/console/editor/native-document/citationExtension.tsx";
-import {
-  DEFAULT_NOTE_RESTART,
-  ENDNOTE_POSITIONS,
-  FOOTNOTE_POSITIONS,
-  NOTE_NUM_FMTS,
-  NOTE_RESTARTS,
-  defaultNotePosition,
-  type NoteNumFmt,
-  type NotePosition,
-  type NoteRestart,
-  type NoteStream,
-} from "@mrnote/core/web/components/console/editor/native-document/footnotes.ts";
+import { DEFAULT_NOTE_RESTART, defaultNotePosition, type NoteNumFmt, type NotePosition, type NoteRestart, type NoteStream } from "@mrnote/core/web/components/console/editor/native-document/footnotes.ts";
 import { noteSettingsAtSection } from "@mrnote/core/web/components/console/editor/native-document/noteSectionSettings.ts";
 import { type CitationStyle } from "@mrnote/core/web/components/console/editor/native-document/citations.ts";
 import {
   INSERT_CROSS_REFERENCE_EVENT,
   type OpenCrossReferencePickerDetail,
 } from "@mrnote/core/web/components/console/editor/native-document/crossReferenceExtension.tsx";
-import {
-  CAPTION_CHAPTER_HEADING_LEVELS,
-  CAPTION_CHAPTER_SEPARATORS,
-  CAPTION_NUMBER_FORMATS,
-  CAPTION_SEPARATORS,
-  DEFAULT_CAPTION_ATTRIBUTES,
-  isCaptionBuiltinKind,
-  builtinCaptionListLabel,
-  builtinCaptionLabelName,
-  captionCustomLabelNames,
-  normalizeCaptionAttributes,
-  normalizeCaptionListLabel,
-  type CaptionListLabel,
-  type DocCaption,
-  type CaptionAttributes,
-  type CaptionChapterHeadingLevel,
-  type CaptionChapterSeparator,
-  type CaptionKind,
-  type CaptionNumberFormat,
-  type CaptionPosition,
-  type CaptionSeparator,
-} from "@mrnote/core/web/components/console/editor/native-document/captions.ts";
-import {
-  DEFAULT_INDEX_SETTINGS,
-  TOC_TAB_LEADERS,
-  normalizeGeneratedListSettings,
-  noteStartValue,
-  normalizeIndexSettings,
-  normalizeTocSettings,
-  type IndexSettings,
-  type TocSettings,
-  type TocTabLeader,
-} from "@mrnote/core/web/components/console/editor/native-document/referenceSettings.ts";
-import { DocumentIndexDialog } from "./native-document/DocumentIndexDialog";
+import { DEFAULT_CAPTION_ATTRIBUTES, isCaptionBuiltinKind, builtinCaptionListLabel, normalizeCaptionAttributes, normalizeCaptionListLabel, type CaptionListLabel, type DocCaption, type CaptionAttributes, type CaptionChapterHeadingLevel, type CaptionChapterSeparator, type CaptionKind, type CaptionNumberFormat, type CaptionPosition, type CaptionSeparator } from "@mrnote/core/web/components/console/editor/native-document/captions.ts";
+import { DEFAULT_INDEX_SETTINGS, TOC_TAB_LEADERS, normalizeGeneratedListSettings, normalizeIndexSettings, normalizeTocSettings, type IndexSettings, type TocSettings, type TocTabLeader } from "@mrnote/core/web/components/console/editor/native-document/referenceSettings.ts";
 import {
   DocumentBuildingBlockDialog,
   type BuildingBlockDialogValue,
@@ -1407,17 +1272,8 @@ import {
   defaultQuickPartBehavior,
   useDocumentQuickParts,
 } from "@mrnote/core/web/components/console/editor/native-document/documentQuickParts.ts";
-import {
-  normalizeReferenceStyles,
-  type ReferenceStyleDefinition,
-  type ReferenceStyleId,
-  type ReferenceStyleMap,
-} from "@mrnote/core/web/components/console/editor/native-document/referenceStyles.ts";
-import { DocumentCaptionLabelField } from "./native-document/DocumentCaptionLabelField";
-import {
-  DocumentTableOfFiguresDialog,
-  type TableOfFiguresDialogValue,
-} from "./native-document/DocumentTableOfFiguresDialog";
+import { type ReferenceStyleDefinition, type ReferenceStyleId, type ReferenceStyleMap } from "@mrnote/core/web/components/console/editor/native-document/referenceStyles.ts";
+import { type TableOfFiguresDialogValue } from "./native-document/DocumentTableOfFiguresDialog";
 import {
   TOC_OUTLINE_LEVEL_ATTR,
   TOC_OUTLINE_LEVELS,
@@ -1425,7 +1281,7 @@ import {
   type TocOutlineLevelValue,
   type TocUpdateMode,
 } from "@mrnote/core/web/components/console/editor/native-document/tableOfContents.ts";
-import { INSERT_MERGE_FIELD_EVENT, type MailMergeDialogAction, type OpenMailMergeDialogDetail, type OpenMergeFieldPickerDetail } from "@mrnote/core/web/components/console/editor/native-document/mergeFieldExtension.tsx";
+import { INSERT_MERGE_FIELD_EVENT, type MailMergeDialogAction, type OpenMailMergeDialogDetail, type OpenMergeFieldPickerDetail } from "./native-document/mergeFieldExtension";
 import {
   GO_TO_BOOKMARK_EVENT,
   INSERT_BOOKMARK_EVENT,
@@ -1482,7 +1338,7 @@ import {
   isDocxExportNeedsConnectionError,
   isDocxExportTooLargeError,
   requestServerDocx,
-} from "@mrnote/core/web/lib/document-export/docx-server-export.ts";
+} from "../../../lib/document-export/docx-server-export";
 import type { TipTapNode } from "@/lib/document-export/tiptap-json";
 import { canonicalDocumentJson } from "@mrnote/core/web/lib/collab/paged-document-projection.ts";
 import { warmDocumentRoomForFirstEdit } from "@mrnote/core/web/lib/collab/collab-extensions.ts";
@@ -1503,7 +1359,7 @@ import {
   exportPlainText,
   projectTrackedChanges,
   type RevisionExportPolicy,
-} from "@mrnote/core/web/lib/document-export/revision-policy.ts";
+} from "../../../lib/document-export/revision-policy";
 import {
   coerceEalBrackets,
   EAL_BRACKETS_VALUES,
@@ -1511,27 +1367,27 @@ import {
   normalizeEalFeature,
   type EalBrackets,
   type EalFeature,
-} from "@mrnote/core/web/components/console/editor/native-document/eastAsianLayoutExtension.ts";
+} from "./native-document/eastAsianLayoutExtension";
 import {
   DEFAULT_EMPHASIS_DOT_STYLE,
   EMPHASIS_DOTS_MARK_NAME,
   EMPHASIS_DOT_STYLE_VALUES,
   normalizeEmphasisDotStyle,
   type EmphasisDotStyle,
-} from "@mrnote/core/web/components/console/editor/native-document/emphasisDotsExtension.ts";
+} from "./native-document/emphasisDotsExtension";
 import {
   ENCLOSED_CHAR_MARK_NAME,
   normalizeEnclosedCharShape,
   normalizeEnclosedCharStyle,
   type EnclosedCharShape,
   type EnclosedCharStyle,
-} from "@mrnote/core/web/components/console/editor/native-document/enclosedCharExtension.ts";
+} from "./native-document/enclosedCharExtension";
 import {
   getFormattingMarksPreferences,
   isFormattingMarksOn,
   type FormattingMarksPreferences,
-} from "@mrnote/core/web/components/console/editor/native-document/formattingMarksExtension.ts";
-import { HIDDEN_TEXT_MARK } from "@mrnote/core/web/components/console/editor/native-document/hiddenTextExtension.ts";
+} from "./native-document/formattingMarksExtension";
+import { HIDDEN_TEXT_MARK } from "./native-document/hiddenTextExtension";
 import {
   OfficeRibbonButton,
   OfficeRibbonTabs,
@@ -1588,11 +1444,6 @@ import {
   officeDialogClassName,
   officeDialogParts,
 } from "@mrnote/core/web/components/office-ribbon/officeDialogChrome.tsx";
-import { DocumentTocCustomDialog, DocumentTocOptionsDialog, DocumentTocStylesDialog } from "@mrnote/core/web/components/console/editor/native-document/DocumentTocDialogs.tsx";
-import {
-  DocumentAlignmentTabDialog,
-  alignmentTabStop,
-} from "./native-document/DocumentAlignmentTabDialog";
 import {
   tocCatalogLocale,
   tocFormatDefaults,
@@ -1618,7 +1469,6 @@ import { useHandwritingSetting } from "./native-document/HandwritingPaperCommand
 import { handwritingPageInView, insertHandwritingPictures } from "./native-document/handwritingDocument";
 import { handwritingInkColor } from "@mrnote/core/web/lib/handwriting-paper.ts";
 import { DOCUMENT_INK_FLUSH_EVENT, DocumentFreeformSurface, type DocumentInkMode, DocumentShapeDrawSurface } from "./native-document/DocumentInkSurface";
-import DocumentInkTrackpad from "./native-document/DocumentInkTrackpad";
 import { useOfficeInkConversion } from "@mrnote/core/web/components/office-ribbon/useOfficeInkConversion.tsx";
 import {
   pressOfficeInkConvert,
@@ -1627,7 +1477,7 @@ import {
 } from "@mrnote/core/web/lib/office-ink-conversion.ts";
 import { DOCUMENT_INK_PEN_PROFILE_STORAGE_KEY, DOCUMENT_INK_PRESETS, documentInkPenProfileFromStorage, documentInkPresetById, serializeDocumentInkPenProfile, withDocumentInkPen, withDocumentInkPenRemoved, type DocumentInkEraser, type DocumentInkPenProfile, type DocumentInkPreset, type DocumentInkTool, DOCUMENT_INK_TAPE_WIDTHS_PT, isDocumentInkShapeAttrs } from "@mrnote/core/web/lib/document-ink.ts";
 import type { TapeInkEffect } from "@mrnote/core/web/lib/office-ink-effects.ts";
-import { documentHasInk, documentHasInkErasable, insertDocumentFreeformShape, documentInkPageIn, insertDocumentInkStroke, convertDocumentInkToShapes, documentInkClientStrokes, documentInkFlightStrokes, documentInkPositionsOf, insertDocumentDrawnShape, replaceDocumentInkWithReading, replaceDocumentInkWithTextBox, documentInkEquationPosition, extendDocumentInkEquation, documentInkRangeRetyped, documentInkRangeRowAt, DOCUMENT_INK_READING_META, documentInkRangeText, replaceDocumentInkRangeText, setDocumentInkPagesJoined, keepDocumentPagesCentred, DOCUMENT_INK_LANDING_META, type DocumentInkReadingPlacement, type DocumentInkTextRange } from "@mrnote/core/web/components/console/editor/native-document/documentInk.ts";
+import { documentHasInk, documentHasInkErasable, insertDocumentFreeformShape, convertDocumentInkToShapes, documentInkClientStrokes, documentInkFlightStrokes, documentInkPositionsOf, insertDocumentDrawnShape, replaceDocumentInkWithReading, replaceDocumentInkWithTextBox, documentInkEquationPosition, extendDocumentInkEquation, documentInkRangeRetyped, documentInkRangeRowAt, DOCUMENT_INK_READING_META, documentInkRangeText, replaceDocumentInkRangeText, setDocumentInkPagesJoined, keepDocumentPagesCentred, DOCUMENT_INK_LANDING_META, type DocumentInkReadingPlacement, type DocumentInkTextRange } from "@mrnote/core/web/components/console/editor/native-document/documentInk.ts";
 import {
   applyDocumentShapeFormat,
   captureDocumentShapeFormat,
@@ -2971,21 +2821,6 @@ function openDocumentLinkAtSelection(editor: Editor): void {
   // An AI answer's citation opens its place in the app (lib/answer-citation-links).
   if (openCitationHref(href)) return;
   window.open(href, "_blank", "noopener,noreferrer");
-}
-
-function documentPictureSources(editor: Editor): string[] {
-  const sources = new Set<string>();
-  editor.state.doc.descendants((node) => {
-    if (sources.size >= 6) return false;
-    if (node.type.name === "image" || node.type.name === "inlineImage") {
-      const src = node.attrs.src;
-      if (typeof src === "string" && /^(data:image\/|https?:\/\/|\/)/.test(src)) {
-        sources.add(src);
-      }
-    }
-    return true;
-  });
-  return [...sources];
 }
 
 const REVIEW_SLICE_FEATURE_IDS = [
@@ -7664,7 +7499,9 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
   // are laid out from when MRAI stocks none (SMARTART-GAP.md §8.6).
   useEffect(() => (pageId ? registerSmartArtDefinitionPage(pageId) : undefined), [pageId]);
   const immersiveReaderReturnFocusRef = useRef<HTMLButtonElement | null>(null);
-  const [rulerVisible, setRulerVisible] = useState(false);
+  // An ONLYOFFICE config's customization.hideRulers (embed): Docs' document
+  // editor shows its ruler unless hidden there.
+  const [rulerVisible, setRulerVisible] = useState(() => onlyofficeRulerAtOpen("document") ?? false);
   // A page or column break the caret's place cannot hold (a text box, a
   // content control, a table row that cannot start a page) is refused with
   // its reason, from the ribbon, the shortcut and the slash menu alike.
@@ -7891,12 +7728,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
   // sources is open, so the submenu is greyed out as Word's is.
   const [compareResultSources, setCompareResultSources] =
     useState<CompareResultSources | null>(null);
-  const [sourceDocumentsMode, setSourceDocumentsMode] =
-    useState<SourceDocumentsMode>(DEFAULT_SOURCE_DOCUMENTS_MODE);
-  const showCompareResult = useCallback((result: CompareResultSources) => {
-    setCompareResultSources(result);
-    setSourceDocumentsMode(DEFAULT_SOURCE_DOCUMENTS_MODE);
-  }, []);
   const compareDocumentsReturnFocusRef = useRef<HTMLElement | null>(null);
   const closeVersionHistory = useCallback(() => {
     const returnFocus = versionHistoryReturnFocusRef.current;
@@ -7928,43 +7759,18 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     [editor],
   );
   const toggleCompareDocuments = useCallback(() => {
-    if (compareDocumentsOpen && compareDocumentsKind === "compare") {
-      closeCompareDocuments();
-      return;
-    }
     compareDocumentsReturnFocusRef.current ??= stableDialogReturnFocusTarget();
     setCompareDocumentsKind("compare");
     setCompareDocumentsOpen(true);
-  }, [closeCompareDocuments, compareDocumentsKind, compareDocumentsOpen]);
+  }, [closeCompareDocuments, compareDocumentsKind, false]);
   const [proofingLanguageTarget, setProofingLanguageTarget] =
     useState<DocumentProofingLanguageTarget | null>(null);
-  const proofingLanguageReturnFocusRef = useRef<HTMLButtonElement | null>(
-    null,
-  );
   const openProofingLanguageDialog = useCallback(() => {
     const target = readDocumentProofingLanguageTarget(editor);
     if (!target) return false;
     setProofingLanguageTarget(target);
     return true;
   }, [editor]);
-  const closeProofingLanguageDialog = useCallback(() => {
-    setProofingLanguageTarget(null);
-  }, []);
-  const submitProofingLanguage = useCallback(
-    (
-      value: ProofingLanguageValue,
-      options?: { preserveLanguages?: boolean; preserveNoProof?: boolean },
-    ) => {
-      if (!proofingLanguageTarget) return false;
-      return setDocumentProofingLanguage(
-        editor,
-        proofingLanguageTarget,
-        value,
-        options,
-      );
-    },
-    [editor, proofingLanguageTarget],
-  );
   const reviewCommandRegistry = useMemo(
     () =>
       createDocumentFeatureCommandRegistry([
@@ -8495,9 +8301,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     useState<PendingDocumentExportLossConsent | null>(null);
   const exporting = exportStatus.phase === "preparing";
   const [unequalColumnsOpen, setUnequalColumnsOpen] = useState(false);
-  const [lineNumbersDialogInitial, setLineNumbersDialogInitial] =
-    useState<DocumentLineNumbersValue | null>(null);
-  const lineNumbersReturnFocusRef = useRef<HTMLElement | null>(null);
   const unequalColumnsReturnFocusRef = useRef<HTMLElement | null>(null);
   const unequalColumnsAuthorityRef = useRef<{
     readonly editor: Editor;
@@ -8735,7 +8538,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
       requestId: 0,
     });
   const [goToMode, setGoToMode] = useState<"all" | "objects" | null>(null);
-  const [zoomDialogOpen, setZoomDialogOpen] = useState(false);
   // Developer > Design Mode and the Content Control Properties dialog.
   const [selectionPaneOpen, setSelectionPaneOpen] = useState(false);
   // The Selection Pane's Group, while two or more groupable shapes are
@@ -9135,7 +8937,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
   // Set Numbering Value, Footnote and Endnote, Index, Caption, Tabs, …):
   // Word puts the caret there, not on OK. One dialog is open at a time.
   const commandDialogFocusInputRef = useRef<HTMLInputElement | null>(null);
-  const commandDialogFocusSelectRef = useRef<HTMLSelectElement | null>(null);
   // Closing a command dialog hands the keyboard back to the document, as
   // Word does, when the page is on screen (a detached view falls back to
   // the control that opened the dialog).
@@ -9343,7 +9144,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     useState(true);
   const [tocTabLeaderDraft, setTocTabLeaderDraft] =
     useState<TocTabLeader>("dot");
-  const [alignmentTabOpen, setAlignmentTabOpen] = useState(false);
 
   const [tocDraft, setTocDraft] = useState<TocSettings>(() =>
     normalizeTocSettings(undefined),
@@ -9865,7 +9665,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
       };
     },
   });
-  const inkStrokeLanded = inkConversion.strokeCommitted;
   // Draw ▸ Convert: the strokes picked (Lasso Select, Shift + click)
   // convert now -- shapes stroke by stroke, a reading as one piece of
   // writing -- and anything else picked with them stays as it is; with no
@@ -9888,20 +9687,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
       });
     },
     [editor, inkConversion, selectedInkPositions],
-  );
-  /** How a finished stroke lands under the conversion mode that is on. */
-  // Draw ▸ Record (DocumentInkAudioControls): the strokes that land while
-  // it runs keep their moment in the recording.
-  const inkRecordingRef = useRef<InkRecordingSession | null>(null);
-  const inkStrokeOptions = useCallback(
-    () => ({
-      toShape: inkToShapeRef.current,
-      onInserted: (strokes: readonly ProseMirrorNode[]) => {
-        for (const stroke of strokes) inkStrokeLanded(stroke);
-      },
-      ...(inkRecordingRef.current ? { audio: inkRecordingRef.current.stamp() } : {}),
-    }),
-    [inkStrokeLanded],
   );
   const [inkMoreColorsPenId, setInkMoreColorsPenId] = useState<string | null>(null);
   // The pen palette's pens: More Colors opens from there while the ribbon is folded.
@@ -10338,7 +10123,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     });
     return changed ? pens : inkPens.pens;
   }, [handwritingPaperColor, inkPens.pens]);
-  const inkPreset = documentInkPresetById(inkPresetId, { ...inkPens, pens: shownInkPens });
   const handwritingSettingRef = useRef(handwritingSetting);
   handwritingSettingRef.current = handwritingSetting;
   // The toolbar re-renders when the formatting it shows changes, which a
@@ -10669,13 +10453,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
   const [pageSetupDialog, setPageSetupDialog] = useState<
     "size" | "margins" | "grid" | null
   >(null);
-  // Word's Page Setup dialog (margins, gutter, orientation, paper, Apply
-  // to) for every document: one without stored section layouts yet shows the
-  // layout its first page-setup write materializes from the page settings.
-  const pageSetupDialogLayout =
-    pageSetupDialog !== null && docsOfficeParityV2
-      ? (selectedSectionLayout ?? shownSectionLayoutAtSelection(editor.state))
-      : null;
   const pageSetupDraftAuthorityRef = useRef<{
     readonly editor: Editor;
     readonly pageId: string | undefined;
@@ -16273,44 +16050,8 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     setIndexBoldPageNumberDraft(activeEntry.boldPageNumber);
     setIndexItalicPageNumberDraft(activeEntry.italicPageNumber);
     rememberEditorSelection();
-    setDocDialog("indexMark");
+    void 0;
   }, [editor, rememberEditorSelection]);
-
-  const submitIndexMark = useCallback(
-    (markAll = false) => {
-      if (editor.isDestroyed || !editor.isEditable) return false;
-      if (!composeIndexTerm(indexTermDraft, indexSubentryDraft)) return false;
-      const applied = markIndexEntryFromDialog(
-        editor,
-        restoredChain(),
-        {
-          term: indexTermDraft,
-          subentry: indexSubentryDraft,
-          referenceMode: indexReferenceModeDraft,
-          crossReference: indexCrossReferenceDraft,
-          pageRangeBookmark: indexPageRangeBookmarkDraft,
-          boldPageNumber: indexBoldPageNumberDraft,
-          italicPageNumber: indexItalicPageNumberDraft,
-        },
-        markAll,
-        indexMatchTextDraft,
-      );
-      if (applied) setDocDialog(null);
-      return applied;
-    },
-    [
-      indexBoldPageNumberDraft,
-      indexCrossReferenceDraft,
-      editor,
-      indexItalicPageNumberDraft,
-      indexMatchTextDraft,
-      indexPageRangeBookmarkDraft,
-      indexReferenceModeDraft,
-      indexSubentryDraft,
-      indexTermDraft,
-      restoredChain,
-    ],
-  );
 
   const indexCachedValue = useCallback(
     () =>
@@ -16348,36 +16089,8 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     );
     setIndexSettingsInitial(settings);
     rememberEditorSelection();
-    setDocDialog("indexSettings");
+    void 0;
   }, [editor, rememberEditorSelection]);
-
-  const applyDocumentIndexSettings = useCallback((draft: IndexSettings) => {
-    if (editor.isDestroyed || !editor.isEditable) return false;
-    const settings = normalizeIndexSettings(draft);
-    const target = resolveDocumentIndexSelection(true);
-    const editingExisting = indexDialogModeRef.current === "edit";
-    const finish = () => {
-      setDocDialog(null);
-      indexDialogModeRef.current = "insert";
-      indexSelectionRef.current = null;
-    };
-    if (editingExisting && target) {
-      rewriteDocumentField(editor, target, "INDEX", settings, indexCachedValue());
-      editor.commands.focus(null, { scrollIntoView: false });
-      finish();
-      return true;
-    }
-    if (editingExisting) return false;
-    const applied = restoredChain()
-      .insertDocumentField("INDEX", {
-        options: { ...settings },
-        cachedValue: indexCachedValue(),
-        updatePolicy: "on-open",
-      })
-      .run();
-    if (applied) finish();
-    return applied;
-  }, [editor, indexCachedValue, resolveDocumentIndexSelection, restoredChain]);
 
   const updateSelectedDocumentIndex = useCallback(() => {
     if (editor.isDestroyed || !editor.isEditable) return false;
@@ -16423,42 +16136,8 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     setAuthorityBoldPageNumberDraft(activeEntry.boldPageNumber);
     setAuthorityItalicPageNumberDraft(activeEntry.italicPageNumber);
     rememberEditorSelection();
-    setDocDialog("authorityMark");
+    void 0;
   }, [editor, rememberEditorSelection]);
-
-  const submitAuthorityMark = useCallback(
-    (markAll = false) => {
-      if (editor.isDestroyed || !editor.isEditable) return false;
-      const entry = normalizeAuthorityEntryAttributes({
-        longCitation: authorityLongCitationDraft,
-        shortCitation: authorityShortCitationDraft,
-        category: authorityCategoryDraft,
-        pageRangeBookmark: authorityPageRangeBookmarkDraft,
-        boldPageNumber: authorityBoldPageNumberDraft,
-        italicPageNumber: authorityItalicPageNumberDraft,
-      });
-      // The citation must validate before the selection is restored.
-      if (!entry.longCitation || !entry.shortCitation) return false;
-      const applied = markAuthorityEntryFromDialog(
-        editor,
-        restoredChain(),
-        entry,
-        markAll,
-      );
-      if (applied) setDocDialog(null);
-      return applied;
-    },
-    [
-      authorityBoldPageNumberDraft,
-      authorityCategoryDraft,
-      authorityItalicPageNumberDraft,
-      authorityLongCitationDraft,
-      authorityPageRangeBookmarkDraft,
-      authorityShortCitationDraft,
-      editor,
-      restoredChain,
-    ],
-  );
 
   const authorityCachedValue = useCallback(
     (category: AuthorityCategoryNumber) =>
@@ -16511,84 +16190,8 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     setAuthorityPageRangeSeparatorDraft(settings.pageRangeSeparator);
     setAuthorityPageListSeparatorDraft(settings.pageListSeparator);
     rememberEditorSelection();
-    setDocDialog("authoritySettings");
+    void 0;
   }, [editor, rememberEditorSelection]);
-
-  const applyAuthoritySettings = useCallback(() => {
-    if (editor.isDestroyed || !editor.isEditable) return false;
-    const allCategories = authorityTableCategoryDraft === AUTHORITY_ALL_CATEGORIES;
-    const settings = normalizeAuthorityTableSettings({
-      category: allCategories ? 1 : authorityTableCategoryDraft,
-      includeCategoryHeading: authorityIncludeHeadingDraft,
-      usePassim: authorityUsePassimDraft,
-      preserveEntryFormatting: authorityPreserveFormattingDraft,
-      entryPageSeparator: authorityEntryPageSeparatorDraft,
-      pageRangeSeparator: authorityPageRangeSeparatorDraft,
-      pageListSeparator: authorityPageListSeparatorDraft,
-    });
-    const target = resolveAuthoritySelection(true);
-    const editingExisting = authorityDialogModeRef.current === "edit";
-    const finish = () => {
-      setDocDialog(null);
-      authorityDialogModeRef.current = "insert";
-      authoritySelectionRef.current = null;
-    };
-    if (editingExisting && target) {
-      if (
-        !rewriteDocumentField(
-          editor,
-          target,
-          "TOA",
-          settings,
-          authorityCachedValue(settings.category),
-        )
-      ) {
-        return false;
-      }
-      editor.commands.focus(null, { scrollIntoView: false });
-      finish();
-      return true;
-    }
-    if (editingExisting) return false;
-    // Category All builds Word's table: one TOA field per category that has
-    // marked citations, in category order (Cases first when none has any).
-    const json = editor.getJSON();
-    const categories: readonly AuthorityCategoryNumber[] = allCategories
-      ? (() => {
-          const marked = AUTHORITY_CATEGORY_NUMBERS.filter(
-            (category) => collectAuthorityEntries(json, category).length > 0,
-          );
-          return marked.length > 0 ? marked : [1];
-        })()
-      : [settings.category];
-    let applied = false;
-    for (const [index, category] of categories.entries()) {
-      const field = {
-        options: { ...settings, category },
-        cachedValue: authorityCachedValue(category),
-        updatePolicy: "on-open" as const,
-      };
-      const inserted = (index === 0 ? restoredChain() : editor.chain())
-        .insertDocumentField("TOA", field)
-        .run();
-      if (!inserted) break;
-      applied = true;
-    }
-    if (applied) finish();
-    return applied;
-  }, [
-    authorityCachedValue,
-    authorityEntryPageSeparatorDraft,
-    authorityIncludeHeadingDraft,
-    authorityPageListSeparatorDraft,
-    authorityPageRangeSeparatorDraft,
-    authorityPreserveFormattingDraft,
-    authorityTableCategoryDraft,
-    authorityUsePassimDraft,
-    editor,
-    resolveAuthoritySelection,
-    restoredChain,
-  ]);
 
   const updateSelectedAuthorityTable = useCallback(() => {
     if (editor.isDestroyed || !editor.isEditable) return false;
@@ -16643,23 +16246,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     return { doc: editor.state.doc, node, pos: remembered.pos };
   }, [editor]);
 
-  // Word's TOC Options lists every paragraph style the document defines;
-  // the palette's names are what a `\t` switch would carry.
-  const documentParagraphStyleNames = useMemo(() => {
-    const styles = ensureStableNamedStyleIds(
-      (editor.state.doc.attrs ?? {}).namedStyles,
-    );
-    const names = new Set<string>();
-    for (const style of styles) {
-      if (typeof style.name === "string" && style.name.trim()) {
-        names.add(style.name.trim());
-      }
-    }
-    return Array.from(names);
-    // The palette is document-level state; the TOC dialog reads it on open.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, docDialog]);
-
   const openTocSettingsDialog = useCallback(() => {
     if (editor.isDestroyed || !editor.isEditable) return;
     rememberTocSelection();
@@ -16675,7 +16261,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
           }),
     );
     setTocDialogView("custom");
-    setDocDialog("tocSettings");
+    void 0;
   }, [editor, locale, rememberTocSelection]);
 
   // Word's Update Table and Remove Table of Contents act on the TOC the
@@ -16697,27 +16283,9 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     }
     tocSelectionRef.current = target;
     setTocUpdateModeDraft("pageNumbers");
-    setDocDialog("tocUpdate");
+    void 0;
     return true;
   }, [editor, rememberTocSelection, resolveDocumentTocTarget]);
-
-  const submitTocUpdate = useCallback(() => {
-    if (editor.isDestroyed || !editor.isEditable) return false;
-    const target = resolveTocSelection(true);
-    if (!target) {
-      editor.commands.focus(null, { scrollIntoView: false });
-      return false;
-    }
-    updateTableOfContents(editor, target, tocUpdateModeDraft);
-    tocSelectionRef.current = selectedTableOfContentsTarget(editor);
-    setDocDialog(null);
-    editor.commands.focus(null, { scrollIntoView: false });
-    return true;
-  }, [
-    editor,
-    resolveTocSelection,
-    tocUpdateModeDraft,
-  ]);
 
   const removeSelectedTableOfContents = useCallback(() => {
     if (editor.isDestroyed || !editor.isEditable) return false;
@@ -16879,37 +16447,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     return true;
   }, [editor]);
 
-  const submitTocSettings = useCallback(() => {
-    if (editor.isDestroyed || !editor.isEditable) return false;
-    const settings = normalizeTocSettings(tocDraft);
-    const editingExistingToc = tocDialogModeRef.current === "edit";
-    const target = resolveTocSelection(editingExistingToc);
-    if (target) {
-      rewriteTableOfContents(editor, target, settings);
-      tocSelectionRef.current = selectedTableOfContentsTarget(editor);
-      tocDialogModeRef.current = "insert";
-      setDocDialog(null);
-      editor.commands.focus(null, { scrollIntoView: false });
-      return true;
-    }
-    if (editingExistingToc) {
-      tocDialogModeRef.current = "insert";
-      editor.commands.focus(null, { scrollIntoView: false });
-      return false;
-    }
-    tocDialogModeRef.current = "insert";
-    setDocDialog(null);
-    return offerTocReplace(tableOfContentsNode(editor.state.doc, settings), (existing) => {
-      rewriteTableOfContents(editor, existing, settings);
-      tocSelectionRef.current = selectedTableOfContentsTarget(editor);
-    });
-  }, [
-    editor,
-    insertionChain,
-    resolveTocSelection,
-    tocDraft,
-  ]);
-
   const seedNoteSettings = useCallback(
     (stream: NoteStream, context?: NoteApplyScopeContext | null) => {
       // Word's dialog shows the values of the section holding the insertion
@@ -16938,46 +16475,8 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     setNoteScopeContext(context);
     setNoteSettingsScope("wholeDocument");
     seedNoteSettings("footnote", context);
-    setDocDialog("footnoteSettings");
+    void 0;
   }, [editor, rememberEditorSelection, seedNoteSettings]);
-
-  const submitFootnoteSettings = useCallback(() => {
-    if (editor.isDestroyed || !editor.isEditable) return false;
-    // The field's whole number, as the number input reads it ("1e2" is
-    // 100); anything that is not a whole number in 1..9999 is refused
-    // rather than cut to its leading digits.
-    const start = noteStartValue(noteSettingsStart);
-    if (start === null) return false;
-    const scope =
-      noteScopeContext?.options.includes(noteSettingsScope) === true
-        ? noteSettingsScope
-        : "wholeDocument";
-    const applied = applyNoteSettings(
-      restoredChain(),
-      {
-        stream: noteSettingsStream,
-        numFmt: noteSettingsFormat,
-        start,
-        position: noteSettingsPosition,
-        restart: noteSettingsRestart,
-        scope,
-        sectionIndexes: noteScopeContext?.sectionIndexes ?? [],
-      },
-      editor.state,
-    );
-    if (applied) setDocDialog(null);
-    return applied;
-  }, [
-    noteScopeContext,
-    noteSettingsFormat,
-    noteSettingsPosition,
-    noteSettingsRestart,
-    noteSettingsScope,
-    noteSettingsStart,
-    noteSettingsStream,
-    editor,
-    restoredChain,
-  ]);
 
   // ---- Captions + live tables of figures/tables --------------------------
   // Keep the human-readable label in the same atomic caption node consumed by
@@ -17016,60 +16515,8 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     setCaptionChapterHeadingLevelDraft(defaults.chapterHeadingLevel);
     setCaptionChapterSeparatorDraft(defaults.chapterSeparator);
     setCaptionEditingDraft(Boolean(selectedCaption));
-    setDocDialog("caption");
+    void 0;
   }, [editor, rememberEditorSelection]);
-
-  const submitCaption = useCallback(() => {
-    if (editor.isDestroyed || !editor.isEditable) return false;
-    const attrs: Partial<CaptionAttributes> = {
-      kind: captionKindDraft,
-      // The label is written into the caption (Word does the same), so it
-      // reads alike for viewers in any language.
-      labelName:
-        captionLabelNameDraft ??
-        (captionKindDraft === "custom"
-          ? null
-          : builtinCaptionLabelName(captionKindDraft)),
-      label: captionLabelDraft,
-      position: captionPositionDraft,
-      numberFormat: captionNumberFormatDraft,
-      excludeLabel: captionExcludeLabelDraft,
-      separator: captionSeparatorDraft,
-      includeChapterNumber: captionIncludeChapterNumberDraft,
-      chapterHeadingLevel: captionChapterHeadingLevelDraft,
-      chapterSeparator: captionChapterSeparatorDraft,
-    };
-    const selectedNodePos = captionNodeSelectionPosRef.current;
-    const command =
-      selectedNodePos !== null && editor.state.doc.nodeAt(selectedNodePos)
-        ? chain(editor).setNodeSelection(selectedNodePos)
-        : restoredChain();
-    const applied = captionEditingDraft
-      ? command.updateCaption(attrs).run()
-      : command.addCaption(attrs).run();
-    if (!applied) return false;
-    rememberCaptionLabel({
-      kind: attrs.kind ?? "figure",
-      labelName: attrs.labelName ?? null,
-    });
-    captionNodeSelectionPosRef.current = null;
-    setDocDialog(null);
-    return true;
-  }, [
-    captionEditingDraft,
-    captionChapterHeadingLevelDraft,
-    captionChapterSeparatorDraft,
-    captionExcludeLabelDraft,
-    captionIncludeChapterNumberDraft,
-    captionKindDraft,
-    captionLabelNameDraft,
-    captionLabelDraft,
-    captionNumberFormatDraft,
-    captionPositionDraft,
-    captionSeparatorDraft,
-    editor,
-    restoredChain,
-  ]);
 
   const rememberCaptionListSelection = useCallback(
     (kind?: CaptionListKind) => {
@@ -17126,72 +16573,10 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
       const settings = normalizeGeneratedListSettings(target?.node.attrs);
       setGeneratedListSettingsKindDraft(label);
       setGeneratedListInitial({ label, settings });
-      setDocDialog("generatedListSettings");
+      void 0;
       return true;
     },
     [rememberCaptionListSelection],
-  );
-
-  const submitCaptionListSettings = useCallback(
-    (value: TableOfFiguresDialogValue) => {
-      if (editor.isDestroyed || !editor.isEditable) return false;
-      const originalKind = generatedListSettingsKindDraft;
-      const kind = value.label;
-      const settings = normalizeGeneratedListSettings(value.settings);
-      const editingExistingList = captionListDialogModeRef.current === "edit";
-      setDocDialog(null);
-      const target = resolveCaptionListSelection(
-        originalKind,
-        editingExistingList,
-      );
-      if (target) {
-        rewriteCaptionList(editor, target, kind, settings);
-        captionListSelectionRef.current = selectedCaptionListTarget(
-          editor,
-          kind,
-        );
-        captionListDialogModeRef.current = "insert";
-        editor.commands.focus(null, { scrollIntoView: false });
-        return true;
-      }
-      if (editingExistingList) {
-        captionListDialogModeRef.current = "insert";
-        editor.commands.focus(null, { scrollIntoView: false });
-        return false;
-      }
-      captionListDialogModeRef.current = "insert";
-      return insertionChain()
-        .insertContent(captionListNode(editor.state.doc, kind, settings))
-        .run();
-    },
-    [
-      editor,
-      generatedListSettingsKindDraft,
-      insertionChain,
-      resolveCaptionListSelection,
-    ],
-  );
-
-  // Word's Modify Style for TOC 1..9 / Table of Figures: the document's own
-  // definition of that built-in style (doc.attrs.referenceStyles).
-  const saveReferenceStyle = useCallback(
-    (id: ReferenceStyleId, definition: ReferenceStyleDefinition | null) => {
-      if (editor.isDestroyed || !editor.isEditable) return false;
-      const current =
-        normalizeReferenceStyles(
-          (editor.state.doc.attrs as { referenceStyles?: unknown })
-            .referenceStyles,
-        ) ?? {};
-      const next: ReferenceStyleMap = { ...current };
-      if (definition) next[id] = definition;
-      else delete next[id];
-      return (
-        editor.commands as unknown as {
-          setReferenceStyles: (styles: unknown) => boolean;
-        }
-      ).setReferenceStyles(next);
-    },
-    [editor],
   );
 
   const openCaptionListUpdateDialog = useCallback(
@@ -17205,31 +16590,11 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
         normalizeCaptionListLabel(target.node.attrs?.kind),
       );
       setGeneratedListUpdateModeDraft("pageNumbers");
-      setDocDialog("generatedListUpdate");
+      void 0;
       return true;
     },
     [editor, resolveCaptionListSelection],
   );
-
-  const submitCaptionListUpdate = useCallback(() => {
-    if (editor.isDestroyed || !editor.isEditable) return false;
-    setDocDialog(null);
-    const kind = generatedListUpdateKindDraft;
-    const target = resolveCaptionListSelection(kind, true);
-    if (!target) {
-      editor.commands.focus(null, { scrollIntoView: false });
-      return false;
-    }
-    updateCaptionList(editor, target, kind, generatedListUpdateModeDraft);
-    captionListSelectionRef.current = selectedCaptionListTarget(editor, kind);
-    editor.commands.focus(null, { scrollIntoView: false });
-    return true;
-  }, [
-    editor,
-    generatedListUpdateKindDraft,
-    generatedListUpdateModeDraft,
-    resolveCaptionListSelection,
-  ]);
 
   const removeSelectedCaptionList = useCallback(
     (kind: CaptionListKind) => {
@@ -17471,7 +16836,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
           execute: () => {
             if (showNotesNeedsAreaChoice(editor.state)) {
               setShowNotesAreaDraft("footnote");
-              setDocDialog("showNotes");
+              void 0;
               return true;
             }
             return showNotesForSelection(editor);
@@ -18970,52 +18335,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     },
     [setRibbonTab],
   );
-  // Word's Layout Options on the chart (Position, Wrap Text, Move with Text /
-  // Fix Position on Page, the floating stack, Align): its own `floatAnchor`.
-  // Word's Layout dialog (More Layout Options…) on the selected floating
-  // drawing, whichever kind it is (`floatLayoutTarget`).
-  const [floatLayoutDialog, setFloatLayoutDialog] = useState<
-    {
-      anchor: import("@mrnote/core/web/lib/office-float-anchor.ts").FloatAnchor;
-      paint: import("@mrnote/core/web/lib/office-float-anchor-edit.ts").FloatPaint | null;
-      size: import("./native-document/floatLayoutTarget").LiveFloatLayoutSize | null;
-    } | null
-  >(null);
-  const floatLayoutLabels: OfficeFloatLayoutDialogLabels = {
-    title: t("document.floatLayout.title"),
-    ok: t("toolbar.dialogOk"),
-    cancel: t("toolbar.cancel"),
-    positionTab: t("document.floatLayout.positionTab"),
-    wrappingTab: t("document.floatLayout.wrappingTab"),
-    sizeTab: t("document.floatLayout.sizeTab"),
-    height: t("document.floatLayout.height"),
-    width: t("document.floatLayout.width"),
-    lockAspectRatio: t("toolbar.lockAspectRatio"),
-    horizontal: t("document.floatLayout.horizontal"),
-    vertical: t("document.floatLayout.vertical"),
-    alignment: t("document.floatLayout.alignment"),
-    bookLayout: t("document.floatLayout.bookLayout"),
-    absolutePosition: t("document.floatLayout.absolutePosition"),
-    relativePosition: t("document.floatLayout.relativePosition"),
-    relativeTo: t("document.floatLayout.relativeTo"),
-    toTheRightOf: t("document.floatLayout.toTheRightOf"),
-    below: t("document.floatLayout.below"),
-    of: t("document.floatLayout.of"),
-    options: t("document.floatLayout.options"),
-    moveWithText: t("document.floatLayout.moveWithText"),
-    lockAnchor: t("document.floatLayout.lockAnchor"),
-    allowOverlap: t("document.floatLayout.allowOverlap"),
-    layoutInCell: t("document.floatLayout.layoutInCell"),
-    wrappingStyle: t("document.floatLayout.wrappingStyle"),
-    wrapText: t("document.floatLayout.wrapText"),
-    distanceFromText: t("document.floatLayout.distanceFromText"),
-    top: t("document.floatLayout.top"),
-    bottom: t("document.floatLayout.bottom"),
-    left: t("document.floatLayout.left"),
-    right: t("document.floatLayout.right"),
-    cm: t("document.floatLayout.cm"),
-    option: (key) => t(`document.floatLayout.option.${key}` as Parameters<typeof t>[0]),
-  };
   const displayedChartPlacement = chartContextTarget
     ? documentChartPlacementState(editor.state.doc, chartContextTarget.node.attrs, chartContextTarget.pos)
     : undefined;
@@ -19414,36 +18733,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
   // Page width first, then larger by the page's width over its text width.
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
-  const zoomToTextWidth = useCallback(() => {
-    const current = zoomRef.current;
-    if (!current?.setLevel || editor.isDestroyed) return;
-    const sheet = editor.view.dom.querySelector<HTMLElement>("article[data-page-sheet]");
-    if (!sheet) {
-      current.fitPageWidth();
-      return;
-    }
-    const style = getComputedStyle(sheet);
-    const width = Number.parseFloat(style.width);
-    const padding =
-      Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
-    const page = style.boxSizing === "border-box" ? width : width + padding;
-    const text = page - padding;
-    if (!(page > 0 && text > 0)) {
-      current.fitPageWidth();
-      return;
-    }
-    current.fitPageWidth();
-    // The fit lands on the next render.
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        const fitted = zoomRef.current;
-        const level = fitted?.level;
-        if (fitted?.setLevel && typeof level === "number" && level > 0) {
-          fitted.setLevel((level * page) / text);
-        }
-      }),
-    );
-  }, [editor]);
   const documentContextSpelling = useDocumentContextSpelling(
     editor,
     documentContextMenu.menu &&
@@ -20610,101 +19899,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     pageSetupDraftMayWrite,
   ]);
 
-  // Word's Page Setup OK (section layouts): both tabs, Apply to and the
-  // document-wide Multiple pages / Gutter position land in one transaction.
-  const submitPageSetupDialog = useCallback(
-    (value: PageSetupDialogValue): boolean => {
-      const mode = pageSetupDraftAuthorityRef.current?.mode;
-      if (!mode || !pageSetupDraftMayWrite(mode)) return false;
-      const layoutTab = value.layoutTab;
-      const applied = applySectionLayoutPatchTo(
-        editor,
-        {
-          pageSize: value.pageSize,
-          pageMargins: {
-            ...value.pageMargins,
-            ...(layoutTab ? { headerTwips: layoutTab.headerTwips, footerTwips: layoutTab.footerTwips } : {}),
-          },
-          ...(value.docGrid ? { docGrid: value.docGrid } : {}),
-          ...(layoutTab ? { verticalAlignment: layoutTab.verticalAlignment } : {}),
-        },
-        value.applyTo,
-        "nextPage",
-        { multiplePages: value.multiplePages, gutterAtTop: value.gutterAtTop },
-      );
-      // The document-wide grid the page draws is the body section's
-      // (manuscriptGrid / docGridLinePitch): a grid chosen for the whole
-      // document is stated there too.
-      if (applied && value.docGrid && value.applyTo === "wholeDocument") {
-        const grid = value.docGrid;
-        editor.view.dispatch(
-          editor.state.tr
-            .setDocAttribute("manuscriptGrid", grid.type === "default" ? "off" : "lines")
-            .setDocAttribute(
-              "docGridLinePitch",
-              grid.type === "default" ? null : (grid.linePitch ?? null),
-            ),
-        );
-      }
-      // The Layout tab's section start and header options, on the sections
-      // Apply to names (after This point forward, the new one onward).
-      if (applied && layoutTab) {
-        const at = resolveSectionAtSelection(editor.state);
-        const targets =
-          value.applyTo === "wholeDocument"
-            ? Array.from({ length: at.sectionCount }, (_, index) => index)
-            : value.applyTo === "thisPointForward"
-              ? Array.from({ length: at.sectionCount - at.sectionIndex }, (_, index) => at.sectionIndex + index)
-              : [at.sectionIndex];
-        if (layoutTab.sectionStart) {
-          const breaks: { pos: number; type: unknown }[] = [];
-          editor.state.doc.descendants((node, pos) => {
-            if (node.type.name === "sectionBreak") breaks.push({ pos, type: node.attrs.breakType });
-            return true;
-          });
-          const tr = editor.state.tr;
-          for (const index of targets) {
-            const item = index > 0 ? breaks[index - 1] : undefined;
-            if (item && (item.type ?? "nextPage") !== layoutTab.sectionStart) {
-              tr.setNodeAttribute(item.pos, "breakType", layoutTab.sectionStart);
-            }
-          }
-          if (tr.docChanged) editor.view.dispatch(tr);
-        }
-        if (layoutTab.differentOddEven !== (editor.state.doc.attrs.differentOddEven === true)) {
-          editor.commands.setDifferentOddEven(layoutTab.differentOddEven);
-        }
-        for (const index of targets) {
-          if (sectionDifferentFirstPageAt(editor.state.doc, index) !== layoutTab.differentFirstPage) {
-            editor.commands.setSectionDifferentFirstPage(index, layoutTab.differentFirstPage);
-          }
-        }
-      }
-      const margins = value.pageMargins;
-      if (
-        applied &&
-        mode === "margins" &&
-        margins?.topTwips !== undefined &&
-        margins.bottomTwips !== undefined &&
-        margins.leftTwips !== undefined &&
-        margins.rightTwips !== undefined
-      ) {
-        rememberLastCustomMargins({
-          twips: {
-            top: margins.topTwips,
-            bottom: margins.bottomTwips,
-            left: margins.leftTwips,
-            right: margins.rightTwips,
-          },
-          mirrored: value.multiplePages === "mirrorMargins",
-        });
-      }
-      if (applied) closePageSetupDialog();
-      return applied;
-    },
-    [closePageSetupDialog, editor, pageSetupDraftMayWrite],
-  );
-
   // "Reset to preset" — clear the custom override AND restore a real preset (the
   // dropdown's `custom` value otherwise has no preset dims). Letter/Normal are
   // the editor defaults, matching what the user sees after clearing.
@@ -20738,98 +19932,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     },
     [docsOfficeParityV2, editor],
   );
-
-  // Word's Page Border button menu. Every entry composes one section-layout
-  // patch in documentPageBorder.ts and applies it here, so the menu itself owns
-  // no model rules. "Whole document" is the one entry that spans the chain: it
-  // replays the same patch on every section inside ONE chained transaction, so
-  // undo restores the whole document's border in a single step.
-  const [pageBordersDialogOpen, setPageBordersDialogOpen] = useState(false);
-  // The Apply to the user last chose in this menu: Remove acts on exactly
-  // that (Word removes the border from what Apply to targets).
-  const pageBorderApplyScopeRef = useRef<PageBorderApplyScope | null>(null);
-  const pageBorderMenuCommands = useMemo<DocumentPageBorderMenuCommands>(() => {
-    const borders = () => effectiveSectionPageBorders(editor.state);
-    const apply = (patch: PageBordersPatch | null): boolean => {
-      if (editor.isDestroyed || !editor.isEditable) return false;
-      return applyCurrentSectionLayoutPatch(editor, { pageBorders: patch });
-    };
-    const applyPen = (
-      pen: Parameters<typeof pageBorderPenPatch>[1],
-    ): boolean => apply(pageBorderPenPatch(borders(), pen));
-    return {
-      openDialog: () => {
-        if (editor.isDestroyed || !editor.isEditable) return;
-        setPageBordersDialogOpen(true);
-      },
-      toggleSide: (side) => {
-        apply(pageBorderSideTogglePatch(borders(), side));
-      },
-      toggleAllEdges: () => {
-        apply(pageBorderAllEdgesTogglePatch(borders()));
-      },
-      setWeightPt: (points) => {
-        applyPen({
-          sizeEighths: Math.min(Math.max(Math.round(points * 8), 2), 96),
-        });
-      },
-      setStyle: (style) => {
-        applyPen({ style });
-      },
-      setColor: (color) => {
-        applyPen(pageBorderColorPen(color));
-      },
-      setAutomaticColor: () => {
-        applyPen(pageBorderColorPen(null));
-      },
-      setOffsetFrom: (offsetFrom) => {
-        if (!borders()) return;
-        apply({ offsetFrom });
-      },
-      setInFrontOfText: (inFront) => {
-        if (!borders()) return;
-        apply({ zOrder: inFront ? "front" : "back" });
-      },
-      setApplyScope: (scope) => {
-        if (editor.isDestroyed || !editor.isEditable) return;
-        const resolved = pageBorderApplyToPatch(borders(), scope);
-        if (!resolved) return;
-        pageBorderApplyScopeRef.current = scope;
-        if (!resolved.everySection) {
-          apply(resolved.patch);
-          return;
-        }
-        const { sectionCount } = resolveSectionAtSelection(editor.state);
-        let chain = editor.chain();
-        for (let index = 0; index < sectionCount; index += 1) {
-          // The chained form of the declared per-section command.
-          chain = chain.updateSectionLayout(index, { pageBorders: resolved.patch });
-        }
-        chain.run();
-      },
-      remove: () => {
-        if (editor.isDestroyed || !editor.isEditable) return;
-        // Word removes the border from whatever "Apply to" last targeted:
-        // the whole document only when that was chosen, else the section at
-        // the caret (Word's own default target). Sections that merely look
-        // alike are not read as a whole-document choice.
-        const { sectionCount } = resolveSectionAtSelection(editor.state);
-        const everywhere =
-          sectionCount > 1 &&
-          pageBorderApplyScopeRef.current === "wholeDocument";
-        if (!everywhere) {
-          apply(null);
-          return;
-        }
-        let chain = editor.chain();
-        for (let index = 0; index < sectionCount; index += 1) {
-          // The chained form of the declared per-section command.
-          chain = chain.updateSectionLayout(index, { pageBorders: null });
-        }
-        chain.run();
-      },
-    };
-  }, [editor]);
   // Themes > Save Current Theme: Word asks for the file's name, then saves
   // the document's theme as an Office theme file (.thmx) that Word's,
   // PowerPoint's and Excel's Browse for Themes apply (the API builds it).
@@ -20874,35 +19976,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
       })();
     },
     [editor, pageId, t],
-  );
-
-  // Word's Line Numbering Options… opens the Line Numbers dialog for the
-  // section at the caret, seeded from its live w:lnNumType (or Word's defaults
-  // while numbering is off).
-  const openLineNumbersDialog = useCallback(() => {
-    if (editor.isDestroyed || !editor.isEditable) return;
-    lineNumbersReturnFocusRef.current = stableDialogReturnFocusTarget();
-    const layout = docsOfficeParityV2 ? activeSectionLayout(editor) : null;
-    const live = layout
-      ? toolbarLineNumbersFromSection(layout)
-      : snapshot.lineNumbers;
-    setLineNumbersDialogInitial({
-      enabled: live !== null,
-      start: lineNumberStartAt(layout?.lineNumbers?.start),
-      countBy: live?.countBy ?? 1,
-      distancePt: live?.distancePt ?? 0,
-      restart: live?.restart ?? "newPage",
-    });
-  }, [docsOfficeParityV2, editor, snapshot.lineNumbers]);
-
-  const closeLineNumbersDialog = useCallback(() => {
-    setLineNumbersDialogInitial(null);
-  }, []);
-
-  const submitLineNumbersDialog = useCallback(
-    (value: DocumentLineNumbersValue): boolean =>
-      runLineNumbersDialog(editor, value, docsOfficeParityV2),
-    [docsOfficeParityV2, editor],
   );
 
   // Home → Line and Paragraph Spacing → Line Spacing Options is the canonical
@@ -21690,53 +20763,6 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     watermarkDraftAuthorityRef.current = null;
     setWatermarkEditorOpen(false);
   }, []);
-
-  const watermarkDraftAuthorityMayWrite = useCallback(() => {
-    const authority = watermarkDraftAuthorityRef.current;
-    return Boolean(
-      authority &&
-        authority.editor === editor &&
-        authority.pageId === pageId &&
-        !editor.isDestroyed &&
-        editor.isEditable &&
-        authority.sourceJson ===
-          JSON.stringify(
-            normalizeDocumentWatermark(editor.state.doc.attrs.watermark),
-          ),
-    );
-  }, [editor, pageId]);
-
-  // Word's Printed Watermark Apply / OK. The dialog hands over the complete
-  // normalized watermark (or null for No watermark); the command
-  // re-normalizes it. Apply keeps the dialog open, so the authority is moved
-  // onto the value just written.
-  const applyWatermark = useCallback(
-    (next: DocumentWatermark | null): boolean => {
-      if (!watermarkDraftAuthorityMayWrite()) return false;
-      const authority = watermarkDraftAuthorityRef.current;
-      if (!authority) return false;
-      // The authority is moved onto the value about to be written BEFORE the
-      // command runs: the transaction listener that retires a draft whose
-      // source changed under it runs inside the dispatch, and saw this very
-      // write as an outside change, closing the dialog on Apply.
-      const expected = JSON.stringify(normalizeDocumentWatermark(next));
-      watermarkDraftAuthorityRef.current = { ...authority, sourceJson: expected };
-      const applied = (editor.chain() as OfficeChain)
-        .setDocumentWatermark(next)
-        .run();
-      const live = JSON.stringify(
-        normalizeDocumentWatermark(editor.state.doc.attrs.watermark),
-      );
-      if (watermarkDraftAuthorityRef.current) {
-        watermarkDraftAuthorityRef.current = {
-          ...watermarkDraftAuthorityRef.current,
-          sourceJson: live,
-        };
-      }
-      return applied;
-    },
-    [editor, watermarkDraftAuthorityMayWrite],
-  );
 
   // One statement of the shared font picker's labels, used by the Home ribbon's
   // own family picker AND by the watermark dialog's Font control: the two are
@@ -29000,17 +28026,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
           </form>
         ) : null}
 
-        {watermarkEditorOpen ? (
-          <DocumentWatermarkDialog
-            initial={normalizeDocumentWatermark(editor.state.doc.attrs.watermark)}
-            textArea={watermarkTextArea(selectedSectionLayout, editor)}
-            documentPictures={documentPictureSources(editor)}
-            canEdit={!editor.isDestroyed && editor.isEditable}
-            onApply={applyWatermark}
-            onClose={closeWatermarkEditor}
-            returnFocusTarget={commandDialogReturnFocus}
-          />
-        ) : null}
+        {null}
 
         {/* Layout > Hyphenation > Hyphenation Options. */}
         {null}
@@ -29076,48 +28092,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
             Margins…: Word's Page Setup is a modal dialog ("Change margins",
             "Change the paper size", Microsoft Support); Reset sits at the
             start of the footer, OK last. */}
-        {pageSetupDialogLayout ? (
-          <DocumentPageSetupDialog
-            initialTab={
-              pageSetupDialog === "size" ? "paper" : pageSetupDialog === "grid" ? "grid" : "margins"
-            }
-            gridDefaultFontPt={
-              pxToPt(Number.parseFloat(String(editor.state.doc.attrs.defaultFontSize ?? "")) || 14)
-            }
-            layout={pageSetupDialogLayout}
-            settings={normalizeWordDocumentSettings(editor.state.doc.attrs.wordSettings)}
-            sectionCount={resolveSectionAtSelection(editor.state).sectionCount}
-            pointForwardAvailable={sectionApplyToPointForwardAvailable(editor)}
-            canEdit={!editor.isDestroyed && editor.isEditable}
-            onApply={submitPageSetupDialog}
-            onCancel={closePageSetupDialog}
-            returnFocusTarget={commandDialogReturnFocus}
-            layoutSource={(() => {
-              const at = resolveSectionAtSelection(editor.state);
-              let breakType: unknown = null;
-              let seen = 0;
-              editor.state.doc.descendants((node) => {
-                if (node.type.name !== "sectionBreak") return true;
-                seen += 1;
-                if (seen === at.sectionIndex) breakType = node.attrs.breakType ?? "nextPage";
-                return true;
-              });
-              return {
-                sectionStart: at.sectionIndex > 0 ? ((breakType ?? "nextPage") as SectionBreakType) : null,
-                differentOddEven: editor.state.doc.attrs.differentOddEven === true,
-                differentFirstPage: sectionDifferentFirstPageAt(editor.state.doc, at.sectionIndex),
-                onLineNumbers: () => {
-                  closePageSetupDialog();
-                  openLineNumbersDialog();
-                },
-                onBorders: () => {
-                  closePageSetupDialog();
-                  pageBorderMenuCommands.openDialog?.();
-                },
-              };
-            })()}
-          />
-        ) : null}
+        {null}
         {null}
         {null}
         {styleSetSaveName !== null ? (
@@ -29190,7 +28165,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
             </label>
           </OfficeDialogShell>
         ) : null}
-        {pageSetupDialog === "size" && !pageSetupDialogLayout ? (
+        {pageSetupDialog === "size" && true ? (
           <OfficeDialogShell
             open
             testIdPrefix="document-page-size"
@@ -29260,7 +28235,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
           </OfficeDialogShell>
         ) : null}
 
-        {pageSetupDialog === "margins" && !pageSetupDialogLayout ? (
+        {pageSetupDialog === "margins" && true ? (
           <OfficeDialogShell
             open
             testIdPrefix="document-page-margins"
@@ -30034,19 +29009,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
           />
         ) : null}
 
-        {proofingLanguageTarget ? (
-          <DocumentProofingLanguageDialog
-            open
-            canEdit={!editor.isDestroyed && editor.isEditable}
-            locale={locale}
-            initialValue={proofingLanguageTarget.value}
-            mixed={proofingLanguageTarget.mixed}
-            noProofMixed={proofingLanguageTarget.noProofMixed}
-            returnFocusRef={proofingLanguageReturnFocusRef}
-            onSubmit={submitProofingLanguage}
-            onClose={closeProofingLanguageDialog}
-          />
-        ) : null}
+        {null}
 
         {null}
 
@@ -30175,27 +29138,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
           />
         ) : null}
         {null}
-        <DocumentInkTrackpad
-          open={false}
-          preset={inkPreset}
-          title={t("toolbar.drawTrackpad")}
-          hint={t("toolbar.drawTrackpadHint")}
-          anchor={() => (editor.isDestroyed ? null : editor.view.dom)}
-          below={() => {
-            if (editor.isDestroyed) return null;
-            for (let host = editor.view.dom.parentElement; host; host = host.parentElement) {
-              const ribbon = host.querySelector(".note-editor-toolbar-stack");
-              if (ribbon) return ribbon;
-            }
-            return null;
-          }}
-          page={(area) => (editor.isDestroyed ? null : documentInkPageIn(editor.view, area))}
-          onStroke={(points) => {
-            // Where it was drawn, on the page under the frame.
-            insertDocumentInkStroke(editor.view, points, inkPreset, inkStrokeOptions());
-          }}
-          onClose={() => setInkTrackpad(false)}
-        />
+        {null}
         {null}
         {cellMarginsDialogTarget ? (
           <DocumentTableCellMarginsDialog
@@ -31472,131 +30415,14 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
           }}
         />
 
-        <DocumentTocCustomDialog
-          open={docDialog === "tocSettings" && tocDialogView === "custom"}
-          value={tocDraft}
-          onChange={setTocDraft}
-          onSubmit={() => {
-            submitTocSettings();
-          }}
-          onCancel={() => setDocDialog(null)}
-          onOpenOptions={() => setTocDialogView("options")}
-          onOpenStyles={() => setTocDialogView("styles")}
-          disabled={!editor.isEditable}
-        />
-        <DocumentTocOptionsDialog
-          open={docDialog === "tocSettings" && tocDialogView === "options"}
-          value={tocDraft}
-          documentStyleNames={documentParagraphStyleNames}
-          onSubmit={(next) => {
-            setTocDraft(next);
-            setTocDialogView("custom");
-          }}
-          onCancel={() => setTocDialogView("custom")}
-        />
-        <DocumentTocStylesDialog
-          open={docDialog === "tocSettings" && tocDialogView === "styles"}
-          value={tocDraft}
-          onClose={() => setTocDialogView("custom")}
-          referenceStyles={normalizeReferenceStyles(
-            (editor.state.doc.attrs as { referenceStyles?: unknown })
-              .referenceStyles,
-          )}
-          canEdit={editor.isEditable}
-          onSaveStyle={saveReferenceStyle}
-        />
-        <DocumentAlignmentTabDialog
-          open={false}
-          onCancel={() => setAlignmentTabOpen(false)}
-          onSubmit={(choice) => {
-            setAlignmentTabOpen(false);
-            const textWidthTwips = Math.round(
-              (rulerGeometry.pageWidthPx -
-                rulerGeometry.marginLeftPx -
-                rulerGeometry.marginRightPx) *
-                15,
-            );
-            const stop = alignmentTabStop(choice, textWidthTwips, {
-              leftTwips: Math.round((snapshot.indentLeftPt ?? 0) * 20),
-              rightTwips: Math.round((snapshot.indentRightPt ?? 0) * 20),
-            });
-            const chain = restoredChain();
-            if (choice.alignment === "left") {
-              // Word's left alignment tab aligns what follows at the left
-              // edge of the margin (or indent): on a header line that
-              // already carries the default centre and right stops, an
-              
-              // The left edge is where the text already starts, so nothing
-              // is inserted; a caret inside a line goes to a new line's edge.
-              const { $from } = editor.state.selection;
-              if ($from.parentOffset > 0) chain.insertContent({ type: "hardBreak" });
-              chain.run();
-              return;
-            }
-            if (stop) {
-              const { $from } = editor.state.selection;
-              const current = normalizeBandRichTabStops($from.parent.attrs.tabStops);
-              const merged = normalizeBandRichTabStops([
-                ...current.filter((existing) => existing.pos !== stop.pos),
-                stop,
-              ]);
-              chain.updateAttributes($from.parent.type.name, { tabStops: merged });
-            }
-            chain.insertContent("\t").run();
-          }}
-        />
+        {null}
+        {null}
+        {null}
+        {null}
 
         {/* References > Show Notes with both footnotes and endnotes in the
             document: Word asks which area to view. */}
-        {docDialog === "showNotes" ? (
-          <OfficeDialogShell
-            open
-            testIdPrefix="document-show-notes"
-            title={t("presentation.showNotesLabel")}
-            description=""
-            defaultActionLabel={t("toolbar.dialogOk")}
-            defaultActionTestId="document-show-notes-apply"
-            cancelActionLabel={t("toolbar.pageSetupCancel")}
-            onDefaultAction={() => {
-              setDocDialog(null);
-              // The note body takes the focus once the dialog has let go
-              // of it (the shell hands focus back as it closes).
-              const area = showNotesAreaDraft;
-              window.setTimeout(() => showNotesForSelection(editor, area), 160);
-            }}
-            onCancel={() => {
-              setDocDialog(null);
-              editor.commands.focus(null, { scrollIntoView: false });
-            }}
-            initialFocusRef={commandDialogFocusInputRef}
-            className="sm:max-w-[380px]"
-          >
-            <div
-              className="office-dialog__group"
-              role="radiogroup"
-              aria-label={t("presentation.showNotesLabel")}
-            >
-              {(["footnote", "endnote"] as const).map((area, index) => (
-                <label key={area} className="office-dialog__check">
-                  <input
-                    ref={index === 0 ? commandDialogFocusInputRef : undefined}
-                    type="radio"
-                    name="show-notes-area"
-                    value={area}
-                    checked={showNotesAreaDraft === area}
-                    onChange={() => setShowNotesAreaDraft(area)}
-                    data-testid={`document-show-notes-${area}`}
-                  />
-                  {t(
-                    area === "footnote"
-                      ? "toolbar.showNotesFootnoteArea"
-                      : "toolbar.showNotesEndnoteArea",
-                  )}
-                </label>
-              ))}
-            </div>
-          </OfficeDialogShell>
-        ) : null}
+        {null}
 
         {tocReplacePrompt ? (
           <ConfirmDialog
@@ -31642,465 +30468,31 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
         {/* References > Update Table: Word's modal "Update Table of Contents"
             dialog, two choices and OK / Cancel ("Update a table of contents",
             Microsoft Support). */}
-        {docDialog === "tocUpdate" ? (
-          <OfficeDialogShell
-            open
-            testIdPrefix="document-toc-update"
-            title={t("toolbar.tocUpdateDialogTitle")}
-            description=""
-            defaultActionLabel={t("toolbar.dialogOk")}
-            defaultActionTestId="document-toc-update-apply"
-            cancelActionLabel={t("toolbar.pageSetupCancel")}
-            onDefaultAction={submitTocUpdate}
-            onCancel={() => {
-              setDocDialog(null);
-              editor.commands.focus(null, { scrollIntoView: false });
-            }}
-            initialFocusRef={commandDialogFocusInputRef}
-            returnFocusTarget={commandDialogReturnFocus}
-            className="sm:max-w-[380px]"
-          >
-            <div
-              className="office-dialog__group"
-              role="radiogroup"
-              aria-label={t("toolbar.tocUpdateDialogTitle")}
-            >
-              <label className="office-dialog__check">
-                <input
-                  ref={commandDialogFocusInputRef}
-                  type="radio"
-                  name="toc-update-mode"
-                  value="pageNumbers"
-                  checked={tocUpdateModeDraft === "pageNumbers"}
-                  onChange={() => setTocUpdateModeDraft("pageNumbers")}
-                  data-testid="document-toc-update-page-numbers"
-                />
-                <DocumentDialogIcon icon="symbol.hash" />
-                {t("toolbar.tocUpdatePageNumbersOnly")}
-              </label>
-              <label className="office-dialog__check">
-                <input
-                  type="radio"
-                  name="toc-update-mode"
-                  value="entireTable"
-                  checked={tocUpdateModeDraft === "entireTable"}
-                  onChange={() => setTocUpdateModeDraft("entireTable")}
-                  data-testid="document-toc-update-entire-table"
-                />
-                <DocumentDialogIcon icon="action.refresh" />
-                {t("toolbar.tocUpdateEntireTable")}
-              </label>
-            </div>
-          </OfficeDialogShell>
-        ) : null}
+        {null}
 
         {/* References > Insert Table of Figures: Word's modal "Table of
             Figures" dialog ("Insert a table of figures", Microsoft Support):
             hyperlinks, page numbers, right alignment and tab leader. */}
-        {docDialog === "generatedListSettings" ? (
-          <DocumentTableOfFiguresDialog
-            initial={generatedListInitial}
-            customLabels={captionCustomLabelNames(
-              collectAllCaptions(editor.state.doc),
-            )}
-            modifiedStyle={
-              normalizeReferenceStyles(
-                (editor.state.doc.attrs as { referenceStyles?: unknown })
-                  .referenceStyles,
-              )?.TableofFigures ?? null
-            }
-            onSaveStyle={(definition) =>
-              saveReferenceStyle("TableofFigures", definition)
-            }
-            initialFocusRef={commandDialogFocusSelectRef}
-            returnFocusTarget={commandDialogReturnFocus}
-            onApply={submitCaptionListSettings}
-            onCancel={() => {
-              captionListDialogModeRef.current = "insert";
-              setDocDialog(null);
-              editor.commands.focus(null, { scrollIntoView: false });
-            }}
-          />
-        ) : null}
+        {null}
 
-        {docDialog === "generatedListUpdate" ? (
-          <OfficeDialogShell
-            open
-            testIdPrefix="document-generated-list-update"
-            title={
-              generatedListUpdateKindDraft === "table"
-                ? t("toolbar.updateTableList")
-                : t("toolbar.updateFigureList")
-            }
-            description=""
-            defaultActionLabel={t("toolbar.dialogOk")}
-            defaultActionTestId="document-generated-list-update-apply"
-            cancelActionLabel={t("toolbar.pageSetupCancel")}
-            onDefaultAction={submitCaptionListUpdate}
-            onCancel={() => {
-              setDocDialog(null);
-              editor.commands.focus(null, { scrollIntoView: false });
-            }}
-            initialFocusRef={commandDialogFocusInputRef}
-            returnFocusTarget={commandDialogReturnFocus}
-            className="sm:max-w-[380px]"
-          >
-            <div
-              className="office-dialog__group"
-              role="radiogroup"
-              aria-label={
-                generatedListUpdateKindDraft === "table"
-                  ? t("toolbar.updateTableList")
-                  : t("toolbar.updateFigureList")
-              }
-            >
-              <label className="office-dialog__check">
-                <input
-                  ref={commandDialogFocusInputRef}
-                  type="radio"
-                  name="generated-list-update-mode"
-                  value="pageNumbers"
-                  checked={generatedListUpdateModeDraft === "pageNumbers"}
-                  onChange={() =>
-                    setGeneratedListUpdateModeDraft("pageNumbers")
-                  }
-                  data-testid="document-generated-list-update-page-numbers"
-                />
-                <DocumentDialogIcon icon="symbol.hash" />
-                {t("toolbar.tocUpdatePageNumbersOnly")}
-              </label>
-              <label className="office-dialog__check">
-                <input
-                  type="radio"
-                  name="generated-list-update-mode"
-                  value="entireTable"
-                  checked={generatedListUpdateModeDraft === "entireTable"}
-                  onChange={() =>
-                    setGeneratedListUpdateModeDraft("entireTable")
-                  }
-                  data-testid="document-generated-list-update-entire-table"
-                />
-                <DocumentDialogIcon icon="action.refresh" />
-                {t("toolbar.tocUpdateEntireTable")}
-              </label>
-            </div>
-          </OfficeDialogShell>
-        ) : null}
+        {null}
 
         {/* References > Footnotes launcher: Word's modal "Footnote and
             Endnote" dialog ("Insert footnotes and endnotes", Microsoft
             Support): Location, Format, Apply changes. This one only applies
             the settings, so its default action is Word's Apply. */}
-        {docDialog === "footnoteSettings" ? (
-          <OfficeDialogShell
-            open
-            testIdPrefix="document-footnote-settings"
-            title={t("toolbar.footnoteSettings")}
-            description=""
-            defaultActionLabel={t("toolbar.apply")}
-            defaultActionTestId="document-footnote-settings-apply"
-            cancelActionLabel={t("toolbar.pageSetupCancel")}
-            onDefaultAction={submitFootnoteSettings}
-            onCancel={() => {
-              setDocDialog(null);
-              editor.commands.focus(null, { scrollIntoView: false });
-            }}
-            initialFocusRef={commandDialogFocusSelectRef}
-            returnFocusTarget={commandDialogReturnFocus}
-            className="sm:max-w-[440px]"
-          >
-            <div className="note-editor-command-dialog__grid">
-              <label className="office-dialog__field">
-                {t("toolbar.noteStreamLabel")}
-                <select
-                  ref={commandDialogFocusSelectRef}
-                  data-testid="document-note-settings-stream"
-                  value={noteSettingsStream}
-                  onChange={(event) =>
-                    seedNoteSettings(
-                      event.target.value === "endnote" ? "endnote" : "footnote",
-                    )
-                  }
-                >
-                  <option value="footnote">{t("footnotes.title")}</option>
-                  <option value="endnote">
-                    {t("footnotes.endnotesTitle")}
-                  </option>
-                </select>
-              </label>
-              <label className="office-dialog__field">
-                {t("toolbar.notePosition")}
-                <select
-                  data-testid="document-note-settings-position"
-                  value={noteSettingsPosition}
-                  onChange={(event) =>
-                    setNoteSettingsPosition(event.target.value as NotePosition)
-                  }
-                >
-                  {(noteSettingsStream === "endnote"
-                    ? ENDNOTE_POSITIONS
-                    : FOOTNOTE_POSITIONS
-                  ).map((position) => (
-                    <option key={position} value={position}>
-                      {t(
-                        `toolbar.notePosition_${position}` as "toolbar.notePosition_pageBottom",
-                      )}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="office-dialog__field">
-                {t("toolbar.noteNumberFormat")}
-                <select
-                  data-testid="document-note-settings-format"
-                  value={noteSettingsFormat}
-                  onChange={(event) =>
-                    setNoteSettingsFormat(event.target.value as NoteNumFmt)
-                  }
-                >
-                  {NOTE_NUM_FMTS.map((format) => (
-                    <option key={format} value={format}>
-                      {t(
-                        `toolbar.noteNumberFormat_${format}` as "toolbar.noteNumberFormat_decimal",
-                      )}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="office-dialog__field">
-                {t("toolbar.noteNumberStart")}
-                {/* Word numbers a restarting stream from 1 and its object
-                    model refuses a start once Numbering is not Continuous. */}
-                <input
-                  type="number"
-                  min={1}
-                  max={9999}
-                  data-testid="document-note-settings-start"
-                  value={noteSettingsStart}
-                  disabled={noteSettingsRestart !== "continuous"}
-                  onChange={(event) => setNoteSettingsStart(event.target.value)}
-                />
-              </label>
-              <label className="office-dialog__field">
-                {t("toolbar.noteNumberRestart")}
-                <select
-                  data-testid="document-note-settings-restart"
-                  value={noteSettingsRestart}
-                  onChange={(event) =>
-                    setNoteSettingsRestart(event.target.value as NoteRestart)
-                  }
-                >
-                  {NOTE_RESTARTS.filter(
-                    (restart) =>
-                      noteSettingsStream === "footnote" ||
-                      restart !== "eachPage",
-                  ).map((restart) => (
-                    <option key={restart} value={restart}>
-                      {t(
-                        `toolbar.noteNumberRestart_${restart}` as "toolbar.noteNumberRestart_continuous",
-                      )}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="office-dialog__field">
-                {t("toolbar.noteApplyScope")}
-                <select
-                  data-testid="document-note-settings-scope"
-                  value={noteSettingsScope}
-                  disabled={(noteScopeContext?.options.length ?? 1) < 2}
-                  onChange={(event) =>
-                    setNoteSettingsScope(event.target.value as NoteApplyScope)
-                  }
-                >
-                  {(noteScopeContext?.options ?? ["wholeDocument"]).map(
-                    (scope) => (
-                      <option key={scope} value={scope}>
-                        {t(
-                          scope === "wholeDocument"
-                            ? "toolbar.noteApplyScope_document"
-                            : scope === "thisSection"
-                              ? "toolbar.noteApplyScope_section"
-                              : "toolbar.noteApplyScope_selectedSections",
-                        )}
-                      </option>
-                    ),
-                  )}
-                </select>
-              </label>
-            </div>
-          </OfficeDialogShell>
-        ) : null}
+        {null}
 
         {/* References > Insert Index: Word's modal "Index" dialog ("Create
             and update an index", Microsoft Support): Type, Columns,
             Language, then the separators this editor writes as INDEX field
             switches. */}
-        {docDialog === "indexSettings" ? (
-          <DocumentIndexDialog
-            mode={indexDialogModeRef.current}
-            initial={indexSettingsInitial}
-            initialFocusRef={commandDialogFocusSelectRef}
-            returnFocusTarget={commandDialogReturnFocus}
-            onApply={applyDocumentIndexSettings}
-            onCancel={() => {
-              setDocDialog(null);
-              indexDialogModeRef.current = "insert";
-              indexSelectionRef.current = null;
-              editor.commands.focus(null, { scrollIntoView: false });
-            }}
-            onMarkEntry={() => {
-              setDocDialog(null);
-              indexDialogModeRef.current = "insert";
-              indexSelectionRef.current = null;
-              openIndexMarkDialog();
-            }}
-            onAutoMark={(rows) => {
-              if (editor.isDestroyed || !editor.isEditable) return 0;
-              const count = indexConcordanceRanges(editor.state.doc, rows).length;
-              return (editor.commands as unknown as {
-                autoMarkIndexEntries: (rows: unknown) => boolean;
-              }).autoMarkIndexEntries(rows)
-                ? count
-                : 0;
-            }}
-          />
-        ) : null}
+        {null}
 
         {/* References > Insert Table of Authorities: Word's modal "Table of
             Authorities" dialog ("Create a table of authorities", Microsoft
             Support): Category, Use passim, Keep original formatting. */}
-        {docDialog === "authoritySettings" ? (
-          <OfficeDialogShell
-            open
-            testIdPrefix="document-authority-settings"
-            title={
-              authorityDialogModeRef.current === "edit"
-                ? t("toolbar.editAuthorityTable")
-                : t("toolbar.authorityTableSettings")
-            }
-            description={t("toolbar.authoritySettingsHint")}
-            defaultActionLabel={t("toolbar.dialogOk")}
-            defaultActionTestId="document-authority-settings-apply"
-            defaultActionDisabled={
-              !authorityPageRangeSeparatorDraft ||
-              !authorityPageListSeparatorDraft
-            }
-            cancelActionLabel={t("toolbar.cancel")}
-            onDefaultAction={applyAuthoritySettings}
-            onCancel={() => {
-              setDocDialog(null);
-              authorityDialogModeRef.current = "insert";
-              authoritySelectionRef.current = null;
-              editor.commands.focus(null, { scrollIntoView: false });
-            }}
-            initialFocusRef={commandDialogFocusSelectRef}
-            returnFocusTarget={commandDialogReturnFocus}
-            className="sm:max-w-[480px]"
-          >
-            <label className="office-dialog__field">
-              {t("toolbar.authorityCategory")}
-              <select
-                ref={commandDialogFocusSelectRef}
-                data-testid="document-authority-table-category"
-                value={authorityTableCategoryDraft}
-                onChange={(event) =>
-                  setAuthorityTableCategoryDraft(
-                    event.target.value === AUTHORITY_ALL_CATEGORIES
-                      ? AUTHORITY_ALL_CATEGORIES
-                      : normalizeAuthorityCategory(event.target.value),
-                  )
-                }
-              >
-                {authorityDialogInserting ? (
-                  <option value={AUTHORITY_ALL_CATEGORIES}>
-                    {t("toolbar.authorityCategoryAll")}
-                  </option>
-                ) : null}
-                {AUTHORITY_CATEGORY_NUMBERS.map((category) => (
-                  <option key={category} value={category}>
-                    {category <= 7
-                      ? t(
-                          `toolbar.authorityCategory${category}` as "toolbar.authorityCategory1",
-                        )
-                      : t("toolbar.authorityCategoryNumber", { category })}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="office-dialog__group">
-              <label className="office-dialog__check">
-                <input
-                  type="checkbox"
-                  checked={authorityIncludeHeadingDraft}
-                  onChange={(event) =>
-                    setAuthorityIncludeHeadingDraft(event.target.checked)
-                  }
-                />
-                {t("toolbar.authorityIncludeHeading")}
-              </label>
-              <label className="office-dialog__check">
-                <input
-                  type="checkbox"
-                  checked={authorityUsePassimDraft}
-                  onChange={(event) =>
-                    setAuthorityUsePassimDraft(event.target.checked)
-                  }
-                />
-                {t("toolbar.authorityUsePassim")}
-              </label>
-              <label className="office-dialog__check">
-                <input
-                  type="checkbox"
-                  checked={authorityPreserveFormattingDraft}
-                  onChange={(event) =>
-                    setAuthorityPreserveFormattingDraft(event.target.checked)
-                  }
-                />
-                {t("toolbar.authorityPreserveFormatting")}
-              </label>
-            </div>
-            <div className="note-editor-command-dialog__grid">
-              <label className="office-dialog__field">
-                {t("toolbar.authorityEntryPageSeparator")}
-                <input
-                  type="text"
-                  maxLength={5}
-                  data-testid="document-authority-entry-page-separator"
-                  placeholder={t("toolbar.authorityNativeLeader")}
-                  value={authorityEntryPageSeparatorDraft}
-                  onChange={(event) =>
-                    setAuthorityEntryPageSeparatorDraft(event.target.value)
-                  }
-                />
-              </label>
-              <label className="office-dialog__field">
-                {t("toolbar.authorityPageRangeSeparator")}
-                <input
-                  type="text"
-                  maxLength={5}
-                  data-testid="document-authority-page-range-separator"
-                  value={authorityPageRangeSeparatorDraft}
-                  onChange={(event) =>
-                    setAuthorityPageRangeSeparatorDraft(event.target.value)
-                  }
-                />
-              </label>
-              <label className="office-dialog__field">
-                {t("toolbar.authorityPageListSeparator")}
-                <input
-                  type="text"
-                  maxLength={5}
-                  data-testid="document-authority-page-list-separator"
-                  value={authorityPageListSeparatorDraft}
-                  onChange={(event) =>
-                    setAuthorityPageListSeparatorDraft(event.target.value)
-                  }
-                />
-              </label>
-            </div>
-          </OfficeDialogShell>
-        ) : null}
+        {null}
 
         {/* References > Mark Entry (Alt+Shift+X) and Mark Citation
             (Alt+Shift+I) are Word's two MODELESS dialogs: they stay open while
@@ -32109,621 +30501,15 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
             Support). So they are not OfficeDialogShell modals: the card sits
             beside the ribbon, the page stays editable behind it, and it takes
             the same chrome (title row, fields, push buttons, default last). */}
-        {docDialog === "indexMark" ? (
-          <form
-            className={`${officeDialogClassName({ tone: "document" })} note-editor-modeless-dialog`}
-            data-testid="document-index-mark-dialog"
-            role="dialog"
-            aria-modal="false"
-            aria-labelledby="document-index-mark-dialog-title"
-            onSubmit={(event) => {
-              event.preventDefault();
-              submitIndexMark(false);
-            }}
-            onKeyDown={(event) => {
-              if (event.key !== "Escape") return;
-              event.preventDefault();
-              event.stopPropagation();
-              setDocDialog(null);
-              editor.commands.focus(null, { scrollIntoView: false });
-            }}
-          >
-            <div className="office-dialog__header">
-              <h2
-                id="document-index-mark-dialog-title"
-                className="office-dialog__title"
-              >
-                {t("toolbar.markIndexEntry")}
-              </h2>
-            </div>
-            <div className="office-dialog__body">
-              <div className="note-editor-command-dialog__grid">
-                <label className="office-dialog__field">
-                  {t("toolbar.indexTermLabel")}
-                  <input
-                    type="text"
-                    maxLength={120}
-                    data-testid="document-index-term"
-                    aria-label={t("toolbar.indexTermLabel")}
-                    placeholder={t("toolbar.indexTermPlaceholder")}
-                    value={indexTermDraft}
-                    onChange={(event) => setIndexTermDraft(event.target.value)}
-                    autoFocus
-                  />
-                </label>
-                <label className="office-dialog__field">
-                  {t("toolbar.indexSubentryLabel")}
-                  <input
-                    type="text"
-                    maxLength={120}
-                    data-testid="document-index-subentry"
-                    aria-label={t("toolbar.indexSubentryLabel")}
-                    placeholder={t("toolbar.indexSubentryPlaceholder")}
-                    value={indexSubentryDraft}
-                    onChange={(event) =>
-                      setIndexSubentryDraft(event.target.value)
-                    }
-                  />
-                </label>
-                <label className="office-dialog__field">
-                  {t("toolbar.indexReferenceModeLabel")}
-                  <select
-                    data-testid="document-index-reference-mode"
-                    aria-label={t("toolbar.indexReferenceModeLabel")}
-                    value={indexReferenceModeDraft}
-                    onChange={(event) => {
-                      const mode = event.target
-                        .value as IndexEntryReferenceMode;
-                      setIndexReferenceModeDraft(mode);
-                      if (
-                        mode === "pageRange" &&
-                        !indexPageRangeBookmarkDraft
-                      ) {
-                        setIndexPageRangeBookmarkDraft(
-                          getBookmarks(editor.state)[0]?.name ?? "",
-                        );
-                      }
-                    }}
-                  >
-                    <option value="page">
-                      {t("toolbar.indexReferenceModePage")}
-                    </option>
-                    <option value="pageRange">
-                      {t("toolbar.indexReferenceModePageRange")}
-                    </option>
-                    <option value="crossReference">
-                      {t("toolbar.indexReferenceModeCrossReference")}
-                    </option>
-                  </select>
-                </label>
-                {indexReferenceModeDraft === "crossReference" ? (
-                  <label className="office-dialog__field">
-                    {t("toolbar.indexCrossReferenceLabel")}
-                    <input
-                      type="text"
-                      maxLength={120}
-                      data-testid="document-index-cross-reference"
-                      aria-label={t("toolbar.indexCrossReferenceLabel")}
-                      placeholder={t("toolbar.indexCrossReferencePlaceholder")}
-                      value={indexCrossReferenceDraft}
-                      onChange={(event) =>
-                        setIndexCrossReferenceDraft(event.target.value)
-                      }
-                    />
-                  </label>
-                ) : null}
-                {indexReferenceModeDraft === "pageRange" ? (
-                  <label className="office-dialog__field">
-                    {t("toolbar.indexPageRangeBookmarkLabel")}
-                    <select
-                      data-testid="document-index-page-range-bookmark"
-                      aria-label={t("toolbar.indexPageRangeBookmarkLabel")}
-                      value={indexPageRangeBookmarkDraft}
-                      onChange={(event) =>
-                        setIndexPageRangeBookmarkDraft(event.target.value)
-                      }
-                    >
-                      {getBookmarks(editor.state).length === 0 ? (
-                        <option value="">
-                          {t("toolbar.indexPageRangeBookmarkUnavailable")}
-                        </option>
-                      ) : (
-                        getBookmarks(editor.state).map((bookmark) => (
-                          <option key={bookmark.name} value={bookmark.name}>
-                            {bookmark.name}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  </label>
-                ) : null}
-              </div>
-              <div className="office-dialog__row">
-                <label className="office-dialog__check">
-                  <input
-                    type="checkbox"
-                    data-testid="document-index-bold-page-number"
-                    checked={indexBoldPageNumberDraft}
-                    disabled={indexReferenceModeDraft === "crossReference"}
-                    onChange={(event) =>
-                      setIndexBoldPageNumberDraft(event.target.checked)
-                    }
-                  />
-                  {t("toolbar.indexBoldPageNumber")}
-                </label>
-                <label className="office-dialog__check">
-                  <input
-                    type="checkbox"
-                    data-testid="document-index-italic-page-number"
-                    checked={indexItalicPageNumberDraft}
-                    disabled={indexReferenceModeDraft === "crossReference"}
-                    onChange={(event) =>
-                      setIndexItalicPageNumberDraft(event.target.checked)
-                    }
-                  />
-                  {t("toolbar.indexItalicPageNumber")}
-                </label>
-              </div>
-            </div>
-            <div className="office-dialog__footer">
-              <button
-                type="button"
-                className="office-dialog__button"
-                data-testid="document-index-mark-cancel"
-                onClick={() => {
-                  setDocDialog(null);
-                  editor.commands.focus(null, { scrollIntoView: false });
-                }}
-              >
-                {t("toolbar.pageSetupCancel")}
-              </button>
-              <button
-                type="button"
-                className="office-dialog__button"
-                data-testid="document-index-mark-all"
-                disabled={
-                  !indexMatchTextDraft ||
-                  !composeIndexTerm(indexTermDraft, indexSubentryDraft) ||
-                  indexReferenceModeDraft === "pageRange" ||
-                  (indexReferenceModeDraft === "crossReference" &&
-                    !sanitizeIndexTerm(indexCrossReferenceDraft))
-                }
-                onClick={() => submitIndexMark(true)}
-              >
-                {t("toolbar.markIndexEntryAll")}
-              </button>
-              <button
-                type="submit"
-                className="office-dialog__button office-dialog__button--primary"
-                data-testid="document-index-mark-apply"
-                disabled={
-                  !composeIndexTerm(indexTermDraft, indexSubentryDraft) ||
-                  (indexReferenceModeDraft === "crossReference" &&
-                    !sanitizeIndexTerm(indexCrossReferenceDraft)) ||
-                  (indexReferenceModeDraft === "pageRange" &&
-                    !getBookmarks(editor.state).some(
-                      (bookmark) =>
-                        bookmark.name === indexPageRangeBookmarkDraft,
-                    ))
-                }
-              >
-                {t("toolbar.markIndexEntryApply")}
-              </button>
-            </div>
-          </form>
-        ) : null}
+        {null}
 
-        {docDialog === "authorityMark" ? (
-          <form
-            className={`${officeDialogClassName({ tone: "document" })} note-editor-modeless-dialog`}
-            data-testid="document-authority-mark-dialog"
-            role="dialog"
-            aria-modal="false"
-            aria-labelledby="document-authority-mark-dialog-title"
-            onSubmit={(event) => {
-              event.preventDefault();
-              submitAuthorityMark(false);
-            }}
-            onKeyDown={(event) => {
-              if (event.key !== "Escape") return;
-              event.preventDefault();
-              event.stopPropagation();
-              setDocDialog(null);
-              editor.commands.focus(null, { scrollIntoView: false });
-            }}
-          >
-            <div className="office-dialog__header">
-              <h2
-                id="document-authority-mark-dialog-title"
-                className="office-dialog__title"
-              >
-                {t("toolbar.markAuthorityCitation")}
-              </h2>
-            </div>
-            <div className="office-dialog__body">
-              <label className="office-dialog__field">
-                {t("toolbar.authorityLongCitation")}
-                <input
-                  type="text"
-                  maxLength={240}
-                  data-testid="document-authority-long-citation"
-                  value={authorityLongCitationDraft}
-                  onChange={(event) => {
-                    // The short citation starts as the citation itself and
-                    // follows it until it is edited on its own.
-                    if (authorityShortCitationDraft === authorityLongCitationDraft) {
-                      setAuthorityShortCitationDraft(event.target.value);
-                    }
-                    setAuthorityLongCitationDraft(event.target.value);
-                  }}
-                  autoFocus
-                />
-              </label>
-              <div className="note-editor-command-dialog__grid">
-                <label className="office-dialog__field">
-                  {t("toolbar.authorityShortCitation")}
-                  <input
-                    type="text"
-                    maxLength={120}
-                    data-testid="document-authority-short-citation"
-                    value={authorityShortCitationDraft}
-                    onChange={(event) =>
-                      setAuthorityShortCitationDraft(event.target.value)
-                    }
-                  />
-                </label>
-                <label className="office-dialog__field">
-                  {t("toolbar.authorityCategory")}
-                  <select
-                    data-testid="document-authority-category"
-                    value={authorityCategoryDraft}
-                    onChange={(event) =>
-                      setAuthorityCategoryDraft(
-                        normalizeAuthorityCategory(event.target.value),
-                      )
-                    }
-                  >
-                    {AUTHORITY_CATEGORY_NUMBERS.map((category) => (
-                      <option key={category} value={category}>
-                        {category <= 7
-                          ? t(
-                              `toolbar.authorityCategory${category}` as "toolbar.authorityCategory1",
-                            )
-                          : t("toolbar.authorityCategoryNumber", { category })}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="office-dialog__field">
-                  {t("toolbar.authorityPageRangeBookmark")}
-                  <select
-                    data-testid="document-authority-page-range-bookmark"
-                    value={authorityPageRangeBookmarkDraft}
-                    onChange={(event) =>
-                      setAuthorityPageRangeBookmarkDraft(event.target.value)
-                    }
-                  >
-                    <option value="">
-                      {t("toolbar.authorityCurrentPage")}
-                    </option>
-                    {getBookmarks(editor.state).map((bookmark) => (
-                      <option key={bookmark.name} value={bookmark.name}>
-                        {bookmark.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <div className="office-dialog__row">
-                <label className="office-dialog__check">
-                  <input
-                    type="checkbox"
-                    checked={authorityBoldPageNumberDraft}
-                    onChange={(event) =>
-                      setAuthorityBoldPageNumberDraft(event.target.checked)
-                    }
-                  />
-                  {t("toolbar.indexBoldPageNumber")}
-                </label>
-                <label className="office-dialog__check">
-                  <input
-                    type="checkbox"
-                    checked={authorityItalicPageNumberDraft}
-                    onChange={(event) =>
-                      setAuthorityItalicPageNumberDraft(event.target.checked)
-                    }
-                  />
-                  {t("toolbar.indexItalicPageNumber")}
-                </label>
-              </div>
-            </div>
-            <div className="office-dialog__footer">
-              <button
-                type="button"
-                className="office-dialog__button"
-                data-testid="document-authority-mark-cancel"
-                onClick={() => {
-                  setDocDialog(null);
-                  editor.commands.focus(null, { scrollIntoView: false });
-                }}
-              >
-                {t("toolbar.cancel")}
-              </button>
-              <button
-                type="button"
-                className="office-dialog__button"
-                data-testid="document-authority-mark-all"
-                disabled={
-                  !sanitizeAuthorityCitation(authorityLongCitationDraft) ||
-                  !sanitizeAuthorityCitation(authorityShortCitationDraft, 120) ||
-                  Boolean(authorityPageRangeBookmarkDraft)
-                }
-                onClick={() => submitAuthorityMark(true)}
-              >
-                {t("toolbar.markAuthorityCitationAll")}
-              </button>
-              <button
-                type="submit"
-                className="office-dialog__button office-dialog__button--primary"
-                data-testid="document-authority-mark-apply"
-                disabled={
-                  !sanitizeAuthorityCitation(authorityLongCitationDraft) ||
-                  !sanitizeAuthorityCitation(authorityShortCitationDraft, 120)
-                }
-              >
-                {t("toolbar.markAuthorityCitationApply")}
-              </button>
-            </div>
-          </form>
-        ) : null}
+        {null}
 
         {/* References > Insert Caption: Word's modal "Caption" dialog ("Add,
             format, or delete captions in Word", Microsoft Support): the
             caption text, then Options (Label, Position, Exclude label) and
             the Numbering choices Word keeps behind Numbering…. */}
-        {docDialog === "caption" ? (
-          <OfficeDialogShell
-            open
-            testIdPrefix="document-caption"
-            title={t(
-              captionEditingDraft
-                ? "toolbar.captionEditDialogTitle"
-                : "toolbar.captionDialogTitle",
-            )}
-            description=""
-            defaultActionLabel={t("toolbar.dialogOk")}
-            defaultActionTestId="document-caption-apply"
-            cancelActionLabel={t("toolbar.pageSetupCancel")}
-            onDefaultAction={submitCaption}
-            onCancel={() => {
-              setDocDialog(null);
-              captionNodeSelectionPosRef.current = null;
-              editor.commands.focus(null, { scrollIntoView: false });
-            }}
-            initialFocusRef={commandDialogFocusInputRef}
-            returnFocusTarget={commandDialogReturnFocus}
-            className="sm:max-w-[480px]"
-            bodyClassName="note-editor-dialog-scroll"
-          >
-            <label className="office-dialog__field">
-              {t("toolbar.captionTextLabel")}
-              <input
-                ref={commandDialogFocusInputRef}
-                type="text"
-                maxLength={300}
-                data-testid="document-caption-label"
-                aria-label={t("toolbar.captionTextLabel")}
-                placeholder={t("toolbar.captionTextPlaceholder")}
-                value={captionLabelDraft}
-                onChange={(event) => setCaptionLabelDraft(event.target.value)}
-              />
-            </label>
-            <section className="office-dialog__group">
-              <h3>{t("toolbar.captionSectionOptions")}</h3>
-              <DocumentCaptionLabelField
-                captions={captionDialogCaptions}
-                kind={captionKindDraft}
-                labelName={captionLabelNameDraft}
-                onChange={(choice) => {
-                  setCaptionKindDraft(choice.kind);
-                  setCaptionLabelNameDraft(choice.labelName);
-                }}
-                editingCaptionId={captionEditingIdDraft}
-                insertionIndex={captionDialogInsertionIndex}
-                text={captionLabelDraft}
-                numberFormat={captionNumberFormatDraft}
-                excludeLabel={captionExcludeLabelDraft}
-                separator={captionSeparatorDraft}
-              />
-              <div className="note-editor-command-dialog__grid">
-                <label className="office-dialog__field">
-                  {t("toolbar.captionPositionLabel")}
-                  <select
-                    data-testid="document-caption-position"
-                    aria-label={t("toolbar.captionPositionLabel")}
-                    value={captionPositionDraft}
-                    onChange={(event) =>
-                      setCaptionPositionDraft(
-                        event.target.value === "above" ? "above" : "below",
-                      )
-                    }
-                  >
-                    <option value="above">
-                      {t("toolbar.captionPositionAbove")}
-                    </option>
-                    <option value="below">
-                      {t("toolbar.captionPositionBelow")}
-                    </option>
-                  </select>
-                </label>
-              </div>
-              <label className="office-dialog__check">
-                <input
-                  type="checkbox"
-                  data-testid="document-caption-exclude-label"
-                  checked={captionExcludeLabelDraft}
-                  onChange={(event) =>
-                    setCaptionExcludeLabelDraft(event.target.checked)
-                  }
-                />
-                {t("toolbar.captionExcludeLabel")}
-              </label>
-            </section>
-            <section className="office-dialog__group">
-              <h3>{t("toolbar.captionSectionNumbering")}</h3>
-              <div className="note-editor-command-dialog__grid">
-                <label className="office-dialog__field">
-                  {t("toolbar.captionNumberFormatLabel")}
-                  <select
-                    data-testid="document-caption-number-format"
-                    aria-label={t("toolbar.captionNumberFormatLabel")}
-                    value={captionNumberFormatDraft}
-                    onChange={(event) =>
-                      setCaptionNumberFormatDraft(
-                        CAPTION_NUMBER_FORMATS.includes(
-                          event.target.value as CaptionNumberFormat,
-                        )
-                          ? (event.target.value as CaptionNumberFormat)
-                          : "Arabic",
-                      )
-                    }
-                  >
-                    <option value="Arabic">
-                      {t("toolbar.captionNumberArabic")}
-                    </option>
-                    <option value="Roman">
-                      {t("toolbar.captionNumberRoman")}
-                    </option>
-                    <option value="roman">
-                      {t("toolbar.captionNumberRomanLower")}
-                    </option>
-                    <option value="Alphabetic">
-                      {t("toolbar.captionNumberAlphabetic")}
-                    </option>
-                    <option value="alphabetic">
-                      {t("toolbar.captionNumberAlphabeticLower")}
-                    </option>
-                  </select>
-                </label>
-                <label className="office-dialog__field">
-                  {t("toolbar.captionSeparatorLabel")}
-                  <select
-                    data-testid="document-caption-separator"
-                    aria-label={t("toolbar.captionSeparatorLabel")}
-                    value={captionSeparatorDraft}
-                    onChange={(event) =>
-                      setCaptionSeparatorDraft(
-                        CAPTION_SEPARATORS.includes(
-                          event.target.value as CaptionSeparator,
-                        )
-                          ? (event.target.value as CaptionSeparator)
-                          : ": ",
-                      )
-                    }
-                  >
-                    <option value=": ">
-                      {t("toolbar.captionSeparatorColon")}
-                    </option>
-                    <option value=". ">
-                      {t("toolbar.captionSeparatorPeriod")}
-                    </option>
-                    <option value=" – ">
-                      {t("toolbar.captionSeparatorEnDash")}
-                    </option>
-                    <option value=" — ">
-                      {t("toolbar.captionSeparatorEmDash")}
-                    </option>
-                    <option value=" - ">
-                      {t("toolbar.captionSeparatorHyphen")}
-                    </option>
-                    <option value=" ">
-                      {t("toolbar.captionSeparatorSpace")}
-                    </option>
-                    <option value="">
-                      {t("toolbar.captionSeparatorNone")}
-                    </option>
-                  </select>
-                </label>
-              </div>
-              <label className="office-dialog__check">
-                <input
-                  type="checkbox"
-                  data-testid="document-caption-include-chapter-number"
-                  checked={captionIncludeChapterNumberDraft}
-                  disabled={
-                    !snapshot.headingNumbering &&
-                    !captionIncludeChapterNumberDraft
-                  }
-                  title={
-                    snapshot.headingNumbering
-                      ? t("toolbar.captionIncludeChapterNumber")
-                      : t("toolbar.captionChapterNumberingUnavailable")
-                  }
-                  onChange={(event) =>
-                    setCaptionIncludeChapterNumberDraft(event.target.checked)
-                  }
-                />
-                {t("toolbar.captionIncludeChapterNumber")}
-              </label>
-              <div className="note-editor-command-dialog__grid">
-                <label className="office-dialog__field">
-                  {t("toolbar.captionChapterHeadingStyle")}
-                  <select
-                    data-testid="document-caption-chapter-heading-level"
-                    aria-label={t("toolbar.captionChapterHeadingStyle")}
-                    value={captionChapterHeadingLevelDraft}
-                    disabled={!captionIncludeChapterNumberDraft}
-                    onChange={(event) => {
-                      const level = Number.parseInt(event.target.value, 10);
-                      setCaptionChapterHeadingLevelDraft(
-                        CAPTION_CHAPTER_HEADING_LEVELS.includes(
-                          level as CaptionChapterHeadingLevel,
-                        )
-                          ? (level as CaptionChapterHeadingLevel)
-                          : 1,
-                      );
-                    }}
-                  >
-                    {CAPTION_CHAPTER_HEADING_LEVELS.map((level) => (
-                      <option key={level} value={level}>
-                        {t("toolbar.captionChapterHeadingLevel", { level })}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="office-dialog__field">
-                  {t("toolbar.captionChapterSeparator")}
-                  <select
-                    data-testid="document-caption-chapter-separator"
-                    aria-label={t("toolbar.captionChapterSeparator")}
-                    value={captionChapterSeparatorDraft}
-                    disabled={!captionIncludeChapterNumberDraft}
-                    onChange={(event) =>
-                      setCaptionChapterSeparatorDraft(
-                        CAPTION_CHAPTER_SEPARATORS.includes(
-                          event.target.value as CaptionChapterSeparator,
-                        )
-                          ? (event.target.value as CaptionChapterSeparator)
-                          : "-",
-                      )
-                    }
-                  >
-                    {CAPTION_CHAPTER_SEPARATORS.map((separator) => (
-                      <option key={separator} value={separator}>
-                        {separator}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              {!snapshot.headingNumbering ? (
-                <p className="office-dialog__hint" role="status">
-                  {t("toolbar.captionChapterNumberingUnavailable")}
-                </p>
-              ) : null}
-            </section>
-          </OfficeDialogShell>
-        ) : null}
+        {null}
 
         {/* Picture > Change Picture > From Device clicks this input. It is
             not part of any one ribbon tab: the Picture tab only constructs
@@ -32762,29 +30548,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
 
         {/* Word's Layout dialog (More Layout Options…) on the selected
             floating chart, picture, shape or text box. */}
-        <OfficeFloatLayoutDialog
-          open={false}
-          anchor={null?.anchor ?? null}
-          paint={null?.paint ?? null}
-          size={null?.size ?? null}
-          labels={floatLayoutLabels}
-          onApply={(anchor, size) => {
-            const target = liveDocumentFloatLayoutTarget(editor);
-            const opened = null?.size ?? null;
-            setFloatLayoutDialog(null);
-            if (!target) return;
-            target.apply(anchor);
-            if (!size || !opened) return;
-            if (size.widthEmu !== opened.widthEmu || size.heightEmu !== opened.heightEmu) {
-              liveDocumentFloatLayoutTarget(editor)?.applySize(size.widthEmu, size.heightEmu);
-            }
-            if (size.lockAspectRatio !== opened.lockAspectRatio) {
-              liveDocumentFloatLayoutTarget(editor)?.applyLock?.(size.lockAspectRatio);
-            }
-          }}
-          onCancel={() => setFloatLayoutDialog(null)}
-          testIdPrefix="document-float-layout-dialog"
-        />
+        {null}
 
         {/* Word's Insert → Symbol dialog. The shared, editor-neutral component
             in components/office-ribbon owns the two tabs, the font dropdown, the
@@ -34167,15 +31931,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
           }}
         />
       ) : null}
-      {documentEditorView ? (
-        <DocumentDockedPane docks={taskPaneDocks} pane="editor">
-          <DocumentEditorPane
-            editor={editor}
-            initialView={documentEditorView}
-            onClose={() => setDocumentEditorView(null)}
-          />
-        </DocumentDockedPane>
-      ) : null}
+      {null}
       {revealFormattingOpen ? (
         <DocumentDockedPane docks={taskPaneDocks} pane="reveal-formatting">
           <DocumentRevealFormattingPane
@@ -34232,30 +31988,8 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
           />
         </DocumentDockedPane>
       ) : null}
-      {compareDocumentsOpen && pageId ? (
-        <DocumentDockedPane docks={taskPaneDocks} pane="compare">
-          <CompareDocumentsPanel
-            key={compareDocumentsKind}
-            editor={editor}
-            pageId={pageId}
-            mode={compareDocumentsKind}
-            onClose={closeCompareDocuments}
-            onResult={showCompareResult}
-            dockClassName={documentTaskPaneDockStyles.pane}
-          />
-        </DocumentDockedPane>
-      ) : null}
-      {compareResultSources && sourceDocumentsMode !== "none" ? (
-        <DocumentDockedPane docks={taskPaneDocks} pane="source-documents">
-          <SourceDocumentsPane
-            editor={editor}
-            sources={compareResultSources}
-            mode={sourceDocumentsMode}
-            onModeChange={setSourceDocumentsMode}
-            dockClassName={documentTaskPaneDockStyles.pane}
-          />
-        </DocumentDockedPane>
-      ) : null}
+      {null}
+      {null}
       <DocumentImmersiveReader
         editor={editor}
         open={immersiveReaderOpen}
@@ -34263,24 +31997,8 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
         readAloud={readAloud}
         returnFocusRef={immersiveReaderReturnFocusRef}
       />
-      {lineNumbersDialogInitial ? (
-        <DocumentLineNumbersDialog
-          open
-          canEdit={!editor.isDestroyed && editor.isEditable}
-          locale={locale}
-          initial={lineNumbersDialogInitial}
-          startSupported={docsOfficeParityV2}
-          returnFocusRef={lineNumbersReturnFocusRef}
-          onSubmit={submitLineNumbersDialog}
-          onClose={closeLineNumbersDialog}
-        />
-      ) : null}
-      {pageBordersDialogOpen ? (
-        <DocumentPageBordersDialog
-          editor={editor}
-          onClose={() => setPageBordersDialogOpen(false)}
-        />
-      ) : null}
+      {null}
+      {null}
       {pageNumbersDialog ? (
         <DocumentPageNumbersDialog
           canEdit={!editor.isDestroyed && editor.isEditable}
@@ -34306,39 +32024,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
       ) : null}
       {null}
       {zoom ? (
-        <OfficeZoomDialog
-          open={false}
-          title={t("toolbar.zoomDialogTitle")}
-          presets={[200, 100, 75]}
-          initialPercent={(zoom.level ?? Number.parseFloat(zoom.percent) / 100) * 100}
-          min={Math.round(EDITOR_ZOOM_MIN * 100)}
-          max={Math.round(EDITOR_ZOOM_MAX * 100)}
-          labels={{
-            fit: t("toolbar.pageWidth"),
-            percent: t("toolbar.zoomPercentField"),
-            ok: t("toolbar.zoomOk"),
-            cancel: t("toolbar.cancel"),
-          }}
-          fitOptions={[
-            { id: "pageWidth", label: t("toolbar.pageWidth") },
-            { id: "textWidth", label: t("toolbar.zoomTextWidth") },
-            { id: "wholePage", label: t("toolbar.zoomWholePage") },
-            { id: "manyPages", label: t("toolbar.multiplePages") },
-          ]}
-          onApply={(choice) => {
-            setZoomDialogOpen(false);
-            if (choice.kind === "percent") {
-              zoom.setLevel?.(choice.percent / 100);
-              return;
-            }
-            if (choice.id === "wholePage") zoom.fitOnePage();
-            else if (choice.id === "manyPages") zoom.fitMultiplePages();
-            else if (choice.id === "textWidth") zoomToTextWidth();
-            else zoom.fitPageWidth();
-          }}
-          onCancel={() => setZoomDialogOpen(false)}
-          testIdPrefix="document-zoom-dialog"
-        />
+        null
       ) : null}
       {/* One status surface, hosted at the real window bottom when supplied. */}
       <OfficeStatusBar

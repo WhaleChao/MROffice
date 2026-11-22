@@ -18,7 +18,20 @@
  * `documentTableMeasurementUnit` matches only a literal "en-US" and so reads
  * the app's "en" as metric; it is left to its owner.)
  */
+/**
+ * A measurement system the host fixed for this editor (an ONLYOFFICE
+ * config's customization.unit, lib/embed/onlyoffice-frame): it wins over the
+ * locale and the browser's region, as ONLYOFFICE's unit wins over its
+ * region. null: none fixed.
+ */
+let measurementOverride: "cm" | "inch" | null = null;
+
+export function setOfficeMeasurementOverride(unit: "cm" | "inch" | null): void {
+  measurementOverride = unit;
+}
+
 export function officeLocaleUsesInches(locale: string): boolean {
+  if (measurementOverride) return measurementOverride === "inch";
   try {
     const tag = new Intl.Locale(locale);
     return tag.language === "en" && (tag.region ?? "US") === "US";
@@ -42,6 +55,7 @@ export function officeSystemUsesInches(
   appLocale: string,
   browserLanguage: string | undefined = typeof navigator === "undefined" ? undefined : navigator.language,
 ): boolean {
+  if (measurementOverride) return measurementOverride === "inch";
   if (browserLanguage) {
     try {
       const region = new Intl.Locale(browserLanguage).maximize().region;

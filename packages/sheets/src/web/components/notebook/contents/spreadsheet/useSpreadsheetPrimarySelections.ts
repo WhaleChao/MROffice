@@ -12,7 +12,7 @@ import { normalizeHexColor } from "@mrnote/core/web/lib/spreadsheet/color-palett
 import { type SheetModel } from "./spreadsheetSheetModel";
 import { SPREADSHEET_DEFAULT_TEXT_COLOR } from "./spreadsheetWindowConstants";
 import { type SelectionObservations } from "../../../../lib/spreadsheet/selection-observations";
-import { type GridRect } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
+import { type GridRect } from "../../../../lib/spreadsheet/grid-nav";
 
 /** What useSpreadsheetPrimarySelections reads from SpreadsheetWindow's render scope. */
 export interface SpreadsheetPrimarySelectionsInputs {

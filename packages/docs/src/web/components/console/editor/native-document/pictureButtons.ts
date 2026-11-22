@@ -28,7 +28,7 @@ import {
   pictureShadowEffect,
   pictureShadowEffectAttrs,
   type PictureLookEffectKind,
-} from "@mrnote/core/web/components/console/editor/native-document/pictureEffects.ts";
+} from "./pictureEffects";
 import type { Editor } from "@tiptap/react";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { closeHistory } from "@tiptap/pm/history";
@@ -70,7 +70,7 @@ import {
   documentImageFillCropInsets,
   type DocumentImageCropInsets,
   type DocumentImageCropResult,
-} from "@mrnote/core/web/components/console/editor/native-document/documentImageCrop.ts";
+} from "./documentImageCrop";
 import { normalizePageOrientation, pageGeometryTwips } from "@mrnote/core/web/components/console/editor/native-document/pageSetup.ts";
 import { resolveSectionAtSelection } from "@mrnote/core/web/components/console/editor/native-document/sectionLayouts.ts";
 import { normalizeWordDocumentSettings, resolveWordPageBox } from "@mrnote/core/web/components/console/editor/native-document/wordDocumentSettings.ts";
@@ -79,7 +79,7 @@ import {
   OFFICE_PICTURE_RECTANGLE_GEOMETRY,
   normalizeOfficePictureGeometry,
 } from "@mrnote/core/web/lib/office-picture-geometry.ts";
-import { EMU_PER_PX, MIN_IMAGE_PX } from "@mrnote/core/web/components/console/editor/native-document/ImageResizeNodeView.ts";
+import { EMU_PER_PX, MIN_IMAGE_PX } from "./ImageResizeNodeView";
 import {
   documentShapeRelativeHeight,
   nextDocumentFloatingHeight,

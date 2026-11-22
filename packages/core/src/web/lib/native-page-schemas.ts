@@ -289,6 +289,11 @@ import {
   MIN_RUN_FONT_SIZE,
 } from "./presentation-runs";
 import {
+  effectSettingsEqual,
+  normalizeEffectSettings,
+  type PresentationAnimationEffectSettings,
+} from "./presentation-anim-effect-settings";
+import {
   isEditableAnimationDurationMs,
   isEditableAnimationTimingMs,
   PRESENTATION_ANIMATION_EFFECT_OPTIONS,
@@ -2301,6 +2306,17 @@ const presentationMotionPathSchema = z
   })
   .passthrough();
 
+// PowerPoint's Effect Options of one step: exactly the well-formed shape
+// `normalizeEffectSettings` keeps (the server checks it against the effect).
+const presentationAnimationEffectSettingsSchema = z
+  .record(z.string(), z.unknown())
+  .refine((value) =>
+    effectSettingsEqual(
+      normalizeEffectSettings(value),
+      value as PresentationAnimationEffectSettings,
+    ),
+  );
+
 const presentationAnimationStepSchema = z
   .object({
     id: z.string().min(1).max(200).optional(),
@@ -2308,6 +2324,8 @@ const presentationAnimationStepSchema = z
     animation: z.enum(TIMELINE_ANIMATIONS),
     effectOption: z.enum(PRESENTATION_ANIMATION_EFFECT_OPTIONS).optional(),
     effectColor: z.string().regex(/^#[0-9a-f]{6}$/).optional(),
+    // Effect Options (`presentation-anim-effect-settings`), well-formed only.
+    effectSettings: presentationAnimationEffectSettingsSchema.optional(),
     trigger: z.enum(TIMELINE_TRIGGERS),
     delayMs: z.number().min(0).max(MAX_STEP_DELAY_MS),
     durationMs: z.number().min(0).max(MAX_STEP_DURATION_MS),
@@ -2366,6 +2384,7 @@ const presentationAnimationReceiptStepSchema = z
     triggerNativeShapeId: z.string().regex(/^shp[1-9][0-9]*$/).optional(),
     effectOption: z.enum(PRESENTATION_ANIMATION_EFFECT_OPTIONS).optional(),
     effectColor: z.string().regex(/^#[0-9a-f]{6}$/).optional(),
+    effectSettings: presentationAnimationEffectSettingsSchema.optional(),
     trigger: z.enum(TIMELINE_TRIGGERS),
     delayMs: z.number().refine(isEditableAnimationTimingMs),
     durationMs: z.number().refine(isEditableAnimationDurationMs),

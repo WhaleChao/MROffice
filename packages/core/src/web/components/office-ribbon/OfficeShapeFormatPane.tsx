@@ -909,7 +909,7 @@ export function OfficeShapeFormatPane({
       className={[styles.pane, className].filter(Boolean).join(" ")}
       paneRef={paneRef}
       style={style}
-      dataAttributes={{ ...dataAttributes, "data-read-only": writable ? "false" : "true" }}
+      dataAttributes={{ ...dataAttributes, "data-office-format-pane": "", "data-read-only": writable ? "false" : "true" }}
     >
       {tabs.length > 1 ? (
         <div className={styles.tabs} role="tablist">

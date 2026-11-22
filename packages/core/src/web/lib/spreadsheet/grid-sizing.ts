@@ -749,20 +749,30 @@ export function columnFileWidthToPixels(
 }
 
 /**
+ * The margin Windows Excel adds to a sheet's `baseColWidth` characters: twice
+ * a quarter digit rounded up, and the gridline -- 5 pixels up to an 8-pixel
+ * digit, 7 at 9-12, 9 at 13-16 (lookwin colw probes: Arial 12 base 10 prints a
+ * 104-pixel column, not 96; R474-X81). The API's base_column_margin_pixels.
+ */
+export function columnBaseMarginPixels(digitWidth: number): number {
+  return 2 * Math.ceil(Math.max(1, digitWidth) / 4) + 1;
+}
+
+/**
  * Device pixels of the default column of a sheet whose file names no
- * `defaultColWidth`, from its `baseColWidth` characters plus the 5-pixel
- * margin. Windows Excel rounds that up to a multiple of 8 pixels, which is
- * why a base of 8 at the 7-pixel digit is 64 pixels, "8.43" characters, and not
- * 61; Excel for Mac does not round (a new Mac workbook's base of 10 at its
- * 6-point digit is 65 points, measured).
+ * `defaultColWidth`, from its `baseColWidth` characters plus the margin
+ * (columnBaseMarginPixels). Windows Excel rounds that up to a multiple of 8
+ * pixels, which is why a base of 8 at the 7-pixel digit is 64 pixels, "8.43"
+ * characters, and not 61; Excel for Mac does not round (a new Mac workbook's
+ * base of 10 at its 6-point digit is 65 points, measured).
  */
 export function columnBaseWidthToPixels(
   baseColumnWidth: number,
   digitWidth = DEFAULT_MAX_DIGIT_WIDTH_PX,
   dpi = 96,
 ): number {
-  const device = baseColumnWidth * digitWidth + COLUMN_WIDTH_PADDING_PX;
-  return dpi === 72 ? device : Math.ceil(device / 8) * 8;
+  if (dpi === 72) return baseColumnWidth * digitWidth + COLUMN_WIDTH_PADDING_PX;
+  return Math.ceil((baseColumnWidth * digitWidth + columnBaseMarginPixels(digitWidth)) / 8) * 8;
 }
 
 /** Characters shown for a column `pixels` wide (never below zero). */

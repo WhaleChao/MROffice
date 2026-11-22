@@ -13,7 +13,7 @@ import { type SparklineType, SPARKLINE_TYPES } from "@mrnote/core/web/lib/spread
 import { chartRangeToA1 } from "@mrnote/core/web/lib/spreadsheet/chart-config.ts";
 import { SPREADSHEET_WEB_SPARKLINE_AUTHORING_ENABLED } from "../../../../lib/spreadsheet/feature-capabilities";
 import { type SheetModel } from "./spreadsheetSheetModel";
-import { type GridRect } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
+import { type GridRect } from "../../../../lib/spreadsheet/grid-nav";
 import { type Dispatch, type SetStateAction } from "react";
 import { SpreadsheetCollapseDialogButton } from "./SpreadsheetRangePicker";
 import { type SpreadsheetRangePick } from "./useSpreadsheetRangePick";

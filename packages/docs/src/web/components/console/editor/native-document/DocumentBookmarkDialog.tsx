@@ -23,6 +23,9 @@
  *   location. Add closes the dialog.
  * - Delete removes the named bookmark (never its text); Go To selects the
  *   bookmarked range and leaves the dialog open, as Word does.
+ * - Get Link (an embedded editor whose host makes links to a bookmark: an
+ *   ONLYOFFICE config's onMakeActionLink) shows the host's link to the
+ *   bookmark, to copy; opening it opens the document there.
  */
 
 import { useMemo, useRef, useState } from "react";
@@ -53,6 +56,8 @@ export interface DocumentBookmarkDialogProps {
   readonly onAdd: (name: string) => boolean;
   readonly onDelete: (name: string) => boolean;
   readonly onGoTo: (name: string) => boolean;
+  /** The host's link that opens the document at the bookmark (null: none came). */
+  readonly onGetLink?: (name: string) => Promise<string | null>;
   readonly onClose: () => void;
 }
 
@@ -65,6 +70,7 @@ export function DocumentBookmarkDialog({
   onAdd,
   onDelete,
   onGoTo,
+  onGetLink,
   onClose,
 }: DocumentBookmarkDialogProps) {
   const t = useTranslations("console-notebooks");
@@ -73,6 +79,8 @@ export function DocumentBookmarkDialog({
   const [sort, setSort] = useState<BookmarkSort>("name");
   const [showHidden, setShowHidden] = useState(false);
   const [wasOpen, setWasOpen] = useState(open);
+  const [link, setLink] = useState<{ name: string; value: string | null; waiting: boolean } | null>(null);
+  const [copied, setCopied] = useState(false);
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) setName("");
@@ -136,6 +144,26 @@ export function DocumentBookmarkDialog({
             <DocumentDialogIcon icon="nav.arrow.right" />
             {t("bookmark.goTo")}
           </button>
+          {onGetLink ? (
+            <button
+              type="button"
+              className={officeDialogParts.button}
+              data-testid="document-bookmark-get-link"
+              disabled={existing === null || existing.hidden === true}
+              onClick={() => {
+                if (!existing) return;
+                const wanted = existing.name;
+                setCopied(false);
+                setLink({ name: wanted, value: null, waiting: true });
+                void onGetLink(wanted).then((value) =>
+                  setLink((current) => (current && current.name === wanted ? { name: wanted, value, waiting: false } : current)),
+                );
+              }}
+            >
+              <DocumentDialogIcon icon="link.insert" />
+              {t("bookmark.getLink")}
+            </button>
+          ) : null}
         </>
       }
     >
@@ -215,6 +243,30 @@ export function DocumentBookmarkDialog({
           </label>
         ))}
       </div>
+      {link ? (
+        <div className={officeDialogParts.field} data-testid="document-bookmark-link">
+          <span className={officeDialogParts.label}>{t("bookmark.linkLabel", { name: link.name })}</span>
+          {link.waiting ? (
+            <span className={officeDialogParts.hint} role="status">{t("bookmark.linkWaiting")}</span>
+          ) : link.value ? (
+            <span className={officeDialogParts.row}>
+              <input type="text" readOnly value={link.value} onFocus={(event) => event.target.select()} data-testid="document-bookmark-link-value" />
+              <button
+                type="button"
+                className={officeDialogParts.button}
+                data-testid="document-bookmark-link-copy"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(link.value ?? "").then(() => setCopied(true), () => setCopied(false));
+                }}
+              >
+                {copied ? t("bookmark.linkCopied") : t("bookmark.linkCopy")}
+              </button>
+            </span>
+          ) : (
+            <span className={officeDialogParts.hint} role="status">{t("bookmark.linkFailed")}</span>
+          )}
+        </div>
+      ) : null}
       <label className={officeDialogParts.check}>
         <input
           type="checkbox"

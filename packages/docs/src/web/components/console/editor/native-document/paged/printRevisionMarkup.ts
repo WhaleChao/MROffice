@@ -26,7 +26,7 @@
  * beside it, each moved onto its sheet. The final copy is the sheets as the
  * final view lays them out; the copy then drops what that view hides.
  */
-import { applyRevisionPolicyToDom } from "@mrnote/core/web/lib/document-export/revision-policy.ts";
+import { applyRevisionPolicyToDom } from "../../../../../lib/document-export/revision-policy";
 import {
   CHANGE_BAR_OVERLAY_CLASS,
   SIMPLE_MARKUP_CHANGE_BAR_CLASS,

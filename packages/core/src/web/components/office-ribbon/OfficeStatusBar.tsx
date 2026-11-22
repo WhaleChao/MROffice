@@ -80,6 +80,7 @@ export function OfficeStatusBar({
       {...screenTipRegion}
       {...data}
       data-office-status-docked={docked ? "true" : undefined}
+      data-office-status-bar=""
       data-testid={testId}
       aria-live={ariaLive}
       style={style}

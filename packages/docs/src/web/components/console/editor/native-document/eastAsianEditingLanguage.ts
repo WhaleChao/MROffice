@@ -13,10 +13,10 @@ import {
   useBrowserListsEastAsianLanguage,
 } from "@mrnote/core/web/components/office-ribbon/officeEastAsianLanguage.ts";
 
-import { EAL_MARK_NAME } from "@mrnote/core/web/components/console/editor/native-document/eastAsianLayoutExtension.ts";
-import { ENCLOSED_CHAR_MARK_NAME } from "@mrnote/core/web/components/console/editor/native-document/enclosedCharExtension.ts";
+import { EAL_MARK_NAME } from "./eastAsianLayoutExtension";
+import { ENCLOSED_CHAR_MARK_NAME } from "./enclosedCharExtension";
 import { textHasEastAsian } from "@mrnote/core/web/components/console/editor/native-document/noteTextStyle.ts";
-import { PROOFING_LANGUAGE_MARK } from "@mrnote/core/web/components/console/editor/native-document/proofingLanguageExtension.ts";
+import { PROOFING_LANGUAGE_MARK } from "./proofingLanguageExtension";
 
 /**
  * When Word's Home tab holds Phonetic Guide, Character Border, Character

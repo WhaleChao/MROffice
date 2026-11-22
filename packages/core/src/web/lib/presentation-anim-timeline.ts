@@ -34,6 +34,11 @@ import {
 } from "./presentation-effect-recipe-identities";
 import { RUN_FONT_FAMILIES, runFontFamilyName } from "./presentation-runs";
 import {
+  effectSettingsEqual,
+  normalizeEffectSettings,
+  type PresentationAnimationEffectSettings,
+} from "./presentation-anim-effect-settings";
+import {
   normalizeMotionPath,
   presetMotionPath,
   type MotionPath,
@@ -1594,10 +1599,20 @@ export function hasEditableSlideAnimationSource(source: unknown): boolean {
       "durationMs",
       ...(entry.effectOption === undefined ? [] : ["effectOption"]),
       ...(entry.effectColor === undefined ? [] : ["effectColor"]),
+      ...(entry.effectSettings === undefined ? [] : ["effectSettings"]),
       ...(entry.triggerNativeShapeId === undefined
         ? []
         : ["triggerNativeShapeId"]),
     ]);
+    if (
+      entry.effectSettings !== undefined &&
+      !effectSettingsEqual(
+        normalizeEffectSettings(entry.effectSettings),
+        entry.effectSettings as PresentationAnimationEffectSettings,
+      )
+    ) {
+      return false;
+    }
     const option = resolvePresentationAnimationEffectOption(
       entry.kind,
       entry.effectOption,
@@ -1757,6 +1772,13 @@ export interface TimelineStep {
   effectOption?: PresentationAnimationEffectOption;
   /** Explicit native color-emphasis target; omission keeps theme accent2. */
   effectColor?: string;
+  /**
+   * PowerPoint's Effect Options beyond the effect, its direction and timing
+   * (Smooth start / end, Auto-reverse, Repeat, Rewind, After animation,
+   * Animate text By word / By letter): `presentation-anim-effect-settings`.
+   * Absent → the effect as the gallery adds it, byte-for-byte as before.
+   */
+  effectSettings?: PresentationAnimationEffectSettings;
   /** How this step starts relative to its neighbours. */
   trigger: TimelineTrigger;
   /** Delay (ms) before this step starts, measured from its anchor. */
@@ -2002,6 +2024,9 @@ export function validateStep(
   if (effectColor?.effectColor !== undefined) {
     step.effectColor = effectColor.effectColor;
   }
+  // Effect Options: a malformed key is dropped, never the step.
+  const effectSettings = normalizeEffectSettings(record.effectSettings);
+  if (effectSettings) step.effectSettings = effectSettings;
 
   if (
     typeof record.id === "string" &&
@@ -2631,6 +2656,7 @@ export interface AnimationTimingValue {
 export function copyTimelineStep(step: TimelineStep): TimelineStep {
   return {
     ...step,
+    ...(step.effectSettings ? { effectSettings: { ...step.effectSettings } } : {}),
     ...(step.motionPath
       ? {
           motionPath: {
@@ -2653,6 +2679,7 @@ export function timelineStepsEqual(
     left.animation !== right.animation ||
     left.effectOption !== right.effectOption ||
     left.effectColor !== right.effectColor ||
+    !effectSettingsEqual(left.effectSettings, right.effectSettings) ||
     left.trigger !== right.trigger ||
     left.delayMs !== right.delayMs ||
     left.durationMs !== right.durationMs ||
@@ -2710,6 +2737,41 @@ export function editTimelineStepEffectOption(
       return withoutOption;
     }
     return { ...copy, effectOption: resolution.effectOption };
+  });
+}
+
+/**
+ * Replace the Effect Options (the Effect Options dialog's Effect and Timing
+ * tabs) of one exact selected occurrence, or return null when nothing would
+ * change. `settings` must already be canonical for the step's effect
+ * (`canonicalEffectSettings`); `undefined` returns the effect to the
+ * gallery's defaults. A text built a paragraph at a time takes them as one
+ * effect, every paragraph's step together, as PowerPoint's dialog applies to
+ * the whole build.
+ */
+export function editTimelineStepEffectSettings(
+  steps: readonly TimelineStep[],
+  index: number,
+  expectedStep: TimelineStep,
+  settings: PresentationAnimationEffectSettings | undefined,
+): TimelineStep[] | null {
+  const current = steps[index];
+  if (
+    !Number.isInteger(index) ||
+    index < 0 ||
+    index >= steps.length ||
+    !current ||
+    !timelineStepsEqual(current, expectedStep) ||
+    effectSettingsEqual(current.effectSettings, settings)
+  ) {
+    return null;
+  }
+  const build = timelineTextBuildRange(steps, index) ?? { first: index, last: index };
+  return steps.map((step, stepIndex) => {
+    const copy = copyTimelineStep(step);
+    if (stepIndex < build.first || stepIndex > build.last) return copy;
+    const { effectSettings: _previous, ...withoutSettings } = copy;
+    return settings ? { ...withoutSettings, effectSettings: { ...settings } } : withoutSettings;
   });
 }
 
@@ -3054,6 +3116,34 @@ export interface StepPlayState {
    * object keeps that end state while later groups play (PPT-B024).
    */
   emphasisSettled: boolean;
+  /**
+   * Effect Options, once the step's group has played and a later click has
+   * come: the object is taken away (After animation: Hide After Animation /
+   * Hide on Next Mouse Click; an entrance that rewinds), brought back (an
+   * exit that rewinds), or dimmed (After animation: a colour).
+   */
+  afterHidden?: boolean;
+  afterShown?: boolean;
+  dimmed?: boolean;
+}
+
+/** What a step's Effect Options leave once its group has played (auto flow). */
+function settledAfterEffect(
+  step: TimelineStep,
+  settled: boolean,
+): Pick<StepPlayState, "afterHidden" | "afterShown" | "dimmed"> {
+  const settings = step.effectSettings;
+  if (!settings || !settled) return {};
+  const category = presentationAnimationEffect(step.animation)?.category;
+  const after = settings.afterEffect;
+  const rewound = settings.rewind === true;
+  return {
+    ...(after === "hide" || after === "hide-on-next-click" || (rewound && category === "entrance")
+      ? { afterHidden: true }
+      : {}),
+    ...(rewound && category === "exit" && !after ? { afterShown: true } : {}),
+    ...(after === "dim" ? { dimmed: true } : {}),
+  };
 }
 
 function timelineStepVisibleAtGroup(
@@ -3132,6 +3222,8 @@ export function resolveStepPlayStates(
       autoCursor += 1;
       const hasEffect =
         step.animation !== "none" || step.motionPath !== undefined;
+      // Rewind when done playing: nothing of the effect is held afterwards.
+      const holds = step.effectSettings?.rewind !== true;
       states.set(flatIndex, {
         visible: timelineStepVisibleAtGroup(step, groupVisible, groupAnimates),
         animate: groupVisible && groupAnimates && hasEffect,
@@ -3139,16 +3231,19 @@ export function resolveStepPlayStates(
         durationMs: step.durationMs,
         motionPath: step.motionPath,
         motionPathSettled:
-          groupVisible && !groupAnimates && step.motionPath !== undefined,
+          holds && groupVisible && !groupAnimates && step.motionPath !== undefined,
         colorEffectSettled:
+          holds &&
           groupVisible &&
           !groupAnimates &&
           presentationAnimationEffect(step.animation)?.nativeBehavior === "color",
         emphasisSettled:
+          holds &&
           groupVisible &&
           !groupAnimates &&
           presentationAnimationEffect(step.animation)?.category === "emphasis" &&
           presentationAnimationEffect(step.animation)?.nativeBehavior !== "color",
+        ...settledAfterEffect(step, groupVisible && !groupAnimates),
       });
     }
   }

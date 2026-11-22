@@ -61,7 +61,7 @@ import {
   type DocumentTablePropertiesChanges,
   type DocumentTablePropertiesCommitResult,
   type DocumentTablePropertiesTarget,
-} from "@mrnote/core/web/components/console/editor/native-document/tableProperties.ts";
+} from "./tableProperties";
 import {
   defaultTableStyleOptionsForTheme,
   getTableStyleTheme,

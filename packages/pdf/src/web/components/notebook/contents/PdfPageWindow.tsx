@@ -31799,6 +31799,12 @@ export default function PdfPageWindow({
     const pending = textBoxEditsSavePromiseRef.current;
     if (!pending) return null;
     const result = await pending;
+    // A box of that write the writer refused for good: no write to wait for
+    // again, and the box stays the reader's draft. The page change asked
+    // after it goes on -- a turn pressed while it was written took its
+    // refusal as its own, said 「保存失败」 and was put back (rt0480,
+    
+    if (!result && textBoxWritesRefusedForGoodRef.current.get(pending)?.()) return null;
     if (!result) throw new Error(t("pages.saveFailed"));
     if (result.kind === "patchback_incomplete") {
       throw new Error(pdfPatchbackIncompleteMessage);

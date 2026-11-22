@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 
-import { ChartDataWindow, chartDataWindowLabels } from "@mrnote/core/web/components/console/editor/extensions/ChartDataWindow.tsx";
+import { ChartDataWindow, chartDataWindowLabels } from "@mrnote/docs/web/components/console/editor/extensions/ChartDataWindow.tsx";
 import {
   validateChartBlockAttrsV2,
   type ChartBlockAttrsV2,

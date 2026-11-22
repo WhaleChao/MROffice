@@ -5201,6 +5201,23 @@
   white-space: nowrap;
 }
 
+/* The selected effect's Effect Options… (PowerPoint's item menu entry). */
+.presentation-window__timeline-effect-options {
+  background: var(--console-accent-tint-soft, #f7fbfa);
+  border: 1px solid
+    color-mix(in srgb, var(--console-accent, #0d9488) 12%, transparent);
+  border-radius: 7px;
+  color: var(--console-text-primary, #183c38);
+  font: inherit;
+  font-size: 12px;
+  min-height: 28px;
+  padding: 0 8px;
+}
+
+.presentation-window__timeline-effect-options:hover {
+  background: color-mix(in srgb, var(--console-accent, #0d9488) 10%, transparent);
+}
+
 .presentation-window__timeline-step select {
   background: var(--console-accent-tint-soft, #f7fbfa);
   border: 1px solid

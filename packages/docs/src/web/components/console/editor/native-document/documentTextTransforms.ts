@@ -24,7 +24,7 @@ import {
   TABLE_REPEATED_HEADER_ATTR,
   TABLE_ROW_CONTINUATION_ATTR,
 } from "@mrnote/core/web/components/console/editor/native-document/paged/tablePagination.ts";
-import { TABLE_NUMBER_CURRENCY_PREFIX_SOURCE } from "@mrnote/core/web/components/console/editor/native-document/tableCellFormula.ts";
+import { TABLE_NUMBER_CURRENCY_PREFIX_SOURCE } from "./tableCellFormula";
 import {
   commitCrossSheetEdit,
   joinSelectionSheets,

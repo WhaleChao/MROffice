@@ -48,7 +48,7 @@ import {
   type DocumentRubyAlign,
   type DocumentRubyProperties,
   type PhoneticGuideSegment,
-} from "@mrnote/core/web/components/console/editor/native-document/rubyProperties.ts";
+} from "./rubyProperties";
 import {
   loadPinyinReadingProvider,
   phoneticGuideSegmentsWithDefaultReadings,

@@ -8,7 +8,7 @@
 import { normalizeTableShading, shadingCss } from "./tableShading";
 import { Extension, type Editor } from "@tiptap/core";
 import { closeHistory } from "@tiptap/pm/history";
-import type { Node as ProseMirrorNode, Slice } from "@tiptap/pm/model";
+import { Fragment, type Node as ProseMirrorNode, type Slice } from "@tiptap/pm/model";
 import {
   Plugin,
   Selection,
@@ -247,33 +247,43 @@ export function findOutermostTable(state: EditorState): EnclosingTable | null {
  * Word's page (or column, or section) break inside a table: the table is
  * split above the row `found` names, as Split Table splits it, and the break
  * goes between the two tables instead of Split Table's empty paragraph. A
- * caret in the first row puts the break before the table. Returns the
- * position of the break, or null when the row cannot start a second table
- * (a repeated header copy, a row the page already cut, a merged cell the
- * page layout carries across a page boundary).
+ * caret in the first row puts the break before the table. Word puts the
+ * break in a paragraph of its own between the tables (a table cannot follow
+ * a table directly), which reads back as an empty paragraph, the break and
+ * the paragraph's empty rest: the same three go between the halves here
+ * (DQ-L 37, corpus R498-D57: the saved file read back with a paragraph the
+ * page did not hold). `window.__docsTableSplitBreakParagraphOff = true` puts
+ * the break alone. Returns the positions of the break and of the second
+ * table, or null when the row cannot start a second table (a repeated
+ * header copy, a row the page already cut, a merged cell the page layout
+ * carries across a page boundary).
  */
 export function insertBreakSplittingTable(
   state: EditorState,
   tr: Transaction,
   found: EnclosingTable,
   breakNode: ProseMirrorNode,
-): number | null {
+): { breakPos: number; tablePos: number } | null {
   const table = found.node;
   // The first row of a page's continuation fragment is not the table's first
   // row: Split Table's own plan decides there (a page-boundary split).
   if (found.rowIndex === 0 && table.attrs[TABLE_CONTINUATION_ATTR] !== true) {
     tr.insert(found.pos, breakNode);
-    return found.pos;
+    return { breakPos: found.pos, tablePos: found.pos + breakNode.nodeSize };
   }
   if (!proseMirrorTableAdmitsDensePolicy(table)) return null;
   const plan = planTableSplit(state, found);
   if (!plan) return null;
-  const nodes = tableSplitNodes(state.schema, plan, breakNode);
+  const between = breakParagraphNodes(state.schema, breakNode);
+  const nodes = tableSplitNodes(state.schema, plan, between);
   if (!nodes) return null;
+  const before = between.indexOf(breakNode);
+  const offset = between.slice(0, before).reduce((size, node) => size + node.nodeSize, 0);
+  const size = between.reduce((total, node) => total + node.nodeSize, 0);
   const cut = structuralTableSplitAt(table, found.pos, plan);
   if (cut !== null) {
-    splitTableInPlace(tr, found.pos, cut, plan, breakNode);
-    return cut + 1;
+    splitTableInPlace(tr, found.pos, cut, plan, between);
+    return { breakPos: cut + 1 + offset, tablePos: cut + 1 + size };
   }
   tr.replaceWith(found.pos, found.pos + table.nodeSize, nodes);
   for (const fragment of plan.retagged) {
@@ -282,7 +292,23 @@ export function insertBreakSplittingTable(
     if (node?.type.name !== "table") continue;
     tr.setNodeMarkup(pos, undefined, { ...node.attrs, ...fragment.attrs });
   }
-  return found.pos + (plan.head ? nodes[0].nodeSize : 0);
+  const headSize = plan.head ? nodes[0].nodeSize : 0;
+  return { breakPos: found.pos + headSize + offset, tablePos: found.pos + headSize + size };
+}
+
+/** What goes between the halves of a table a break splits: Word's paragraph
+ * holding the break, as read back -- [empty paragraph, break, empty
+ * paragraph] -- or the break alone (`__docsTableSplitBreakParagraphOff`). */
+function breakParagraphNodes(schema: EditorState["schema"], breakNode: ProseMirrorNode): ProseMirrorNode[] {
+  const paragraphType = schema.nodes.paragraph;
+  if (
+    !paragraphType ||
+    (typeof window !== "undefined" &&
+      (window as Window & { __docsTableSplitBreakParagraphOff?: boolean }).__docsTableSplitBreakParagraphOff === true)
+  ) {
+    return [breakNode];
+  }
+  return [paragraphType.create(), breakNode, paragraphType.create()];
 }
 
 export type DocumentTableSelectionScope = "cell" | "row" | "column" | "table";
@@ -1534,7 +1560,7 @@ function splitTableInPlace(
   pos: number,
   cut: number,
   plan: TableSplitPlan,
-  between: ProseMirrorNode,
+  between: ProseMirrorNode | readonly ProseMirrorNode[],
 ): void {
   tr.split(cut, 1);
   const tailPos = cut + 1;
@@ -1546,7 +1572,7 @@ function splitTableInPlace(
   if (head?.type.name === "table" && plan.head) {
     tr.setNodeMarkup(pos, undefined, { ...head.attrs, ...(plan.head.attrs ?? {}) });
   }
-  tr.insert(tailPos, between);
+  tr.insert(tailPos, Array.isArray(between) ? Fragment.fromArray([...between]) : (between as ProseMirrorNode));
 }
 
 /** Meta of a Split Table transaction; its history boundary is closed after. */
@@ -1568,14 +1594,14 @@ interface TableSplitPlan {
 function tableSplitNodes(
   schema: EditorState["schema"],
   plan: TableSplitPlan,
-  between?: ProseMirrorNode,
+  between?: readonly ProseMirrorNode[],
 ): ProseMirrorNode[] | null {
   const paragraphType = schema.nodes.paragraph;
   if (!paragraphType) return null;
   try {
     const nodes = [
       ...(plan.head ? [schema.nodeFromJSON(plan.head)] : []),
-      between ?? paragraphType.create(),
+      ...(between ?? [paragraphType.create()]),
       schema.nodeFromJSON(plan.tail),
     ];
     for (const node of nodes) {

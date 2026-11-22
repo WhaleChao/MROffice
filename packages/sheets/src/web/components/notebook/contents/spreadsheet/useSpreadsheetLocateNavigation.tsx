@@ -8,7 +8,7 @@
 import { usePageLocate } from "@mrnote/core/web/hooks/usePageLocate.ts";
 import { type PageLocateRequest, PAGE_LOCATE_SNIPPET_PREFIX } from "@mrnote/core/web/lib/page-locate.ts";
 import { useRef, useInsertionEffect, useCallback, type RefObject } from "react";
-import { type SpreadsheetNavigationElementSelection } from "./SpreadsheetNavigationPane";
+import { type SpreadsheetNavigationElementSelection } from "@/components/notebook/contents/spreadsheet/SpreadsheetNavigationPane";
 import { type ErrorCheckFinding } from "../../../../lib/spreadsheet/error-checking";
 import { normalizeNamedRanges } from "@mrnote/core/web/lib/spreadsheet/named-ranges.ts";
 import { resolveNameBoxTarget } from "../../../../lib/spreadsheet/grid-ops";

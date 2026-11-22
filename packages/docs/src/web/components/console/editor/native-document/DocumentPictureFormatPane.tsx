@@ -76,12 +76,12 @@ import {
   pictureShadowEffect,
   pictureShadowEffectAttrs,
   type PictureLookEffectKind,
-} from "@mrnote/core/web/components/console/editor/native-document/pictureEffects.ts";
-import { documentPictureStylePatch } from "@mrnote/core/web/components/console/editor/native-document/DocumentPictureStyleGallery.tsx";
+} from "./pictureEffects";
+import { documentPictureStylePatch } from "./DocumentPictureStyleGallery";
 import {
   documentImageCropFrameSize,
   documentImageCropSourceSize,
-} from "@mrnote/core/web/components/console/editor/native-document/documentImageCrop.ts";
+} from "./documentImageCrop";
 
 /**
  * Word's Format Picture pane (Picture Format > Picture Styles launcher;

@@ -14,6 +14,7 @@
  * (structural split, no behaviour change).
  */
 
+import { effectTextUnitCount, effectTextWordPieces } from "@mrnote/core/web/lib/presentation-anim-effect-settings.ts";
 import { createContext, Fragment, useContext, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { PRESENTATION_FIELD_TEXT_ATTRIBUTE } from "@mrnote/core/web/lib/presentation/math-atom.ts";
 import { formatDeckDate, PRESENTATION_DATE_FIELD_FORMATS, type PresentationDateFieldFormat } from "@mrnote/core/web/lib/presentation-header-footer.ts";
@@ -93,6 +94,17 @@ export interface LetterPlay {
   stepMs: number;
   /** An entrance: a letter is not there until its own start. */
   hiddenUntilStart: boolean;
+  /**
+   * Effect Options > Animate text: By word (each run of non-space
+   * characters is one unit) or By letter (each character that is not white
+   * space). Absent: an effect that iterates by itself, every character but
+   * a line break one unit, as before.
+   */
+  unit?: "word" | "letter";
+  /** The units' easing (a hand-drawn effect's own, or Smooth start / end). */
+  timingFunction?: string;
+  /** Repeat / Auto-reverse / Rewind of the effect (Effect Options). */
+  timing?: { iterationCount: string; direction: "normal" | "alternate"; rewind: boolean };
 }
 
 /** The letter-by-letter play of the text being drawn; `null` everywhere else. */
@@ -115,38 +127,66 @@ export function letterCount(text: string): number {
   return count;
 }
 
-/** `text` as one animated box per letter, counting from `base`. */
+/** The units of `text` a play steps through (`LetterPlay.unit`). */
+export function letterPlayUnitCount(text: string, play: LetterPlay): number {
+  if (play.unit) return effectTextUnitCount(text, play.unit);
+  return letterCount(text);
+}
+
+/** `text` as one animated box per letter (or word), counting from `base`. */
 function letterPlayNodes(text: string, play: LetterPlay, base: number): ReactNode[] {
   const nodes: ReactNode[] = [];
   let index = base;
   let key = 0;
+  const box = (content: string) => (
+    <span
+      key={key}
+      data-letter-play={index}
+      // The reduced-motion reset for inline timeline animations.
+      className="presentation-present__block--motion"
+      style={{
+        display: "inline-block",
+        whiteSpace: "pre",
+        ...(play.hiddenUntilStart ? { visibility: "hidden" } : {}),
+        animationName: play.keyframe,
+        animationDuration: `${play.durationMs}ms`,
+        animationDelay: `${Math.round(play.delayMs + index * play.stepMs)}ms`,
+        animationTimingFunction: play.timingFunction ?? "linear",
+        // Not `backwards`: the first frame of an entrance already shows the
+        // letter, and it must stay hidden until its own start. A rewound
+        // effect does not hold its end.
+        animationFillMode: play.timing?.rewind ? "none" : "forwards",
+        ...(play.timing
+          ? {
+              animationIterationCount: play.timing.iterationCount,
+              animationDirection: play.timing.direction,
+            }
+          : {}),
+      }}
+    >
+      {content}
+    </span>
+  );
+  if (play.unit === "word") {
+    // PowerPoint's words (letters and digits of a script run together, each
+    // other mark alone); the white space between is drawn as it is.
+    for (const piece of effectTextWordPieces(text)) {
+      if (!piece.word) {
+        nodes.push(piece.text);
+        continue;
+      }
+      nodes.push(box(piece.text));
+      index += 1;
+      key += 1;
+    }
+    return nodes;
+  }
   for (const character of text) {
-    if (character === "\n") {
+    if (character === "\n" || (play.unit === "letter" && /\s/u.test(character))) {
       nodes.push(character);
       continue;
     }
-    nodes.push(
-      <span
-        key={key}
-        data-letter-play={index}
-        // The reduced-motion reset for inline timeline animations.
-        className="presentation-present__block--motion"
-        style={{
-          display: "inline-block",
-          whiteSpace: "pre",
-          ...(play.hiddenUntilStart ? { visibility: "hidden" } : {}),
-          animationName: play.keyframe,
-          animationDuration: `${play.durationMs}ms`,
-          animationDelay: `${Math.round(play.delayMs + index * play.stepMs)}ms`,
-          animationTimingFunction: "linear",
-          // Not `backwards`: the first frame of an entrance already shows the
-          // letter, and it must stay hidden until its own start.
-          animationFillMode: "forwards",
-        }}
-      >
-        {character}
-      </span>,
-    );
+    nodes.push(box(character));
     index += 1;
     key += 1;
   }
@@ -310,7 +350,7 @@ export function PresentationRunsText({
     let count = letterBase;
     for (const run of normalized) {
       runLetterBases.push(count);
-      count += letterCount(run.text);
+      count += letterPlayUnitCount(run.text, letterPlay);
     }
   }
   // A highlight is drawn UNDER every glyph of the box, as PowerPoint paints all

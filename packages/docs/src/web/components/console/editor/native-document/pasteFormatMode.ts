@@ -35,7 +35,7 @@
 
 import type { Mark as PmMark } from "@tiptap/pm/model";
 import { sanitizeCustomMark, sanitizeFootnoteId } from "@mrnote/core/web/components/console/editor/native-document/footnotes.ts";
-import { normalizePastedPlainText, PLAIN_PASTE_MAX_TEXT_LENGTH, htmlToPlainText } from "@mrnote/core/web/components/console/editor/native-document/plainTextPaste.ts";
+import { normalizePastedPlainText, PLAIN_PASTE_MAX_TEXT_LENGTH, htmlToPlainText } from "./plainTextPaste";
 
 /** The three Word/WPS paste-options modes. */
 export type PasteFormatMode = "keep" | "merge" | "text";

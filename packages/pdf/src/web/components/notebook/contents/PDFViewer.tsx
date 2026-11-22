@@ -23,7 +23,7 @@ import {
 import { readNativeFreeTextSourceFacts } from "../../../lib/pdf/native-free-text-source-facts";
 import { measureFreeTextLineWidth } from "../../../lib/pdf/free-text-line-measure";
 import { pdfFormRolesOf, readPdfFormFieldRoles, type PdfFormRole } from "../../../lib/pdf/form-roles";
-import { PdfFormRolesDialog, type PdfFormRoleChange } from "./pdf/PdfFormRolesDialog";
+import { type PdfFormRoleChange } from "@/components/notebook/contents/pdf/PdfFormRolesDialog";
 import { preparePdfOrdinaryLayerView, createPdfOrdinaryStageLifetime, type PreparePdfOrdinaryNoteSource, type PdfOrdinaryNoteSourceStage } from "../../../lib/pdf/ordinary-note-source-stage";
 import {
   PDF_LISTED_ANNOTATION_SUBTYPES,
@@ -172,8 +172,6 @@ import PdfTranslationPreflight, {
 import PdfDocumentEncryptDialog, {
   type PdfDocumentEncryptRequest,
 } from "./pdf/PdfDocumentEncryptDialog";
-import PdfDangerousActionSafeCopyDialog, {
-} from "./pdf/PdfDangerousActionSafeCopyDialog";
 import PdfVerifiedPdfaExportDialog, {
   type PdfaExportAvailability,
 } from "./pdf/PdfVerifiedPdfaExportDialog";
@@ -188,10 +186,7 @@ import PdfFormFieldAuthoringDialog, {
   type PdfFormFieldDialogSection,
 } from "./pdf/PdfFormFieldAuthoringDialog";
 import { type PdfFormFieldContextKind } from "./pdf/PdfFormFieldContextRibbon";
-import {
-  PdfRadioGroupOptionsDialog,
-  type PdfRadioGroupOptionsApplyValue,
-} from "./pdf/PdfRadioGroupOptionsDialog";
+import { type PdfRadioGroupOptionsApplyValue } from "./pdf/PdfRadioGroupOptionsDialog";
 import PdfXfaGuardDialog from "./pdf/PdfXfaGuardDialog";
 import {
   type PdfEditRibbonCommand,
@@ -201,15 +196,10 @@ import PdfDecorationDialog, {
 import {
   type PdfCommentRibbonCommand,
 } from "./pdf/PdfCommentRibbonTab";
-import PdfReadAloudSettingsDialog, {
-  type PdfReadAloudSettings,
-  type PdfSpeechVoiceOption,
-} from "./pdf/PdfReadAloudSettingsDialog";
+import { type PdfReadAloudSettings, type PdfSpeechVoiceOption } from "./pdf/PdfReadAloudSettingsDialog";
 import PdfCompressSettingsDialog, {
   type PdfCompressPreset,
 } from "./pdf/PdfCompressSettingsDialog";
-import PdfFormDataExportDialog from "./pdf/PdfFormDataExportDialog";
-import PdfBatchPrintDialog from "./pdf/PdfBatchPrintDialog";
 import {
   type PdfFeaturedCommand,
 } from "./pdf/PdfFeaturedRibbonTab";
@@ -361,8 +351,8 @@ import type {
 } from "@/lib/pdf/form-field-delete";
 // The form planners, candidate builders and writers run on the engine host
 
-import { createAuthoredCheckBoxCandidate, createAuthoredDropdownCandidate, createAuthoredListBoxCandidate, createAuthoredNavigationButtonCandidate, createAuthoredPrintButtonCandidate, createAuthoredRadioGroupCandidate, createAuthoredResetButtonCandidate, createAuthoredSignatureFieldCandidate, createAuthoredTextFieldCandidate, createAuthoredViewButtonCandidate, createAuthoredSaveButtonCandidate, createAuthoredGoToPageButtonCandidate, createAuthoredWebLinkButtonCandidate, createExistingPdfActionButtonFieldEditPlan, createExistingPdfCheckboxFieldEditPlan, createExistingPdfDropdownFieldEditPlan, createExistingPdfFormFieldDeletePlan, createExistingPdfListBoxFieldEditPlan, createExistingPdfSignatureFieldEditPlan, createExistingPdfTextFieldEditPlan, createFormFieldsPlan, isPdfActionButtonFieldKind, matchesCreateFormFieldsPlan, preflightPdfFormPlan, writePdfFormPlan } from "../../../lib/pdf/remote/pdf-forms";
-import { NATIVE_PDF_FORM_AUTHORING_SCHEMA_VERSION, NATIVE_PDF_FORM_IMAGE_SCHEMA_VERSION, NATIVE_PDF_FORM_GROUP_PROPERTIES_SCHEMA_VERSION, NATIVE_PDF_RADIO_GROUP_OPTIONS_SCHEMA_VERSION, NATIVE_PDF_FORM_WIDGET_GEOMETRY_SCHEMA_VERSION, isNativePdfFormFieldKind, isNativePdfFormExportValue, nativePdfFormWidgetExpectedIdentity, type ExistingFormField, type NativePdfFormFieldGroupExpectedIdentity, type NativePdfFormWidgetAppearanceStyle } from "../../../lib/pdf/form-field-authoring";
+import { createExistingPdfActionButtonFieldEditPlan, createExistingPdfCheckboxFieldEditPlan, createExistingPdfDropdownFieldEditPlan, createExistingPdfFormFieldDeletePlan, createExistingPdfListBoxFieldEditPlan, createExistingPdfSignatureFieldEditPlan, createExistingPdfTextFieldEditPlan, createFormFieldsPlan, isPdfActionButtonFieldKind, matchesCreateFormFieldsPlan, preflightPdfFormPlan, writePdfFormPlan } from "../../../lib/pdf/remote/pdf-forms";
+import { NATIVE_PDF_FORM_AUTHORING_SCHEMA_VERSION, NATIVE_PDF_FORM_IMAGE_SCHEMA_VERSION, NATIVE_PDF_FORM_GROUP_PROPERTIES_SCHEMA_VERSION, NATIVE_PDF_FORM_WIDGET_GEOMETRY_SCHEMA_VERSION, isNativePdfFormFieldKind, isNativePdfFormExportValue, nativePdfFormWidgetExpectedIdentity, type ExistingFormField, type NativePdfFormFieldGroupExpectedIdentity, type NativePdfFormWidgetAppearanceStyle } from "../../../lib/pdf/form-field-authoring";
 import {
   flagOnlyFormFieldEdit,
   nativeFormFieldSpec,
@@ -473,13 +463,7 @@ import {
   type SpeechStatus,
   type SpeechUtteranceLike,
 } from "../../../lib/pdf/speech";
-import {
-  createDefaultPdfReadAloudPreferences,
-  loadPdfReadAloudPreferences,
-  pdfSpeechVoiceMatchesLanguage,
-  resolvePdfReadAloudLanguage,
-  savePdfReadAloudPreferences,
-} from "../../../lib/pdf/read-aloud-preferences";
+import { createDefaultPdfReadAloudPreferences, loadPdfReadAloudPreferences, pdfSpeechVoiceMatchesLanguage, resolvePdfReadAloudLanguage } from "../../../lib/pdf/read-aloud-preferences";
 import { XFDF_MAX_FILE_BYTES, fromXfdf, matchXfdfDocument, type ParsedXfdf } from "@mrnote/core/web/lib/pdf/xfdf.ts";
 import {
   canRoundTripShapeThroughXfdf,
@@ -624,7 +608,7 @@ import { getApiHttpBaseUrl } from "@mrnote/core/web/lib/env.ts";
 import {
   isDocxExportNeedsConnectionError,
   requestServerDocx,
-} from "@mrnote/core/web/lib/document-export/docx-server-export.ts";
+} from "@mrnote/docs/web/lib/document-export/docx-server-export.ts";
 import {
   downloadBlobFile,
   downloadTextFile,
@@ -853,10 +837,7 @@ import {
   type OutlineNode,
   type OutlineSectionEntry,
 } from "@mrnote/core/web/lib/pdf/outline.ts";
-import PdfPropertiesDialog, {
-  type PdfAccessibilityIssue,
-  type PdfDocumentPropertiesFacts,
-} from "./pdf/PdfPropertiesDialog";
+import { type PdfAccessibilityIssue, type PdfDocumentPropertiesFacts } from "./pdf/PdfPropertiesDialog";
 import {
   EMPTY_PDF_METADATA,
   mergePdfMetadataSources,
@@ -1126,7 +1107,7 @@ import {
   splitPdf,
   type MergeSource,
 } from "../../../lib/pdf/merge-split";
-import { buildPdfBatchPrintDocument, type PdfBatchPrintItem } from "../../../lib/pdf/batch-print";
+import { type PdfBatchPrintItem } from "@/lib/pdf/batch-print";
 import {
   MAX_SPLIT_PAGES,
   bookmarkSplitGroups,
@@ -1318,22 +1299,12 @@ import {
   semanticAppearanceRouteKey,
   semanticAppearanceTargetsKey,
 } from "./pdf/viewer/semanticAppearance";
-import { PDF_READER_DOWNLOAD_ORIGINAL_COMMAND, PDF_READER_DOWNLOAD_CURRENT_COMMAND, PDF_READER_DOWNLOAD_ANNOTATED_COMMAND, PDF_READER_DOWNLOAD_FILLABLE_COMMAND, PDF_READER_DOWNLOAD_EDITABLE_ANNOTATIONS_COMMAND, PDF_READER_DOWNLOAD_ARCHIVAL_COMMAND, PDF_READER_DOWNLOAD_PROPERTIES_COMMAND, PDF_READER_PRINT_COMMAND, PDF_READER_APPLY_REDACTIONS_COMMAND, PDF_READER_EXTRACT_COMMAND, PDF_READER_SPLIT_COMMAND, PDF_READER_MERGE_COMMAND, PDF_READER_INSERT_FILE_COMMAND, PDF_READER_COMPRESS_LOSSLESS_COMMAND, PDF_READER_COMPRESS_LOSSY_COMMAND, PDF_READER_CREATE_FORM_FIELDS_COMMAND, PDF_READER_EDIT_EXISTING_FORM_FIELD_COMMAND, PDF_READER_DELETE_EXISTING_FORM_FIELD_COMMAND, PDF_READER_RESET_FORM_VALUES_COMMAND, PDF_READER_IMPORT_FORM_DATA_COMMAND, PDF_READER_NATIVE_ACTIVATION_COMMANDS, type PendingPdfReaderActivation } from "./pdf/viewer/readerCommands";
+import { PDF_READER_DOWNLOAD_ORIGINAL_COMMAND, PDF_READER_DOWNLOAD_CURRENT_COMMAND, PDF_READER_DOWNLOAD_ANNOTATED_COMMAND, PDF_READER_DOWNLOAD_FILLABLE_COMMAND, PDF_READER_DOWNLOAD_EDITABLE_ANNOTATIONS_COMMAND, PDF_READER_DOWNLOAD_ARCHIVAL_COMMAND, PDF_READER_PRINT_COMMAND, PDF_READER_APPLY_REDACTIONS_COMMAND, PDF_READER_EXTRACT_COMMAND, PDF_READER_SPLIT_COMMAND, PDF_READER_MERGE_COMMAND, PDF_READER_INSERT_FILE_COMMAND, PDF_READER_COMPRESS_LOSSLESS_COMMAND, PDF_READER_COMPRESS_LOSSY_COMMAND, PDF_READER_CREATE_FORM_FIELDS_COMMAND, PDF_READER_EDIT_EXISTING_FORM_FIELD_COMMAND, PDF_READER_DELETE_EXISTING_FORM_FIELD_COMMAND, PDF_READER_RESET_FORM_VALUES_COMMAND, PDF_READER_IMPORT_FORM_DATA_COMMAND, PDF_READER_NATIVE_ACTIVATION_COMMANDS, type PendingPdfReaderActivation } from "./pdf/viewer/readerCommands";
 import {
   type PdfVerifiedPdfaCapability,
   parsePdfVerifiedPdfaCapability,
 } from "./pdf/viewer/verifiedPdfa";
-import {
-  PDF_DANGEROUS_ACTION_SAFE_COPY_MAX_OUTPUT_BYTES,
-  type PdfDangerousActionInspection,
-  parsePdfDangerousActionInspection,
-  pdfCompressionEvidenceSourceKey,
-  resolvePdfDangerousActionSourceCustody,
-  appendPdfDangerousActionSourceQuery,
-} from "./pdf/viewer/dangerousActions";
-import {
-  snapshotPdfMetadataCommandPayload,
-} from "./pdf/viewer/metadataCommand";
+import { type PdfDangerousActionInspection, parsePdfDangerousActionInspection, pdfCompressionEvidenceSourceKey, resolvePdfDangerousActionSourceCustody, appendPdfDangerousActionSourceQuery } from "./pdf/viewer/dangerousActions";
 import {
   MIN_SCALE,
   MAX_SCALE,
@@ -2068,7 +2039,7 @@ type PreparedNativeTextOfPage = Readonly<{ pageNumber: number; scale: number; ro
   /** The page's own layer is this revision's: nothing goes on the page. */
   kept?: boolean }>;
 
-export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewDownloadUrl, deterministicPreview = false, ribbonQuickActions, ribbonActionRail, documentFind, nativeTextOpener, ribbonQuickActionTail, ribbonQuickOverflowOnlyTail, ribbonSaveStatus, ribbonSaveStatusLabel, annotationContextWritable = true, nativeAnnotationWriteGeneration = "standalone", ribbonInsertPageCommands, onPageOrganizerApply, managedOutline, onManagedOutlineMutation, onSourceOutlineEdit, managedOutlineBusy, managedOutlineDisabledReason, onDownload, onDownloadSavedRevision, onGuestExportRequest, preferAnnotatedDownload, annotatedDownloadEnabled = true, onReaderExportEditsChange, onReaderExportEditCountChange, onVisualMaskOutputRiskChange, nativeFormWriteAuthority, nativeFormFields, onNativeFormFieldChange, onNativeFormAuthoringChange, nativeFormAuthoringDisabledReason, onNativeFormPendingChange, onCopilotFormInventory, onNativeFormFlushReady, downloadWithAnnotationsRequestId, downloadWithAnnotationsPolicyAction, onDownloadWithAnnotationsSettled, onPageChange, onCurrentInsertedPageChange, onNavigationPanelChange, navigationPanelCloseRequest, annotationListHost, onNativePageRotationsChange, notebookId, pageId, livePageId, liveTransformRoom, ocrSourcePageId, initialPage, initialPageIntentGeneration, navigateToPageRequest, showPageSlotRequest, onRequestPageSummary, onPageTextChange, onNativeListTextSelectionChange, onPlacedAnnotationSelectionChange, onNativeListTextExtraTargetsChange, onNativeTextAnnotationsChange, onNativeFreeTextCandidatePage, onNativeTextMarkupAnnotationsChange, onNativeInkAnnotationsChange, onManagedInkUpsert, onManagedInkDelete, onManagedInkErase, liveInkAwareness = null, taskPaneDocks = null, nativeSourceInkStrokes = EMPTY_NATIVE_SOURCE_INK_STROKES, onNativeSourceInkDelete, onNativeSourceInkTransform, onNativeSourceInkStyle, onNativeShapeAnnotationsChange, onManagedShapeUpsert, onManagedAreaHighlightUpsert, onManagedShapeDelete, nativeShapes, heldNativeAnnotations: heldNativeAnnotationsProp = null, heldManagedInkStrokes, discardedReaderRowIds, onManagedMeasurementUpsert, onManagedMeasurementDelete, nativeMeasurements, onManagedSignatureUpsert, onManagedSignatureDelete, nativeSignatures, managedSignatureAppearanceReady = false, onNativeStampAnnotationsChange, onManagedStampUpsert, onNativeImageInsert, onManagedStampDelete, nativeStamps, onManagedLinkUpsert, onManagedLinkDelete, nativeLinks, onNativeLinkAnnotationsChange, nativeSourceLinks, nativeSourceLinkDisabledReason, onNativeSourceLinkUpsert, onNativeSourceLinkTransform, onNativeSourceLinkDelete, onNativeSourceLinksDeleteAll, nativeSourceStamps, onNativeSourceStampTransform, onNativeSourceStampDelete, onNativeFreeTextAnnotationsChange, nativeSourceFreeTexts, onNativeSourceFreeTextTransform, onNativeSourceFreeTextDelete, onNativeSourceFreeTextEdit, managedStampAppearanceReady = false, nativeSourceShapes, onNativeSourceShapeTransform, onNativeSourceShapeDelete, onNativeSourceShapeStyle, managedShapeAppearanceReady = false, nativeTextMarkups, nativeSourceTextMarkups = EMPTY_NATIVE_SOURCE_TEXT_MARKUPS, onNativeSourceTextMarkupSelect, nativeSourceTextNotes = EMPTY_NATIVE_SOURCE_TEXT_NOTES, onNativeSourceTextNoteSelect, onManagedTextMarkupUpsert, onManagedTextMarkupUpsertGroups, onManagedTextMarkupUpsertMany, onManagedTextMarkupDelete, onManagedProofingUpsert, onManagedNoteUpsert, onManagedNoteDelete, onManagedCommentBatchDelete, managedTextMarkupAppearanceReady = false, onPageTextBoxesChange, documentTitle, dataItemId, engineReaderResourceId = null, nativePlanners: hostNativePlanners, annotationReadScope, sourceDocumentRevision: savedDocumentRevision, onOrdinaryNoteSourcePrepareReady, sourceByteGenerationKey: savedByteGenerationKey, sourceSha256: savedSha256, workingSource, documentPageStructure, onDocumentPageStructureRejected, onDocumentPageMapChange, nativeTextSourceHandoff, initialRibbonTab, onRibbonTabChange, entryPainting, onFirstVisiblePaint, onPageSourcePainted, onSourceRiskSnapshotChange, lossyCompressionSource, lossyCompressionWritable = false, pageRotations, deletedPages, insertedPages, pageMoves, textBoxEdits, nativeTextBoxLayouts, readNativeKeptTextBlocks, cropBoxes, documentDecorations, documentDecorationsNative = false, documentDecorationsNativeAppearanceReady = false, onDocumentDecorationsChange, onDocumentDecorationsDraftDiscard, nativePageLabelRanges, onNativePageLabelRangesApply, onUploadWatermarkImage, nativeFileAttachments = [], onNativeFileAttachmentUpsert, onNativeFileAttachmentMove, onNativeFileAttachmentDelete, nativeFileAttachmentBusy = false, nativeFileAttachmentDisabledReason, onNativePageImport, onNativePageReplace, nativePageImportBusy = false, nativePageImportDisabledReason, nativePageReplaceDisabledReason, nativeInkStrokes, nativeImageOverlays, resolveNativeImageOverlayUrl, resolveNativeImageOverlayBytes, enablePageOps = false, onEditContent, onPrepareNativeTextEdit, onWarmNativeTextEdit, nativeTextWarmHold = false, onNativeVectorGeometryCommit, onNativeImageActivate, onNativePictureCommit, onNativePictureOriginal, onNativePictureAltRead, onNativePictureOriginRead, onNativeVectorDeleteCommit, onNativeVectorDuplicateCommit, onNativeVectorReorderCommit, onNativeVectorReorderCommitAll, onNativeContentReorderCommit, onNativeVectorStyleCommitAll, onNativeVectorDeleteCommitAll, onNativeVectorGeometryCommitAll, onNativeVectorMergeCommit, onNativeVectorDuplicateCommitAll, onNativeVectorPasteContent, nativeVectorGeometryBusy = false, nativeVectorGeometryDisabledReason, nativeVectorWriteSettling = false, nativeDocumentWriteBusy = false, nativeVectorWriterSourceSha256 = null, nativeVectorProvisionalTargetSinkRef, nativeVectorPageShapeBoxesRef, nativeGestureWritePendingRef, nativeCachedPaintShowRef, onNativeVectorSelectionActiveChange, onNativeVectorStyleCommit, nativeVectorStyleBusy = false, nativeVectorStyleDisabledReason, nativeTextEditingActive = false, onNativeTextContinuationCaptureChange, onNativeTextQueuedOpen, onNativeTextKeptDrag, onNativeTextEditModeActiveChange, contentEditExitSignal = 0, lineAnnotateRequest = null, contentEditEnterSignal = 0, handToolSignal = 0, insertTextSignal = 0, onContentEditModeExit, onCurrentAuthorChange, editContentDisabledReason, editContentModeDisabledReason, editContentModeDisabledTransient = false, editContentBusy = false, onInsertText, onInsertBlankPageBeside, textBoxAuthoring, tableAuthoring, chartAuthoring, nativeImageInsertRequestId = 0, onCropPage, onPageSizeApply, onTaggedTextApply, taggedTextDisabledReason, taggedTextBusy=false, heldTaggedTextValues, heldPageLabelRanges, heldPageGeometries: heldPageGeometriesProp, heldPageImports, pageSizeOriginalSizes, pageSizeDisabledReason, onEraseRegion, onSplitPages, splitPageDisabledReason, onOpenPageBackground, pageBackgroundOpen = false, pageBackgroundBusy = false, pageBackgroundDisabledReason, onCreateEditableVersion, onConvertToSpreadsheet, onConvertToPresentation, onOpenOfficeConversion, onOfficeConversionPrepare, officeProjectionDisabledReason, isCreatingEditableVersion, rangeSource }: PDFViewerProps) {
+export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewDownloadUrl, deterministicPreview = false, ribbonQuickActions, ribbonActionRail, documentFind, nativeTextOpener, ribbonQuickActionTail, ribbonQuickOverflowOnlyTail, ribbonSaveStatus, ribbonSaveStatusLabel, annotationContextWritable = true, nativeAnnotationWriteGeneration = "standalone", ribbonInsertPageCommands, onPageOrganizerApply, managedOutline, onManagedOutlineMutation, onSourceOutlineEdit, managedOutlineBusy, managedOutlineDisabledReason, onDownload, onDownloadSavedRevision, onGuestExportRequest, preferAnnotatedDownload, annotatedDownloadEnabled = true, onReaderExportEditsChange, onReaderExportEditCountChange, onVisualMaskOutputRiskChange, nativeFormWriteAuthority, nativeFormFields, onNativeFormFieldChange, onNativeFormAuthoringChange, nativeFormAuthoringDisabledReason, onNativeFormPendingChange, onCopilotFormInventory, onNativeFormFlushReady, downloadWithAnnotationsRequestId, downloadWithAnnotationsPolicyAction, onDownloadWithAnnotationsSettled, onPageChange, onCurrentInsertedPageChange, onNavigationPanelChange, navigationPanelCloseRequest, annotationListHost, onNativePageRotationsChange, notebookId, pageId, livePageId, liveTransformRoom, ocrSourcePageId, initialPage, initialPageIntentGeneration, navigateToPageRequest, showPageSlotRequest, onRequestPageSummary, onPageTextChange, onNativeListTextSelectionChange, onPlacedAnnotationSelectionChange, onNativeListTextExtraTargetsChange, onNativeTextAnnotationsChange, onNativeFreeTextCandidatePage, onNativeTextMarkupAnnotationsChange, onNativeInkAnnotationsChange, onManagedInkUpsert, onManagedInkDelete, onManagedInkErase, liveInkAwareness = null, taskPaneDocks = null, nativeSourceInkStrokes = EMPTY_NATIVE_SOURCE_INK_STROKES, onNativeSourceInkDelete, onNativeSourceInkTransform, onNativeSourceInkStyle, onNativeShapeAnnotationsChange, onManagedShapeUpsert, onManagedAreaHighlightUpsert, onManagedShapeDelete, nativeShapes, heldNativeAnnotations: heldNativeAnnotationsProp = null, heldManagedInkStrokes, discardedReaderRowIds, onManagedMeasurementUpsert, onManagedMeasurementDelete, nativeMeasurements, onManagedSignatureUpsert, onManagedSignatureDelete, nativeSignatures, managedSignatureAppearanceReady = false, onNativeStampAnnotationsChange, onManagedStampUpsert, onNativeImageInsert, onManagedStampDelete, nativeStamps, onManagedLinkUpsert, onManagedLinkDelete, nativeLinks, onNativeLinkAnnotationsChange, nativeSourceLinks, nativeSourceLinkDisabledReason, onNativeSourceLinkUpsert, onNativeSourceLinkTransform, onNativeSourceLinkDelete, onNativeSourceLinksDeleteAll, nativeSourceStamps, onNativeSourceStampTransform, onNativeSourceStampDelete, onNativeFreeTextAnnotationsChange, nativeSourceFreeTexts, onNativeSourceFreeTextTransform, onNativeSourceFreeTextDelete, onNativeSourceFreeTextEdit, managedStampAppearanceReady = false, nativeSourceShapes, onNativeSourceShapeTransform, onNativeSourceShapeDelete, onNativeSourceShapeStyle, managedShapeAppearanceReady = false, nativeTextMarkups, nativeSourceTextMarkups = EMPTY_NATIVE_SOURCE_TEXT_MARKUPS, onNativeSourceTextMarkupSelect, nativeSourceTextNotes = EMPTY_NATIVE_SOURCE_TEXT_NOTES, onNativeSourceTextNoteSelect, onManagedTextMarkupUpsert, onManagedTextMarkupUpsertGroups, onManagedTextMarkupUpsertMany, onManagedTextMarkupDelete, onManagedProofingUpsert, onManagedNoteUpsert, onManagedNoteDelete, onManagedCommentBatchDelete, managedTextMarkupAppearanceReady = false, onPageTextBoxesChange, documentTitle, dataItemId, engineReaderResourceId = null, nativePlanners: hostNativePlanners, annotationReadScope, sourceDocumentRevision: savedDocumentRevision, onOrdinaryNoteSourcePrepareReady, sourceByteGenerationKey: savedByteGenerationKey, sourceSha256: savedSha256, workingSource, documentPageStructure, onDocumentPageStructureRejected, onDocumentPageMapChange, nativeTextSourceHandoff, initialRibbonTab, onRibbonTabChange, entryPainting, onFirstVisiblePaint, onPageSourcePainted, onSourceRiskSnapshotChange, lossyCompressionSource, lossyCompressionWritable = false, pageRotations, deletedPages, insertedPages, pageMoves, textBoxEdits, nativeTextBoxLayouts, readNativeKeptTextBlocks, cropBoxes, documentDecorations, documentDecorationsNative = false, documentDecorationsNativeAppearanceReady = false, onDocumentDecorationsChange, onDocumentDecorationsDraftDiscard, nativePageLabelRanges, onNativePageLabelRangesApply, onUploadWatermarkImage, nativeFileAttachments = [], onNativeFileAttachmentUpsert, onNativeFileAttachmentMove, onNativeFileAttachmentDelete, nativeFileAttachmentBusy = false, nativeFileAttachmentDisabledReason, onNativePageImport, onNativePageReplace, nativePageImportBusy = false, nativePageImportDisabledReason, nativePageReplaceDisabledReason, nativeInkStrokes, nativeImageOverlays, resolveNativeImageOverlayUrl, resolveNativeImageOverlayBytes, enablePageOps = false, onEditContent, onPrepareNativeTextEdit, onWarmNativeTextEdit, nativeTextWarmHold = false, onNativeVectorGeometryCommit, onNativeImageActivate, onNativePictureCommit, onNativePictureOriginal, onNativePictureAltRead, onNativePictureOriginRead, onNativeVectorDeleteCommit, onNativeVectorDuplicateCommit, onNativeVectorReorderCommit, onNativeVectorReorderCommitAll, onNativeContentReorderCommit, onNativeVectorStyleCommitAll, onNativeVectorDeleteCommitAll, onNativeVectorGeometryCommitAll, onNativeVectorMergeCommit, onNativeVectorDuplicateCommitAll, onNativeVectorPasteContent, nativeVectorGeometryBusy = false, nativeVectorGeometryDisabledReason, nativeVectorWriteSettling = false, nativeDocumentWriteBusy = false, nativeVectorWriterSourceSha256 = null, nativeVectorProvisionalTargetSinkRef, nativeVectorPageShapeBoxesRef, nativeGestureWritePendingRef, nativeCachedPaintShowRef, onNativeVectorSelectionActiveChange, onNativeVectorStyleCommit, nativeVectorStyleBusy = false, nativeVectorStyleDisabledReason, nativeTextEditingActive = false, onNativeTextContinuationCaptureChange, onNativeTextQueuedOpen, onNativeTextKeptDrag, onNativeTextEditModeActiveChange, contentEditExitSignal = 0, lineAnnotateRequest = null, contentEditEnterSignal = 0, handToolSignal = 0, insertTextSignal = 0, onContentEditModeExit, onCurrentAuthorChange, editContentDisabledReason, editContentModeDisabledReason, editContentModeDisabledTransient = false, editContentBusy = false, onInsertText, onInsertBlankPageBeside, textBoxAuthoring, tableAuthoring, chartAuthoring, nativeImageInsertRequestId = 0, onCropPage, onPageSizeApply, onTaggedTextApply, heldPageLabelRanges, heldPageGeometries: heldPageGeometriesProp, heldPageImports, pageSizeOriginalSizes, pageSizeDisabledReason, onEraseRegion, onSplitPages, splitPageDisabledReason, onOpenPageBackground, pageBackgroundOpen = false, pageBackgroundBusy = false, pageBackgroundDisabledReason, onCreateEditableVersion, onConvertToSpreadsheet, onConvertToPresentation, onOpenOfficeConversion, onOfficeConversionPrepare, officeProjectionDisabledReason, isCreatingEditableVersion, rangeSource }: PDFViewerProps) {
   // The planners and writers this viewer's engine calls go through: the
   // editing host's own page, else a reader's (its head is registered under
   // the reader page), else none (answered only for bytes one page holds).
@@ -4648,13 +4619,8 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     null,
   );
   const printPreflightTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const [batchPrintOpen, setBatchPrintOpen] = useState(false);
   const batchPrintOpenRef = useRef(false);
   batchPrintOpenRef.current = false;
-  const [batchPrintSeed, setBatchPrintSeed] =
-    useState<PdfBatchPrintItem | null>(null);
-  const batchPrintTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const batchPrintGenerationRef = useRef(1);
   // Managed document decorations are one typed authority shared by editor
   // preview, host persistence and flattened output. Standalone readers retain
   // a local model; native PDF pages pass the controlled persistence callback.
@@ -4814,8 +4780,6 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
   const [taggedTextInventory,setTaggedTextInventory]=useState<{
     sourceSha256:string;targets:readonly PdfTaggedTextTarget[];failed:boolean;
   }|null>(null);
-  const propertiesDialogReturnFocusRef =
-    useRef<HTMLButtonElement | null>(null);
   const [docMetadata, setDocMetadata] = useState<PdfMetadata>({
     ...EMPTY_PDF_METADATA,
   });
@@ -4831,7 +4795,6 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     readonly issues: readonly PdfAccessibilityIssue[];
   } | null>(null);
   const [accessibilityAuditBusy, setAccessibilityAuditBusy] = useState(false);
-  const propertiesSaveInFlightRef = useRef(false);
   // USER-created bookmarks (Acrobat "Add Bookmark"): the reader marks the
   // current page with a short label so they can jump back. Unlike the embedded
   // outline above (read-only, from the file), these are PERSISTED per data-item
@@ -5442,9 +5405,6 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     useState(false);
   const [dangerousActionSafeCopyError, setDangerousActionSafeCopyError] =
     useState<string | null>(null);
-  const dangerousActionSafeCopyTriggerRef = useRef<HTMLButtonElement | null>(
-    null,
-  );
   const dangerousActionSafeCopyAbortRef = useRef<AbortController | null>(null);
   const dangerousActionSafeCopyInFlightRef = useRef(false);
   const dangerousActionSafeCopySessionGenerationRef = useRef(1);
@@ -28078,73 +28038,6 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
       }),
     [pages, resolvedPageRotation],
   );
-  const documentPropertiesFacts = useMemo<PdfDocumentPropertiesFacts>(() => {
-    const sourceProfile = matchedSourceRiskSnapshot?.profile;
-    return {
-      formatVersion: docFormatVersion,
-      pageCount: pages.length,
-      pageSizes: pages.map((page) => {
-        const rotation = resolvedPageRotation(page.pageNumber);
-        return rotation === 90 || rotation === 270
-          ? { widthPt: page.height, heightPt: page.width }
-          : { widthPt: page.width, heightPt: page.height };
-      }),
-      formFieldCount: allFormFields.length,
-      managedAttachmentCount: placedAttachments.length,
-      optionalContentGroupCount: ocgLayers.length,
-      encryption: sourceProfile?.encryption ?? "unknown",
-      certificateSignatures:
-        sourceProfile?.certificateSignatures ?? "unknown",
-      attachments:
-        placedAttachments.length > 0
-          ? "present"
-          : (sourceProfile?.attachments ?? "unknown"),
-      xfa: sourceProfile?.xfa ?? "unknown",
-      taggedStructure: sourceProfile?.taggedStructure ?? "unknown",
-      pdfaClaim: sourceProfile?.pdfaClaim ?? "unknown",
-      accessibilityAudit: accessibilityAuditBusy
-        ? {
-            status: "checking",
-            pageCount: pages.length,
-            untaggedPageCount: 0,
-            incompleteReadingOrderPageCount: 0,
-            semanticObjectCount: 0,
-            missingAltTextCount: 0,
-            issues: [],
-          }
-        : accessibilityAudit?.document === pdfDoc
-          ? {
-              status: accessibilityAudit.failed ? "failed" : "ready",
-              pageCount: accessibilityAudit.pageCount,
-              untaggedPageCount: accessibilityAudit.untaggedPageCount,
-              incompleteReadingOrderPageCount:
-                accessibilityAudit.incompleteReadingOrderPageCount,
-              semanticObjectCount: accessibilityAudit.semanticObjectCount,
-              missingAltTextCount: accessibilityAudit.missingAltTextCount,
-              issues: accessibilityAudit.issues,
-            }
-          : {
-              status: "not-checked",
-              pageCount: pages.length,
-              untaggedPageCount: 0,
-              incompleteReadingOrderPageCount: 0,
-              semanticObjectCount: 0,
-              missingAltTextCount: 0,
-              issues: [],
-            },
-    };
-  }, [
-    allFormFields.length,
-    accessibilityAudit,
-    accessibilityAuditBusy,
-    docFormatVersion,
-    matchedSourceRiskSnapshot?.profile,
-    ocgLayers.length,
-    pages,
-    pdfDoc,
-    placedAttachments.length,
-    resolvedPageRotation,
-  ]);
   const visibleFormCapability = useMemo(() => {
     const visible = allFormFields.filter(
       (field) =>
@@ -32108,16 +32001,6 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     url,
   ]);
 
-  const applyFormDataExportFormat = useCallback(
-    (format: PdfFormDataFormat) => {
-      formDataExportFormatRef.current = format;
-      setFormDataExportFormat(format);
-      setFormDataExportDialogOpen(false);
-      queueMicrotask(() => void handleExportFormData(format));
-    },
-    [handleExportFormData],
-  );
-
   // Reset form data only through the typed native AcroForm writer. A reader
   // without that authority is explicitly disabled; it must never manufacture
   // a flattened derivative that looks like a current-document reset.
@@ -32977,65 +32860,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     [setDetectNoticeState],
   );
   const detectedFieldsCommandRef = useRef<HTMLButtonElement | null>(null);
-  const authoredTextFieldCommandRef = useRef<HTMLButtonElement | null>(null);
-  const authoredCheckBoxCommandRef = useRef<HTMLButtonElement | null>(null);
-  const authoredRadioGroupCommandRef = useRef<HTMLButtonElement | null>(null);
-  const authoredSignatureFieldCommandRef = useRef<HTMLButtonElement | null>(
-    null,
-  );
-  const authoredResetButtonCommandRef = useRef<HTMLButtonElement | null>(null);
-  const authoredPrintButtonCommandRef = useRef<HTMLButtonElement | null>(null);
-  const authoredNavigationButtonCommandRef =
-    useRef<HTMLButtonElement | null>(null);
-  const authoredViewButtonCommandRef = useRef<HTMLButtonElement | null>(null);
-  const authoredSaveButtonCommandRef = useRef<HTMLButtonElement | null>(null);
-  const authoredGoToPageButtonCommandRef =
-    useRef<HTMLButtonElement | null>(null);
-  const authoredWebLinkButtonCommandRef =
-    useRef<HTMLButtonElement | null>(null);
-  const authoredImageFieldCommandRef = useRef<HTMLButtonElement | null>(null);
-  const authoredDropdownCommandRef = useRef<HTMLButtonElement | null>(null);
-  const authoredListBoxCommandRef = useRef<HTMLButtonElement | null>(null);
-  const [authoredFieldKind, setAuthoredFieldKind] =
-    useState<PdfAuthoredFormFieldKind>("text");
   const [authoredFieldDialogOpen, setAuthoredFieldDialogOpen] = useState(false);
-  const authoredFormFieldCommandRef = useCallback(
-    (kind: PdfAuthoredFormFieldKind) => {
-      switch (kind) {
-        case "checkbox":
-          return authoredCheckBoxCommandRef;
-        case "radio":
-          return authoredRadioGroupCommandRef;
-        case "signature":
-          return authoredSignatureFieldCommandRef;
-        case "dropdown":
-          return authoredDropdownCommandRef;
-        case "listbox":
-          return authoredListBoxCommandRef;
-        case "resetButton":
-          return authoredResetButtonCommandRef;
-        case "printButton":
-          return authoredPrintButtonCommandRef;
-        case "navigationButton":
-          return authoredNavigationButtonCommandRef;
-        case "viewButton":
-          return authoredViewButtonCommandRef;
-        case "saveButton":
-          return authoredSaveButtonCommandRef;
-        case "goToPageButton":
-          return authoredGoToPageButtonCommandRef;
-        case "webLinkButton":
-          return authoredWebLinkButtonCommandRef;
-        case "imageField":
-          return authoredImageFieldCommandRef;
-        case "text":
-          return authoredTextFieldCommandRef;
-      }
-      const exhaustiveKind: never = kind;
-      return exhaustiveKind;
-    },
-    [],
-  );
   const existingTextFieldEditCommandRef = useRef<HTMLButtonElement | null>(
     null,
   );
@@ -34501,199 +34326,6 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     },
     [blockUnsafeFormMutation, commitImageFieldPicture, t],
   );
-  const handleApplyAuthoredFormField = useCallback(
-    async (selection: PdfAuthoredFormFieldSelection) => {
-      if (blockUnsafeFormMutation()) return;
-      if (nativeFormMode) {
-        const authority = nativeFormWriteAuthorityRef.current;
-        const spec = nativeFormFieldSpec(selection);
-        const commit = nativeFormAuthoringChangeRef.current;
-        if (!authority?.writable || !commit) {
-          setDetectNotice(
-            authority?.reason ??
-              t("pdf.viewer.nativePdfFieldAuthoringAuthority"),
-          );
-          return;
-        }
-        if (!spec) {
-          setDetectNotice(
-            t("pdf.viewer.fieldKindCannotYetWritten"),
-          );
-          return;
-        }
-        const id = crypto.randomUUID();
-        const accepted = await Promise.resolve(
-          commit({
-            generation: authority.generation,
-            gestureId: id,
-            operation: {
-              schemaVersion: NATIVE_PDF_FORM_AUTHORING_SCHEMA_VERSION,
-              id,
-              operation: "create",
-              field: spec,
-            },
-          }),
-        ).catch(() => false);
-        if (accepted !== true) {
-          
-          // said as a missing receipt.
-          setDetectNotice(
-            typeof accepted === "string" && accepted
-              ? accepted
-              : t("pdf.viewer.fieldDidNotReceiveLossless"),
-          );
-          return;
-        }
-        setAuthoredFieldDialogOpen(false);
-        setDetectNotice(
-          t("pdf.viewer.createdOriginalPdf", { name: spec.name }),
-          "status",
-        );
-        requestAnimationFrame(() =>
-          authoredFormFieldCommandRef(selection.kind).current?.focus({ preventScroll: true }),
-        );
-        return;
-      }
-      if (selection.kind === "imageField") {
-        // Written by the notebook's native form writer only.
-        setDetectNotice(t("pdf.viewer.fieldKindCannotYetWritten"));
-        return;
-      }
-      const sourceIdentity = currentDetectedFieldSourceIdentityRef.current;
-      if (!sourceIdentity) {
-        setDetectNotice(
-          t("pdf.viewer.currentPdfSourceCannotUsed"),
-        );
-        return;
-      }
-      try {
-        const candidate = await (
-          selection.kind === "webLinkButton"
-            ? createAuthoredWebLinkButtonCandidate(
-                selection.draft,
-                selection.placement,
-                existingAuthoringFields,
-                selection.buttonLabel,
-                selection.buttonUrl,
-              )
-            : selection.kind === "goToPageButton"
-            ? createAuthoredGoToPageButtonCandidate(
-                selection.draft,
-                selection.placement,
-                existingAuthoringFields,
-                selection.buttonLabel,
-              )
-            : selection.kind === "saveButton"
-            ? createAuthoredSaveButtonCandidate(
-                selection.draft,
-                selection.placement,
-                existingAuthoringFields,
-                selection.buttonLabel,
-              )
-            : selection.kind === "viewButton"
-            ? createAuthoredViewButtonCandidate(
-                selection.draft,
-                selection.placement,
-                existingAuthoringFields,
-                selection.viewAction,
-                selection.buttonLabel,
-              )
-            : selection.kind === "navigationButton"
-            ? createAuthoredNavigationButtonCandidate(
-                selection.draft,
-                selection.placement,
-                existingAuthoringFields,
-                selection.navigationAction,
-                selection.buttonLabel,
-              )
-            : selection.kind === "printButton"
-              ? createAuthoredPrintButtonCandidate(
-                  selection.draft,
-                  selection.placement,
-                  existingAuthoringFields,
-                  selection.buttonLabel,
-                )
-              : selection.kind === "resetButton"
-                ? createAuthoredResetButtonCandidate(
-                    selection.draft,
-                    selection.placement,
-                    existingAuthoringFields,
-                    selection.buttonLabel,
-                  )
-                : selection.draft.kind === "checkbox"
-                  ? createAuthoredCheckBoxCandidate(
-                      selection.draft,
-                      selection.placement,
-                      existingAuthoringFields,
-                      selection.checked,
-                    )
-                  : selection.draft.kind === "radio"
-                    ? createAuthoredRadioGroupCandidate(
-                        selection.draft,
-                        selection.placement,
-                        existingAuthoringFields,
-                        selection.options,
-                        selection.selectedValue,
-                        selection.offToggleable,
-                      )
-                    : selection.draft.kind === "signature"
-                      ? createAuthoredSignatureFieldCandidate(
-                          selection.draft,
-                          selection.placement,
-                          existingAuthoringFields,
-                        )
-                      : selection.draft.kind === "dropdown"
-                        ? createAuthoredDropdownCandidate(
-                            selection.draft,
-                            selection.placement,
-                            existingAuthoringFields,
-                            selection.editable,
-                          )
-                        : selection.draft.kind === "listbox"
-                          ? createAuthoredListBoxCandidate(
-                              selection.draft,
-                              selection.placement,
-                              existingAuthoringFields,
-                              selection.selectedValues,
-                              selection.multiselect,
-                            )
-                          : createAuthoredTextFieldCandidate(
-                              selection.draft,
-                              selection.placement,
-                              existingAuthoringFields,
-                            )
-        );
-        detectedFieldCandidateSourceIdentityRef.current = sourceIdentity;
-        setFieldCandidates((current) => [...(current ?? []), candidate]);
-        setRejectedCandidates((current) => {
-          const next = new Set(current);
-          next.delete(candidate.name);
-          return next;
-        });
-        setAuthoredFieldDialogOpen(false);
-        setDetectNotice(
-          t("pdf.viewer.addedReviewPageThenCreate", { name: candidate.name }),
-          "status",
-        );
-        requestAnimationFrame(() =>
-          authoredFormFieldCommandRef(selection.kind).current?.focus({ preventScroll: true }),
-        );
-      } catch (error) {
-        setDetectNotice(
-          error instanceof Error
-            ? error.message
-            : t("pdf.viewer.unableAddFormField"),
-        );
-      }
-    },
-    [
-      authoredFormFieldCommandRef,
-      blockUnsafeFormMutation,
-      existingAuthoringFields,
-      t,
-      nativeFormMode,
-    ],
-  );
   const handleCancelDetectedFields = useCallback(() => {
     detectedFieldCandidateSourceIdentityRef.current = null;
     detectedFieldOutputGenerationRef.current += 1;
@@ -34842,86 +34474,6 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
       requestOutputConsent,
       savePolicyV1,
     ],
-  );
-  // 管理角色: each changed role's fields edited in turn, through the field
-  // writer the properties dialog uses (a role lives on its fields).
-  const [formRolesDialogOpen, setFormRolesDialogOpen] = useState(false);
-  const [formRolesBusy, setFormRolesBusy] = useState(false);
-  const [formRolesError, setFormRolesError] = useState<string | null>(null);
-  const formRoleFieldCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    const seen = new Set<string>();
-    for (const fields of formFields.values()) {
-      for (const field of fields) {
-        const role = formFieldRoles.get(field.id);
-        if (!role || seen.has(field.name)) continue;
-        seen.add(field.name);
-        counts.set(role.name, (counts.get(role.name) ?? 0) + 1);
-      }
-    }
-    return counts;
-  }, [formFieldRoles, formFields]);
-  const applyFormRoleChanges = useCallback(
-    async (changes: readonly PdfFormRoleChange[]): Promise<boolean> => {
-      const commit = nativeFormAuthoringChangeRef.current;
-      if (!nativeFormMode || !commit) {
-        setFormRolesError(t("pdf.viewer.nativePropertyWritebackUnavailableField"));
-        return false;
-      }
-      const targets = new Map(changes.map((change) => [change.from, change.to] as const));
-      const edits: { field: RenderedFormField; page: number; to: PdfFormRole | null }[] = [];
-      const seen = new Set<string>();
-      for (const [page, fields] of formFields) {
-        for (const field of fields) {
-          const role = formFieldRoles.get(field.id);
-          if (!role || !targets.has(role.name) || seen.has(field.name)) continue;
-          seen.add(field.name);
-          edits.push({ field, page, to: targets.get(role.name) ?? null });
-        }
-      }
-      setFormRolesBusy(true);
-      setFormRolesError(null);
-      let skipped = 0;
-      try {
-        for (const edit of edits) {
-          const session = createFormFieldContextSession(edit.field, edit.page);
-          if (!session) { skipped += 1; continue; }
-          const { role: _role, ...draft } = session.initialSelection.draft as typeof session.initialSelection.draft & { role?: PdfFormRole };
-          void _role;
-          const spec = nativeFormFieldSpec({ ...session.initialSelection,
-            draft: { ...draft, ...(edit.to ? { role: edit.to } : {}) } } as PdfAuthoredFormFieldSelection);
-          const expected = nativeExpectedFormFieldIdentity(edit.field, edit.page);
-          // Each edit waits for the window to write again (the previous
-          // edit's save applied), up to half a minute.
-          let authority = nativeFormWriteAuthorityRef.current;
-          for (let waited = 0; !authority?.writable && waited < 30_000; waited += 150) {
-            await new Promise((resolve) => window.setTimeout(resolve, 150));
-            authority = nativeFormWriteAuthorityRef.current;
-          }
-          if (!authority?.writable || !spec || !expected) {
-            throw new Error(authority?.reason ?? t("pdf.viewer.nativePropertyWritebackUnavailableField"));
-          }
-          const id = crypto.randomUUID();
-          const accepted = await commit({ generation: authority.generation, gestureId: id,
-            operation: { schemaVersion: NATIVE_PDF_FORM_AUTHORING_SCHEMA_VERSION, id, operation: "edit", expected, field: spec } });
-          if (accepted !== true) {
-            throw new Error(typeof accepted === "string" ? accepted : t("pdf.viewer.pdfDidNotSaveThese"));
-          }
-        }
-        if (skipped > 0) {
-          setFormRolesError(t("pdfForm.manageRolesSkipped", { count: skipped }));
-          return false;
-        }
-        setFormRolesDialogOpen(false);
-        return true;
-      } catch (error) {
-        setFormRolesError(error instanceof Error ? error.message : t("pdf.viewer.pdfDidNotSaveThese"));
-        return false;
-      } finally {
-        setFormRolesBusy(false);
-      }
-    },
-    [createFormFieldContextSession, formFieldRoles, formFields, nativeFormMode, t],
   );
   const handleApplyExistingFormFieldEdit = useCallback(
     async (selection: PdfAuthoredFormFieldSelection) => {
@@ -35450,113 +35002,6 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
       existingTextFieldEditBusy,
       t,
       resolvedPageRotation,
-    ],
-  );
-  const applySelectedRadioGroupOptions = useCallback(
-    async (value: PdfRadioGroupOptionsApplyValue): Promise<boolean> => {
-      const selected = selectedFormFieldContextRef.current;
-      const session = selected?.radioOptions;
-      const authority = nativeFormWriteAuthorityRef.current;
-      const commit = nativeFormAuthoringChangeRef.current;
-      if (
-        !selected ||
-        !session ||
-        existingTextFieldEditBusy ||
-        existingTextFieldEditInFlightRef.current ||
-        value.replacementValues.length !== session.widgets.length
-      ) {
-        return false;
-      }
-      if (
-        selected.disabledReason ||
-        !authority?.writable ||
-        !commit ||
-        formMutationBlocked
-      ) {
-        setFormFieldDialogError(
-          selected.disabledReason ??
-            (formMutationBlocked ? formMutationBlockedReason : undefined) ??
-            authority?.reason ??
-            t("pdf.viewer.radioGroupCannotWrittenBack"),
-        );
-        return false;
-      }
-      setFormFieldDialogError(null);
-      const id = crypto.randomUUID();
-      const selectedValue =
-        value.selectedIndex === null
-          ? null
-          : value.replacementValues[value.selectedIndex] ?? null;
-      const operation = {
-        schemaVersion: NATIVE_PDF_RADIO_GROUP_OPTIONS_SCHEMA_VERSION,
-        id,
-        operation: "edit-radio-options" as const,
-        name: session.name,
-        widgets: session.widgets.map((widget, index) => ({
-          ...widget,
-          replacementValue: value.replacementValues[index] ?? "",
-        })),
-        selectedValue,
-        offToggleable: value.offToggleable,
-      };
-      existingTextFieldEditInFlightRef.current = true;
-      setExistingTextFieldEditBusy(true);
-      try {
-        const accepted = await commit({
-          generation: authority.generation,
-          gestureId: id,
-          operation,
-        });
-        if (accepted !== true) {
-          throw new Error(
-            typeof accepted === "string"
-              ? accepted
-              : t("pdf.viewer.pdfDidNotSaveThese2"),
-          );
-        }
-        const updatedSession: PdfRadioGroupOptionsSession = {
-          ...session,
-          widgets: session.widgets.map((widget, index) => ({
-            ...widget,
-            originalValue: value.replacementValues[index]!,
-          })),
-          selectedIndex: value.selectedIndex,
-          offToggleable: value.offToggleable,
-        };
-        const updated: SelectedFormFieldContext = {
-          ...selected,
-          radioOptions: updatedSession,
-          field: {
-            ...selected.field,
-            initialValue: selectedValue,
-            noToggleToOff: !value.offToggleable,
-          },
-        };
-        selectedFormFieldContextRef.current = updated;
-        setSelectedFormFieldContext(updated);
-        setRadioGroupOptionsOpen(false);
-        setDetectNotice(
-          t("pdf.viewer.updatedRadioGroupOriginalPdf", { name: session.name }),
-          "status",
-        );
-        return true;
-      } catch (error) {
-        setFormFieldDialogError(
-          error instanceof Error
-            ? error.message
-            : t("pdf.viewer.unableSaveRadioGroupOptions"),
-        );
-        return false;
-      } finally {
-        existingTextFieldEditInFlightRef.current = false;
-        setExistingTextFieldEditBusy(false);
-      }
-    },
-    [
-      existingTextFieldEditBusy,
-      formMutationBlocked,
-      formMutationBlockedReason,
-      t,
     ],
   );
   const executeExistingFormFieldDeleteOutput = useCallback(
@@ -36802,62 +36247,6 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     return { bytes, source };
   }, [dataItemId, expectedSourceByteGenerationKey, url]);
 
-  const closeBatchPrint = useCallback(() => {
-    batchPrintGenerationRef.current += 1;
-    setBatchPrintOpen(false);
-    setBatchPrintSeed(null);
-  }, []);
-
-  const executeBatchPrint = useCallback(
-    async (items: readonly PdfBatchPrintItem[]): Promise<boolean> => {
-      if (printing || flattening || loading || !batchPrintOpenRef.current) {
-        return false;
-      }
-      const generation = batchPrintGenerationRef.current;
-      const currentItem = items.find((item) => item.id.startsWith("current:"));
-      // Batch print only opens on a PDF without output edits and prints the
-      // verified source bytes; it goes stale when an output edit appears,
-      // not when the page's builder inputs are merely re-created while it
-      // renders (the same rule as Print's preflight receipt).
-      const authorityIsCurrent = () => {
-        if (
-          generation !== batchPrintGenerationRef.current ||
-          !batchPrintOpenRef.current ||
-          hasEffectivePdfOutputEditsRef.current
-        ) {
-          return false;
-        }
-        if (!currentItem) return true;
-        const currentSource = savePolicyRuntimeRef.current.source;
-        return Boolean(
-          currentSource &&
-            currentSource.identity.dataItemId ===
-              currentItem.source.source.identity.dataItemId &&
-            currentSource.identity.byteGenerationKey ===
-              currentItem.source.source.identity.byteGenerationKey &&
-            currentSource.identity.documentRevision ===
-              currentItem.source.source.identity.documentRevision &&
-            currentSource.identity.sha256 ===
-              currentItem.source.source.identity.sha256,
-        );
-      };
-      if (!authorityIsCurrent()) return false;
-      setPrinting(true);
-      beginOutputAttempt();
-      let result: Awaited<ReturnType<typeof buildPdfBatchPrintDocument>> | null =
-        null;
-      try {
-        result = await buildPdfBatchPrintDocument(items);
-        if (!authorityIsCurrent()) return false;
-        return await invokePdfBytesPrint(result.bytes, authorityIsCurrent);
-      } finally {
-        result?.bytes.fill(0);
-        setPrinting(false);
-      }
-    },
-    [beginOutputAttempt, flattening, invokePdfBytesPrint, loading, printing],
-  );
-
   const imageExtractionReviewIsCurrent = useCallback(
     (review: NonNullable<typeof imageExtractionReview>): boolean => {
       const loaded = loadedPdfSourceIdentityRef.current;
@@ -38003,15 +37392,6 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         host: "reader",
         instanceId: commandInstanceId,
         invocation: PDF_READER_DOWNLOAD_ARCHIVAL_COMMAND,
-      }),
-    [commandInstanceId],
-  );
-  const downloadPropertiesAuthorityOwner = useMemo(
-    () =>
-      createPdfCommandAuthorityOwner({
-        host: "reader",
-        instanceId: commandInstanceId,
-        invocation: PDF_READER_DOWNLOAD_PROPERTIES_COMMAND,
       }),
     [commandInstanceId],
   );
@@ -40537,69 +39917,6 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     splitMode === "combine"
       ? PDF_READER_EXTRACT_COMMAND
       : PDF_READER_SPLIT_COMMAND;
-
-  // Properties carries invocation-specific user data, so its private owner
-  // publishes a fresh one-shot generation whose closure captures an immutable
-  // metadata snapshot. No shared mutable "pending options" ref can be swapped
-  // between resolve and execute.
-  const handleSaveProperties = useCallback(
-    async (meta: PdfMetadata) => {
-      if (propertiesSaveInFlightRef.current) return;
-      propertiesSaveInFlightRef.current = true;
-      try {
-        const metadata = snapshotPdfMetadataCommandPayload(meta);
-        if (!metadata) {
-          setFlattenError(t("pdfViewer.flattenFailed"));
-          return;
-        }
-        const authority = downloadPropertiesAuthorityOwner.bind(() =>
-          handleDownloadWithAnnotations({ metadata }),
-        );
-        const propertiesRuntimeDecision = withReaderSavePolicy(
-          "download-properties",
-          annotatedDownloadRuntimeDecision,
-          true,
-          JSON.stringify(metadata),
-        );
-        const runtime = readerRuntimeFor(
-          PDF_READER_DOWNLOAD_PROPERTIES_COMMAND.featureId,
-          propertiesRuntimeDecision,
-        );
-        const resolved = authority.resolve(
-          PDF_READER_DOWNLOAD_PROPERTIES_COMMAND,
-          readerCapabilityContext,
-          runtime,
-        );
-        if (!resolved.enabled) {
-          setFlattenError(resolved.reasonLabel ?? t("pdfViewer.flattenFailed"));
-          return;
-        }
-        const outcome = await authority.execute(
-          PDF_READER_DOWNLOAD_PROPERTIES_COMMAND,
-          readerCapabilityContext,
-          runtime,
-        );
-        if (outcome !== "executed") return;
-        setDocMetadata(metadata);
-        setPropertiesOpen(false);
-      } catch (error) {
-        setFlattenError(
-          error instanceof Error ? error.message : t("pdfViewer.flattenFailed"),
-        );
-      } finally {
-        propertiesSaveInFlightRef.current = false;
-      }
-    },
-    [
-      annotatedDownloadRuntimeDecision,
-      downloadPropertiesAuthorityOwner,
-      handleDownloadWithAnnotations,
-      readerCapabilityContext,
-      readerRuntimeFor,
-      t,
-      withReaderSavePolicy,
-    ],
-  );
 
   const createNativeFormGestureId = useCallback(
     (fieldName: string, generation: string) =>
@@ -44528,7 +43845,6 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     readonly PdfSpeechVoiceOption[]
   >([]);
   const [speechSettingsOpen, setSpeechSettingsOpen] = useState(false);
-  const speechSettingsReturnFocusRef = useRef<HTMLElement | null>(null);
   // The page being read; reading follows pages on its own, not the viewport.
   const speechPageRef = useRef(0);
 
@@ -44875,29 +44191,6 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     speechPosition.index,
     speechSupported,
   ]);
-
-  const applySpeechSettings = useCallback(
-    (next: PdfReadAloudSettings) => {
-      const restart =
-        speechStatus === "speaking" || speechStatus === "paused";
-      const restartPage = speechPageRef.current || currentPage;
-      speechControllerRef.current?.stop();
-      speechControllerRef.current = null;
-      speechSettingsRef.current = next;
-      setSpeechSettings(next);
-      if (typeof window !== "undefined") {
-        try {
-          savePdfReadAloudPreferences(window.localStorage, next);
-        } catch {
-          // Storage can be disabled or quota-limited. The current session still
-          // applies the setting; no PDF content or identifier is persisted.
-        }
-      }
-      setSpeechSettingsOpen(false);
-      if (restart) queueMicrotask(() => void readPageAloud(restartPage));
-    },
-    [currentPage, readPageAloud, speechStatus],
-  );
 
   // Leaving the document must not leave a voice narrating it.
   useEffect(() => {
@@ -46065,253 +45358,6 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     dataItemId,
     expectedSourceByteGenerationKey,
     t,
-    url,
-  ]);
-
-  const cancelDangerousActionSafeCopy = useCallback(() => {
-    dangerousActionSafeCopySessionGenerationRef.current += 1;
-    dangerousActionSafeCopyAbortRef.current?.abort();
-    dangerousActionSafeCopyAbortRef.current = null;
-    dangerousActionSafeCopyInFlightRef.current = false;
-    setDangerousActionSafeCopyBusy(false);
-    setDangerousActionSafeCopyError(null);
-    setDangerousActionSafeCopyOpen(false);
-  }, []);
-
-  const handleCreateDangerousActionSafeCopy = useCallback(async () => {
-    if (dangerousActionSafeCopyInFlightRef.current) return;
-    setDangerousActionSafeCopyError(null);
-    const requestedInspection = dangerousActionInspection;
-    const requestedDocument = pdfDocRef.current;
-    const requestedLoadedSource = loadedPdfSourceIdentityRef.current;
-    const requestedSource = savePolicyRuntimeRef.current.source;
-    const requestedDocumentRevision = sourceDocumentRevisionRef.current;
-    const requestedEditRevision = savePolicyEditRevisionRef.current.revision;
-    const requestedPageItems = visiblePageItemsRef.current;
-    const requestedPages = pagesRef.current;
-    const requestedSessionGeneration =
-      dangerousActionSafeCopySessionGenerationRef.current + 1;
-    dangerousActionSafeCopySessionGenerationRef.current =
-      requestedSessionGeneration;
-    const sourceSha256 = requestedSource?.identity.sha256 ?? "";
-    const requestedCustody = requestedSource
-      ? resolvePdfDangerousActionSourceCustody(
-          lossyCompressionRuntimeRef.current.source,
-          dataItemId ?? "",
-          sourceSha256,
-        )
-      : null;
-    const sourceInventoryIsExact =
-      requestedDocument !== null &&
-      requestedPages.length === requestedDocument.numPages &&
-      requestedPages.every(
-        (page, index) =>
-          page.pageNumber === index + 1 &&
-          Number.isFinite(page.width) &&
-          page.width > 0 &&
-          Number.isFinite(page.height) &&
-          page.height > 0,
-      ) &&
-      requestedPageItems.length === requestedDocument.numPages &&
-      requestedPageItems.every(
-        (item, index) =>
-          item.kind === "original" && item.page.pageNumber === index + 1,
-      );
-    if (
-      !savePolicyV1 ||
-      !pdfSavePolicyV1Enabled() ||
-      !dataItemId ||
-      !requestedInspection?.eligible ||
-      requestedInspection.actions.length === 0 ||
-      !requestedDocument ||
-      !requestedLoadedSource ||
-      !requestedSource ||
-      !requestedCustody ||
-      requestedInspection.sourceSha256 !== sourceSha256 ||
-      requestedInspection.pageCount !== requestedDocument.numPages ||
-      requestedLoadedSource.document !== requestedDocument ||
-      requestedLoadedSource.dataItemId !== dataItemId ||
-      requestedLoadedSource.url !== url ||
-      requestedLoadedSource.byteGenerationKey !==
-        expectedSourceByteGenerationKey ||
-      requestedLoadedSource.documentRevision !== requestedDocumentRevision ||
-      requestedSource.identity.dataItemId !== dataItemId ||
-      requestedSource.identity.byteGenerationKey !==
-        expectedSourceByteGenerationKey ||
-      requestedSource.identity.documentRevision !== requestedDocumentRevision ||
-      requestedSource.profile.encryption !== "none" ||
-      requestedSource.profile.certificateSignatures !== "none" ||
-      !/^[0-9a-f]{64}$/.test(sourceSha256) ||
-      !sourceInventoryIsExact ||
-      hasEffectivePdfOutputEditsRef.current ||
-      formValueEditorEditsRef.current
-    ) {
-      setDangerousActionSafeCopyError(
-        t("pdf.viewer.currentPdfSourceAuthorityNot"),
-      );
-      return;
-    }
-    const authorityIsCurrent = (): boolean => {
-      const currentLoadedSource = loadedPdfSourceIdentityRef.current;
-      const currentSource = savePolicyRuntimeRef.current.source;
-      const currentCustody = currentSource
-        ? resolvePdfDangerousActionSourceCustody(
-            lossyCompressionRuntimeRef.current.source,
-            dataItemId,
-            currentSource.identity.sha256,
-          )
-        : null;
-      return (
-        pdfSavePolicyV1Enabled() &&
-        dangerousActionSafeCopySessionGenerationRef.current ===
-          requestedSessionGeneration &&
-        dangerousActionInspection === requestedInspection &&
-        pdfDocRef.current === requestedDocument &&
-        currentLoadedSource?.document === requestedDocument &&
-        currentLoadedSource.dataItemId === dataItemId &&
-        currentLoadedSource.url === requestedLoadedSource.url &&
-        currentLoadedSource.byteGenerationKey ===
-          requestedLoadedSource.byteGenerationKey &&
-        currentLoadedSource.documentRevision === requestedDocumentRevision &&
-        currentSource === requestedSource &&
-        currentCustody?.key === requestedCustody.key &&
-        currentSource.identity.sha256 === sourceSha256 &&
-        currentSource.identity.documentRevision === requestedDocumentRevision &&
-        currentSource.profile.encryption === "none" &&
-        currentSource.profile.certificateSignatures === "none" &&
-        sourceDocumentRevisionRef.current === requestedDocumentRevision &&
-        savePolicyEditRevisionRef.current.revision === requestedEditRevision &&
-        visiblePageItemsRef.current === requestedPageItems &&
-        pagesRef.current === requestedPages &&
-        !hasEffectivePdfOutputEditsRef.current &&
-        !formValueEditorEditsRef.current
-      );
-    };
-    const requireAuthority = (): boolean => {
-      const current = authorityIsCurrent();
-      if (
-        !current &&
-        dangerousActionSafeCopySessionGenerationRef.current ===
-          requestedSessionGeneration
-      ) {
-        setDangerousActionSafeCopyError(
-          t("pdf.viewer.pdfChangedWhileCopyBeing"),
-        );
-      }
-      return current;
-    };
-
-    const abortController = new AbortController();
-    dangerousActionSafeCopyAbortRef.current?.abort();
-    dangerousActionSafeCopyAbortRef.current = abortController;
-    dangerousActionSafeCopyInFlightRef.current = true;
-    beginOutputAttempt();
-    setDangerousActionSafeCopyBusy(true);
-    let output: Uint8Array | null = null;
-    // A copy the server never made and one that failed its checks are
-    // different failures for the reader.
-    let stage: "create" | "verify" = "create";
-    try {
-      if (!requireAuthority()) return;
-      const response = await apiFetchRaw(
-        `/api/v1/data-items/${encodeURIComponent(
-          dataItemId,
-        )}/pdf-dangerous-actions/safe-copy`,
-        {
-          method: "POST",
-          signal: abortController.signal,
-          body: JSON.stringify({
-            source_sha256: sourceSha256,
-            page_count: requestedDocument.numPages,
-            confirm_remove: true,
-            ...(requestedCustody.resourceId
-              ? {
-                  resource_id: requestedCustody.resourceId,
-                  resource_version_id: requestedCustody.resourceVersionId,
-                  expected_page_id: requestedCustody.expectedPageId,
-                }
-              : {}),
-          }),
-        },
-        { contentType: "application/json" },
-      );
-      stage = "verify";
-      if (!requireAuthority()) return;
-      const responseSourceSha256 = response.headers.get("x-pdf-source-sha256");
-      const responseOutputSha256 = response.headers.get(
-        "x-pdf-safe-copy-sha256",
-      );
-      const responsePageCount = Number.parseInt(
-        response.headers.get("x-pdf-safe-copy-page-count") ?? "",
-        10,
-      );
-      const responseRemovedActionCount = Number.parseInt(
-        response.headers.get("x-pdf-removed-action-count") ?? "",
-        10,
-      );
-      const responseMediaType =
-        response.headers.get("content-type")?.split(";", 1)[0].trim() ?? "";
-      if (
-        responseSourceSha256 !== sourceSha256 ||
-        !responseOutputSha256 ||
-        !/^[0-9a-f]{64}$/.test(responseOutputSha256) ||
-        responseOutputSha256 === sourceSha256 ||
-        responsePageCount !== requestedDocument.numPages ||
-        responseRemovedActionCount !== requestedInspection.actions.length ||
-        responseMediaType !== "application/pdf"
-      ) {
-        throw new Error("Invalid PDF safe-copy response authority");
-      }
-      const responseBuffer = await response.arrayBuffer();
-      output = new Uint8Array(responseBuffer);
-      if (
-        !requireAuthority() ||
-        output.byteLength < 8 ||
-        output.byteLength > PDF_DANGEROUS_ACTION_SAFE_COPY_MAX_OUTPUT_BYTES ||
-        new TextDecoder("ascii").decode(output.subarray(0, 5)) !== "%PDF-" ||
-        (await pdfBytesSha256(output)) !== responseOutputSha256
-      ) {
-        throw new Error("Invalid PDF safe-copy output");
-      }
-      if (!requireAuthority()) return;
-      const blob = new Blob([responseBuffer], { type: "application/pdf" });
-      if (!downloadBlobFile(`${annotationExportBase}-safe.pdf`, blob)) {
-        throw new Error("PDF safe-copy download is unavailable");
-      }
-      setDangerousActionSafeCopyOpen(false);
-      setDangerousActionSafeCopyError(null);
-    } catch (error) {
-      if (
-        dangerousActionSafeCopySessionGenerationRef.current ===
-          requestedSessionGeneration &&
-        !(error instanceof DOMException && error.name === "AbortError")
-      ) {
-        setDangerousActionSafeCopyError(
-          stage === "create"
-            ? t("pdf.viewer.safeCopyCouldNotCreate")
-            : t("pdf.viewer.safeCopyCouldNotVerified"),
-        );
-      }
-    } finally {
-      output?.fill(0);
-      if (
-        dangerousActionSafeCopySessionGenerationRef.current ===
-          requestedSessionGeneration &&
-        dangerousActionSafeCopyAbortRef.current === abortController
-      ) {
-        dangerousActionSafeCopyAbortRef.current = null;
-        dangerousActionSafeCopyInFlightRef.current = false;
-        setDangerousActionSafeCopyBusy(false);
-      }
-    }
-  }, [
-    beginOutputAttempt,
-    annotationExportBase,
-    dangerousActionInspection,
-    dataItemId,
-    expectedSourceByteGenerationKey,
-    t,
-    savePolicyV1,
     url,
   ]);
 
@@ -47616,6 +46662,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
   // match (createPageHighlights: the page's own markup, saved with it).
   const liveAutomationRef = useRef<Omit<LivePdfEditor, "kind">>(null!);
   liveAutomationRef.current = {
+    formRoles: () => formRoles,
     pageCount: () => visiblePages.length,
     currentPage: () => currentPageRef.current,
     goToPage: (page) => {
@@ -47790,6 +46837,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
       annotations: () => liveAutomationRef.current.annotations?.() ?? [],
       formFields: () => liveAutomationRef.current.formFields?.() ?? Promise.resolve([]),
       insertPicture: (file) => liveAutomationRef.current.insertPicture?.(file) ?? Promise.resolve(false),
+      formRoles: () => liveAutomationRef.current.formRoles?.() ?? [],
     });
   }, [livePdfIn, livePdfPageId]);
 
@@ -54914,19 +53962,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         handleProofingSave={handleProofingSave}
       />
 
-      <PdfFormFieldAuthoringDialog
-        open={false}
-        initialKind={authoredFieldKind}
-        currentPage={currentPage}
-        totalPages={pages.length}
-        pageSizes={formFieldDialogPageSizes}
-        existingFields={existingAuthoringFields}
-        nativeAuthoring={nativeFormMode}
-        formRoles={formRoles}
-        returnFocusRef={authoredFormFieldCommandRef(authoredFieldKind)}
-        onApply={handleApplyAuthoredFormField}
-        onCancel={() => setAuthoredFieldDialogOpen(false)}
-      />
+      {null}
 
       <PdfFormFieldAuthoringDialog
         // One field's properties a mount: docked, the pane stays open while
@@ -54957,42 +53993,9 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         onCancel={() => setExistingTextFieldEditSession(null)}
       />
 
-      <PdfFormRolesDialog
-        open={false}
-        roles={formRoles}
-        fieldCounts={formRoleFieldCounts}
-        busy={formRolesBusy}
-        submitError={formRolesError}
-        onApply={applyFormRoleChanges}
-        onCancel={() => setFormRolesDialogOpen(false)}
-      />
+      {null}
 
-      <PdfRadioGroupOptionsDialog
-        open={
-          false
-        }
-        fieldName={selectedFormFieldContext?.radioOptions?.name ?? ""}
-        options={(selectedFormFieldContext?.radioOptions?.widgets ?? []).map(
-          (widget) => ({
-            key: `${widget.objectNumber}:${widget.generation}:${widget.page}`,
-            originalValue: widget.originalValue,
-          }),
-        )}
-        selectedIndex={
-          selectedFormFieldContext?.radioOptions?.selectedIndex ?? null
-        }
-        offToggleable={
-          selectedFormFieldContext?.radioOptions?.offToggleable ?? false
-        }
-        busy={existingTextFieldEditBusy}
-        submitError={formFieldDialogError}
-        onApply={applySelectedRadioGroupOptions}
-        onCancel={() => {
-          setRadioGroupOptionsOpen(false);
-          const trigger = selectedFormFieldContextRef.current?.trigger;
-          window.requestAnimationFrame(() => trigger?.focus({ preventScroll: true }));
-        }}
-      />
+      {null}
 
       <OfficeDialogShell
         open={existingFormFieldDeleteSession !== null}
@@ -55062,46 +54065,9 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
       {/* Document properties (Acrobat "File ▸ Properties"): seeded from the
           loaded document's info metadata; Save bakes the edits into a
           flattened download through flatten-apply's `metadata` option. */}
-      <PdfPropertiesDialog
-        open={false}
-        metadata={docMetadata}
-        facts={documentPropertiesFacts}
-        busy={flattening}
-        onSave={(meta) => void handleSaveProperties(meta)}
-        onClose={() => setPropertiesOpen(false)}
-        onNavigateToAccessibilityIssue={(issue) => goToPage(issue.page)}
-        returnFocusRef={propertiesDialogReturnFocusRef}
-        taggedText={onTaggedTextApply&&taggedTextInventory ? {
-          sourceSha256:sourceSha256??"",
-          targets:heldTaggedTextValues ? taggedTextInventory.targets.map((target) => {
-            const key = `${target.node.objectNumber}:${target.node.generation}`;
-            const alt = heldTaggedTextValues.get(`${key}:Alt`);
-            const actual = heldTaggedTextValues.get(`${key}:ActualText`);
-            return alt === undefined && actual === undefined ? target : {
-              ...target,
-              ...(alt !== undefined ? { alt: { text: alt, rawHex: "" },
-                ...(target.inlineAlt ? { inlineAlt: { ...target.inlineAlt, text: alt } } : {}) } : {}),
-              ...(actual !== undefined ? { actualText: { text: actual, rawHex: "" },
-                ...(target.inlineActualText ? { inlineActualText: { ...target.inlineActualText, text: actual } } : {}) } : {}),
-            };
-          }) : taggedTextInventory.targets,
-          busy:taggedTextBusy,
-          disabledReason:taggedTextDisabledReason??(taggedTextInventory.failed||taggedTextInventory.sourceSha256!==sourceSha256
-            ? t("pdf.viewer.currentPdfSemanticTextSource"):undefined),
-          onApply:(target,property,value)=>onTaggedTextApply({sourceSha256:taggedTextInventory.sourceSha256,target,property,value}),
-        }:undefined}
-      />
+      {null}
 
-      <PdfReadAloudSettingsDialog
-        open={false}
-        locale={locale}
-        value={speechSettings}
-        documentLanguage={docMetadata.language}
-        voices={speechVoices}
-        returnFocusRef={speechSettingsReturnFocusRef}
-        onApply={applySpeechSettings}
-        onCancel={() => setSpeechSettingsOpen(false)}
-      />
+      {null}
 
       <PdfCompressSettingsDialog
         open={compressSettingsOpen}
@@ -55116,13 +54082,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         onCancel={() => setCompressSettingsOpen(false)}
       />
 
-      <PdfFormDataExportDialog
-        open={false}
-        value={formDataExportFormat}
-        returnFocusRef={formDataExportDialogReturnFocusRef}
-        onApply={applyFormDataExportFormat}
-        onCancel={() => setFormDataExportDialogOpen(false)}
-      />
+      {null}
 
       <PdfExtractTextDialog
         open={visibleTextExportReview !== null}
@@ -55229,13 +54189,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         />
       ) : null}
 
-      <PdfBatchPrintDialog
-        open={false}
-        seed={null}
-        returnFocusRef={batchPrintTriggerRef}
-        onCancel={closeBatchPrint}
-        onPrint={executeBatchPrint}
-      />
+      {null}
 
       {translationDialog ? (
         <PdfTranslationPreflight
@@ -55332,15 +54286,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         returnFocusRef={verifiedPdfaExportTriggerRef}
       />
 
-      <PdfDangerousActionSafeCopyDialog
-        open={false}
-        actions={dangerousActionInspection?.actions ?? []}
-        busy={dangerousActionSafeCopyBusy}
-        error={dangerousActionSafeCopyError}
-        onCancel={cancelDangerousActionSafeCopy}
-        onConfirm={() => void handleCreateDangerousActionSafeCopy()}
-        returnFocusRef={dangerousActionSafeCopyTriggerRef}
-      />
+      {null}
 
       <PdfOutputLossDialog
         open={pendingOutputConsent !== null}

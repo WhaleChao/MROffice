@@ -11,7 +11,7 @@
  */
 "use client";
 
-import { resolveInternalLinkTarget } from "@mrnote/core/web/components/console/editor/native-document/tocNavigationExtension.ts";
+import { resolveInternalLinkTarget } from "../tocNavigationExtension";
 import { tocRowHeadingPos } from "@mrnote/core/web/components/console/editor/extensions/TableOfContents.tsx";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import type { RefObject } from "react";

@@ -25,7 +25,7 @@ import { documentDefaultParagraphSpacing, normalizeDefaultLineHeight, normalizeD
 import { normalizeFirstLineIndentPt, normalizeIndentPt } from "@mrnote/core/web/components/console/editor/native-document/preciseIndent.ts";
 import { EMPTY_DOCUMENT_DEFAULT_INDENTS } from "@mrnote/core/web/components/console/editor/native-document/paragraphSetAsDefault.ts";
 import { normalizeDocumentProtection, type DocumentProtection } from "@mrnote/core/web/components/console/editor/native-document/documentProtection.ts";
-import { protectionHonorsEditableRanges } from "@mrnote/core/web/components/console/editor/native-document/rangePermissions.ts";
+import { protectionHonorsEditableRanges } from "../rangePermissions";
 import { normalizeHandwritingDocument, type HandwritingDocumentSetting } from "@mrnote/core/web/lib/handwriting-paper.ts";
 import { normalizeCustomPageMargins, normalizeCustomPageSize, normalizeInkPaper, normalizePageBackgroundColor, normalizePageBackgroundFill, normalizePageBorder, resolvePageMargins, resolvePageOrientation, resolvePageSize, shouldSyncPageSetupFromDocumentAttrs, type CustomPageMarginsInches, type CustomPageSizeInches, type InkPaper, type PageBackgroundFill, type PageBorder, type PageMargins, type PageOrientation, type PageSize } from "@mrnote/core/web/components/console/editor/native-document/pageSetup.ts";
 import { resolveColumnSeparator, resolveColumns, resolveManuscriptGrid, resolveWritingMode, type ColumnCount, type ManuscriptGrid, type WritingMode } from "@mrnote/core/web/components/console/editor/native-document/documentLayout.ts";

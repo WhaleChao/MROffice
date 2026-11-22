@@ -16,7 +16,7 @@ import { isCheckboxCell } from "../../../../lib/spreadsheet/checkbox";
 import { spreadsheetWrapMetrics } from "./spreadsheetCellCss";
 import { type SheetModel } from "./spreadsheetSheetModel";
 import { type CalculationState } from "@mrnote/core/web/lib/spreadsheet/calculation-mode.ts";
-import { type GridRect } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
+import { type GridRect } from "../../../../lib/spreadsheet/grid-nav";
 
 /** What useSpreadsheetSelectionAutoFit reads from SpreadsheetWindow's render scope. */
 export interface SpreadsheetSelectionAutoFitInputs {

@@ -24,11 +24,15 @@ import {
 import {
   createPageSnapshot,
   deletePageVersion,
+  listPageSaveHolds,
   listPageVersions,
+  readPageSaveHold,
   restorePageVersion,
   type PageItem,
+  type PageSaveHoldItem,
   type PageVersionItem,
 } from "../../../lib/notebook-sdk";
+import { downloadBlobFile } from "../../../lib/download-file";
 import { isApiRequestError } from "../../../lib/api";
 import ConfirmDialog from "../../ui/ConfirmDialog";
 
@@ -82,6 +86,7 @@ export default function VersionHistoryPanel({
   onContentRestored,
   onClose,
   dockClassName,
+  changesToMerge,
 }: {
   pageId: string;
   canWrite?: boolean;
@@ -91,6 +96,16 @@ export default function VersionHistoryPanel({
   /** Where the host docks the task pane (Docs: its right-hand dock). The
    * workbook and code windows leave it in their own flow. */
   dockClassName?: string;
+  /** The page's changes to merge (SAVE-GUARANTEE S2: a deck body the server
+   * could not take as a save, kept on the server) are listed above the
+   * versions, each opened as a new page or downloaded. Only a host whose
+   * pages keep them passes this. */
+  changesToMerge?: {
+    /** The file name a download starts from (the page's title). */
+    fileTitle: string;
+    /** Open a kept body as a new page beside this one. */
+    onOpenAsPage: (content: Record<string, unknown>, createdAt: string | null) => Promise<void>;
+  };
 }) {
   const t = useTranslations("console-notebooks");
   // In the interface's language, not the browser's.
@@ -116,6 +131,8 @@ export default function VersionHistoryPanel({
     };
   }, [canWrite]);
   const [versions, setVersions] = useState<PageVersionItem[] | null>(null);
+  const [holds, setHolds] = useState<PageSaveHoldItem[]>([]);
+  const listsChangesToMerge = changesToMerge !== undefined;
   const [error, setError] = useState<string | null>(null);
   const [listFailed, setListFailed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -179,12 +196,19 @@ export default function VersionHistoryPanel({
         generation === listRequestGeneration.current &&
         activePageIdRef.current === requestedPageId &&
         (!actionScope || isCurrentAction(actionScope));
+      // The changes to merge come beside the versions; a list that cannot be
+      // read now is simply not shown (never a failure on the page).
+      const nextHolds = listsChangesToMerge
+        ? listPageSaveHolds(requestedPageId, actionScope?.controller.signal).catch(() => null)
+        : Promise.resolve([] as PageSaveHoldItem[]);
       try {
         const nextVersions = await listPageVersions(
           requestedPageId,
           actionScope?.controller.signal,
         );
+        const heldNow = await nextHolds;
         if (!requestIsCurrent()) return true;
+        if (heldNow) setHolds(heldNow);
         setVersions(nextVersions);
         setError(null);
         setListFailed(false);
@@ -196,7 +220,7 @@ export default function VersionHistoryPanel({
         return false;
       }
     },
-    [isCurrentAction, pageId],
+    [isCurrentAction, listsChangesToMerge, pageId],
   );
 
   useLayoutEffect(() => {
@@ -210,6 +234,7 @@ export default function VersionHistoryPanel({
     activeActionControllerRef.current?.abort();
     activeActionControllerRef.current = null;
     setVersions(null);
+    setHolds([]);
     setError(null);
     setListFailed(false);
     setBusy(false);
@@ -408,6 +433,51 @@ export default function VersionHistoryPanel({
     [busy, pageId],
   );
 
+  const changesToMergeRef = useRef(changesToMerge);
+  useLayoutEffect(() => {
+    changesToMergeRef.current = changesToMerge;
+  }, [changesToMerge]);
+  const heldTime = useCallback(
+    (createdAt: string | null) =>
+      createdAt ? new Date(createdAt).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }) : "",
+    [locale],
+  );
+  const handleHeld = useCallback(
+    async (hold: PageSaveHoldItem, how: "open" | "download") => {
+      if (busy) return;
+      const scope = beginAction();
+      if (!scope) return;
+      setBusy(true);
+      try {
+        const kept = await readPageSaveHold(scope.pageId, hold.id, scope.controller.signal);
+        if (!isCurrentAction(scope)) return;
+        const host = changesToMergeRef.current;
+        if (!host || !kept?.content_json || typeof kept.content_json !== "object") throw new Error("");
+        if (how === "open") {
+          await host.onOpenAsPage(kept.content_json, kept.created_at ?? hold.created_at);
+        } else {
+          const stamp = (kept.created_at ?? hold.created_at ?? "").replace(/[:]/g, "-").slice(0, 16);
+          const name = `${(host.fileTitle || "page").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "page"} ${stamp}.json`;
+          downloadBlobFile(name, new Blob([JSON.stringify(kept.content_json)], { type: "application/json" }));
+        }
+        if (isCurrentAction(scope)) setError(null);
+      } catch (heldError) {
+        if (isCurrentAction(scope)) {
+          setError(failureWithReason(
+            translationsRef.current(how === "open" ? "versions.changesToMergeOpenFailed" : "versions.changesToMergeDownloadFailed"),
+            heldError,
+          ));
+        }
+      } finally {
+        if (isCurrentAction(scope)) {
+          activeActionControllerRef.current = null;
+          setBusy(false);
+        }
+      }
+    },
+    [beginAction, busy, isCurrentAction],
+  );
+
   const sourceLabel = (source: string): string => {
     switch (source) {
       case "manual":
@@ -492,13 +562,54 @@ export default function VersionHistoryPanel({
           ) : null}
         </div>
       ) : null}
+      {holds.map((hold) => (
+        <div
+          key={`held-${hold.id}`}
+          data-testid="document-version-merge-row"
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            columnGap: 8,
+            rowGap: 4,
+            padding: "6px 0",
+            borderTop: "1px solid var(--office-pane-border, rgba(15, 23, 42, 0.06))",
+          }}
+        >
+          <span style={{ minWidth: 0, flex: "1 1 auto" }}>
+            {t("versions.changesToMerge", { time: heldTime(hold.created_at) })}
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto", flex: "0 0 auto" }}>
+            <button
+              className={officeTaskPaneParts.button}
+              type="button"
+              onClick={() => void handleHeld(hold, "open")}
+              disabled={busy || !canWrite}
+              data-testid="document-version-merge-open"
+              style={{ fontSize: 12, whiteSpace: "nowrap" }}
+            >
+              {t("versions.changesToMergeOpen")}
+            </button>
+            <button
+              className={officeTaskPaneParts.button}
+              type="button"
+              onClick={() => void handleHeld(hold, "download")}
+              disabled={busy || !canWrite}
+              data-testid="document-version-merge-download"
+              style={{ fontSize: 12, whiteSpace: "nowrap" }}
+            >
+              {t("versions.changesToMergeDownload")}
+            </button>
+          </span>
+        </div>
+      ))}
       {versions === null && !listFailed ? (
         <EditorLoadingState
           kind="list"
           minimal
           label={t("versions.loading")}
         />
-      ) : versions?.length === 0 ? (
+      ) : versions?.length === 0 && holds.length === 0 ? (
         <div
           data-testid="document-version-history-empty"
           style={{ color: "var(--office-pane-muted, #6b7280)" }}

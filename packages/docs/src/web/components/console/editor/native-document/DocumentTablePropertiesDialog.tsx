@@ -26,8 +26,8 @@ import type {
   DocumentTablePropertiesCommitResult,
   DocumentTablePropertiesRow,
   DocumentTablePropertiesTarget,
-} from "@mrnote/core/web/components/console/editor/native-document/tableProperties.ts";
-import { DOCUMENT_TABLE_ALT_TEXT_MAX_LENGTH } from "@mrnote/core/web/components/console/editor/native-document/tableProperties.ts";
+} from "./tableProperties";
+import { DOCUMENT_TABLE_ALT_TEXT_MAX_LENGTH } from "./tableProperties";
 import {
   DEFAULT_TABLE_ROW_HEIGHT,
   MAX_TABLE_COLUMN_WIDTH,

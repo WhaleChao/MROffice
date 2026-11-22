@@ -30,7 +30,7 @@ import {
 } from "@mrnote/core/web/lib/document-cover-pages/coverPages.ts";
 
 import { DocsInsertIcon } from "@mrnote/core/web/components/console/editor/DocumentInsertRibbonIcons.tsx";
-import { DocumentCoverPageScene } from "@mrnote/core/web/components/console/editor/native-document/DocumentCoverPageScene.tsx";
+import { DocumentCoverPageScene } from "./native-document/DocumentCoverPageScene";
 import {
   applyDocumentCoverPage,
   canMutateDocumentCoverPage,
@@ -38,7 +38,7 @@ import {
   documentCoverPageContext,
   readDocumentCoverPageAuthority,
   removeDocumentCoverPage,
-} from "@mrnote/core/web/components/console/editor/native-document/documentCoverPages.ts";
+} from "./native-document/documentCoverPages";
 import styles from "./DocumentCoverPageGallery.module.css";
 
 export interface DocumentCoverPageGalleryProps {

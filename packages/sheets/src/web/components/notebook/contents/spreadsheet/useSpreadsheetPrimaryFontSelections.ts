@@ -14,7 +14,7 @@ import { type SpreadsheetViewOptions } from "../../../../lib/spreadsheet/view-op
 import { SPREADSHEET_DEFAULT_FONT_SIZE } from "./spreadsheetCellCss";
 import { type SheetModel } from "./spreadsheetSheetModel";
 import { type SelectionObservations } from "../../../../lib/spreadsheet/selection-observations";
-import { type GridRect } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
+import { type GridRect } from "../../../../lib/spreadsheet/grid-nav";
 
 /** What useSpreadsheetPrimaryFontSelections reads from SpreadsheetWindow's render scope. */
 export interface SpreadsheetPrimaryFontSelectionsInputs {

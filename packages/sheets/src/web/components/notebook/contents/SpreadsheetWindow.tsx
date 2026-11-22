@@ -127,7 +127,6 @@ import { filterMatchText, filterVisibilityGroups } from "../../../lib/spreadshee
 import { useSpreadsheetFilterVisibility } from "./spreadsheet/useSpreadsheetFilterVisibility";
 
 import { useSpreadsheetBackgroundCalculation, type DeriveCalculationPivots } from "./spreadsheet/useSpreadsheetBackgroundCalculation";
-import { SpreadsheetChangesPane } from "./spreadsheet/SpreadsheetChangesPane";
 import { useSpreadsheetChangeLog } from "./spreadsheet/useSpreadsheetChangeLog";
 import { BackgroundCalculationHost, BackgroundCalculationDirtyJournal, type BackgroundCalculationHostBinding } from "@mrnote/core/web/lib/spreadsheet/background-calculation-host.ts";
 import { BackgroundCalculationClient } from "@mrnote/core/web/lib/spreadsheet/background-calculation-client.ts";
@@ -180,7 +179,7 @@ import {
 
 
 import { SpreadsheetPdfViewError, type SpreadsheetPdfExportView } from "@mrnote/core/web/lib/spreadsheet/pdf-export-view.ts";
-import { openNewOfficeWindow, registerOfficeScrollPort } from "@mrnote/core/web/lib/office-window-commands/index.ts";
+import { registerOfficeScrollPort } from "@mrnote/core/web/lib/office-window-commands/index.ts";
 import {
   useSpreadsheetBorderDraw,
   type SpreadsheetBorderDrawMode,
@@ -225,39 +224,20 @@ import { OFFICE_PRINT_IDENTITY, officeEastAsianFamily, officeMarkedDrawingSize, 
 import { printedStripEdges } from "../../../lib/spreadsheet/printed-cell-borders";
 import { forecastOutputSheet, type ForecastOutputRequest } from "../../../lib/spreadsheet/forecast-sheet-output";
 import { activeSheetAfterDelete, copiedSheetWorkbook, deletedSheetWorkbook, MAX_SHEETS, movedSheetIndex, movedSheetWorkbook, newWorksheetFor, renamedSheetWorkbook, sheetHiddenWorkbook, sheetUnhideable, tabColoredWorkbook, unhiddenSheet, visibleSheetAfterHiding, workbookNameMirrorsForNewSheet } from "../../../lib/spreadsheet/sheet-buttons";
-import { frozenSheet, splitLinesSheet, splitPlacedSheet, splitRemovedSheet } from "../../../lib/spreadsheet/view-buttons";
-import { galleryCountEmptyRows, galleryUsedRange, galleryValueUsedRange } from "../../../lib/spreadsheet/automate-gallery";
-import {
-  backgroundInputContexts,
-  buildSpillOverlay,
-  resolveCellChartScalar,
-  resolveCellDisplay,
-  sheetsWithoutDerivedCellCaches,
-  spillTargetOccupied,
-  spreadsheetCellIsFormula,
-} from "@mrnote/core/web/lib/spreadsheet/display-cache.ts";
+import { splitLinesSheet } from "../../../lib/spreadsheet/view-buttons";
+import { backgroundInputContexts, buildSpillOverlay, resolveCellDisplay, sheetsWithoutDerivedCellCaches, spillTargetOccupied, spreadsheetCellIsFormula } from "@mrnote/core/web/lib/spreadsheet/display-cache.ts";
 import { clearedSheetForRange } from "../../../lib/spreadsheet/clear-buttons";
 import { fillAcrossCells, justifyLines, type FillAcrossMode } from "../../../lib/spreadsheet/fill-extras";
 import { advanceCreateNames, answerCreateNamesReplace, namesFromSelection, type CreatedNamePlan, type CreateNamesProgress, type CreateNamesSides } from "../../../lib/spreadsheet/formulas-ribbon-extras";
-import { defineNamePlan, definedNameMutation, deletedNameMutation, nameManagerSheets, namesMutatedSheets, workbookNamedRangeCatalog,
-  renameCapturesReferences,
-  renameCapturedByFormulaLocals,
-} from "../../../lib/spreadsheet/name-buttons";
+import { defineNamePlan, definedNameMutation, namesMutatedSheets, workbookNamedRangeCatalog } from "../../../lib/spreadsheet/name-buttons";
 import { actualFilterNumberForCell, actualSortTypeForCell, headerGuessFormatKey, reapplySortPlan, regionFirstRowHoldsMerge, regionHasHeaderRow, remapRowSortMergesFailClosed, rowSortedSheet, rowsASortKeepsInPlace, sortArrayCellsOf, sourceOrderAmongVisibleRows } from "../../../lib/spreadsheet/sort-buttons";
 import { appliedFilterSheet, autoFilterToggledSheet, clearedFiltersSheet, columnConditionFilterPlan, columnValueFilterPlan, establishedAutoFilterRef as establishedAutoFilterRefFor, ordinaryFilterRange, recordedLegacyAutoFilter as recordedLegacyAutoFilterFor } from "../../../lib/spreadsheet/filter-buttons";
-import { dependentSourceDraft, validationDraftRule as validationRuleFromDraft, type ValidationDraft } from "../../../lib/spreadsheet/validation-buttons";
+import { validationDraftRule as validationRuleFromDraft, type ValidationDraft } from "../../../lib/spreadsheet/validation-buttons";
 import { tableHeaderRowToggledSheet, dataTableNativeResizeRefusal, planDataTableResize, planDataTableResizeOutcome, tableConvertedSheets, tableCellEffectiveStyle, tableCreatedSheet, tableFilterButtonToggledSheet, tableRangeResizeBlocked, tableRenamedSheets, tableStyledSheet, tableStyleOptionSheet, tableTotalsToggledSheet, type DataTableResizeOutcome, type DataTableResizeRefusal } from "../../../lib/spreadsheet/table-buttons";
 import { pastedGridSheet } from "../../../lib/spreadsheet/paste-buttons";
 import { pivotSlicerBinding, pivotSlicerFields, pivotSlicerVisibleItems, pivotWithSlicerFilter, sheetWithoutSlicer, slicersWithDesign } from "../../../lib/spreadsheet/slicer-buttons";
 import type { dataTablePlan, goalSeekPlan } from "@/lib/spreadsheet/what-if-buttons";
-import {
-  normalizeWhatIfTables,
-  whatIfTableBlockAt,
-  whatIfTableBlocks,
-  whatIfTableFormula,
-  whatIfTablePartRefused,
-  whatIfTableRef,
-} from "@mrnote/core/web/lib/spreadsheet/what-if-table-definition.ts";
+import { whatIfTableBlockAt, whatIfTableBlocks, whatIfTableFormula, whatIfTablePartRefused } from "@mrnote/core/web/lib/spreadsheet/what-if-table-definition.ts";
 import {
   bindingsWithHeldWhatIfTables,
   readWhatIfTableResults,
@@ -266,10 +246,10 @@ import {
   type HeldWhatIfTables,
 } from "../../../lib/spreadsheet/what-if-table-hold";
 import { parseConsolidateSource, type ConsolidateSourceParseResult } from "../../../lib/spreadsheet/consolidate-buttons";
-import { advancedFilterCriteriaFormulas, advancedFilterPlan } from "../../../lib/spreadsheet/advanced-filter-buttons";
+import { advancedFilterPlan } from "../../../lib/spreadsheet/advanced-filter-buttons";
 import { MAX_PIVOT_SOURCE_CELLS, pivotSourceReference, pivotSourceRefusal, NEW_PIVOT_LAYOUT_DEFAULTS, pivotNewWorksheet, pivotLiveSource, pivotSourceSheetOf, type PivotLiveSource, newPivotChartRecord as newPivotChartRecordFor, nextPivotWorksheetIdentity, pivotCommitPlan, pivotConfigForNewSheet, pivotConfigWithSafeOutput as pivotConfigWithSafeOutputOn, PIVOT_NEW_SHEET_ANCHOR, pivotSourceSnapshot, sheetWithPivotColumnsFitted } from "../../../lib/spreadsheet/pivot-buttons";
-import { autoFilledSheet, cellForFill, edgeFillRequest, edgeFillRulePlans, resolveCellClipboardScalar, seriesAutoFillPlan, seriesFillRequest, textToColumnsRequest } from "../../../lib/spreadsheet/fill-buttons";
-import { outlineGroupsSheet, removeDuplicatesSheet, removeSubtotalsSheet, subtotaledSheet } from "../../../lib/spreadsheet/data-tool-buttons";
+import { autoFilledSheet, cellForFill, edgeFillRequest, edgeFillRulePlans, resolveCellClipboardScalar, seriesAutoFillPlan, seriesFillRequest } from "../../../lib/spreadsheet/fill-buttons";
+import { outlineGroupsSheet } from "../../../lib/spreadsheet/data-tool-buttons";
 import {
   viewOptionsWithWorkbookTheme,
   workbookThemeFromViewOptions,
@@ -281,8 +261,8 @@ import {
   mergeLockedByProtection,
   sheetAfterMergeButton,
 } from "../../../lib/spreadsheet/merge-buttons";
-import { manualBreaksInsertedAt, manualBreaksRemovedAt, pageMarginSelectionFromPrintSettings, printSettingsClearedByPageSetup, printSettingsFromPageSetupDraft, printSettingsWithManualBreaks, printSettingsWithMarginPreset, printSettingsWithPrintArea, printSettingsWithPrintOptionToggled, printSettingsWithQuickSetting, workbookThemeChange } from "../../../lib/spreadsheet/page-layout-buttons";
-import { applyCellCommentChange, sheetWithCellNote, sheetWithNoteVisibilityToggled, sheetWithoutProtection, sheetWithProtection } from "../../../lib/spreadsheet/review-buttons";
+import { pageMarginSelectionFromPrintSettings, printSettingsClearedByPageSetup, printSettingsFromPageSetupDraft, printSettingsWithManualBreaks, printSettingsWithQuickSetting, workbookThemeChange } from "../../../lib/spreadsheet/page-layout-buttons";
+import { applyCellCommentChange, sheetWithCellNote, sheetWithoutProtection } from "../../../lib/spreadsheet/review-buttons";
 import { normalizeNativeFontSize } from "@mrnote/core/web/lib/spreadsheet/native-font-size.ts";
 import { useSpreadsheetTextEngineEpoch } from "./spreadsheet/useSpreadsheetTextEngineEpoch";
 import { useSpreadsheetNativeGrid } from "./spreadsheet/useSpreadsheetNativeGrid";
@@ -313,28 +293,8 @@ import "@mrnote/core/web/styles/note-editor.css";
 import "../../../lib/spreadsheet/note-editor-chrome-adapter.css";
 import { captureSavedPageHotCacheScope, isSavedPageHotCacheScopeCurrent } from "@mrnote/core/web/lib/saved-page-hot-cache.ts";
 import { dispatchNotebookPagesChanged } from "@mrnote/core/web/lib/notebook-events.ts";
-import {
-  activeDataQueryRuns,
-  assertDataQueryBindings,
-  dataQueryOutputRange,
-  inspectDataQueryRun,
-  restoreDataQueryHistory,
-  planDataQueryRuns,
-  readDataQuerySource,
-  type DataQueryDefinition,
-  type DataQueryRun,
-  type DataQueryRunRequest,
-  type DataQueryTable,
-} from "@mrnote/core/web/lib/spreadsheet/data-queries.ts";
-import { SpreadsheetDataQueryDialog, SpreadsheetQueryConnectionsDialog } from "./spreadsheet/SpreadsheetDataQueryDialog";
-import { SpreadsheetNativeQueriesList, SpreadsheetNativeQueryFormulaDialog } from "./spreadsheet/SpreadsheetNativeQueries";
-import { NativeQueryRefreshError, nativeQueryRefreshable, planNativeQueryRefresh } from "../../../lib/spreadsheet/native-query-refresh";
-import {
-  applyDataQueryRefreshProperties, dataQueryOutputColumnTexts, dataQueryRunsForRefreshAll, dataQueryUsedIn, fillDataQueryAdjacentFormulas,
-  effectiveDataQueryProperties, withDataQueryProperties, DATA_QUERY_NEW_QUERY_PROPERTIES, DATA_QUERY_PROPERTY_DEFAULTS,
-  type DataQueryProperties,
-} from "@mrnote/core/web/lib/spreadsheet/data-query-properties.ts";
-import { SpreadsheetExternalDataPropertiesDialog, SpreadsheetQueryPropertiesDialog } from "./spreadsheet/SpreadsheetQueryPropertiesDialog";
+import { activeDataQueryRuns, assertDataQueryBindings, dataQueryOutputRange, inspectDataQueryRun, restoreDataQueryHistory, planDataQueryRuns, type DataQueryDefinition, type DataQueryRun, type DataQueryRunRequest, type DataQueryTable } from "@mrnote/core/web/lib/spreadsheet/data-queries.ts";
+import { applyDataQueryRefreshProperties, dataQueryOutputColumnTexts, fillDataQueryAdjacentFormulas, effectiveDataQueryProperties, withDataQueryProperties, DATA_QUERY_NEW_QUERY_PROPERTIES, type DataQueryProperties } from "@mrnote/core/web/lib/spreadsheet/data-query-properties.ts";
 import { useSpreadsheetQueryRefreshSchedule } from "./spreadsheet/useSpreadsheetQueryRefreshSchedule";
 
 import {
@@ -405,11 +365,6 @@ import {
 } from "@mrnote/core/web/lib/spreadsheet/excel-1900-calendar.ts";
 import { notebookSDK, type PageItem } from "@mrnote/core/web/lib/notebook-sdk.ts";
 import { runCollaborationRequestWithTimeout } from "@mrnote/core/web/lib/collaboration-windows/request-timeout.ts";
-import {
-  getResourceVersionDownload,
-  getResourceVersions,
-  listResourcesAll,
-} from "@mrnote/core/web/lib/resources-sdk.ts";
 import {
   conditionalClearTouchesLockedCells,
   conditionalFormatPatchbackMutationIsLossless,
@@ -514,11 +469,7 @@ import {
   type SpreadsheetConditionalCommitAction,
   type SpreadsheetConditionalDialogRequest,
 } from "./spreadsheet/SpreadsheetConditionalFormatDialogs";
-import {
-  formatConditionalAppliesTo,
-  parseConditionalAppliesTo,
-  type ConditionalRibbonRuleDraft,
-} from "@mrnote/core/web/lib/spreadsheet/conditional-rule-draft.ts";
+import { formatConditionalAppliesTo, type ConditionalRibbonRuleDraft } from "@mrnote/core/web/lib/spreadsheet/conditional-rule-draft.ts";
 import {
   SpreadsheetCollapseDialogButton,
   SpreadsheetRangePickerBar,
@@ -561,11 +512,7 @@ import {
   type ScreenClippingRect,
 } from "@mrnote/core/web/lib/display-media-screenshot.ts";
 import { OfficeAltTextPane } from "@mrnote/core/web/components/office-ribbon/OfficeAltTextPane.tsx";
-import { OfficeTaskPane } from "@mrnote/core/web/components/office-ribbon/OfficeTaskPane.tsx";
-import {
-  OfficeThesaurusPane,
-  type OfficeThesaurusEntry,
-} from "@mrnote/core/web/components/office-ribbon/OfficeThesaurusPane.tsx";
+import { type OfficeThesaurusEntry } from "@/components/office-ribbon/OfficeThesaurusPane";
 import {
   OfficeDockedPane,
   OfficeTaskPaneDockHost,
@@ -577,7 +524,6 @@ import {
   readOfficeTaskPaneCover,
   useOfficeTaskPaneCover,
 } from "@mrnote/core/web/components/office-ribbon/officeTaskPaneOverlay.ts";
-import DocumentInkTrackpad from "@mrnote/docs/web/components/console/editor/native-document/DocumentInkTrackpad.tsx";
 import { documentInkEraserRadiusPx, type DocumentInkEraser, type DocumentInkPoint, type DocumentInkTool } from "@mrnote/core/web/lib/document-ink.ts";
 import { officeInkPenById, officeInkPenProfileFromStorage, serializeOfficeInkPenProfile, withOfficeInkPen, withOfficeInkPenRemoved, type OfficeInkPenProfile } from "@mrnote/core/web/lib/office-ink-pens.ts";
 import {
@@ -805,19 +751,12 @@ import {
   useOfficeChartTemplates,
 } from "@mrnote/core/web/lib/office-charts/chart-template-store.ts";
 import { presentationChartAreaStyleCss, presentationChartTextStyleCss, presentationChartTitleTextPaint, presentationChartTitleWordsCss, type PresentationChartAreaStyle, type PresentationChartAreaPaint, type PresentationChartEffectPreset } from "@mrnote/core/web/lib/presentation-chart-area-style.ts";
-import {
-  SpreadsheetNavigationPane,
-  type SpreadsheetNavigationElementSelection,
-} from "./spreadsheet/SpreadsheetNavigationPane";
+import { type SpreadsheetNavigationElementSelection } from "@/components/notebook/contents/spreadsheet/SpreadsheetNavigationPane";
 import {
   SpreadsheetDataIcon,
   type SpreadsheetDataIconName,
 } from "@mrnote/core/web/components/notebook/contents/spreadsheet/SpreadsheetDataRibbonIcons.tsx";
-import { SpreadsheetProtectSheetDialog } from "./spreadsheet/SpreadsheetProtectSheetDialog";
-import {
-  protectionPasswordErrorKey,
-  SpreadsheetProtectionPasswordDialog,
-} from "./spreadsheet/SpreadsheetProtectionPasswordDialog";
+import { SpreadsheetProtectionPasswordDialog } from "./spreadsheet/SpreadsheetProtectionPasswordDialog";
 import {
   SpreadsheetMoveCopySheetFields,
   type MoveCopySheetBefore,
@@ -847,28 +786,7 @@ import {
   type SpreadsheetShortcutCommandId,
   type SpreadsheetShortcutNumberFormatCommand,
 } from "../../../lib/spreadsheet/command-registry";
-import {
-  createSpreadsheetVisibleCommandAuthority,
-  createSpreadsheetVisibleCommandLineage,
-  resolveSpreadsheetAdvancedFilterModeAuthority,
-  spreadsheetDataValidationPatchbackRuleSupported,
-  spreadsheetDataValidationPatchbackSelectionSupported,
-  spreadsheetDataValidationWriterReceiptMatches,
-  spreadsheetChartDesignWriterReceiptMatches,
-  spreadsheetConditionalFormatWriterReceiptMatches,
-  spreadsheetInsertWriterReceiptMatches,
-  spreadsheetObjectFormatInternalFeatureId,
-  spreadsheetPageSetupWriterReceiptMatches,
-  spreadsheetPivotChartCreateReceiptMatches,
-  spreadsheetPivotWriterReceiptMatches,
-  type SpreadsheetVisibleCommandContext,
-  type SpreadsheetVisibleCommandHandlers,
-  type SpreadsheetVisibleCommandReason,
-  SPREADSHEET_COPILOT_APPLY_CONTROL_ID,
-  spreadsheetVisibleGalleryDecision,
-  spreadsheetVisibleSortDecision,
-  spreadsheetCellControlWritable,
-} from "../../../lib/spreadsheet/visible-command-authority";
+import { createSpreadsheetVisibleCommandAuthority, createSpreadsheetVisibleCommandLineage, resolveSpreadsheetAdvancedFilterModeAuthority, spreadsheetDataValidationPatchbackRuleSupported, spreadsheetDataValidationPatchbackSelectionSupported, spreadsheetChartDesignWriterReceiptMatches, spreadsheetConditionalFormatWriterReceiptMatches, spreadsheetInsertWriterReceiptMatches, spreadsheetObjectFormatInternalFeatureId, spreadsheetPageSetupWriterReceiptMatches, spreadsheetPivotChartCreateReceiptMatches, spreadsheetPivotWriterReceiptMatches, type SpreadsheetVisibleCommandContext, type SpreadsheetVisibleCommandHandlers, type SpreadsheetVisibleCommandReason, SPREADSHEET_COPILOT_APPLY_CONTROL_ID, spreadsheetVisibleGalleryDecision, spreadsheetVisibleSortDecision, spreadsheetCellControlWritable } from "../../../lib/spreadsheet/visible-command-authority";
 import { SPREADSHEET_COPILOT_RESUME_HOSTS } from "@mrnote/core/web/__cut__/m3985607fbf.ts";
 import { SpreadsheetChartFontDialog, SpreadsheetCopilotPartsPanel, SpreadsheetEditorCopilotSurface, SpreadsheetImmersiveReader, SpreadsheetSelectionCopilotPanel, useWarmSpreadsheetLazyPanels } from "./spreadsheet/SpreadsheetLazyPanels";
 import { resumedCopilotSelection, usePendingCopilotResume } from "@mrnote/core/web/__cut__/m2da8b6d223.ts";
@@ -945,7 +863,6 @@ import FormatCellsDialog, {
 } from "./FormatCellsDialog";
 import { formatCellsBorderPatchForCell, formatCellsBorderSummary } from "@mrnote/core/web/lib/spreadsheet/format-cells-border.ts";
 import CellRichTextDialog from "./CellRichTextDialog";
-import { SpreadsheetDataFromPictureDialog } from "./SpreadsheetDataFromPictureDialog";
 import ImportedEditableStatusBar, { declinedChangeNames } from "@mrnote/core/web/components/notebook/contents/ImportedEditableStatusBar.tsx";
 import {
   loadSpreadsheetDataFromPictureCapability,
@@ -1000,15 +917,8 @@ import {
   type FormulaEvaluationLocation,
   type FormulaEvaluationReference,
 } from "../../../lib/spreadsheet/FormulaEvaluationDialog";
-import {
-  AdvancedFilterDialog,
-  type AdvancedFilterMode,
-  type AdvancedFilterRequest,
-} from "../../../lib/spreadsheet/AdvancedFilterDialog";
-import {
-  ForecastSheetDialog,
-} from "../../../lib/spreadsheet/ForecastSheetDialog";
-import { advanceWorksheetCalculationAuthority, worksheetCalculationLedgerLineEdit, type WorksheetCalculationLinesDropped, DEFAULT_CALCULATION_STATE, MAX_WORKSHEET_CALCULATION_FORMULAS, afterEdit, normalizeCalculationMode, recalculationScopeForKey, resetWorksheetCalculationAuthority, worksheetCalculationSeedSnapshot, worksheetCalculationTokenIsCurrent, worksheetFormulaResultKey, withMode, type CalculationMode, type WorksheetCalculationAuthority, type WorksheetCalculationLedger, type WorksheetCalculationToken } from "@mrnote/core/web/lib/spreadsheet/calculation-mode.ts";
+import { type AdvancedFilterMode, type AdvancedFilterRequest } from "@/lib/spreadsheet/AdvancedFilterDialog";
+import { advanceWorksheetCalculationAuthority, worksheetCalculationLedgerLineEdit, type WorksheetCalculationLinesDropped, DEFAULT_CALCULATION_STATE, MAX_WORKSHEET_CALCULATION_FORMULAS, afterEdit, normalizeCalculationMode, recalculationScopeForKey, resetWorksheetCalculationAuthority, worksheetCalculationSeedSnapshot, worksheetCalculationTokenIsCurrent, worksheetFormulaResultKey, type CalculationMode, type WorksheetCalculationAuthority, type WorksheetCalculationLedger, type WorksheetCalculationToken } from "@mrnote/core/web/lib/spreadsheet/calculation-mode.ts";
 import {
   calculatedColumnFormulaAt,
   errorCheckCellFrom,
@@ -1029,7 +939,6 @@ import {
   useSpreadsheetErrorIndicatorReader,
   type SpreadsheetErrorOptionsAction,
 } from "./spreadsheet/SpreadsheetErrorIndicators";
-import { SpreadsheetErrorCheckingOptionsDialog } from "./spreadsheet/SpreadsheetErrorCheckingOptionsDialog";
 import {
   SpreadsheetPageSetupDialog,
   type SpreadsheetPageSetupTab,
@@ -1060,22 +969,7 @@ import {
   type SpreadsheetPivotChartOptions,
   type SpreadsheetPivotChartType,
 } from "@mrnote/core/web/lib/spreadsheet/pivot-chart.ts";
-import {
-  adjustFormulaForCellMove,
-  ERRORS,
-  FormulaResultUnavailableError,
-  isFormulaError,
-  formatCellValue,
-  hyperlinkFormulaLocation,
-  readLiteralCellValue,
-  parseCellRef,
-  shiftFormula,
-  type CellValue,
-  type WorkbookFormulaResultSeed,
-  type EngineValue,
-  columnToLetters,
-  isWebImageValue,
-} from "@mrnote/core/web/lib/spreadsheet/formula-engine.ts";
+import { ERRORS, FormulaResultUnavailableError, isFormulaError, formatCellValue, hyperlinkFormulaLocation, readLiteralCellValue, parseCellRef, shiftFormula, type CellValue, type WorkbookFormulaResultSeed, type EngineValue, columnToLetters, isWebImageValue } from "@mrnote/core/web/lib/spreadsheet/formula-engine.ts";
 import {
   spreadsheetWebImagePicture,
   spreadsheetWebImageRevision,
@@ -1145,17 +1039,7 @@ import {
   previewFormulaFor,
   type ArgField,
 } from "../../../lib/spreadsheet/function-arguments";
-import {
-  DEFAULT_SOLVER_OPTIONS,
-  parseSolverModel,
-  solverModelFormulas,
-  type SolverDialogConstraint,
-  type SolverDialogMethod,
-  type SolverDialogModel,
-  type SolverDialogExtraOptions,
-  DEFAULT_SOLVER_EXTRA_OPTIONS,
-  type SolverDialogOp,
-} from "../../../lib/spreadsheet/solver-model";
+import { type SolverDialogConstraint, type SolverDialogMethod, type SolverDialogModel, type SolverDialogExtraOptions, type SolverDialogOp } from "@/lib/spreadsheet/solver-model";
 import { indirectReferenceAreas } from "../../../lib/spreadsheet/formula-indirect-references";
 import {
   forgetTiledLineEditUndo, keepTiledLineEditWindowInFront, rememberTiledLineEditUndo, sendTiledLineEdit,
@@ -1282,19 +1166,8 @@ import {
   measureSpreadsheetEquation,
   spreadsheetEquationBoxPixels,
 } from "./spreadsheet/SpreadsheetEquationDrawing";
-import {
-  normalizeProtectedRangeRef,
-  protectedRangesAt,
-  protectedRangeUnlockKey,
-  validProtectedRangeTitle,
-  type ProtectedEditRange,
-} from "@mrnote/core/web/lib/spreadsheet/protected-ranges.ts";
-import {
-  captureCustomView,
-  customViewNameKey,
-  MAX_CUSTOM_VIEWS,
-  sheetsWithCustomView,
-} from "../../../lib/spreadsheet/custom-views";
+import { protectedRangesAt, protectedRangeUnlockKey, type ProtectedEditRange } from "@mrnote/core/web/lib/spreadsheet/protected-ranges.ts";
+import { customViewNameKey, sheetsWithCustomView } from "../../../lib/spreadsheet/custom-views";
 import {
   spreadsheetCellStyleLabel,
   spreadsheetTableStyleLabel,
@@ -1323,19 +1196,7 @@ import {
   type SplitPaneName,
   type SplitPaneViewState,
 } from "@mrnote/core/web/lib/spreadsheet/freeze-panes.ts";
-import {
-  EMPTY_SPLIT_PANE_SCROLL,
-  initialSplitPaneScroll,
-  nextSplitPane,
-  splitAtActiveCell,
-  splitLineForBarDrag,
-  splitPaneHeadings,
-  splitPaneScrollBars,
-  splitPaneScrollFor,
-  splitPaneScrollPartners,
-  withSplitPaneScroll,
-  type SplitPaneScrollState,
-} from "../../../lib/spreadsheet/split-pane-geometry";
+import { EMPTY_SPLIT_PANE_SCROLL, initialSplitPaneScroll, nextSplitPane, splitLineForBarDrag, splitPaneHeadings, splitPaneScrollBars, splitPaneScrollFor, splitPaneScrollPartners, withSplitPaneScroll, type SplitPaneScrollState } from "../../../lib/spreadsheet/split-pane-geometry";
 import {
   anchorOf,
   autoFitSkipsMergedCell,
@@ -1377,72 +1238,14 @@ import {
   type OversizedImportPreview,
 } from "@mrnote/core/web/lib/office/oversized-import.ts";
 import { SpreadsheetOversizedImportNotice } from "./spreadsheet/SpreadsheetOversizedImportNotice";
-import {
-  definedNameProblem,
-  definedNameProblemMessageKey,
-  isCellRefString,
-  isRangeRefString,
-  isValidName,
-  isValidRef,
-  namedRangeIdentity,
-  normalizeNamedRanges,
-  qualifyWorkbookNamedRangeRef,
-  resolveName as resolveNamedRange,
-  type NamedRange,
-} from "@mrnote/core/web/lib/spreadsheet/named-ranges.ts";
+import { definedNameProblem, definedNameProblemMessageKey, isCellRefString, isRangeRefString, isValidName, normalizeNamedRanges, resolveName as resolveNamedRange, type NamedRange } from "@mrnote/core/web/lib/spreadsheet/named-ranges.ts";
 import { splitSheetQualifier } from "@mrnote/core/web/lib/spreadsheet/name-syntax.ts";
 import { resolveChartNameRef } from "../../../lib/spreadsheet/chart-name-refs";
 import { nameRefShownFrom } from "@mrnote/core/web/lib/spreadsheet/name-relative-refs.ts";
-import {
-  NAME_MANAGER_NO_FILTER,
-  type NameManagerFilter,
-} from "../../../lib/spreadsheet/name-manager-view";
-import {
-  appendMacroSteps,
-  expandMacroRun,
-  assignedMacroReference,
-  defaultAssignMacroName,
-  findMacro,
-  findMacroByShortcut,
-  isAssignedMacroClick,
-  resolveAssignedMacro,
-  foldMacroSteps,
-  isPureMacroStep,
-  macroFormulaShift,
-  macroReplayOrigin,
-  nextDefaultMacroName,
-  normalizeMacros,
-  PERSONAL_MACRO_WORKBOOK_NAME,
-  readPersonalMacros,
-  recordSheetDiff,
-  removeMacro,
-  upsertMacro,
-  writePersonalMacros,
-  type MacroShortcut,
-  type MacroStep,
-  type SpreadsheetMacro,
-} from "../../../lib/spreadsheet/macros";
-import {
-  formatMacroStep,
-  SpreadsheetAssignMacroDialog,
-  SpreadsheetMacroDialog,
-  SpreadsheetMacroEditDialog,
-  SpreadsheetMacroOptionsDialog,
-  SpreadsheetMacroStepBar,
-  SpreadsheetRecordMacroDialog,
-  type MacroDialogEntry,
-  type MacroDialogScope,
-  type MacroStore,
-  type RecordMacroRequest,
-} from "./spreadsheet/SpreadsheetMacroDialogs";
-import {
-  buildScriptHarness,
-  normalizeScriptWrites,
-  parseScriptWrites,
-  type SnapshotCell,
-  type SheetSnapshot,
-} from "../../../lib/spreadsheet/script-runner";
-import { runInSandbox } from "@mrnote/core/web/lib/code-runner/sandbox.ts";
+import { type NameManagerFilter } from "@/lib/spreadsheet/name-manager-view";
+import { appendMacroSteps, expandMacroRun, defaultAssignMacroName, findMacro, findMacroByShortcut, isAssignedMacroClick, resolveAssignedMacro, foldMacroSteps, isPureMacroStep, macroFormulaShift, macroReplayOrigin, nextDefaultMacroName, normalizeMacros, PERSONAL_MACRO_WORKBOOK_NAME, readPersonalMacros, recordSheetDiff, upsertMacro, writePersonalMacros, type MacroShortcut, type MacroStep, type SpreadsheetMacro } from "../../../lib/spreadsheet/macros";
+import { formatMacroStep, SpreadsheetMacroStepBar, type MacroDialogEntry, type MacroDialogScope, type MacroStore, type RecordMacroRequest } from "./spreadsheet/SpreadsheetMacroDialogs";
+import { type SnapshotCell, type SheetSnapshot } from "@/lib/spreadsheet/script-runner";
 import {
   normalizeWatches,
   type WatchedCell,
@@ -1461,44 +1264,9 @@ import {
   type AutoSumFn,
   type EdgeFillDirection,
 } from "../../../lib/spreadsheet/grid-ops";
-import {
-  autoFillDownExtent,
-  extractPrecedents,
-  extractSheetQualifiedPrecedents,
-  fillSelectionGrid,
-  findDependents,
-  formatDateForCell,
-  formatInternalLink,
-  formatTimeForCell,
-  internalLinksToSheet,
-  parseInternalLink,
-  parseNamedLink,
-  type FormulaCellEntry,
-} from "@mrnote/core/web/lib/spreadsheet/sheet-interactions.ts";
-import {
-  applyScenario,
-  captureScenario,
-  formatScenarioChangingCells,
-  MAX_SCENARIO_CHANGING_CELLS,
-  MAX_SCENARIO_COMMENT_LENGTH,
-  MAX_SCENARIO_NAME_LENGTH,
-  MAX_SCENARIO_VALUE_LENGTH,
-  mergeScenarios,
-  normalizeScenarios,
-  removeScenario,
-  replaceScenario,
-  scenarioChangingCellRefs,
-  scenarioEntryValue,
-  scenarioInputText,
-  upsertScenario,
-  type Scenario,
-} from "../../../lib/spreadsheet/scenarios";
-import {
-  buildScenarioSummarySheet,
-  MAX_SCENARIO_SUMMARY_RESULT_CELLS,
-} from "../../../lib/spreadsheet/scenario-summary";
-import { buildScenarioPivotRecipe } from "../../../lib/spreadsheet/scenario-pivot";
-import { dependentOptionsForCell, listRuleOptions, normalizeRules, rangeHasRule, resolveInputMessage, ruleForCell, validationRuleAreas, shouldBlockInvalidEntry, snapshotRulesForValidationPaste, validateValue, validationCandidateText, validationAlertButtons, type ErrorStyle, type InvalidCellCoord, type ValidationAlertDecision, type ValidationContext, type ValidationOperator, type ValidationRange, type ValidationResult, type ValidationRule, rebaseValidationRule, snapshotRulesForKeptRowsPaste, keptRowRuns } from "@mrnote/core/web/lib/spreadsheet/data-validation.ts";
+import { autoFillDownExtent, fillSelectionGrid, formatDateForCell, formatInternalLink, formatTimeForCell, internalLinksToSheet, parseInternalLink, parseNamedLink, type FormulaCellEntry } from "@mrnote/core/web/lib/spreadsheet/sheet-interactions.ts";
+import { type Scenario } from "@/lib/spreadsheet/scenarios";
+import { dependentOptionsForCell, listRuleOptions, normalizeRules, rangeHasRule, resolveInputMessage, ruleForCell, validationRuleAreas, shouldBlockInvalidEntry, snapshotRulesForValidationPaste, validateValue, validationCandidateText, validationAlertButtons, type ErrorStyle, type InvalidCellCoord, type ValidationAlertDecision, type ValidationContext, type ValidationOperator, type ValidationRange, type ValidationResult, type ValidationRule, snapshotRulesForKeptRowsPaste, keptRowRuns } from "@mrnote/core/web/lib/spreadsheet/data-validation.ts";
 import {
   type ClearVariant,
 } from "../../../lib/spreadsheet/block-clear";
@@ -1507,9 +1275,6 @@ import {
   copySheetForWorkbook,
   duplicateSheetNaming,
 } from "../../../lib/spreadsheet/sheet-ops";
-import {
-  rewriteSheetFormulaReferences,
-} from "../../../lib/spreadsheet/sheet-formula-references";
 import {
   canAdjustPreparedCellShiftFormulas,
   prepareCellShiftFormulas,
@@ -1545,30 +1310,8 @@ import {
   SpreadsheetAutoFillOptionsButton,
   type SpreadsheetAutoFillChoice,
 } from "./spreadsheet/SpreadsheetAutoFillOptionsButton";
-import {
-  canDeleteLines as canDeleteLinesWithProtection,
-  canSelectCell as canSelectCellWithProtection,
-  canSortRange as canSortRangeWithProtection,
-  isCellContentHidden as isCellContentHiddenWithProtection,
-  isCellEditable as isCellEditableWithProtection,
-  nextEditableCellInTabOrder,
-  rangeHasLockedCell as rangeHasLockedCellWithProtection,
-  setRangeLocked,
-  sheetProtectionAllows as sheetProtectionAllowsWithProtection,
-  sheetProtectionPermissions,
-  UNPROTECTED_SHEET_PERMISSIONS,
-  type SheetProtectionOptions,
-  type SheetProtectionPermission,
-  normalizeWorkbookStructureProtection,
-  verifyProtectionPassword,
-  workbookProtectionActive,
-  workbookStructureProtectionPassword,
-  type WorkbookStructureProtection,
-} from "@mrnote/core/web/lib/spreadsheet/protection.ts";
-import {
-  checkProtectionPasswordHash,
-  createProtectionPasswordHash,
-} from "@mrnote/core/web/lib/spreadsheet/protection-password.ts";
+import { canDeleteLines as canDeleteLinesWithProtection, canSelectCell as canSelectCellWithProtection, canSortRange as canSortRangeWithProtection, isCellContentHidden as isCellContentHiddenWithProtection, isCellEditable as isCellEditableWithProtection, nextEditableCellInTabOrder, rangeHasLockedCell as rangeHasLockedCellWithProtection, setRangeLocked, sheetProtectionAllows as sheetProtectionAllowsWithProtection, sheetProtectionPermissions, UNPROTECTED_SHEET_PERMISSIONS, type SheetProtectionOptions, type SheetProtectionPermission, normalizeWorkbookStructureProtection, workbookProtectionActive, workbookStructureProtectionPassword, type WorkbookStructureProtection } from "@mrnote/core/web/lib/spreadsheet/protection.ts";
+import { checkProtectionPasswordHash } from "@mrnote/core/web/lib/spreadsheet/protection-password.ts";
 import { useEmbedAccess } from "@mrnote/core/web/lib/embed/use-embed-access.ts";
 import { embedAllowsManagingComment } from "@mrnote/core/web/lib/embed/session-access.ts";
 import {
@@ -1709,8 +1452,8 @@ import {
   selectedValuesForDateGroups,
   type FilterDateAuthority,
 } from "@mrnote/core/web/lib/spreadsheet/date-filter-tree.ts";
-import { addPrintAreaRange, headerFooterNativeLength, headerFooterSectionRoom, isRangeInsidePrintArea, moveManualBreak, normalizePrintSettings, parseA1Range, toggleManualBreak, type MarginPreset, type PrintHeaderFooter, type PrintMargins, type PrintPaperSize, type PrintSettings } from "@mrnote/core/web/lib/spreadsheet/print-settings.ts";
-import { resolveSpreadsheetPageBreakPreviewRegions, resolveSpreadsheetPageLayoutBreakLines, resolveSpreadsheetPageLayoutGeometry, createPageLayoutRowMap, pageLayoutEdgeScrollStep, pageLayoutDataAreaWidth, pageLayoutWideColumnLimitPx, printedCellWidensRange, printedFormatExtentKeys, printedMergeHoldsAt, printedOccupiedLineBlanks, printedTailUsedColumnEdge, printedWideTailColumnEdge, pageLayoutSpansKeepPage } from "../../../lib/spreadsheet/page-layout-view";
+import { headerFooterNativeLength, headerFooterSectionRoom, isRangeInsidePrintArea, moveManualBreak, normalizePrintSettings, parseA1Range, toggleManualBreak, type MarginPreset, type PrintHeaderFooter, type PrintMargins, type PrintPaperSize, type PrintSettings } from "@mrnote/core/web/lib/spreadsheet/print-settings.ts";
+import { resolveSpreadsheetPageBreakPreviewRegions, resolveSpreadsheetPageLayoutBreakLines, resolveSpreadsheetPageLayoutGeometry, createPageLayoutRowMap, pageLayoutEdgeScrollStep, pageLayoutDataAreaWidth, pageLayoutWideColumnLimitPx, printedCellWidensRange, printedFormatExtentKeys, printedMergeHoldsAt, printedOccupiedLineBlanks, printedTailUsedColumnEdge, printedWideTailColumnEdge, pageLayoutMergeKeepsPage, pageLayoutSpansKeepPage } from "../../../lib/spreadsheet/page-layout-view";
 import {
   hasManualLineBreak,
   cellLineShown,
@@ -1803,9 +1546,8 @@ import {
   SpreadsheetAngledBand,
   type AngledCellEdges,
 } from "./spreadsheet/SpreadsheetAngledCell";
-import { createSpreadsheetCustomShapeObject, createSpreadsheetInkShapeObject, createSpreadsheetShapeFromInkFit, parseSpreadsheetInkTimes, spreadsheetInkOpacityForTool, createSpreadsheetShapeObject, DEFAULT_SHAPE_FILL, DEFAULT_SHAPE_STROKE, isSpreadsheetLineLikeShapeKind, normalizeShapeStyle, spreadsheetShapeKindFromOfficePreset, SPREADSHEET_HIGHLIGHTER_OPACITY, SPREADSHEET_SHAPE_RECENT_STORAGE_KEY, MAX_SHAPE_TEXT_LENGTH, MAX_SHAPE_TEXT_SIZE, MIN_SHAPE_TEXT_SIZE, spreadsheetEquationFits, spreadsheetShapeSceneCamera, type SpreadsheetInkPoint, type SpreadsheetPresetShapeKind, type SpreadsheetShapeStyle } from "@mrnote/core/web/lib/spreadsheet/shapes.ts";
+import { createSpreadsheetCustomShapeObject, createSpreadsheetShapeFromInkFit, parseSpreadsheetInkTimes, spreadsheetInkOpacityForTool, createSpreadsheetShapeObject, DEFAULT_SHAPE_FILL, DEFAULT_SHAPE_STROKE, isSpreadsheetLineLikeShapeKind, normalizeShapeStyle, spreadsheetShapeKindFromOfficePreset, SPREADSHEET_HIGHLIGHTER_OPACITY, SPREADSHEET_SHAPE_RECENT_STORAGE_KEY, MAX_SHAPE_TEXT_LENGTH, MAX_SHAPE_TEXT_SIZE, MIN_SHAPE_TEXT_SIZE, spreadsheetEquationFits, spreadsheetShapeSceneCamera, type SpreadsheetInkPoint, type SpreadsheetPresetShapeKind, type SpreadsheetShapeStyle } from "@mrnote/core/web/lib/spreadsheet/shapes.ts";
 import { normalizeSpreadsheetObjectHyperlink } from "../../../lib/spreadsheet/object-hyperlink";
-import { spreadsheetNameFold } from "@mrnote/core/web/lib/spreadsheet/name-fold.ts";
 import {
   applySpreadsheetShapeTextFont,
   spreadsheetShapeTextFontTargets,
@@ -1972,17 +1714,9 @@ import {
   type GoToSpecialSelection,
   type GoToSpecialValueTypes,
 } from "@mrnote/core/web/lib/spreadsheet/go-to-special.ts";
-import {
-  spellingScopeFor,
-  type SpellingTarget,
-} from "../../../lib/spreadsheet/spelling-walk";
+import { type SpellingTarget } from "@/lib/spreadsheet/spelling-walk";
 import { applyAutoCorrect, currentAutoCorrectEntries } from "@mrnote/core/web/lib/proofing/autocorrect.ts";
-import {
-  SpreadsheetSpellingDialog,
-  type SpreadsheetSpellingHost,
-  type SpreadsheetSpellingLaunch,
-  type SpreadsheetSpellingSheet,
-} from "./spreadsheet/SpreadsheetSpellingDialog";
+import { type SpreadsheetSpellingHost, type SpreadsheetSpellingLaunch, type SpreadsheetSpellingSheet } from "@/components/notebook/contents/spreadsheet/SpreadsheetSpellingDialog";
 import {
   changedCellBounds,
   type SpreadsheetChangeCell,
@@ -1990,16 +1724,9 @@ import {
   type SpreadsheetStructuralStep,
 } from "@mrnote/core/web/lib/spreadsheet/change-log.ts";
 import { normalizeHexColor, pushRecentColor, readableInkFor, tintColor } from "@mrnote/core/web/lib/spreadsheet/color-palette.ts";
-import {
-  dataFormWrites,
-  deleteDataFormRecordCells,
-  findDataFormRecord,
-  newRecordRow,
-  readDataFormRecord,
-  readDataFormShape,
-} from "../../../lib/spreadsheet/data-form";
-import { defaultViewOptions, calculationIterationOption, DEFAULT_CALCULATION_ITERATION, focusCellTintChannels, isOnReadingCrosshair, normalizeViewOptions, sheetsWithViewSwitch, sheetViewModeOf, spreadsheetViewThemeAccents, shouldShowFormulaText, type SpreadsheetSheetViewSwitch, type SpreadsheetViewMode, type SpreadsheetViewOptions } from "../../../lib/spreadsheet/view-options";
-import { MAX_NAMED_SHEET_VIEWS, applySheetViewFilters, buildSheetViewSortState, createNamedSheetViewId, defaultNamedSheetViewRef, sheetViewRefForRange, ensureSheetViewSessionTables, nextDefaultNamedSheetViewName, persistedSheetsForSheetViewSession, reprojectSheetViewSession, rebuildNamedSheetViewState, sheetViewAuthoringBlocker, sheetViewRefOverlapsTable, sheetViewRegionsRowOrder, sheetViewSortRegionConflict, sheetViewSortRegions, sheetViewStateHasFilters, sheetViewStateOfSheet, sheetViewTableFilterId, sheetViewVisibleRowOrder, type SheetViewSortKeyInput, sheetViewsWithDuplicate, sheetWithoutSheetView } from "../../../lib/spreadsheet/sheet-views";
+import { dataFormWrites, newRecordRow, readDataFormRecord, readDataFormShape } from "../../../lib/spreadsheet/data-form";
+import { defaultViewOptions, calculationIterationOption, DEFAULT_CALCULATION_ITERATION, focusCellTintChannels, isOnReadingCrosshair, normalizeViewOptions, sheetViewModeOf, spreadsheetViewThemeAccents, shouldShowFormulaText, type SpreadsheetSheetViewSwitch, type SpreadsheetViewMode, type SpreadsheetViewOptions } from "../../../lib/spreadsheet/view-options";
+import { MAX_NAMED_SHEET_VIEWS, applySheetViewFilters, buildSheetViewSortState, createNamedSheetViewId, defaultNamedSheetViewRef, sheetViewRefForRange, ensureSheetViewSessionTables, persistedSheetsForSheetViewSession, reprojectSheetViewSession, rebuildNamedSheetViewState, sheetViewAuthoringBlocker, sheetViewRefOverlapsTable, sheetViewRegionsRowOrder, sheetViewSortRegionConflict, sheetViewSortRegions, sheetViewStateHasFilters, sheetViewStateOfSheet, sheetViewTableFilterId, sheetViewVisibleRowOrder, type SheetViewSortKeyInput } from "../../../lib/spreadsheet/sheet-views";
 import { parseSpreadsheetWorkbookThemeFile, spreadsheetThemeShapeVisual, spreadsheetWorkbookThemeFontKey, spreadsheetThemeFontSetForLocale, spreadsheetWorkbookThemeFontSet, nativeGridFontForLocale, spreadsheetWorkbookThemePaletteId, type SpreadsheetWorkbookThemeSelection } from "@mrnote/core/web/lib/spreadsheet/workbook-theme.ts";
 import {
   checkboxSeedValue,
@@ -2057,8 +1784,8 @@ import {
   steppedVisibleLine,
   rowsShownLandingPast,
   type NavDirection,
-} from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
-import { gridCellWithDefaultLook, xlsxDefaultLookEnabled, type DefaultLookSheet } from "@mrnote/core/web/lib/spreadsheet/default-look.ts";
+} from "../../../lib/spreadsheet/grid-nav";
+import { copiedCellStyle, gridCellWithDefaultLook, xlsxDefaultLookEnabled, type DefaultLookSheet } from "@mrnote/core/web/lib/spreadsheet/default-look.ts";
 import { compactLineStyleCells, deferredLineStyleBudget, expandLineStyleRuns, lineBlankAt, lineStyleAt, newCellsTakeLineFormats, writeLineBlanksIn, materializeLineStyles, printedLineBlanksSheet, type LineStyleMap } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
 import {
   entryWalkAnchor,
@@ -2069,13 +1796,7 @@ import {
 } from "../../../lib/spreadsheet/selection-entry-walk";
 import { columnAutocomplete } from "../../../lib/spreadsheet/autocomplete";
 import { isSpreadsheetImeKeydown } from "../../../lib/spreadsheet/ime-composition";
-import {
-  normalizeFixedWidthBreaks,
-  splitColumnByDelimiters,
-  splitColumnByFixedWidth,
-  type TextToColumnsColumnFormat,
-  type TextToColumnsQualifier,
-} from "@mrnote/core/web/lib/spreadsheet/text-to-columns.ts";
+import { type TextToColumnsColumnFormat, type TextToColumnsQualifier } from "@mrnote/core/web/lib/spreadsheet/text-to-columns.ts";
 import { surroundingDataRegion, sortSelectionExpansion, MAX_ANALYZED_REGION_CELLS, MAX_INFERRED_DATA_REGION_CELLS } from "@mrnote/core/web/lib/spreadsheet/data-region.ts";
 import {
   worksheetAutoFilterRange,
@@ -2167,22 +1888,22 @@ import { planSpreadsheetCellValue, planTableAutoExpansion, type SpreadsheetAutoF
 import { type CopilotWorkbookValues, fetchCopilotWorkbookResults, planSpreadsheetCopilotChart, planSpreadsheetCopilotSortFilter, planSpreadsheetCopilotValues, resolveCellChartValue } from "./spreadsheet/spreadsheetWorkbookValuePlans";
 import { buildContent, dataSourceInventoryHasEntries, normalizeDataSourceInventory, type SpreadsheetDataSourceInventoryState } from "./spreadsheet/spreadsheetBuildContent";
 import { chartGroupEntriesWithMemberFrames, frameGestureMembers, inkObjectPlacementStyle, nextGridLineAtPixels, objectPositionStyle, releaseObjectMoveCapture, type SpreadsheetInkGesture, type SpreadsheetInkInteractionMode, type SpreadsheetInkPreset, type SpreadsheetObjectFrameGesture, type SpreadsheetObjectResizeHandle, type SpreadsheetObjectTransformGesture, type SpreadsheetObjectTransformPreview, type SpreadsheetPictureCropGesture, type SpreadsheetPictureCropPreview } from "./spreadsheet/spreadsheetObjectGestures";
-import { DRAWING_LAYER_CHROME_Z, isSpreadsheetInkObject, isSpreadsheetLassoObject, MAX_SHEET_OBJECTS, sheetObjectsWithOpenedSmartArt, spreadsheetInkReplayShape, spreadsheetInkToShapeObject, spreadsheetLassoObjectScaled, spreadsheetLineFollowsBox, spreadsheetObjectContext, spreadsheetObjectHasPatchbackVisibilityIdentity, spreadsheetObjectPlainText, spreadsheetDrawingDisplayName, spreadsheetPictureDisplayName, spreadsheetPictureOrdinalMap, spreadsheetSheetDrawingNamer } from "./spreadsheet/spreadsheetObjectContext";
+import { DRAWING_LAYER_CHROME_Z, isSpreadsheetInkObject, isSpreadsheetLassoObject, MAX_SHEET_OBJECTS, sheetObjectsWithOpenedSmartArt, spreadsheetInkReplayShape, spreadsheetLassoObjectScaled, spreadsheetLineFollowsBox, spreadsheetObjectContext, spreadsheetObjectHasPatchbackVisibilityIdentity, spreadsheetObjectPlainText, spreadsheetDrawingDisplayName, spreadsheetPictureDisplayName, spreadsheetPictureOrdinalMap, spreadsheetSheetDrawingNamer } from "./spreadsheet/spreadsheetObjectContext";
 /** A stroke the lasso scales stays clear of the row and column headers. */
 const INK_LASSO_SCALE_MIN = { left: SPREADSHEET_HEADER_WIDTH_PX, top: SPREADSHEET_HEADER_HEIGHT_PX } as const;
 import { type ChartDesignDialogAuthority, type ChartDesignMutationReceipt, type ConditionalFormatMutationReceipt, type DataFromPictureDialogAuthority, type DataValidationDialogAuthority, type InsertMutationReceipt, type LiveReviewCommentPageAuthority, PAGE_SETUP_FOCUS_TEST_ID, type PageSetupDialogAuthority, type PageSetupFocusTarget, type PageSetupMutationReceipt, type PageSetupReturnFocus, type PageSetupReturnFocusTestId, type PageSetupSelectionSnapshot, type PageSetupSourceAuthority, pageSetupTabForFocusTarget, type PictureFormatMutationReceipt, type PictureFormatWriterControlId, type PictureMetadataMutationReceipt, type PictureMetadataWriterControlId, type PictureRotationDialogAuthority, type PivotChartCreateReceipt, type PivotContextMutationReceipt, type PivotContextWriterControlId, type PivotCreationDraft, type PivotCreationFieldArea, type PivotCreationMutationReceipt, pivotCreationSourceA1, type PivotMoveDialogDraft, type PivotSlicerInsertMutationReceipt, type PivotSourceDialogAuthority, type PivotValueFieldSettingsDraft, type RecommendedInsertConfirmReceipt, type ReviewCommentDialogAuthority, type ReviewCommentMutationReceipt, type ShapeFormatMutationReceipt, type ShapeFormatWriterControlId, type ShapeRotationDialogAuthority, type SlicerDesignMutationReceipt, type SlicerDesignWriterControlId, type SparklineDesignMutationReceipt, type SparklineDesignWriterControlId, type TableAltTextMutationReceipt, type TableNameMutationReceipt, type TableResizeMutationReceipt, type TableSlicerInsertMutationReceipt, type TableStyleMutationReceipt, type TableStyleOption, type TableStyleOptionControlId, type TableStyleOptionMutationReceipt, type WorkbookProtectionDialogAuthority, type WorkbookProtectionMutationReceipt } from "./spreadsheet/spreadsheetMutationReceipts";
 import { takePageLinkOpen } from "@mrnote/core/web/lib/page-link-intent.ts";
-import { mergeForwardSplitPaneAuthority, readSheetViewScopePreference, type SheetHistoryEntry, sheetsWithoutSplitView, type SheetViewDialogState, type SheetViewMappedCellMutation, type SheetViewMappedDrawingMutation, type SheetViewMappedLineMutation, type SheetViewMappedPageMutation, type SheetViewScopedAction, type SheetViewScopePreference, type SheetViewSession, splitPaneAuthorityFingerprint, writeSheetViewScopePreference } from "./spreadsheet/spreadsheetSheetViews";
-import { DEFAULT_DELIMITED_IMPORT_NUMBER_OPTIONS, delimitedImportDestinationFits, parseCsvImportFixedWidthBreaks, type SpreadsheetDelimitedImportPreview } from "./spreadsheet/spreadsheetDelimitedImport";
+import { mergeForwardSplitPaneAuthority, readSheetViewScopePreference, type SheetHistoryEntry, sheetsWithoutSplitView, type SheetViewDialogState, type SheetViewMappedCellMutation, type SheetViewMappedDrawingMutation, type SheetViewMappedLineMutation, type SheetViewMappedPageMutation, type SheetViewScopedAction, type SheetViewScopePreference, type SheetViewSession, splitPaneAuthorityFingerprint } from "./spreadsheet/spreadsheetSheetViews";
+import { delimitedImportDestinationFits, type SpreadsheetDelimitedImportPreview } from "./spreadsheet/spreadsheetDelimitedImport";
 import { spreadsheetWorkbookAiContext } from "../../../__m__/m73cdf325db";
 import { FUNCTION_ARGUMENT_RANGE_RE, functionArgumentGridText, functionArgumentValueText, spreadsheetRelativeRangeRef, withFunctionArgumentValue, worksheetCalculationDescriptors, worksheetHistoryContentSheetId } from "./spreadsheet/spreadsheetFormulaHelpers";
-import { CELL_SHIFT_DIALOG_OPTIONS, type CellShiftChoice, type CreateTableDraft, type CreateTableError, defaultCellShiftChoice, initialNoteDraft, parseSolverCells, type RecommendedChartDraft, type ValidationDialogKind } from "./spreadsheet/spreadsheetDialogDrafts";
+import { CELL_SHIFT_DIALOG_OPTIONS, type CellShiftChoice, type CreateTableDraft, type CreateTableError, defaultCellShiftChoice, initialNoteDraft, type RecommendedChartDraft, type ValidationDialogKind } from "./spreadsheet/spreadsheetDialogDrafts";
 import { buildPivotRecommendationPreview, CHART_SELECTION_CHUNK_ROWS, CHART_SELECTION_DEFER_MS, CHART_SELECTION_SYNC_CELLS, chartMatrixProfiles, chartProfileFor, type PivotRecommendationDraft, RECOMMENDED_CHART_ROUNDTRIP_TYPES, recommendSafeChartTypes, SPREADSHEET_CHART_MENU_TYPES, spreadsheetAllChartsFamilies, spreadsheetChartMenuControlId, spreadsheetChartMenuFamilies, spreadsheetChartMenuForFamily, type SpreadsheetChartMenuId } from "./spreadsheet/spreadsheetChartInsertMenus";
-import { announceCommandResult, conditionalFormatKindIsClassicNativeEditable, formulaIntelPlacement, hasValidPageSetupSheetAuthority, type MoveCopySheetDialogAuthority, type MoveCopySheetLiveAuthority, nextReviewCommentPageAuthorityGeneration, noZoomCommitSideEffect, personalMacroStorage, pivotSourceTableByName, type ProjectedWorkbookLinkReference, projectedWorkbookLinkReferences, quietClipboardWrite, readSpreadsheetPictureFile, rebaseLocalSheetEdits, spreadsheetAltTextPaneKey, spreadsheetCellPictureAltTextKey, spreadsheetEditFailureMessage, spreadsheetPxToPt, spreadsheetWorkbookFolder, spreadsheetZoomPercentFromPosition, spreadsheetZoomPositionFromPercent, systemSpreadsheetCalendarClock, type TraceArrowEndpoint, type TraceMode, type TraceSession, type WorkbookImportAuthority } from "./spreadsheet/spreadsheetWindowHelpers";
+import { announceCommandResult, conditionalFormatKindIsClassicNativeEditable, formulaIntelPlacement, hasValidPageSetupSheetAuthority, type MoveCopySheetDialogAuthority, type MoveCopySheetLiveAuthority, nextReviewCommentPageAuthorityGeneration, noZoomCommitSideEffect, personalMacroStorage, pivotSourceTableByName, type ProjectedWorkbookLinkReference, quietClipboardWrite, readSpreadsheetPictureFile, rebaseLocalSheetEdits, spreadsheetAltTextPaneKey, spreadsheetCellPictureAltTextKey, spreadsheetEditFailureMessage, spreadsheetPxToPt, spreadsheetWorkbookFolder, spreadsheetZoomPercentFromPosition, spreadsheetZoomPositionFromPercent, systemSpreadsheetCalendarClock, type TraceArrowEndpoint, type TraceMode, type TraceSession, type WorkbookImportAuthority } from "./spreadsheet/spreadsheetWindowHelpers";
 import { DATA_CONVERSION_OPTIONS_SEARCH_ID } from "./spreadsheet/spreadsheetWindowConstants";
 import { DEFAULT_SPARKLINE_STYLE_ID, sparklineInThemeCached, sparklineStyleById, sparklineStylePatch, type SparklineStyle } from "../../../lib/spreadsheet/sparkline-styles";
 import { openDataConversionOptions } from "../../../lib/spreadsheet/csv-conversion-notice-registry";
-import { ALT_TEXT_PANE_WRITE_DELAY_MS, AUTO_SUM_MENU_FUNCTIONS, createSpreadsheetWindowCaches, CELLS_A_COMMIT_NAMES, AutoGrowRows, cellShiftFormulaCandidateCache, CUSTOM_LISTS_SEARCH_ID, EDIT_RANGE_PASSWORD_KEPT, EMPTY_PIVOT_RANGES, EMPTY_PIVOT_REPORTS, ERROR_CHECKING_OPTIONS_SEARCH_ID, EYE_CARE_SEARCH_ID, FILL_BLANKS_SEARCH_ID, HOME_BORDER_PRESETS, type HomeBorderMenuPreset, importedChartRenderCache, literalEditSources, MARQUEE_EDGE, MAX_SPREADSHEET_THEME_FILE_BYTES, MAX_TRACE_RELATIONSHIPS, nativeChartViewCache, PAGE_WRITE_REASON_CODES, pivotBodyCellStyle, pivotHeaderCellStyle, preparedCellShiftFormulas, SHOW_DESKTOP_WATCH_WINDOW, SHOW_SPREADSHEET_DESKTOP_FORMULAS_EXTRAS, SPELL_CHECK_WHILE_TYPING_SEARCH_ID, SPREADSHEET_COPILOT_V1_ENABLED, SPREADSHEET_DROP_IMPORT_FILE, SPREADSHEET_EXPORT_STATUS_LINGER_MS, SPREADSHEET_EYEDROPPER_CURSOR, SPREADSHEET_PRINT_STATUS_FORMAT, SPREADSHEET_FONT_SIZE_OPTIONS, SPREADSHEET_FONT_SIZES_PT, SPREADSHEET_TASK_PANE_EDGES, type SPREADSHEET_ZOOM_DIALOG_PRESETS, spreadsheetTaskPaneTabTestId, TIMELINE_SEARCH_ID } from "./spreadsheet/spreadsheetWindowConstants";
+import { ALT_TEXT_PANE_WRITE_DELAY_MS, AUTO_SUM_MENU_FUNCTIONS, createSpreadsheetWindowCaches, CELLS_A_COMMIT_NAMES, AutoGrowRows, cellShiftFormulaCandidateCache, CUSTOM_LISTS_SEARCH_ID, EMPTY_PIVOT_RANGES, EMPTY_PIVOT_REPORTS, EYE_CARE_SEARCH_ID, FILL_BLANKS_SEARCH_ID, HOME_BORDER_PRESETS, type HomeBorderMenuPreset, importedChartRenderCache, literalEditSources, MARQUEE_EDGE, MAX_SPREADSHEET_THEME_FILE_BYTES, nativeChartViewCache, PAGE_WRITE_REASON_CODES, pivotBodyCellStyle, pivotHeaderCellStyle, preparedCellShiftFormulas, SHOW_DESKTOP_WATCH_WINDOW, SHOW_SPREADSHEET_DESKTOP_FORMULAS_EXTRAS, SPELL_CHECK_WHILE_TYPING_SEARCH_ID, SPREADSHEET_COPILOT_V1_ENABLED, SPREADSHEET_DROP_IMPORT_FILE, SPREADSHEET_EXPORT_STATUS_LINGER_MS, SPREADSHEET_EYEDROPPER_CURSOR, SPREADSHEET_PRINT_STATUS_FORMAT, SPREADSHEET_FONT_SIZE_OPTIONS, SPREADSHEET_FONT_SIZES_PT, SPREADSHEET_TASK_PANE_EDGES, type SPREADSHEET_ZOOM_DIALOG_PRESETS, spreadsheetTaskPaneTabTestId, TIMELINE_SEARCH_ID } from "./spreadsheet/spreadsheetWindowConstants";
 import { SpreadsheetGridRows, SpreadsheetWindowContent } from "./spreadsheet/SpreadsheetWindowFrame";
 import { SpreadsheetGridBand, SpreadsheetGridBandStore, type SpreadsheetGridBandState } from "./spreadsheet/SpreadsheetGridBand";
 import { GRID_MOTION_ARMED_MS, GRID_MOTION_SETTLE_MS, SpreadsheetGridMotion, type GridMotionRowCells, gridMotionCanvasEnabled, gridMotionKeptCells } from "./spreadsheet/SpreadsheetGridMotion";
@@ -2205,13 +1926,11 @@ import { gridCanvasCellText } from "./spreadsheet/gridCanvasCellText";
 import { gridCanvasTextEnabled } from "../../../lib/spreadsheet/grid-canvas-text";
 import { separateTaskPanes, useSpreadsheetTaskPaneLayout } from "./spreadsheet/useSpreadsheetTaskPaneLayout";
 import { shownOfficeTaskPane, useOfficeTaskPaneLayout } from "@mrnote/core/web/components/office-ribbon/officeTaskPaneLayout.tsx";
-import { useSpreadsheetNavigationSheets } from "./spreadsheet/useSpreadsheetNavigationSheets";
 import { withSheetSmartArtAuthorMarks } from "../../../lib/spreadsheet/smartart-author-marks";
 import { smartArtSlotPictureFormatOf, type SmartArtSlotPictureCommand } from "@mrnote/core/web/lib/office-smartart/slot-picture-format.ts";
 import { spreadsheetFormatPaneTabs } from "./spreadsheet/spreadsheetFormatPaneTabs";
 import { spreadsheetHomeCellsFormatMenuItems } from "./spreadsheet/spreadsheetHomeCellsFormatMenuItems";
 import { useSpreadsheetSortByActiveColumn } from "./spreadsheet/useSpreadsheetSortByActiveColumn";
-import { useSpreadsheetRunSolver } from "./spreadsheet/useSpreadsheetRunSolver";
 import { useSpreadsheetRunWorkbookImport } from "./spreadsheet/useSpreadsheetRunWorkbookImport";
 import { useSpreadsheetSelectionAutoFit } from "./spreadsheet/useSpreadsheetSelectionAutoFit";
 import {
@@ -2227,8 +1946,6 @@ import { paintSpreadsheetObjectSnapGuides, spreadsheetObjectSnapScene, type Spre
 import { snapObjectPoint } from "@mrnote/core/web/lib/office-object-snap.ts";
 import { useSpreadsheetPivotFieldAreas } from "./spreadsheet/useSpreadsheetPivotFieldAreas";
 import { useSpreadsheetTableTotalsAndSlicers } from "./spreadsheet/useSpreadsheetTableTotalsAndSlicers";
-import { useSpreadsheetSheetViewSwitching } from "./spreadsheet/useSpreadsheetSheetViewSwitching";
-import { useSpreadsheetNameManagerRows } from "./spreadsheet/useSpreadsheetNameManagerRows";
 import { spreadsheetSheetTabContextMenuItems } from "./spreadsheet/spreadsheetSheetTabContextMenuItems";
 import { spreadsheetChartDesignControlState } from "./spreadsheet/spreadsheetChartDesignControlState";
 import { type SpreadsheetFormatPaneOpening } from "./spreadsheet/spreadsheetShapeFormatAdapter";
@@ -2268,13 +1985,11 @@ import { useSpreadsheetRunSort } from "./spreadsheet/useSpreadsheetRunSort";
 import { useSpreadsheetSortDataTable } from "./spreadsheet/useSpreadsheetSortDataTable";
 import { useSpreadsheetSortDialogOptions } from "./spreadsheet/useSpreadsheetSortDialogOptions";
 import { useSpreadsheetSortLevelSetters } from "./spreadsheet/useSpreadsheetSortLevelSetters";
-import { useSpreadsheetValidationCommands } from "./spreadsheet/useSpreadsheetValidationCommands";
 import { useSpreadsheetPageBreakPreviewFrame } from "./spreadsheet/useSpreadsheetPageBreakPreviewFrame";
 import { useSpreadsheetPivotToggles } from "./spreadsheet/useSpreadsheetPivotToggles";
 import { useSpreadsheetFormControlsAndFormatPainter } from "./spreadsheet/useSpreadsheetFormControlsAndFormatPainter";
 import { SpreadsheetFormControlView } from "./spreadsheet/SpreadsheetFormControlView";
 import { spreadsheetFormControlOf, type FormControlCellText } from "../../../lib/spreadsheet/form-control-drawing";
-import { useSpreadsheetRunForecastSheet } from "./spreadsheet/useSpreadsheetRunForecastSheet";
 import { useSpreadsheetWatchWindow } from "./spreadsheet/useSpreadsheetWatchWindow";
 import { useSpreadsheetCopilotDataContext } from "@mrnote/core/web/__cut__/m803810ea6c.tsx";
 import { spreadsheetBeginPictureCropGesture } from "./spreadsheet/spreadsheetBeginPictureCropGesture";
@@ -2316,31 +2031,16 @@ import {
   type SmartArtPreparation,
 } from "@mrnote/core/web/lib/office-smartart/prepared-conversion.ts";
 import { renderSpreadsheetDelimitedImportDialog } from "./spreadsheet/renderSpreadsheetDelimitedImportDialog";
-import { renderSpreadsheetDataValidationDialog } from "./spreadsheet/renderSpreadsheetDataValidationDialog";
-import { renderSpreadsheetNameManagerDialog } from "./spreadsheet/renderSpreadsheetNameManagerDialog";
 import { renderSpreadsheetPivotValueFieldSettingsDialog } from "./spreadsheet/renderSpreadsheetPivotValueFieldSettingsDialog";
 import { renderSpreadsheetPivotFieldListPane } from "./spreadsheet/renderSpreadsheetPivotFieldListPane";
-import { renderSpreadsheetSolverParametersDialog } from "./spreadsheet/renderSpreadsheetSolverParametersDialog";
-import { renderSpreadsheetDataFormDialog } from "./spreadsheet/renderSpreadsheetDataFormDialog";
 import { renderSpreadsheetPhoneticSettingsDialog } from "./spreadsheet/renderSpreadsheetPhoneticSettingsDialog";
 import { renderSpreadsheetGoToSpecialDialog } from "./spreadsheet/renderSpreadsheetGoToSpecialDialog";
 import { renderSpreadsheetHyperlinkDialog } from "./spreadsheet/renderSpreadsheetHyperlinkDialog";
 import { renderSpreadsheetSelectionPane } from "./spreadsheet/renderSpreadsheetSelectionPane";
 import { renderSpreadsheetStatusBar } from "./spreadsheet/renderSpreadsheetStatusBar";
 import { type DataFormSaveIntent, type FormulaIntel, type MacroRunSession, type ScenarioFormDraft, type ValidatedDraftTask } from "./spreadsheet/spreadsheetWindowLocalTypes";
-import { renderSpreadsheetTextToColumnsDialog } from "./spreadsheet/renderSpreadsheetTextToColumnsDialog";
-import { renderSpreadsheetScenarioManagerDialog } from "./spreadsheet/renderSpreadsheetScenarioManagerDialog";
-import { renderSpreadsheetScenarioEditDialog } from "./spreadsheet/renderSpreadsheetScenarioEditDialog";
-import { renderSpreadsheetAutomationCatalogDialog } from "./spreadsheet/renderSpreadsheetAutomationCatalogDialog";
 import { renderSpreadsheetTimelineDialog } from "./spreadsheet/renderSpreadsheetTimelineDialog";
 import { renderSpreadsheetFillSeriesDialog } from "./spreadsheet/renderSpreadsheetFillSeriesDialog";
-import { renderSpreadsheetWorkbookProtectionDialog } from "./spreadsheet/renderSpreadsheetWorkbookProtectionDialog";
-import { renderSpreadsheetSheetViewOptionsDialog } from "./spreadsheet/renderSpreadsheetSheetViewOptionsDialog";
-import { renderSpreadsheetAccessibilityDialog } from "./spreadsheet/renderSpreadsheetAccessibilityDialog";
-import { renderSpreadsheetRemoveDuplicatesDialog } from "./spreadsheet/renderSpreadsheetRemoveDuplicatesDialog";
-import { renderSpreadsheetSubtotalDialog } from "./spreadsheet/renderSpreadsheetSubtotalDialog";
-import { renderSpreadsheetSolverOptionsDialog } from "./spreadsheet/renderSpreadsheetSolverOptionsDialog";
-import { renderSpreadsheetScenarioSummaryDialog } from "./spreadsheet/renderSpreadsheetScenarioSummaryDialog";
 import { renderSpreadsheetCellShiftDialog } from "./spreadsheet/renderSpreadsheetCellShiftDialog";
 import { SpreadsheetPrintDialog } from "./spreadsheet/SpreadsheetPrintDialog";
 import { SpreadsheetIconGallery } from "./spreadsheet/SpreadsheetIconGallery";
@@ -2352,15 +2052,12 @@ import {
 } from "../../../lib/spreadsheet/print-scope";
 import { renderSpreadsheetSortWarningDialog, type SortWarningRun } from "./spreadsheet/renderSpreadsheetSortWarningDialog";
 import { renderSpreadsheetNewCellStyleDialog } from "./spreadsheet/renderSpreadsheetNewCellStyleDialog";
-import { renderSpreadsheetEditRangesDialog } from "./spreadsheet/renderSpreadsheetEditRangesDialog";
 import { renderSpreadsheetTableControls } from "./spreadsheet/renderSpreadsheetTableControls";
 import { renderSpreadsheetRecommendedChartsDialog } from "./spreadsheet/renderSpreadsheetRecommendedChartsDialog";
 import { renderSpreadsheetCreateTableDialog } from "./spreadsheet/renderSpreadsheetCreateTableDialog";
 import { renderSpreadsheetInsertSymbolDialog } from "./spreadsheet/renderSpreadsheetInsertSymbolDialog";
 import { renderSpreadsheetCustomListsDialog } from "./spreadsheet/renderSpreadsheetCustomListsDialog";
 import { renderSpreadsheetSparklineDialog } from "./spreadsheet/renderSpreadsheetSparklineDialog";
-import { renderSpreadsheetSolverConstraintDialog } from "./spreadsheet/renderSpreadsheetSolverConstraintDialog";
-import { renderSpreadsheetScenarioMergeDialog } from "./spreadsheet/renderSpreadsheetScenarioMergeDialog";
 import { renderSpreadsheetInkReplayBar } from "./spreadsheet/renderSpreadsheetInkReplayBar";
 import { renderSpreadsheetPictureRotationDialog } from "./spreadsheet/renderSpreadsheetPictureRotationDialog";
 import { renderSpreadsheetShapeRotationDialog } from "./spreadsheet/renderSpreadsheetShapeRotationDialog";
@@ -2373,12 +2070,7 @@ import { renderSpreadsheetChangePivotSourceDialog } from "./spreadsheet/renderSp
 import { renderSpreadsheetRenamePivotTableDialog } from "./spreadsheet/renderSpreadsheetRenamePivotTableDialog";
 import { renderSpreadsheetRenameChartDialog } from "./spreadsheet/renderSpreadsheetRenameChartDialog";
 import { renderSpreadsheetRenamePictureDialog } from "./spreadsheet/renderSpreadsheetRenamePictureDialog";
-import { renderSpreadsheetSheetViewScopeDialog } from "./spreadsheet/renderSpreadsheetSheetViewScopeDialog";
-import { renderSpreadsheetLocalScriptDialog } from "./spreadsheet/renderSpreadsheetLocalScriptDialog";
 import { renderSpreadsheetFillBlanksDialog } from "./spreadsheet/renderSpreadsheetFillBlanksDialog";
-import { renderSpreadsheetGoalSeekDialog } from "./spreadsheet/renderSpreadsheetGoalSeekDialog";
-import { renderSpreadsheetDataTableWhatIfDialog } from "./spreadsheet/renderSpreadsheetDataTableWhatIfDialog";
-import { renderSpreadsheetScenarioValuesDialog } from "./spreadsheet/renderSpreadsheetScenarioValuesDialog";
 import { renderSpreadsheetPictureLinkDialog } from "./spreadsheet/renderSpreadsheetPictureLinkDialog";
 import { renderSpreadsheetChartPasteSpecialDialog } from "./spreadsheet/renderSpreadsheetChartPasteSpecialDialog";
 import { renderSpreadsheetStandardWidthDialog } from "./spreadsheet/renderSpreadsheetStandardWidthDialog";
@@ -2387,9 +2079,6 @@ import { renderSpreadsheetZoomDialog } from "./spreadsheet/renderSpreadsheetZoom
 import { renderSpreadsheetIterationDialog, renderSpreadsheetPrecisionWarning, spreadsheetIterationDialogLimits, type SpreadsheetIterationDialogDraft } from "./spreadsheet/renderSpreadsheetIterationDialog";
 import { cellsAtKeysRoundedAsDisplayed, cellsRoundedAsDisplayed } from "@mrnote/core/web/lib/spreadsheet/display-precision.ts";
 import { cellsWithTableOwnEdges, sheetWithoutHeaderOwnBorder, tableOwnEdgeKeys, tablesWithOwnBorders } from "@mrnote/core/web/lib/spreadsheet/table-own-borders.ts";
-import { renderSpreadsheetEditRangeConfirmDialog } from "./spreadsheet/renderSpreadsheetEditRangeConfirmDialog";
-import { renderSpreadsheetAddCustomViewDialog } from "./spreadsheet/renderSpreadsheetAddCustomViewDialog";
-import { renderSpreadsheetPasteNamesDialog } from "./spreadsheet/renderSpreadsheetPasteNamesDialog";
 import { renderSpreadsheetMergeStylesDialog } from "./spreadsheet/renderSpreadsheetMergeStylesDialog";
 import { SpreadsheetTouchSelectionLayer } from "./spreadsheet/SpreadsheetTouchSelectionLayer";
 import { syntheticHandleEvent, useSpreadsheetTouchGestures } from "./spreadsheet/useSpreadsheetTouchGestures";
@@ -3066,7 +2755,6 @@ function SpreadsheetWindow({
   const [dataQueryBusy, setDataQueryBusy] = useState(false);
   const dataQueryBusyRef = useRef(false);
   const [dataQueryError, setDataQueryError] = useState<string>();
-  const dataQueryReturnFocusRef = useRef<HTMLElement | null>(null);
   const dataQueryImportBusyRef = useRef<number | null>(null);
   const createTableRangeInputRef = useRef<HTMLInputElement>(null);
   const [pivotRecommendationDraft, setPivotRecommendationDraft] =
@@ -3259,11 +2947,6 @@ function SpreadsheetWindow({
       acceptedMediaTypes: ["image/jpeg", "image/png", "image/webp"],
       sources: ["file", "clipboard"],
     });
-  const [dataFromPictureDialogAuthority, setDataFromPictureDialogAuthority] =
-    useState<DataFromPictureDialogAuthority | null>(null);
-  const dataFromPictureLaunchSourceRef =
-    useRef<SpreadsheetDataFromPictureSource | null>(null);
-  const dataFromPictureTriggerRef = useRef<HTMLButtonElement>(null);
   const chartDesignMutationCommandRef =
     useRef<ChartDesignMutationReceipt | null>(null);
   const chartDesktopAuthorityRef = useRef<ChartDesignDialogAuthority | null>(null);
@@ -3496,7 +3179,6 @@ function SpreadsheetWindow({
     useRef<WorkbookProtectionMutationReceipt | null>(null);
   const [workbookProtectionPasswordDraft, setWorkbookProtectionPasswordDraft] =
     useState("");
-  const workbookProtectionPasswordInputRef = useRef<HTMLInputElement>(null);
   const [workbookProtectionError, setWorkbookProtectionError] = useState<
     string | null
   >(null);
@@ -3504,9 +3186,6 @@ function SpreadsheetWindow({
   // Password step; the typed passwords never leave this dialog state.
   const [workbookProtectionStructure, setWorkbookProtectionStructure] =
     useState(true);
-  const [workbookProtectionConfirmDraft, setWorkbookProtectionConfirmDraft] =
-    useState<string | null>(null);
-  const [workbookProtectionBusy, setWorkbookProtectionBusy] = useState(false);
   const [tableStylePreview, setTableStylePreview] = useChangedState<{
     tableId: string;
     styleId: TableStyleChoice;
@@ -3760,8 +3439,6 @@ function SpreadsheetWindow({
   const sheetViewMappedDrawingAuthorityRef = useRef(Symbol("sheet-view-mapped-drawing-authority"));
   const [sheetViewDialog, setSheetViewDialog] =
     useState<SheetViewDialogState | null>(null);
-  const sheetViewDialogInputRef = useRef<HTMLInputElement>(null);
-  const sheetViewReturnFocusRef = useRef<HTMLElement | null>(null);
   // Excel exposes a very large logical worksheet while storing only cells that
   // carry content/formatting. Keep the lazily revealed empty extent in session
   // state, per sheet: scrolling must not enter document history or autosave.
@@ -3773,14 +3450,10 @@ function SpreadsheetWindow({
       status: "idle",
       inventory: null,
     });
-  const workbookLinkFindCursorRef = useRef(new Map<string, number>());
   const [dataSourceInventoryDialog, setDataSourceInventoryDialog] = useState<
     "connections" | "workbookLinks" | null
   >(null);
   const dataSourceInventoryRequestRef = useRef(0);
-  // Imported Power Query queries: the one whose M text is open, the one refreshing.
-  const [nativeQueryFormulaName, setNativeQueryFormulaName] = useState<string | null>(null);
-  const [nativeQueryBusyName, setNativeQueryBusyName] = useState<string | null>(null);
   // Each sheet has its own view, as each worksheet's view holds it in Excel
   // (sheetView@view). The view a sheet was saved in seeds it; switching
   // Normal / Page Layout / Page Break Preview is session authority held per
@@ -4114,9 +3787,6 @@ function SpreadsheetWindow({
     },
     [zoomSheetId, storedZoomLevel],
   );
-  const zoomReset = useCallback(() => {
-    setSheetZoom(EDITOR_ZOOM_DEFAULT);
-  }, [setSheetZoom]);
   const setSpreadsheetZoomPercent = useCallback(
     (percent: number) => setSheetZoom(clampZoom(percent / 100)),
     [setSheetZoom],
@@ -4994,7 +4664,6 @@ function SpreadsheetWindow({
   inkPresetRef.current = officeInkPenById(inkPens, inkPresetId);
   const [inkEraser, setInkEraser] = useState<DocumentInkEraser>("stroke");
   const inkEraserRef = useRef<DocumentInkEraser>("stroke");
-  const [inkTrackpad, setInkTrackpad] = useState(false);
   // XLS-A032: Draw ▸ Convert — Ink to Shape, Ink to Math and Ink to Text are
   // modes, one at a time, as on PowerPoint's Draw tab (lib/office-ink-
   // conversion): under Ink to Shape a stroke that plainly is a shape lands as
@@ -5156,24 +4825,6 @@ function SpreadsheetWindow({
   }, []);
   const selectionPaneRef = useRef<HTMLElement>(null);
   const [navigationPaneOpen, setNavigationPaneOpen] = useState(false);
-  // Review > Thesaurus: the shared pane (PowerPoint's own), docked with the
-  // workbook's other panes. The seed's nonce re-opens it on a new word; the
-  // target is the cell text Insert replaces.
-  const [thesaurusOpen, setThesaurusOpen] = useState(false);
-  const [thesaurusSeed, setThesaurusSeed] = useState<{ word: string; nonce: number }>({
-    word: "",
-    nonce: 0,
-  });
-  const thesaurusTargetRef = useRef<{
-    sheetId: string;
-    row: number;
-    col: number;
-    word: string;
-    from: number;
-    value: string;
-  } | null>(null);
-  const [thesaurusTargetCell, setThesaurusTargetCell] = useState<string | null>(null);
-  const navigationTriggerRef = useRef<HTMLButtonElement>(null);
   const navigationActionReturnFocusRef = useRef<HTMLButtonElement>(null);
   const navigationRenameInputRef = useRef<HTMLInputElement>(null);
   const [navigationPictureRenameDraft, setNavigationPictureRenameDraft] =
@@ -5229,7 +4880,6 @@ function SpreadsheetWindow({
     sheetId: string;
   } | null>(null);
   const noteDraftRef = useRef("");
-  const [notesShownAll, setNotesShownAll] = useState(false);
   const [commentsPaneOpen, setCommentsPaneOpen] = useState(false);
   // The cell (`sheetId:row:col`) a comment is being STARTED on from the open
   // Comments pane. Excel drafts it as a card in the pane, not in a popover
@@ -5600,68 +5250,17 @@ function SpreadsheetWindow({
   // The Insert chart button whose gallery its PRIMARY half opened (a button
   // over several kinds whose own default does not suit the selection).
   const [insertChartMenuOpen, setInsertChartMenuOpen] = useState<SpreadsheetChartMenuId | null>(null);
-  const [nameManagerOpen, setNameManagerOpen] = useState(false);
-  const [nameManagerMode, setNameManagerMode] = useState<
-    "list" | "create" | "edit"
-  >("list");
-  // Name Manager's Filter menu (XLS-A066): scope, errors and kind combine.
-  const [nameManagerFilter, setNameManagerFilter] =
-    useState<NameManagerFilter>(NAME_MANAGER_NO_FILTER);
-  const [nameManagerSort, setNameManagerSort] = useState<"asc" | "desc">(
-    "asc",
-  );
-  const [nameManagerSelectedIdentity, setNameManagerSelectedIdentity] =
-    useState<string | null>(null);
-  const [nameManagerDraft, setNameManagerDraft] = useState<{
-    name: string;
-    ref: string;
-    scope: "workbook" | "worksheet";
-    comment: string;
-  }>({ name: "", ref: "", scope: "workbook", comment: "" });
-  const [nameManagerError, setNameManagerError] = useState<
-    | "spreadsheet.names.sourceChanged"
-    | "spreadsheet.names.sourceReadOnly"
-    | "spreadsheet.names.invalidUnique"
-    | "spreadsheet.names.relativeRef"
-    | "spreadsheet.names.renameCaptured"
-    | "spreadsheet.names.renameCapturedByFormula"
-    | null
-  >(null);
-  const [nameManagerDialogAuthority, setNameManagerDialogAuthority] =
-    useState<{
-      workbook: readonly SheetModel[];
-      activeSheetIndex: number;
-      sheet: SheetModel;
-      sheetId: string;
-    } | null>(null);
-  const nameManagerInputRef = useRef<HTMLInputElement>(null);
-  const nameManagerReturnFocusRef = useRef<HTMLElement | null>(null);
   // Excel's macro dialogs: Record Macro (filled in before a recording), the
   // Macro dialog (View Macros, Alt+F8), Macro Options and the step list that
   // stands in for the VBA editor.
   const [macroRecordDialog, setMacroRecordDialog] = useState<{ name: string } | null>(null);
   const [macroDialogOpen, setMacroDialogOpen] = useState(false);
-  const [macroDialogScope, setMacroDialogScope] = useState<MacroDialogScope>("all");
-  const [macroOptionsEntry, setMacroOptionsEntry] = useState<MacroDialogEntry | null>(null);
-  const [macroEditEntry, setMacroEditEntry] = useState<MacroDialogEntry | null>(null);
   // The Personal Macro Workbook (Excel's PERSONAL.XLSB): every workbook this
   // browser opens sees it.
   const [personalMacros, setPersonalMacros] = useState<SpreadsheetMacro[]>([]);
   useEffect(() => {
     setPersonalMacros(readPersonalMacros(personalMacroStorage()));
   }, []);
-  // Run Script (Office-Scripts-style imperative scripting): a sandboxed JS editor
-  // whose script reads a snapshot of the sheet and returns cell writes. See
-  // lib/spreadsheet/script-runner + runScript below.
-  const [scriptDialogOpen, setScriptDialogOpen] = useState(false);
-  const [scriptText, setScriptText] = useState("");
-  const [scriptRunning, setScriptRunning] = useState(false);
-  const [scriptStatus, setScriptStatus] = useState<{
-    ok: boolean;
-    message: string;
-  } | null>(null);
-  const [automationCatalogOpen, setAutomationCatalogOpen] = useState(false);
-  const scriptEditorRef = useRef<HTMLTextAreaElement>(null);
   const automationDialogReturnFocusRef = useRef<HTMLElement | null>(null);
   const rememberAutomationTrigger = useCallback(() => {
     if (
@@ -5671,20 +5270,6 @@ function SpreadsheetWindow({
       automationDialogReturnFocusRef.current = document.activeElement;
     }
   }, []);
-  const openLocalScriptEditor = useCallback(
-    (template = "", preserveReturnFocus = false) => {
-      if (!preserveReturnFocus) rememberAutomationTrigger();
-      setAutomationCatalogOpen(false);
-      setScriptStatus(null);
-      setScriptText(template);
-      setScriptDialogOpen(true);
-    },
-    [rememberAutomationTrigger],
-  );
-  const closeLocalScriptEditor = useCallback(() => {
-    if (scriptRunning) return;
-    setScriptDialogOpen(false);
-  }, [scriptRunning]);
   // Watch Window (Excel Formulas ▸ Watch Window): a side panel that keeps the
   // live value of pinned cells visible while editing elsewhere in the sheet.
   // The cell list belongs to this editor session, keyed by stable sheet id; it
@@ -5726,9 +5311,6 @@ function SpreadsheetWindow({
   // In-cell rich text authoring dialog (Excel inline rich text) open state.
   const [richTextOpen, setRichTextOpen] = useState(false);
   const [goalSeekOpen, setGoalSeekOpen] = useState(false);
-  const [goalSeekSetCell, setGoalSeekSetCell] = useState("");
-  const [goalSeekTarget, setGoalSeekTarget] = useState("");
-  const [goalSeekChangeCell, setGoalSeekChangeCell] = useState("");
   const [goalSeekStatus, setGoalSeekStatus] = useState<{
     kind: "success" | "error";
     text: string;
@@ -5750,40 +5332,11 @@ function SpreadsheetWindow({
   // the goal, the changing-cells range, and a constraint list. Pure UI state
   // until the user runs it (which writes the solution through the normal path).
   const [solverOpen, setSolverOpen] = useState(false);
-  const [solverObjectiveCell, setSolverObjectiveCell] = useState("");
-  const [solverGoalKind, setSolverGoalKind] = useState<"min" | "max" | "value">(
-    "max",
-  );
-  const [solverGoalValue, setSolverGoalValue] = useState("");
-  const [solverChangingRange, setSolverChangingRange] = useState("");
   // Each constraint row: a cell ref (its formula value is the left-hand side), a
   // relational operator, and a numeric right-hand-side bound (as a raw string).
   const [solverConstraints, setSolverConstraints] = useState<
     SolverDialogConstraint[]
   >([]);
-  // XLS-A073: the constraint picked in the list, Make Unconstrained Variables
-  // Non-Negative, the solving method, the Options, and the sub-dialog up.
-  const [solverSelectedConstraint, setSolverSelectedConstraint] = useState<number | null>(null);
-  const [solverNonNegative, setSolverNonNegative] = useState(DEFAULT_SOLVER_OPTIONS.nonNegative);
-  const [solverMethod, setSolverMethod] = useState<SolverDialogMethod>(DEFAULT_SOLVER_OPTIONS.method);
-  const [solverPrecision, setSolverPrecision] = useState(DEFAULT_SOLVER_OPTIONS.precision);
-  const [solverIterations, setSolverIterations] = useState(DEFAULT_SOLVER_OPTIONS.iterations);
-  const [solverIgnoreIntegers, setSolverIgnoreIntegers] = useState(DEFAULT_SOLVER_OPTIONS.ignoreIntegers);
-  // XLS-A073: the rest of Solver Options (All Methods, GRG Nonlinear,
-  // Evolutionary), and Show Iteration Results' trial budget.
-  const [solverExtra, setSolverExtra] = useState<SolverDialogExtraOptions>(DEFAULT_SOLVER_EXTRA_OPTIONS);
-  const [solverOptionsTab, setSolverOptionsTab] = useState<"all" | "grg" | "evolutionary">("all");
-  const solverTrialRef = useRef<{ budget: number } | null>(null);
-  const solverTrialContinueRef = useRef(false);
-  const [solverTrialOpen, setSolverTrialOpen] = useState(false);
-  const [solverSubDialog, setSolverSubDialog] = useState<
-    | { kind: "constraint"; index: number | null; cellRef: string; op: SolverDialogOp; bound: string }
-    | { kind: "options" }
-    | { kind: "model"; range: string }
-    | { kind: "reset" }
-    | null
-  >(null);
-  const [solverConstraintError, setSolverConstraintError] = useState<string | null>(null);
   const [solverStatus, setSolverStatus] = useState<{
     kind: "success" | "error";
     text: string;
@@ -5794,20 +5347,6 @@ function SpreadsheetWindow({
   const [solverPending, setSolverPending] = useState<{
     sourceSheet: SheetModel;
     values: readonly { row: number; col: number; value: string }[];
-  } | null>(null);
-  // What-If Data Table (Excel/WPS "Data > What-If Analysis > Data Table"),
-  // one-variable column-input form. The input values are the selected column; the
-  // dialog supplies the formula cell + the column input cell; results write to the
-  // column immediately to the right. Pure UI state until the user runs it.
-  const [whatIfOpen, setWhatIfOpen] = useState(false);
-  // XLS-A070: Excel's Data Table dialog has two boxes, Row input cell and
-  // Column input cell; which formulas the table runs is read from the
-  // selection (lib/spreadsheet/what-if-buttons, excelLayoutDataTable).
-  const [whatIfInputCell, setWhatIfInputCell] = useState("");
-  const [whatIfRowInputCell, setWhatIfRowInputCell] = useState("");
-  const [whatIfStatus, setWhatIfStatus] = useState<{
-    kind: "success" | "error";
-    text: string;
   } | null>(null);
   // Insert Symbol (Excel/WPS "Insert ▸ Symbol"): the dialog snapshots the exact
   // cell/caret authority on open; browsing characters is draft-only until Insert.
@@ -5825,44 +5364,12 @@ function SpreadsheetWindow({
   } | null>(null);
   const symbolPickerReturnFocusRef = useRef<HTMLElement>(null);
   const symbolPickerFirstSymbolRef = useRef<HTMLButtonElement>(null);
-  // Scenario Manager (Excel/WPS "Data > What-If Analysis > Scenario Manager"):
-  // the dialog's open state, the selected scenario and the last action's
-  // status message. The saved scenarios live on the sheet model (not here);
-  // Add… / Edit… go through the Add Scenario and Scenario Values sub-dialogs,
-  // Show applies a scenario's values, Delete removes one — all through the
-  // normal edit path (undo + autosave).
-  const [scenarioOpen, setScenarioOpen] = useState(false);
-  const [scenarioSelectedName, setScenarioSelectedName] = useState<
-    string | null
-  >(null);
-  const [scenarioStatus, setScenarioStatus] = useState<{
-    kind: "success" | "error";
-    text: string;
-  } | null>(null);
   // Add Scenario / Edit Scenario, then Scenario Values. The manager hides
   // while either is up, as Excel's does; nothing is written until Scenario
   // Values' OK.
   const [scenarioForm, setScenarioForm] = useChangedState<ScenarioFormDraft | null>(
     null,
   );
-  const [scenarioValuesDraft, setScenarioValuesDraft] = useState<{
-    form: ScenarioFormDraft;
-    refs: readonly string[];
-    values: readonly string[];
-  } | null>(null);
-  // Merge… (the source sheet picked) and Summary… (report type + result
-  // cells). The manager hides while either is up, as it does for Add / Edit.
-  const [scenarioMergeDraft, setScenarioMergeDraft] = useState<{
-    sheetId: string;
-    sourceSheetId: string | null;
-  } | null>(null);
-  const [scenarioSummaryDraft, setScenarioSummaryDraft] = useChangedState<{
-    sheetId: string;
-    resultCells: string;
-    /** Report type: Scenario summary, or Scenario PivotTable report. */
-    reportType: "summary" | "pivot";
-    error: string | null;
-  } | null>(null);
   // Changing cells' RefEdit: the form collapses to the picker bar while the
   // range is selected on the sheet; this is the last selection it followed.
   const [scenarioCellsPicking, setScenarioCellsPicking] = useState<{
@@ -5871,20 +5378,6 @@ function SpreadsheetWindow({
     r2: number;
     c2: number;
   } | null>(null);
-  // First fields of the What-If Analysis dialogs, focused on open as Excel
-  // does (Goal Seek's Set cell, Solver's objective, Data Table's formula cell,
-  // the scenario list or Add…, the scenario's name, its first value).
-  const goalSeekSetInputRef = useRef<HTMLInputElement>(null);
-  const solverObjectiveInputRef = useRef<HTMLInputElement>(null);
-  const whatIfFormulaInputRef = useRef<HTMLInputElement>(null);
-  const scenarioManagerFocusRef = useRef<HTMLButtonElement>(null);
-  const scenarioNameInputRef = useRef<HTMLInputElement>(null);
-  const scenarioFirstValueInputRef = useRef<HTMLInputElement>(null);
-  const scenarioMergeFocusRef = useRef<HTMLButtonElement>(null);
-  const scenarioSummaryFocusRef = useRef<HTMLInputElement>(null);
-  // Set when Data Table writes its table: the dialog then closes onto the
-  // sheet, as Excel's OK does, instead of the ribbon button.
-  const whatIfReturnToGridRef = useRef(false);
   // Text to Columns dialog state. Nothing persists until the user confirms;
   // commit still flows through one normal history/autosave grid mutation.
   const [textToColumnsOpen, setTextToColumnsOpen] = useState(false);
@@ -5892,32 +5385,13 @@ function SpreadsheetWindow({
   // Whether the page takes edits at all (not a viewer's, not a copy waiting
   // for the server's authority): every content write is refused otherwise.
   const pageTakesEditsRef = useRef(true);
-  const textToColumnsToggleRef = useRef<HTMLButtonElement>(null);
   // Set when a split completes: the wizard then hands focus to the sheet (as
   // Excel's Finish does) instead of back to the ribbon button.
   const textToColumnsReturnToGridRef = useRef(false);
-  const [textToColumnsDelimiters, setTextToColumnsDelimiters] = useState({
-    comma: true,
-    tab: false,
-    semicolon: false,
-    space: false,
-    custom: false,
-  });
-  const [textToColumnsCustom, setTextToColumnsCustom] = useState("");
-  const [textToColumnsQualifier, setTextToColumnsQualifier] =
-    useState<TextToColumnsQualifier>("double");
-  const [textToColumnsConsecutive, setTextToColumnsConsecutive] =
-    useState(false);
   const [textToColumnsDestination, setTextToColumnsDestination] = useState("");
   const [textToColumnsColumnFormats, setTextToColumnsColumnFormats] = useState<
     TextToColumnsColumnFormat[]
   >([]);
-  const [textToColumnsColumnDateOrders, setTextToColumnsColumnDateOrders] =
-    useState<DelimitedImportDateOrder[]>([]);
-  const [textToColumnsNumberOptions, setTextToColumnsNumberOptions] =
-    useState<DelimitedImportNumberOptions>(
-      DEFAULT_DELIMITED_IMPORT_NUMBER_OPTIONS,
-    );
   // Text to Columns mode: "delimited" (split on a character) or "fixedWidth"
   // (split at column-break positions). The break positions are entered as a
   // comma/space-separated list of character offsets.
@@ -5984,9 +5458,6 @@ function SpreadsheetWindow({
     activeSheetIndex: number;
     selection: PageSetupSelectionSnapshot;
   } | null>(null);
-  const formulaFunctionCategoryCommandRef = useRef<FunctionCategory | null>(
-    null,
-  );
   const formulaNameMutationCommandRef = useRef<
     | {
         controlId: "XLSCTL.FORMULAS.NAME.DEFINE.APPLY";
@@ -6072,8 +5543,6 @@ function SpreadsheetWindow({
     progress: CreateNamesProgress;
     name: string;
   } | null>(null);
-  // Formulas ▸ Use in Formula ▸ Paste Names…: the name being chosen.
-  const [pasteNamesDraft, setPasteNamesDraft] = useState<{ selected: string | null } | null>(null);
   // Home ▸ Cell Styles ▸ New Cell Style… (Excel's Style dialog, XLS-A012).
   // Modify… and Duplicate… on a gallery style open the same dialog; Format…
   // edits the style's own formatting (not the cells').
@@ -6087,21 +5556,6 @@ function SpreadsheetWindow({
     protection: CustomCellStyleProtection;
   } | null>(null);
   const [cellStyleFormatOpen, setCellStyleFormatOpen] = useState(false);
-  // Review ▸ Allow Edit Ranges (XLS-A028): the draft list, its selection, the
-  // New/Modify Range editor (with Excel's Confirm Password step), and the
-  // Unlock Range prompt a protected cell asks for.
-  const [editRangesDialog, setEditRangesDialog] = useState<{
-    ranges: ProtectedEditRange[];
-    selected: number | null;
-    editor: {
-      index: number | null;
-      title: string;
-      ref: string;
-      password: string;
-      confirm?: string;
-      error?: string;
-    } | null;
-  } | null>(null);
   const [editRangeUnlock, setEditRangeUnlock] = useState<{
     row: number;
     col: number;
@@ -6136,16 +5590,8 @@ function SpreadsheetWindow({
   // the set of value columns to aggregate. Confirming runs planSubtotals and
   // writes the rebuilt region through the normal paste + outline-group paths.
   const [subtotalOpen, setSubtotalOpen] = useState(false);
-  const [subtotalFunction, setSubtotalFunction] =
-    useState<SubtotalFunction>("sum");
   const [subtotalGroupCol, setSubtotalGroupCol] = useChangedState<number | null>(null);
   const [subtotalValueCols, setSubtotalValueCols] = useChangedState<number[]>([]);
-  // Excel's three Subtotal check boxes (XLS-A064), at Excel's defaults.
-  const [subtotalOptions, setSubtotalOptions] = useState({
-    replace: true,
-    pageBreaks: false,
-    summaryBelow: true,
-  });
   const [subtotalStatus, setSubtotalStatus] = useState<{
     kind: "success" | "error";
     text: string;
@@ -6284,9 +5730,6 @@ function SpreadsheetWindow({
     null,
   );
   const pageSetupReturnFocusRef = useRef<PageSetupReturnFocus | null>(null);
-  const pageSetupMutationCommandRef = useRef<PageSetupMutationReceipt | null>(
-    null,
-  );
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   // Excel's Page Setup dialog edits ONE draft of the sheet's print settings
   // across its four tabs (Page / Margins / Header/Footer / Sheet). OK writes
@@ -6304,8 +5747,6 @@ function SpreadsheetWindow({
   const [validationDialogOpen, setValidationDialogOpen] = useState(false);
   const dataValidationDialogAuthorityRef =
     useRef<DataValidationDialogAuthority | null>(null);
-  const dataValidationMutationCommandRef =
-    useRef<DataValidationDialogAuthority | null>(null);
   // Excel's Data Validation "Clear All" edits the dialog draft first. The
   // worksheet changes only when the user confirms with OK; Cancel/Escape must
   // therefore remain a zero-write path. Any subsequent field edit leaves the
@@ -6314,18 +5755,6 @@ function SpreadsheetWindow({
   const [validationDialogTab, setValidationDialogTab] = useState<
     "settings" | "input" | "error" | "ime"
   >("settings");
-  const validationDialogTriggerRef = useRef<HTMLButtonElement>(null);
-  const validationKindRef = useRef<HTMLSelectElement | null>(null);
-  const closeValidationDialog = useCallback(() => {
-    setValidationDialogOpen(false);
-    dataValidationDialogAuthorityRef.current = null;
-    dataValidationMutationCommandRef.current = null;
-    setValidationClearPending(false);
-    setValidationDialogTab("settings");
-    window.requestAnimationFrame(() =>
-      validationDialogTriggerRef.current?.focus({ preventScroll: true }),
-    );
-  }, []);
   const [validationError, setValidationError] = useChangedState<string | null>(null);
   // Circle Invalid Data (Excel/WPS): the cells currently ringed because their
   // value violates their validation rule. Ephemeral — like Excel, the circles
@@ -6345,22 +5774,14 @@ function SpreadsheetWindow({
   // reference to the cells holding them ("=$A$1:$A$10", live).
   const [valListValues, setValListValues] = useState("");
   const [valShowDropDown, setValShowDropDown] = useState(true);
-  // The rule the dialog opened on (the active cell's), and Excel's "Apply these
-  // changes to all other cells with the same settings".
-  const [validationOpenedRule, setValidationOpenedRule] =
-    useState<ValidationRule | null>(null);
-  const [valApplyToSame, setValApplyToSame] = useState(false);
   // Source's Collapse Dialog: the selection being followed into the box, and
   // the dialog's own selection to put back when it expands again.
   const [validationSourcePicking, setValidationSourcePicking] =
     useState<ValidationRange | null>(null);
   const validationSourcePickReboundRef = useRef<PageSetupSelectionSnapshot | null>(null);
-  const validationSourcePickOriginRef =
-    useRef<PageSetupSelectionSnapshot | null>(null);
   const [, setValidationAuthorityRevision] = useState(0);
   const [valMin, setValMin] = useState("");
   const [valMax, setValMax] = useState("");
-  const [valInteger, setValInteger] = useState(false);
   const [valMinLength, setValMinLength] = useState("");
   const [valMaxLength, setValMaxLength] = useState("");
   // formula ("Custom") draft: a per-cell predicate formula.
@@ -6368,15 +5789,11 @@ function SpreadsheetWindow({
   // date draft: ISO min/max, weekdays-only toggle and on/before-today toggles.
   const [valDateMin, setValDateMin] = useState("");
   const [valDateMax, setValDateMax] = useState("");
-  const [valWeekdaysOnly, setValWeekdaysOnly] = useState(false);
-  const [valNotBeforeToday, setValNotBeforeToday] = useState(false);
-  const [valNotAfterToday, setValNotAfterToday] = useState(false);
   const [valTimeMin, setValTimeMin] = useState("");
   const [valTimeMax, setValTimeMax] = useState("");
   // dependent (cascade) draft: controlling cell + per-row toggle + options map.
   const [valDepSourceRow, setValDepSourceRow] = useState("");
   const [valDepSourceCol, setValDepSourceCol] = useState("");
-  const [valDepPerRow, setValDepPerRow] = useState(false);
   const [valDepOptions, setValDepOptions] = useState("");
   const [valDepDefault, setValDepDefault] = useState("");
   // Data-validation input/error MESSAGE draft (Excel parity): the guidance shown
@@ -6860,18 +6277,6 @@ function SpreadsheetWindow({
     return () =>
       document.removeEventListener("fullscreenchange", syncFullscreenState);
   }, []);
-
-  const toggleSpreadsheetFullscreen = useCallback(async () => {
-    const target = rootRef.current;
-    if (!target?.requestFullscreen || !document.exitFullscreen) return;
-    try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else await target.requestFullscreen();
-    } catch {
-      // Browser or embedding policy denied the request. Keep the workbook and
-      // live grid selection untouched; the next user gesture may retry.
-    }
-  }, []);
   useLiveZoomGesture({
     viewport: () => gridWrapRef.current,
     // The grid stage carries the sheet's CSS zoom; while a pinch or a
@@ -6932,21 +6337,6 @@ function SpreadsheetWindow({
     });
     pendingRafIdsRef.current.add(id);
   }, []);
-  const closeNavigationPane = useCallback(() => {
-    setNavigationPaneOpen(false);
-    scheduleRaf(() =>
-      navigationTriggerRef.current?.focus({ preventScroll: true }),
-    );
-  }, [scheduleRaf]);
-  const toggleNavigationPane = useCallback(() => {
-    if (navigationPaneOpen) {
-      closeNavigationPane();
-      return;
-    }
-    setObjectSelectionMode(false);
-    setSelectionPaneOpen(false);
-    setNavigationPaneOpen(true);
-  }, [closeNavigationPane, navigationPaneOpen]);
   useEffect(() => {
     const pending = pendingRafIdsRef.current;
     return () => {
@@ -7206,12 +6596,6 @@ function SpreadsheetWindow({
   const colorPickerRef = useRef<HTMLSpanElement>(null);
   const objectColorPickerRef = useRef<HTMLSpanElement>(null);
   const sparklineColorPickerRef = useRef<HTMLSpanElement>(null);
-  // Review > Spelling (F7): the check in progress, if any.
-  const [spellingLaunch, setSpellingLaunch] =
-    useState<SpreadsheetSpellingLaunch | null>(null);
-  const [reviewDialogMode, setReviewDialogMode] = useState<
-    "accessibility" | "performance" | "statistics" | null
-  >(null);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   // Show Changes: a peer's content arriving means their change records
   // follow; the change log hook (declared later) refreshes its pane.
@@ -7326,7 +6710,6 @@ function SpreadsheetWindow({
       | { readonly kind: "new" };
   } | null>(null);
   const dataFormDialogRef = useRef<HTMLSpanElement>(null);
-  const dataFormToggleRef = useRef<HTMLButtonElement>(null);
   // Paste Special dialog (Excel "选择性粘贴"): Excel's shape — one Paste radio
   // (which facet of the copied cells lands), one Operation radio, Skip blanks
   // and Transpose, plus a Paste Link button. Open state is a boolean; the body
@@ -8415,103 +7798,6 @@ function SpreadsheetWindow({
   }, [pageId, autosave.page?.id, nativeCopySourceVersion, guestMode, embeddedWorkbook]);
   const nativeWorksheetCopyAvailable = Boolean(nativeCopySource && nativeCopySource.pageId === pageId && nativeCopySource.version === nativeCopySourceVersion && nativeCopySource.available);
   const copilotNativeCopyAvailable = nativeWorksheetCopyAvailable || Boolean(nativeCopySource && nativeCopySource.pageId === pageId && nativeCopySource.version === nativeCopySourceVersion && nativeCopySource.baselinePrepareAvailable);
-  const inspectImportedDataSourceInventory = useCallback(async (): Promise<SpreadsheetDataSourceInventory | null> => {
-    if (dataSourceInventoryState.status === "loading") return null;
-    const requestId = dataSourceInventoryRequestRef.current + 1;
-    dataSourceInventoryRequestRef.current = requestId;
-    setDataSourceInventoryState((current) => ({
-      status: "loading",
-      inventory: current.inventory,
-    }));
-    try {
-      let resourceId =
-        autosave.page?.editable_page_patchback?.resource_id?.trim() ||
-        autosave.page?.editable_page_source?.resource_id?.trim() ||
-        "";
-      if (!resourceId && autosave.page?.notebook_id) {
-        const resources = await listResourcesAll({
-          notebookId: autosave.page.notebook_id,
-          kind: "xlsx",
-        });
-        const source = resources.find(
-          (resource) =>
-            resource.metadata_json?.editable_page_id === pageId ||
-            (resource.metadata_json?.editable_page_ids &&
-              typeof resource.metadata_json.editable_page_ids === "object" &&
-              !Array.isArray(resource.metadata_json.editable_page_ids) &&
-              (
-                resource.metadata_json.editable_page_ids as Record<
-                  string,
-                  unknown
-                >
-              ).spreadsheet === pageId),
-        );
-        if (source) {
-          resourceId = source.id;
-        }
-      }
-      if (!resourceId) throw new Error("xlsx_source_resource_unavailable");
-      const versions = await getResourceVersions(resourceId);
-      const original = versions
-        .filter((version) => version.version_kind === "original")
-        .sort((left, right) => right.version_number - left.version_number)[0];
-      if (!original) throw new Error("xlsx_source_version_unavailable");
-      const download = await getResourceVersionDownload(resourceId, original.id);
-      const { fetchPrivateFile } = await import("@mrnote/core/web/lib/private-file-transfer.ts");
-      const response = await fetchPrivateFile(download.download_url);
-      if (!response.ok) throw new Error("xlsx_source_download_failed");
-      // The package is read on the server (the browser keeps no Excel
-      // reader): its part directory and link targets, never a connection.
-      const workbookImport = await import(
-        "../../../lib/spreadsheet/workbook-import-client"
-      );
-      const inventory = await workbookImport.inspectSpreadsheetDataSourceInventory(
-        await response.blob(),
-      );
-      if (
-        dataSourceInventoryRequestRef.current !== requestId ||
-        autosave.page?.id !== pageId
-      ) {
-        return null;
-      }
-      setDataSourceInventoryState({ status: "ready", inventory });
-      return inventory;
-    } catch {
-      if (dataSourceInventoryRequestRef.current !== requestId) return null;
-      setDataSourceInventoryState({ status: "error", inventory: null });
-      return null;
-    }
-  }, [
-    autosave.page?.editable_page_patchback?.resource_id,
-    autosave.page?.editable_page_source?.resource_id,
-    autosave.page?.id,
-    autosave.page?.notebook_id,
-    dataSourceInventoryState.status,
-    pageId,
-  ]);
-  const openDataSourceInventory = useCallback(
-    (section: "connections" | "workbookLinks") => {
-      setDataSourceInventoryDialog(section);
-      const workbookLinkDetailsMissing =
-        section === "workbookLinks" &&
-        spreadsheetNativeWriteRoute === "patchback" &&
-        (dataSourceInventoryState.inventory?.workbookLinkParts ?? 0) > 0 &&
-        dataSourceInventoryState.inventory?.workbookLinks.length === 0;
-      if (
-        dataSourceInventoryState.status === "idle" ||
-        dataSourceInventoryState.status === "error" ||
-        workbookLinkDetailsMissing
-      ) {
-        void inspectImportedDataSourceInventory();
-      }
-    },
-    [
-      dataSourceInventoryState.inventory,
-      dataSourceInventoryState.status,
-      inspectImportedDataSourceInventory,
-      spreadsheetNativeWriteRoute,
-    ],
-  );
   const [shareRuntimeCapabilities, setShareRuntimeCapabilities] = useState({
     clipboard: false,
     webShare: false,
@@ -8557,17 +7843,6 @@ function SpreadsheetWindow({
     sheetSideBySideCancelRef.current?.();
     sheetSideBySideCancelRef.current = null;
   }, [pageId, windowId]);
-  const openWorkbookWindow = useCallback(() => {
-    const notebookId = autosave.page?.notebook_id;
-    if (!windowManager || !notebookId || !pageId) return;
-    openNewOfficeWindow(windowManager, {
-      notebookId,
-      pageId,
-      pageType: "spreadsheet",
-      title: title || t("pages.untitled"),
-      ...(windowId ? { sourceWindowId: windowId } : {}),
-    });
-  }, [autosave.page?.notebook_id, pageId, t, title, windowId, windowManager]);
   // The grid is this window's scroll port for Synchronous Scrolling
   // (lib/office-window-commands): two windows on the workbook can scroll
   // together. The root carries data-office-page-id so View Side by Side
@@ -9358,77 +8633,6 @@ function SpreadsheetWindow({
       sheet.name,
     ],
   );
-  const workbookReviewStats = useMemo(function collectWorkbookReviewStats() {
-    // These totals only belong to the three review dialogs. Ordinary typing
-    // must not rescan every worksheet for a surface that is not mounted.
-    if (reviewDialogMode === null) return null;
-    let cellsWithData = 0;
-    let formulas = 0;
-    let tables = 0;
-    let pivots = 0;
-    let charts = 0;
-    let images = 0;
-    let objects = 0;
-    let comments = 0;
-    let mergedRanges = 0;
-    let conditionalFormats = 0;
-    const accessibilityIssues: string[] = [];
-
-    for (const candidate of sheets) {
-      const candidateObjects = candidate.objects ?? [];
-      const floatingCharts = candidate.charts ?? [];
-      for (const cell of Object.values(candidate.cells)) {
-        if (!cell) continue;
-        if (String(cell.value ?? "").trim() !== "" || cell.formula) {
-          cellsWithData += 1;
-        }
-        // Text that only starts with "=" ('=9+4) is not a formula (S-092).
-        if (spreadsheetCellIsFormula(cell)) {
-          formulas += 1;
-        }
-        if (hasThread(cell.comment)) comments += 1;
-      }
-      tables += candidate.dataTables?.length ?? 0;
-      pivots += sheetPivots(candidate).length;
-      charts +=
-        floatingCharts.length +
-        candidateObjects.filter((object) => object.type === "chart").length;
-      images += candidateObjects.filter((object) => object.type === "image").length;
-      objects += candidateObjects.length + floatingCharts.length;
-      mergedRanges += candidate.merges?.length ?? 0;
-      conditionalFormats += candidate.conditionalFormats?.length ?? 0;
-
-      // Each object as Excel's checker names it ("图片 1", a name of its
-      // own), the Selection Pane's name, never an internal id (S-010).
-      let defaultName: ReturnType<typeof spreadsheetSheetDrawingNamer> | null = null;
-      for (const object of candidateObjects) {
-        if (
-          (object.type === "image" || object.type === "chart") &&
-          !String(object.alt ?? object.title ?? object.caption ?? "").trim()
-        ) {
-          defaultName ??= spreadsheetSheetDrawingNamer(candidateObjects, floatingCharts, t);
-          accessibilityIssues.push(
-            `${candidate.name}: ${spreadsheetDrawingDisplayName(object, defaultName)}`,
-          );
-        }
-      }
-    }
-
-    return {
-      accessibilityIssues,
-      cellsWithData,
-      charts,
-      comments,
-      conditionalFormats,
-      formulas,
-      images,
-      mergedRanges,
-      objects,
-      pivots,
-      sheets: sheets.length,
-      tables,
-    };
-  }, [sheets, t, reviewDialogMode]);
 
   // ---- Evaluate Formula (公式求值) ----------------------------------------
   // Excel/WPS walk a formula one sub-expression at a time. The walk itself is
@@ -9448,18 +8652,6 @@ function SpreadsheetWindow({
     readonly defaultList: string;
     readonly defaultCriteria: string;
   } | null>(null);
-  const advancedFilterReturnFocusRef = useRef<HTMLElement | null>(null);
-  const closeAdvancedFilter = useCallback(() => {
-    setAdvancedFilterOpen(false);
-    setAdvancedFilterAuthority(null);
-    window.requestAnimationFrame(() => {
-      const prior = advancedFilterReturnFocusRef.current;
-      const fallback = rootRef.current?.querySelector<HTMLElement>(
-        '[data-testid="spreadsheet-ribbon-advanced-filter"]',
-      );
-      (prior?.isConnected ? prior : fallback)?.focus({ preventScroll: true });
-    });
-  }, []);
   const reapplyFilterLabel = t("spreadsheet.uiCopy.reapply");
   const sortDialogInvalidOptionLabel = t("spreadsheet.uiCopy.theSortOptionIsInvalidChooseAnAvailableOption");
   const sortDialogCoordinateBlockedLabel = t("spreadsheet.uiCopy.canTSortLeftToRightAcrossFiltersSlicers");
@@ -9476,15 +8668,6 @@ function SpreadsheetWindow({
     onLeft: t("spreadsheet.localCopy.sortDialog.onLeft"),
     onRight: t("spreadsheet.localCopy.sortDialog.onRight"),
   };
-
-  const [forecastOpen, setForecastOpen] = useState(false);
-  const forecastTriggerRef = useRef<HTMLButtonElement>(null);
-  const closeForecast = useCallback(() => {
-    setForecastOpen(false);
-    window.requestAnimationFrame(() => {
-      forecastTriggerRef.current?.focus({ preventScroll: true });
-    });
-  }, []);
   const [unhideMenuOpen, setUnhideMenuOpen] = useState(false);
   // The Unhide dialog's selection (sheet ids) and the item a Shift range
   // extends from, as in Excel's multi-select Unhide list.
@@ -9731,29 +8914,6 @@ function SpreadsheetWindow({
         );
       }),
   );
-  const selectedNavigationElement = useMemo<
-    SpreadsheetNavigationElementSelection | null
-  >(() => {
-    if (selectedObject) {
-      if (selectedObject.type === "chart") {
-        return { sheetId: sheet.id, kind: "chart", id: selectedObject.id };
-      }
-      if (selectedObject.type === "image") {
-        return { sheetId: sheet.id, kind: "image", id: selectedObject.id };
-      }
-      if (selectedObject.type === "shape") {
-        return { sheetId: sheet.id, kind: "shape", id: selectedObject.id };
-      }
-    }
-    if (selectedChartSelection?.sheetId === sheet.id) {
-      return {
-        sheetId: sheet.id,
-        kind: "chart",
-        id: selectedChartSelection.chartId,
-      };
-    }
-    return null;
-  }, [selectedChartSelection, selectedObject, sheet.id]);
   useEffect(() => {
     if (!selectedObject?.hidden) return;
     setSelectedObjectId(null);
@@ -9983,68 +9143,6 @@ function SpreadsheetWindow({
     () => workbookNamedRangeCatalog(sheets),
     [sheets],
   );
-  const selectedNameManagerEntry = useMemo(
-    () =>
-      workbookNamedRanges.find(
-        (entry) =>
-          namedRangeIdentity(entry) === nameManagerSelectedIdentity,
-      ) ?? null,
-    [nameManagerSelectedIdentity, workbookNamedRanges],
-  );
-  // Why the Name Manager's New / Edit form cannot be saved, said beside the
-  // field it concerns: Excel answers a refused name with "The name that you
-  // entered is not valid" or "already exists", never a silently greyed OK. A
-  // name is unique within its scope (Microsoft Support, "Names in formulas").
-  const nameManagerProblemId = useId();
-  const nameManagerDraftProblem = useMemo((): {
-    field: "name" | "ref";
-    messageKey: string;
-  } | null => {
-    if (nameManagerMode !== "create" && nameManagerMode !== "edit") return null;
-    const name = nameManagerDraft.name.trim();
-    const problem = definedNameProblem(name);
-    if (problem && problem !== "empty") {
-      return { field: "name", messageKey: definedNameProblemMessageKey(problem) };
-    }
-    if (!problem) {
-      const source =
-        nameManagerMode === "edit" ? selectedNameManagerEntry : null;
-      const scope = source?.scope ?? nameManagerDraft.scope;
-      const scopeSheetId =
-        scope === "worksheet"
-          ? source?.scopeSheetId ?? nameManagerDialogAuthority?.sheetId
-          : undefined;
-      const identity = namedRangeIdentity({
-        name,
-        ref: "",
-        scope,
-        ...(scopeSheetId ? { scopeSheetId } : {}),
-      });
-      const sourceIdentity = source ? namedRangeIdentity(source) : null;
-      if (
-        identity !== sourceIdentity &&
-        workbookNamedRanges.some(
-          (entry) => namedRangeIdentity(entry) === identity,
-        )
-      ) {
-        return {
-          field: "name",
-          messageKey: definedNameProblemMessageKey("exists"),
-        };
-      }
-    }
-    const ref = nameManagerDraft.ref.trim();
-    if ((ref.startsWith("=") ? ref.slice(1).trim() : ref) === "") {
-      return { field: "ref", messageKey: "spreadsheet.names.refersToEmpty" };
-    }
-    return null;
-  }, [
-    nameManagerDialogAuthority,
-    nameManagerDraft,
-    nameManagerMode,
-    selectedNameManagerEntry,
-    workbookNamedRanges,
-  ]);
   // Recorded macros (Excel/WPS "Record Macro"): the validated macro list off the
   // sheet, plus the live-recording state. Refs (not state) drive the recording
   // capture so the single value-commit path (`setCellValue`) can append a step
@@ -10072,12 +9170,6 @@ function SpreadsheetWindow({
   // never again as the cells it wrote.
   const macroRunActiveRef = useRef(false);
   const macroRecordNoticeRef = useRef(false);
-  // Scenarios (Excel/WPS "Scenario Manager"): the validated scenario list off the
-  // sheet model, normalized so malformed/duplicate entries never reach the UI.
-  const scenarios = useMemo(
-    () => normalizeScenarios(sheet.scenarios),
-    [sheet.scenarios],
-  );
   // The active sheet's What-If Data Tables: their results are one block that
   // only changes whole, and the bar shows their {=TABLE(row,col)}.
   const whatIfBlocks = useMemo(
@@ -10216,15 +9308,6 @@ function SpreadsheetWindow({
       }),
     [sheet.dataTables, sheet.rowCount, sheet.columnCount],
   );
-  const {
-    navigationSheets,
-  } = useSpreadsheetNavigationSheets({
-    homeZh,
-    isSheetProtectionEffectiveRef,
-    sheets,
-    spreadsheetNativeWriteRoute,
-    t,
-  });
   // Resolve editability once per table/sheet. Header cells only perform a map
   // lookup, rather than rescanning the protected table range for every column.
   const tableFilterEditBlockers = useMemo(() => {
@@ -10862,8 +9945,6 @@ function SpreadsheetWindow({
     sessionEvaluateRulesRef.current = backgroundCalculation.evaluateRules;
   });
   const latestCalculationAnswer = backgroundCalculation.latestAnswer;
-  // Goal Seek / Data Table / Scenario summary / Solver (C2).
-  const sessionWhatIf = backgroundCalculation.whatIf;
   // Each rule as the latest calculation of this load answered it: the
   // automatic session's, or Calculate Now's own pass (B470), which starts a
   // new load and so retires the automatic answer before it.
@@ -11765,60 +10846,6 @@ function SpreadsheetWindow({
   const lazyRecoverySettledRef = useRef(lazyRecoverySettled);
   lazyRecoverySettledRef.current = lazyRecoverySettled;
   useEffect(() => registerSpreadsheetLazyRecovery(() => lazyRecoveryRef.current(), undefined, () => lazyRecoverySettledRef.current()), []);
-  const changeCalculationMode = useCallback(
-    async (nextMode: CalculationMode) => {
-      if (nextMode === calcState.mode) return true;
-      const liveWorkbook = liveSheetsRef.current;
-      const liveIndex = liveActiveSheetIndexRef.current;
-      const liveSheet = liveWorkbook[liveIndex];
-      if (
-        liveWorkbook !== sheets ||
-        liveIndex !== activeSheetIndex ||
-        !liveSheet ||
-        liveSheet !== sheet
-      ) {
-        return false;
-      }
-      automaticWorksheetResultsRef.current = null;
-      setAutomaticWorksheetResultsRevision((revision) => revision + 1);
-      if (nextMode === "manual") {
-        if (!await captureWorkbookCalculation()) return false;
-        // The capture yielded; an edit that landed meanwhile owns the live
-        // workbook, and saving the pre-capture one would revert it.
-        if (liveSheetsRef.current !== liveWorkbook || liveActiveSheetIndexRef.current !== liveIndex) return false;
-        setCalcState({ mode: "manual", dirty: false });
-      } else {
-        calcLedgerRef.current = null;
-        setCalcLedgerRevision((revision) => revision + 1);
-        setCalcState((current) => withMode(current, "auto"));
-      }
-      autosave.queueSave({
-        title,
-        content_json: buildPersistedContent(
-          liveWorkbook,
-          referenceStyle,
-          viewOptions,
-          liveSheet.id,
-          dataSourceInventoryState.inventory,
-          nextMode,
-        ),
-      });
-      return true;
-    },
-    [
-      autosave,
-      buildPersistedContent,
-      calcState.mode,
-      captureWorkbookCalculation,
-      dataSourceInventoryState.inventory,
-      activeSheetIndex,
-      referenceStyle,
-      sheet,
-      sheets,
-      title,
-      viewOptions,
-    ],
-  );
 
   // A persisted/imported Manual workbook has no trusted in-memory ledger in a
   // new browser session. Capture exactly once from the loaded workbook before
@@ -11991,60 +11018,8 @@ function SpreadsheetWindow({
   }, [pageId, writeSheets, setAutomaticWorksheetResultsRevision]);
   applyTiledModelRef.current = applyTiledModel;
 
-  // Formulas > Calculation Options > Use 1904 Date System. Excel keeps every
-  // stored serial when the setting changes, so existing dates read four years
-  // and one day later (or earlier) and every formula recalculates against the
-  // new calendar (Microsoft Support, "Date systems in Excel"). Nothing in the
-  // cells is rewritten: the change is the workbook setting, saved with it.
-  const toggleWorkbookDate1904 = useCallback((): boolean => {
-    const liveWorkbook = liveSheetsRef.current;
-    const liveSheet = liveWorkbook[liveActiveSheetIndexRef.current];
-    if (!liveSheet) return false;
-    const next: SpreadsheetDateSystem =
-      excelDateSystemArg(workbookDateSystemRef.current) ? "1900" : "1904";
-    pendingWorkbookSettingsRef.current.dateSystem = next;
-    writeWorkbookDateSystem(next);
-    // A new calendar is a topology change for calculation: cached and
-    // background results were read in the old system.
-    recordWorksheetCalculationMutation(liveWorkbook, { kind: "topology" });
-    autosave.queueSave({
-      title,
-      content_json: buildPersistedContent(
-        liveWorkbook,
-        referenceStyle,
-        viewOptions,
-        liveSheet.id,
-      ),
-    });
-    return true;
-  }, [
-    autosave,
-    buildPersistedContent,
-    recordWorksheetCalculationMutation,
-    referenceStyle,
-    title,
-    viewOptions,
-    writeWorkbookDateSystem,
-  ]);
-
   // The active sheet's evaluator (unchanged API for every existing caller).
   const formulaEvaluator = formulaWorkbook.evaluator;
-
-  const {
-    nameManagerRows,
-  } = useSpreadsheetNameManagerRows({
-    activeCell,
-    evaluateExpressionsInSession,
-    formulaWorkbook,
-    locale,
-    nameManagerFilter,
-    nameManagerOpen,
-    nameManagerSort,
-    sheet,
-    sheets,
-    t,
-    workbookNamedRanges,
-  });
   const activePivotOutputPlan =
     formulaWorkbook.pivotPlans.get(pivotPlanKey(sheet.id, activePivotSlot)) ?? null;
   // Every drawn report of the sheet, with the PivotTable that owns it.
@@ -13895,42 +12870,6 @@ function SpreadsheetWindow({
   const sheetViewRangeImageBlocked =
     sheetViewProjectionActive || sheetViewFilteredDisplayActive;
   const sheetViewClipboardBlockedReason = t("spreadsheet.uiCopy.aSortedOrFilteredSheetViewMayNotBe");
-  const openAdvancedFilter = useCallback(() => {
-    if (
-      typeof sheet.id !== "string" ||
-      sheet.id.length === 0 ||
-      selRect.r1 < 0 ||
-      selRect.r2 < selRect.r1 ||
-      selRect.r2 >= sheet.rowCount ||
-      selRect.c1 < 0 ||
-      selRect.c2 < selRect.c1 ||
-      selRect.c2 >= sheet.columnCount
-    ) {
-      return;
-    }
-    if (selRect.r1 === selRect.r2 && selRect.c1 === selRect.c2 && refuseListCommandFromIsolatedBlankRef.current()) return;
-    const focused = document.activeElement;
-    advancedFilterReturnFocusRef.current =
-      focused instanceof HTMLElement ? focused : null;
-    // Excel fills List range with the list around one selected cell (its
-    // current region), a selection of several cells as selected, both as
-    // absolute references ("$A$1:$C$6").
-    const list =
-      selRect.r1 === selRect.r2 && selRect.c1 === selRect.c2
-        ? surroundingDataRegion(sheet.cells, selRect.r1, selRect.c1, sheet.rowCount, sheet.columnCount, undefined, mergeSpans) ??
-          currentRegionAt(sheet.cells, selRect.r1, selRect.c1, sheet.rowCount, sheet.columnCount, mergeSpans)
-        : selRect;
-    const absolute = (range: { r1: number; c1: number; r2: number; c2: number }) =>
-      `$${columnLabel(range.c1)}$${range.r1 + 1}:$${columnLabel(range.c2)}$${range.r2 + 1}`;
-    // The sheet's Criteria name from its last Advanced Filter comes back too.
-    const lastCriteria = parseA1Range(sheet.advancedFilterState?.criteria ?? "");
-    setAdvancedFilterAuthority({
-      sheetId: sheet.id,
-      defaultList: absolute(list),
-      defaultCriteria: lastCriteria ? absolute(lastCriteria) : "",
-    });
-    setAdvancedFilterOpen(true);
-  }, [mergeSpans, selRect, sheet.advancedFilterState?.criteria, sheet.cells, sheet.columnCount, sheet.id, sheet.rowCount]);
   const autoFitAuthorityRef = useRef<{
     workbook: SheetModel[];
     sheet: SheetModel;
@@ -14972,7 +13911,8 @@ function SpreadsheetWindow({
           ? { ...(cell?.style ?? {}), quotePrefix: true }
           // A position with no cell shows its row's or column's format, and
           
-          : cell?.style ?? (cell === undefined
+          // a cell with no format of its own shows xf 0's look (R474-X10).
+          : copiedCellStyle(sheet as DefaultLookSheet, cell, xlsxDefaultLookEnabled()) ?? (cell === undefined
             ? lineStyleAt(
                 (sheet as { rowStyles?: LineStyleMap }).rowStyles,
                 (sheet as { columnStyles?: LineStyleMap }).columnStyles,
@@ -15405,227 +14345,6 @@ function SpreadsheetWindow({
     }
     if (outcome.kind === "done") replaceActiveSheet(outcome.sheet);
   };
-
-  // Review > Spelling (F7), as Excel scopes it (Microsoft Support, "Check
-  // spelling in a worksheet"): one cell selected checks the whole sheet from
-  // the active cell, several cells check just those, and a cell in edit mode
-  // checks the text being edited (only its selected words when some are).
-  // The check itself is SpreadsheetSpellingDialog's, over lib/spreadsheet/
-  // spelling-walk; every correction is an ordinary undoable sheet edit.
-  const runSpellReview = (payload?: unknown) => {
-    let entry: { row: number; col: number; range?: { start: number; end: number }; draft?: string } | null = null;
-    if (editingCell?.sheetId === sheet.id) {
-      const { row, col } = editingCell;
-      // The entry the key was pressed in: the cell's own editor, or the
-      // formula bar editing it.
-      const event =
-        payload && typeof payload === "object"
-          ? (payload as { currentTarget?: unknown; target?: unknown })
-          : {};
-      const fromEvent = [event.currentTarget, event.target].find(
-        (candidate): candidate is HTMLInputElement | HTMLTextAreaElement =>
-          candidate instanceof HTMLInputElement || candidate instanceof HTMLTextAreaElement,
-      );
-      const input =
-        fromEvent ??
-        gridWrapRef.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-          `[data-cell="${row}:${col}"]`,
-        ) ??
-        null;
-      const start = input?.selectionStart ?? 0;
-      const end = input?.selectionEnd ?? 0;
-      entry = {
-        row,
-        col,
-        ...(input && end > start ? { range: { start, end }, draft: input.value } : {}),
-      };
-    }
-    const mergedActive = spanAt(selRect.r1, selRect.c1, mergeSpans);
-    const singleCell =
-      (selRect.r1 === selRect.r2 && selRect.c1 === selRect.c2) ||
-      (mergedActive !== null &&
-        mergedActive.rowSpan === selRect.r2 - selRect.r1 + 1 &&
-        mergedActive.colSpan === selRect.c2 - selRect.c1 + 1);
-    setSpellingLaunch({
-      id: Date.now(),
-      sheetId: sheet.id,
-      scope: spellingScopeFor({ selection: selRect, active: activeCell, singleCell, entry }),
-      skipCellKeys: spillOverlay.spilled,
-    });
-  };
-
-  // Review > Thesaurus (Shift+F7; Microsoft Support "Look up words in the
-  // thesaurus": select the word, Review > Thesaurus, then a synonym's
-  // Insert replaces it). In Edit mode the pane opens on the entry's selected
-  // words; otherwise on the active cell's text when it is a word or a short
-  // phrase, else its first word. A formula, a number or an empty cell opens
-  // the pane on its search box.
-  const openThesaurus = (payload?: unknown) => {
-    let target: NonNullable<typeof thesaurusTargetRef.current> | null = null;
-    const row = editingCell?.sheetId === sheet.id ? editingCell.row : activeCell.row;
-    const col = editingCell?.sheetId === sheet.id ? editingCell.col : activeCell.col;
-    const committed = sheet.cells[`${row}:${col}`]?.value;
-    const value = typeof committed === "string" ? committed : "";
-    if (value && !value.startsWith("=")) {
-      let from = -1;
-      let word = "";
-      if (editingCell?.sheetId === sheet.id) {
-        const event =
-          payload && typeof payload === "object"
-            ? (payload as { currentTarget?: unknown; target?: unknown })
-            : {};
-        const input =
-          [event.currentTarget, event.target].find(
-            (candidate): candidate is HTMLInputElement | HTMLTextAreaElement =>
-              candidate instanceof HTMLInputElement || candidate instanceof HTMLTextAreaElement,
-          ) ??
-          gridWrapRef.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-            `[data-cell="${row}:${col}"]`,
-          ) ??
-          null;
-        const start = input?.selectionStart ?? 0;
-        const end = input?.selectionEnd ?? 0;
-        // The entry's selection names words of the committed text only while
-        // the entry still holds that text.
-        if (input && input.value === value && end > start) {
-          const raw = value.slice(start, end);
-          word = raw.trim();
-          from = start + (raw.length - raw.trimStart().length);
-        }
-      }
-      if (from < 0) {
-        const whole = value.trim();
-        if (whole && whole.length <= 80 && !/\s{2,}|\n/.test(whole) && whole.split(/\s+/).length <= 4) {
-          word = whole;
-          from = value.indexOf(whole);
-        } else {
-          const first = /[\p{L}\p{M}][\p{L}\p{M}'\u2019-]*/u.exec(value);
-          if (first) {
-            word = first[0];
-            from = first.index;
-          }
-        }
-      }
-      if (word && from >= 0 && word.length <= 80 && !word.includes("\n")) {
-        target = { sheetId: sheet.id, row, col, word, from, value };
-      }
-    }
-    thesaurusTargetRef.current = target;
-    setThesaurusTargetCell(target ? `${target.sheetId}:${target.row}:${target.col}` : null);
-    setThesaurusSeed((seed) => ({ word: target?.word ?? "", nonce: seed.nonce + 1 }));
-    if (thesaurusOpen) sheetTaskPaneDock.bringForward("thesaurus");
-    // The Comments pane takes the dock's column while it is open.
-    setCommentsPaneOpen(false);
-    setThesaurusOpen(true);
-  };
-  const lookupThesaurus = useCallback(
-    async (word: string): Promise<OfficeThesaurusEntry> => {
-      const target = thesaurusTargetRef.current;
-      const { apiPost } = await import("@mrnote/core/web/lib/api.ts");
-      return apiPost<OfficeThesaurusEntry>("/api/v1/ai/notebook/thesaurus", {
-        page_id: pageId,
-        word,
-        context: target && target.word === word ? target.value.slice(0, 600) : null,
-      });
-    },
-    [pageId],
-  );
-  // Insert: the synonym in place of the word the pane was opened on, as one
-  // ordinary (undoable) cell edit; a cell changed since, locked, spilled or
-  // on another sheet is left alone.
-  const insertThesaurusWord = (synonym: string) => {
-    const target = thesaurusTargetRef.current;
-    const key = target ? `${target.row}:${target.col}` : "";
-    const cell = target ? sheet.cells[key] : undefined;
-    const fail = (message: string) => toast({ title: message, variant: "destructive" });
-    if (!target || target.sheetId !== sheet.id || cell?.value !== target.value ||
-        target.value.slice(target.from, target.from + target.word.length) !== target.word) {
-      fail(t("presentation.review.thesaurusInsertFailed"));
-      return;
-    }
-    if (!dataDialogWriteAllowedRef.current) {
-      showProtectNotice(autosave.readOnlyReason ?? undefined);
-      return;
-    }
-    if (spillOverlay.spilled.has(key)) {
-      fail(t("spreadsheet.spillEditBlocked"));
-      return;
-    }
-    if (!isEditableCell(target.row, target.col)) {
-      showProtectNotice();
-      return;
-    }
-    const nextValue =
-      target.value.slice(0, target.from) + synonym + target.value.slice(target.from + target.word.length);
-    const nextCells = copyCellMap(sheet.cells);
-    const { display: _display, ...rest } = cell ?? {};
-    nextCells[key] = { ...rest, value: nextValue };
-    knownCellChangeRef.current = { before: sheet.cells, after: nextCells, keys: [key] };
-    replaceActiveSheet({ ...sheet, cells: nextCells });
-    // The inserted word is what a second Insert replaces.
-    thesaurusTargetRef.current = { ...target, word: synonym, value: nextValue };
-  };
-  const closeThesaurus = () => setThesaurusOpen(false);
-
-  // What the Spelling dialog asks of the window. Built at render, so each
-  // call sees the sheet on screen and the commit boundaries of this render.
-  const spellingHostFor = (scope: SpreadsheetSpellingLaunch["scope"]): SpreadsheetSpellingHost => ({
-    sheet: () => sheet as SpreadsheetSpellingSheet,
-    commit: (next, edits) => {
-      if (!dataDialogWriteAllowedRef.current) {
-        showProtectNotice(autosave.readOnlyReason ?? undefined);
-        return false;
-      }
-      const pageChanged = next.printSettings !== sheet.printSettings;
-      const contentChanged = next.cells !== sheet.cells || next.objects !== sheet.objects;
-      // The dialog commits header / footer text apart from the rest.
-      if (pageChanged && contentChanged) return false;
-      if (pageChanged) {
-        return commitPageLayoutSettings(sheet, next.printSettings as PrintSettings | undefined);
-      }
-      const keys = edits.flatMap((edit) => (edit.cellKey ? [edit.cellKey] : []));
-      if (next.cells !== sheet.cells && keys.length > 0) {
-        knownCellChangeRef.current = { before: sheet.cells, after: next.cells as CellMap, keys };
-      }
-      return replaceActiveSheet(next as unknown as SheetModel) !== sheets;
-    },
-    writable: (target: SpellingTarget) => {
-      if (!dataDialogWriteAllowedRef.current) {
-        return autosave.readOnlyReason ?? t("spreadsheet.commandStatus.commandUnavailable");
-      }
-      switch (target.kind) {
-        case "cell":
-        case "note":
-          if (spillOverlay.spilled.has(target.key)) return t("spreadsheet.spillEditBlocked");
-          return isEditableCell(target.row, target.col) ? true : t("spreadsheet.protectionBlocked");
-        case "shape":
-          return sheetProtectionAllowsRef.current(sheet, "editObjects")
-            ? true
-            : t("spreadsheet.protectionBlocked");
-        case "header-footer": {
-          const state = visibleCommandState("XLSCTL.PAGE_LAYOUT.PAGE_SETUP.APPLY");
-          return state.enabled
-            ? true
-            : (visibleCommandReason(state.reasonKey) ?? t("spreadsheet.commandStatus.commandUnavailable"));
-        }
-      }
-    },
-    reveal: (target) => {
-      if (target.kind !== "cell" && target.kind !== "note") return;
-      const cell = { row: target.row, col: target.col };
-      if (scope.kind === "range") {
-        // Excel keeps the checked range selected and moves the active cell.
-        const anchor = entryWalkAnchor(scope.rect, cell);
-        setSelectionEntryWalk({ sheetId: sheet.id, rect: scope.rect, active: cell, anchor });
-        setSelectionAnchor(anchor);
-      } else if (scope.kind === "sheet") {
-        setSelectionAnchor(cell);
-      }
-      if (scope.kind !== "entry") setActiveCell(cell);
-      scheduleRaf(() => scrollCellIntoView(cell.row, cell.col));
-    },
-    notify: (message) => showProtectNotice(message),
-  });
 
   // Excel's "No cells were found." closes the dialog too and hands the grid
   // back with the selection untouched, from the dialog or a Find & Select
@@ -16067,9 +14786,9 @@ function SpreadsheetWindow({
   const listRegionRef = useRef<ListRegionMemo | null>(null);
   const oneCellListRegion = useMemo(() => {
     if (hasMultiSelection) return null;
-    if (!commandSearchOpen && !subtotalOpen && !dataFormOpen) return null;
+    if (!commandSearchOpen && true && true) return null;
     return listRegionAtReusing(listRegionRef, sheet.cells, selRect.r1, selRect.c1, sheet.rowCount, sheet.columnCount, mergeSpans, MAX_INFERRED_DATA_REGION_CELLS);
-  }, [commandSearchOpen, dataFormOpen, hasMultiSelection, mergeSpans, ribbonTab, selRect.r1, selRect.c1, sheet.cells, sheet.rowCount, sheet.columnCount, subtotalOpen]);
+  }, [commandSearchOpen, false, hasMultiSelection, mergeSpans, ribbonTab, selRect.r1, selRect.c1, sheet.cells, sheet.rowCount, sheet.columnCount, false]);
   const listSourceR1 = oneCellListRegion ? oneCellListRegion.r1 : Math.min(selRect.r1, selRect.r2);
   const listSourceC1 = oneCellListRegion ? oneCellListRegion.c1 : Math.min(selRect.c1, selRect.c2);
   const listSourceR2 = oneCellListRegion ? oneCellListRegion.r2 : Math.max(selRect.r1, selRect.r2);
@@ -16122,95 +14841,20 @@ function SpreadsheetWindow({
         : null,
     [sheet.cells, dataFormShape, dataFormIndex, dataFormReadOptions],
   );
-  // The draft follows the record unless the user is mid-edit on this one.
-  const dataFormValues = useMemo(
-    () =>
-      dataFormRecord
-        ? dataFormRecord.fields.map(
-            (field, offset) => dataFormDraft[offset] ?? field.value,
-          )
-        : [],
-    [dataFormRecord, dataFormDraft],
-  );
   const dataFormOpenAvailable = Boolean(
-    dataFormOpen &&
-      dataFormAuthorityIsCurrent &&
-      dataFormShape &&
-      dataFormRecord,
+    false,
   );
   // An imported workbook takes the delete too: the moved records' cells,
   // notes and links are written into the original package.
   const dataFormDeleteAvailable = Boolean(
-    dataFormOpenAvailable && !dataFormCriteria,
+    dataFormOpenAvailable && true,
   );
   const dataFormDeleteApplyAvailable = Boolean(
-    dataFormDeleteAvailable && dataFormDeletePending,
+    dataFormDeleteAvailable && null,
   );
 
-  const closeDataForm = () => {
-    setDataFormOpen(false);
-    setDataFormAuthority(null);
-    setDataFormDraft([]);
-    setDataFormRecordBaseline(null);
-    setDataFormCriteria(null);
-    setDataFormStatus(null);
-    setDataFormDeletePending(null);
-    setDataFormValidationPending(null);
-    scheduleRaf(() =>
-      dataFormToggleRef.current?.focus({ preventScroll: true }),
-    );
-  };
-
-  const openDataForm = () => {
-    if (dataFormOpen) {
-      closeDataForm();
-      return;
-    }
-    // Off the Data tab (the command search) the list around one cell is not
-    // inferred yet; the form reads it now, and refuses where there is none,
-    // as Excel's Form does, rather than open on the bare cell.
-    const range = hasMultiSelection
-      ? selectedDataFormRange
-      : (oneCellListRegion ??
-        surroundingDataRegion(sheet.cells, selRect.r1, selRect.c1, sheet.rowCount, sheet.columnCount, undefined, mergeSpans) ??
-        selectedDataFormRange);
-    if (!readDataFormShape(sheet.cells, range)) {
-      showProtectNotice(t("spreadsheet.dataFormNeedsList"));
-      return;
-    }
-    setDataFormAuthority({
-      pageId,
-      sheetId: sheet.id,
-      workbookIdentity: dataFormWorkbookIdentityRef.current,
-      range,
-    });
-    setDataFormStatus(null);
-    setDataFormCriteria(null);
-    setDataFormDraft([]);
-    setDataFormRecordBaseline(null);
-    setDataFormDeletePending(null);
-    setDataFormValidationPending(null);
-    setDataFormIndex(0);
-    // A window-level modal: the quick-actions flyout shuts first, so its
-    // native popover never floats over the dim.
-    setQuickActionsOpen(false);
-    setDataFormOpen(true);
-    scheduleRaf(() => {
-      const dialog = dataFormDialogRef.current;
-      const target =
-        dialog?.querySelector<HTMLElement>("input:not([readonly])") ??
-        dialog?.querySelector<HTMLElement>("input, button") ??
-        dialog;
-      target?.focus({ preventScroll: true });
-    });
-  };
-
   useEffect(() => {
-    if (
-      !dataFormOpen ||
-      !dataFormAuthority ||
-      dataFormAuthorityIsCurrent
-    ) {
+    {
       return;
     }
     setDataFormOpen(false);
@@ -16221,7 +14865,7 @@ function SpreadsheetWindow({
     setDataFormStatus(null);
     setDataFormDeletePending(null);
     setDataFormValidationPending(null);
-  }, [dataFormAuthority, dataFormAuthorityIsCurrent, dataFormOpen]);
+  }, [dataFormAuthority, dataFormAuthorityIsCurrent, false]);
 
   const moveDataFormRecord = (index: number) => {
     setDataFormIndex(index);
@@ -16383,11 +15027,7 @@ function SpreadsheetWindow({
     );
     if (
       !liveRecord ||
-      (dataFormRecordBaseline !== null &&
-        (dataFormRecordBaseline.length !== liveRecord.fields.length ||
-          liveRecord.fields.some(
-            (field, index) => field.value !== dataFormRecordBaseline[index],
-          )))
+      (false)
     ) {
       setDataFormStatus(
         t("spreadsheet.uiCopy.thisRecordChangedReopenTheDataFormAndTry"),
@@ -16689,261 +15329,6 @@ function SpreadsheetWindow({
         dataFormValidationPending.issueIndex
       ]
     : null;
-
-  const requestDeleteDataFormRecord = () => {
-    if (
-      !dataFormAuthorityIsCurrent ||
-      !dataFormAuthority ||
-      !dataFormShape ||
-      !dataFormRecord ||
-      dataFormCriteria
-    ) {
-      return;
-    }
-    setDataFormValidationPending(null);
-    setDataFormStatus(null);
-    setDataFormDeletePending({
-      pageId: dataFormAuthority.pageId,
-      sheetId: dataFormAuthority.sheetId,
-      workbookIdentity: dataFormAuthority.workbookIdentity,
-      range: { ...dataFormAuthority.range },
-      sheetSnapshot: sheet,
-      recordIndex: dataFormRecord.index,
-      recordRow: dataFormRecord.row,
-      recordValues: dataFormRecord.fields.map((field) => field.value),
-    });
-  };
-
-  const confirmDeleteDataFormRecord = () => {
-    const pending = dataFormDeletePending;
-    setDataFormDeletePending(null);
-    if (!pending) return;
-    // It moves the cells below it, with the references that point at them.
-    if (chartsHoldSheetTopology()) return;
-    const rangeMatches =
-      dataFormAuthority !== null &&
-      dataFormAuthority.range.r1 === pending.range.r1 &&
-      dataFormAuthority.range.c1 === pending.range.c1 &&
-      dataFormAuthority.range.r2 === pending.range.r2 &&
-      dataFormAuthority.range.c2 === pending.range.c2;
-    if (
-      !dataFormAuthorityIsCurrent ||
-      !dataFormAuthority ||
-      dataFormAuthority.pageId !== pending.pageId ||
-      dataFormAuthority.sheetId !== pending.sheetId ||
-      dataFormAuthority.workbookIdentity !== pending.workbookIdentity ||
-      sheet !== pending.sheetSnapshot ||
-      !rangeMatches
-    ) {
-      setDataFormStatus(
-        t("spreadsheet.uiCopy.theWorkbookOrRecordChangedReopenTheDataForm"),
-      );
-      return;
-    }
-    const liveShape = readDataFormShape(sheet.cells, pending.range);
-    const liveRecord = liveShape
-      ? readDataFormRecord(sheet.cells, liveShape, pending.recordIndex, dataFormReadOptions)
-      : null;
-    if (
-      !liveShape ||
-      !liveRecord ||
-      liveRecord.row !== pending.recordRow ||
-      liveRecord.fields.length !== pending.recordValues.length ||
-      liveRecord.fields.some(
-        (field, index) => field.value !== pending.recordValues[index],
-      )
-    ) {
-      setDataFormStatus(
-        t("spreadsheet.uiCopy.thisRecordChangedReopenTheDataFormAndTry"),
-      );
-      return;
-    }
-    const affectedRange = {
-      r1: liveRecord.row,
-      c1: liveShape.range.c1,
-      r2: liveShape.range.r2,
-      c2: liveShape.range.c2,
-    };
-    const merged = mergeSpans.some(
-      (span) =>
-        span.row <= affectedRange.r2 &&
-        span.row + span.rowSpan - 1 >= affectedRange.r1 &&
-        span.col <= affectedRange.c2 &&
-        span.col + span.colSpan - 1 >= affectedRange.c1,
-    );
-    if (merged) {
-      setDataFormStatus(
-        t("spreadsheet.uiCopy.theRecordCannotBeDeletedBecauseTheListContains"),
-      );
-      return;
-    }
-    if (rangeHasLockedCellRef.current(sheet, affectedRange)) {
-      showProtectNotice();
-      return;
-    }
-    let spillBlocked = false;
-    let pivotBlocked = false;
-    for (let row = affectedRange.r1; row <= affectedRange.r2; row += 1) {
-      for (let col = affectedRange.c1; col <= affectedRange.c2; col += 1) {
-        const key = `${row}:${col}`;
-        spillBlocked ||= spillOverlay.spilled.has(key);
-        pivotBlocked ||= isActivePivotOutputOwnedCell(row, col);
-        if (spillBlocked || pivotBlocked) break;
-      }
-      if (spillBlocked || pivotBlocked) break;
-    }
-    if (spillBlocked || pivotBlocked) {
-      showProtectNotice(
-        spillBlocked ? t("spreadsheet.spillEditBlocked") : undefined,
-      );
-      return;
-    }
-    const overlapsRange = (table: DataTable) =>
-      table.range.r1 <= liveShape.range.r2 &&
-      table.range.r2 >= liveShape.range.r1 &&
-      table.range.c1 <= liveShape.range.c2 &&
-      table.range.c2 >= liveShape.range.c1;
-    const exactlyMatchesRange = (table: DataTable) =>
-      table.range.r1 === liveShape.range.r1 &&
-      table.range.r2 === liveShape.range.r2 &&
-      table.range.c1 === liveShape.range.c1 &&
-      table.range.c2 === liveShape.range.c2;
-    const overlappingTables = dataTables.filter(overlapsRange);
-    const matchingTable = overlappingTables.find(exactlyMatchesRange);
-    if (
-      overlappingTables.length > 0 &&
-      (matchingTable === undefined || overlappingTables.length > 1)
-    ) {
-      setDataFormStatus(
-        t("spreadsheet.uiCopy.theRecordCannotBeDeletedUnlessTheDataForm"),
-      );
-      return;
-    }
-    // A table's filters and sort are keyed by column, and its Total Row moves
-    // up with the rows (Excel's data form deletes the record from a filtered,
-    // sorted or totalled table alike). Only a native part MRAI keeps
-    // byte-for-byte refuses, and says which.
-    const nativeRefusal = matchingTable
-      ? dataTableNativeResizeRefusal(matchingTable.nativeResizeBlocker)
-      : null;
-    if (nativeRefusal) {
-      setDataFormStatus(
-        tableResizeRefusalMessage(
-          nativeRefusal,
-          "spreadsheet.uiCopy.thisRangeIsInvalidOrStaleOrTheNative",
-        ),
-      );
-      return;
-    }
-    const nextCells = deleteDataFormRecordCells(
-      sheet.cells,
-      liveShape,
-      pending.recordIndex,
-    );
-    if (!nextCells) return;
-    // A table keeps one data row: deleting its only record leaves that row
-    // blank, as Excel does, rather than a header-only table.
-    const keepsOnlyRow = Boolean(matchingTable) && liveShape.recordCount === 1;
-    const nextRange = keepsOnlyRow
-      ? { ...liveShape.range }
-      : { ...liveShape.range, r2: liveShape.range.r2 - 1 };
-    // The records below the deleted one moved up a row: the formulas among
-    // them, and everything else on the sheet that names those cells, follow
-    // the move (live audit B275).
-    const deletedRow = liveShape.range.r1 + 1 + pending.recordIndex;
-    let nextSheet: SheetModel =
-      !keepsOnlyRow && liveShape.range.r2 > deletedRow
-        ? rewriteSheetFormulaReferences({ ...sheet, cells: nextCells }, (formula) =>
-            adjustFormulaForCellMove(formula, {
-              from: {
-                r1: deletedRow + 1,
-                c1: liveShape.range.c1,
-                r2: liveShape.range.r2,
-                c2: liveShape.range.c2,
-              },
-              rowDelta: -1,
-              colDelta: 0,
-              sheetName: sheet.name || sheet.id,
-            }),
-          )
-        : { ...sheet, cells: nextCells };
-    if (matchingTable && !keepsOnlyRow) {
-      const outcome = planDataTableResizeOutcome(
-        nextSheet,
-        matchingTable.id,
-        nextRange,
-        rangeHasLockedCellRef.current,
-        { defaultColumnName: defaultTableColumnNameText },
-      );
-      if (!outcome.ok) {
-        setDataFormStatus(
-          tableResizeRefusalMessage(
-            outcome.reason,
-            "spreadsheet.uiCopy.thisRangeIsInvalidOrStaleOrTheNative",
-          ),
-        );
-        return;
-      }
-      nextSheet = outcome.sheet;
-    }
-    setValidationAlert(null);
-    replaceActiveSheet(nextSheet, undefined, "coordinate");
-    setDataFormDraft([]);
-    setDataFormRecordBaseline(null);
-    setDataFormCriteria(null);
-    setSelectionAnchor({ row: nextRange.r1, col: nextRange.c1 });
-    setActiveCell({
-      row:
-        liveShape.recordCount > 1
-          ? Math.min(liveRecord.row, nextRange.r2)
-          : nextRange.r1,
-      col: nextRange.c2,
-    });
-    if (liveShape.recordCount === 1) {
-      setDataFormOpen(false);
-      setDataFormAuthority(null);
-      setDataFormIndex(0);
-      setDataFormStatus(null);
-      scheduleRaf(() =>
-        dataFormToggleRef.current?.focus({ preventScroll: true }),
-      );
-      return;
-    }
-    setDataFormAuthority((current) =>
-      current &&
-      current.pageId === pending.pageId &&
-      current.sheetId === pending.sheetId &&
-      current.workbookIdentity === pending.workbookIdentity
-        ? { ...current, range: nextRange }
-        : current,
-    );
-    setDataFormIndex(Math.min(pending.recordIndex, liveShape.recordCount - 2));
-    setDataFormStatus(
-      t("spreadsheet.uiCopy.theCurrentRecordWasDeleted"),
-    );
-  };
-
-  const findDataFormNext = (direction: 1 | -1) => {
-    if (!dataFormShape || !dataFormCriteria) return;
-    const from =
-      dataFormRecord?.index ?? (direction > 0 ? -1 : dataFormShape.recordCount);
-    const next = findDataFormRecord(
-      sheet.cells,
-      dataFormShape,
-      dataFormCriteria,
-      from,
-      direction,
-      dataFormReadOptions,
-    );
-    if (next === null) {
-      setDataFormStatus(
-        t("spreadsheet.uiCopy.noMoreMatchingRecords"),
-      );
-      return;
-    }
-    setDataFormCriteria(null);
-    moveDataFormRecord(next);
-  };
 
   const clearSelectionBy = (variant: ClearVariant) => {
     const outcome = clearedSheetForRange(
@@ -20884,11 +19269,6 @@ function SpreadsheetWindow({
   useInsertionEffect(() => {
     changeLogRemoteRef.current = changeLog.notifyRemoteContent;
   });
-  const openChangesPane = () => {
-    const request = changeLogOpenRequestRef.current ?? { scope: "workbook" as const };
-    changeLogOpenRequestRef.current = null;
-    changeLog.openPane(request);
-  };
 
   const navigateToSheetRange = (
     targetSheetIndex: number,
@@ -20935,20 +19315,6 @@ function SpreadsheetWindow({
     });
   };
 
-  // A Changes card selects what it changed, on its sheet; a card of a sheet
-  // since deleted or hidden has nothing to select.
-  const selectChangeEntry = (
-    entry: SpreadsheetChangeEntry,
-    cell?: SpreadsheetChangeCell,
-  ): void => {
-    const index = sheets.findIndex((candidate) => candidate.id === entry.sheetId);
-    if (index < 0 || sheets[index]?.hidden) return;
-    navigateToSheetRange(
-      index,
-      cell ? { r1: cell.r, c1: cell.c, r2: cell.r, c2: cell.c } : entry,
-    );
-  };
-
   const locateDisplayTextForRef = useRef<((sheetIndex: number) => FindDisplayText | undefined) | null>(null);
   const {
     editErrorCheckFindingInFormulaBar,
@@ -20983,262 +19349,6 @@ function SpreadsheetWindow({
     writeActiveSheetIndex,
     writeSelectedChartSelection,
   });
-
-  // Trace Precedents / Dependents (Excel/WPS): the first click displays direct
-  // relationships; repeating the SAME command for the SAME stable root expands
-  // one breadth-first worksheet level and retains the earlier arrows. Remote
-  // worksheet markers stay terminal in this surface — navigating there starts a
-  // new trace session — while same-sheet cycles are discovered at most once.
-  const traceFromActiveCell = (mode: TraceMode): boolean => {
-    const root: TraceArrowEndpoint = {
-      sheetId: sheet.id,
-      row: activeCell.row,
-      col: activeCell.col,
-    };
-    // Excel answers a trace that finds nothing with a message rather than
-    // silence: Trace Precedents needs a formula with references in the active
-    // cell, and Trace Dependents reports when no formula refers to it.
-    const activeKey = `${activeCell.row}:${activeCell.col}`;
-    if (mode === "precedents") {
-      const activeFormula = sheet.cells[activeKey]?.formula;
-      if (
-        !activeFormula ||
-        (extractPrecedents(activeFormula, 1).length === 0 &&
-          extractSheetQualifiedPrecedents(activeFormula, 1).length === 0)
-      ) {
-        showProtectNotice(
-          t("spreadsheet.uiCopy.tracePrecedentsRequiresAFormulaWithReferences"),
-        );
-        return false;
-      }
-    } else {
-      const ownName = (sheet.name || sheet.id).trim().toLowerCase();
-      const referredTo = sheets.some((candidate) =>
-        Object.entries(candidate.cells).some(([key, cell]) => {
-          if (!cell?.formula) return false;
-          if (candidate.id === sheet.id) {
-            if (key === activeKey) return false;
-            const [rawRow, rawCol] = key.split(":");
-            if (
-              findDependents(
-                { row: activeCell.row, col: activeCell.col },
-                [{ row: Number(rawRow), col: Number(rawCol), formula: cell.formula }],
-                1,
-              ).length > 0
-            ) {
-              return true;
-            }
-          }
-          return extractSheetQualifiedPrecedents(
-            cell.formula,
-            MAX_TRACE_RELATIONSHIPS,
-          ).some(
-            (precedent) =>
-              precedent.sheetName.trim().toLowerCase() === ownName &&
-              precedent.row === activeCell.row &&
-              precedent.col === activeCell.col,
-          );
-        }),
-      );
-      if (!referredTo) {
-        showProtectNotice(
-          t("spreadsheet.uiCopy.traceDependentsFoundNoFormulasReferringToTheActiveCell"),
-        );
-        return false;
-      }
-    }
-    const endpointKey = (endpoint: TraceArrowEndpoint) =>
-      `${endpoint.sheetId}:${endpoint.row}:${endpoint.col}`;
-    const sameEndpoint = (
-      left: TraceArrowEndpoint,
-      right: TraceArrowEndpoint,
-    ) =>
-      left.sheetId === right.sheetId &&
-      left.row === right.row &&
-      left.col === right.col;
-    const relationshipKey = (
-      from: TraceArrowEndpoint,
-      to: TraceArrowEndpoint,
-    ) => `${endpointKey(from)}>${endpointKey(to)}`;
-    const formulaSheetName = (candidate: (typeof sheets)[number]) =>
-      (candidate.name || candidate.id).trim().toLowerCase();
-    const sheetsByFormulaName = new Map(
-      sheets.map(
-        (candidate) => [formulaSheetName(candidate), candidate] as const,
-      ),
-    );
-    const activeFormulaSheetName = formulaSheetName(sheet);
-    const formulaCells: FormulaCellEntry[] = [];
-    if (mode === "dependents") {
-      for (const [key, cell] of Object.entries(sheet.cells)) {
-        if (!cell?.formula) continue;
-        const [rawRow, rawCol] = key.split(":");
-        const row = Number(rawRow);
-        const col = Number(rawCol);
-        if (!Number.isInteger(row) || !Number.isInteger(col)) continue;
-        formulaCells.push({ row, col, formula: cell.formula });
-      }
-    }
-
-    setTraceSession((current) => {
-      const continuesCurrent = Boolean(
-        current && current.mode === mode && sameEndpoint(current.root, root),
-      );
-      if (continuesCurrent && current?.frontier.length === 0) return current;
-
-      const relationships = continuesCurrent
-        ? [...(current?.relationships ?? [])]
-        : [];
-      const frontier = continuesCurrent ? (current?.frontier ?? []) : [root];
-      const relationshipKeys = new Set(
-        relationships.map((relationship) =>
-          relationshipKey(relationship.from, relationship.to),
-        ),
-      );
-      const visited = new Set(
-        continuesCurrent ? current?.visited : [endpointKey(root)],
-      );
-      const nextFrontier: TraceArrowEndpoint[] = [];
-      const queued = new Set<string>();
-
-      const addRelationship = (
-        from: TraceArrowEndpoint,
-        to: TraceArrowEndpoint,
-        navigateTo: TraceArrowEndpoint,
-        expandable: TraceArrowEndpoint,
-      ) => {
-        if (relationships.length >= MAX_TRACE_RELATIONSHIPS) return;
-        const key = relationshipKey(from, to);
-        if (relationshipKeys.has(key)) return;
-        relationshipKeys.add(key);
-        relationships.push({ from, to, navigateTo });
-
-        // Only cells on the active worksheet become the next frontier. A
-        // cross-sheet endpoint remains a black terminal marker until navigated.
-        if (expandable.sheetId !== sheet.id) return;
-        const expandableKey = endpointKey(expandable);
-        if (visited.has(expandableKey) || queued.has(expandableKey)) return;
-        visited.add(expandableKey);
-        queued.add(expandableKey);
-        nextFrontier.push(expandable);
-      };
-
-      for (const anchor of frontier) {
-        if (
-          relationships.length >= MAX_TRACE_RELATIONSHIPS ||
-          anchor.sheetId !== sheet.id
-        ) {
-          break;
-        }
-
-        if (mode === "precedents") {
-          const formula = sheet.cells[`${anchor.row}:${anchor.col}`]?.formula;
-          const remaining = MAX_TRACE_RELATIONSHIPS - relationships.length;
-          if (remaining <= 0) break;
-          for (const source of extractPrecedents(formula, remaining)) {
-            const endpoint = { sheetId: sheet.id, ...source };
-            addRelationship(endpoint, anchor, endpoint, endpoint);
-          }
-          const qualifiedRemaining =
-            MAX_TRACE_RELATIONSHIPS - relationships.length;
-          if (qualifiedRemaining <= 0) break;
-          for (const source of extractSheetQualifiedPrecedents(
-            formula,
-            qualifiedRemaining,
-          )) {
-            const targetSheet = sheetsByFormulaName.get(
-              source.sheetName.trim().toLowerCase(),
-            );
-            if (
-              !targetSheet ||
-              source.row >= targetSheet.rowCount ||
-              source.col >= targetSheet.columnCount
-            ) {
-              continue;
-            }
-            const endpoint = {
-              sheetId: targetSheet.id,
-              row: source.row,
-              col: source.col,
-            };
-            addRelationship(endpoint, anchor, endpoint, endpoint);
-          }
-          continue;
-        }
-
-        const remaining = MAX_TRACE_RELATIONSHIPS - relationships.length;
-        if (remaining <= 0) break;
-        for (const target of findDependents(
-          { row: anchor.row, col: anchor.col },
-          formulaCells,
-          remaining,
-        )) {
-          const endpoint = { sheetId: sheet.id, ...target };
-          addRelationship(anchor, endpoint, endpoint, endpoint);
-        }
-
-        // A qualified reference may create a dependent anywhere in this
-        // workbook, but only a dependent on this worksheet is expandable.
-        for (const candidate of sheets) {
-          if (relationships.length >= MAX_TRACE_RELATIONSHIPS) break;
-          for (const [key, cell] of Object.entries(candidate.cells)) {
-            if (!cell?.formula) continue;
-            const [rawRow, rawCol] = key.split(":");
-            const dependentRow = Number(rawRow);
-            const dependentCol = Number(rawCol);
-            if (
-              !Number.isInteger(dependentRow) ||
-              !Number.isInteger(dependentCol) ||
-              dependentRow < 0 ||
-              dependentCol < 0 ||
-              dependentRow >= candidate.rowCount ||
-              dependentCol >= candidate.columnCount ||
-              (candidate.id === sheet.id &&
-                dependentRow === anchor.row &&
-                dependentCol === anchor.col)
-            ) {
-              continue;
-            }
-            const qualifiedPrecedents = extractSheetQualifiedPrecedents(
-              cell.formula,
-              MAX_TRACE_RELATIONSHIPS,
-            );
-            const readsAnchor = qualifiedPrecedents.some(
-              (precedent) =>
-                precedent.sheetName.trim().toLowerCase() ===
-                  activeFormulaSheetName &&
-                precedent.row === anchor.row &&
-                precedent.col === anchor.col,
-            );
-            if (!readsAnchor) continue;
-            const endpoint = {
-              sheetId: candidate.id,
-              row: dependentRow,
-              col: dependentCol,
-            };
-            addRelationship(anchor, endpoint, endpoint, endpoint);
-          }
-        }
-      }
-
-      // Once a level adds no relationship, the command is a true no-op. The
-      // unchanged frontier is safe because any content mutation clears it.
-      if (
-        continuesCurrent &&
-        relationships.length === (current?.relationships.length ?? 0)
-      ) {
-        return current;
-      }
-      return {
-        mode,
-        root,
-        relationships,
-        frontier: nextFrontier,
-        visited: [...visited],
-      };
-    });
-    return true;
-  };
 
   const navigateToTraceEndpoint = (endpoint: TraceArrowEndpoint): void => {
     const targetSheetIndex = sheets.findIndex(
@@ -21643,12 +19753,6 @@ function SpreadsheetWindow({
     activeCell.col >= 0 &&
     activeCell.row < sheet.rowCount &&
     activeCell.col < sheet.columnCount;
-  // Removing a split never needs the panes drawn, so a split stays removable
-  // from the same button wherever the sheet is shown, as Excel's Split toggle
-  // always is. Only creating one needs the panes.
-  const splitToggleAvailable =
-    nativeSplitPresent ||
-    (splitRenderingSupported && splitSelectionFitsPersistedGrid);
   const splitLineCommitAvailable =
     splitRenderingSupported && splitSelectionFitsPersistedGrid;
   const physicalSplitPanes = useMemo(() => splitPaneNames(split), [split]);
@@ -23732,7 +21836,7 @@ function SpreadsheetWindow({
             : undefined;
           await downloadPageExport({ pageId, format, expectedContentVersion: page.content_version,
             ...(options.lossyConsent ? { lossyConsent: true } : {}),
-            ...(spreadsheetView ? { spreadsheetView } : {}), ...(format === "pdf" && notesShownAll ? { showAllNotes: true } : {}) });
+            ...(spreadsheetView ? { spreadsheetView } : {}), ...({}) });
         };
         try {
           await exportAt(savedPage);
@@ -23814,7 +21918,7 @@ function SpreadsheetWindow({
       sheet,
       t,
       prepareCurrentContentWhenSettled,
-      notesShownAll,
+      false,
       reportExportStatus,
     ],
   );
@@ -23886,7 +21990,7 @@ function SpreadsheetWindow({
           ...scope,
         },
         // "As displayed on sheet" prints every note while Show All Notes is on.
-        ...(notesShownAll ? { showAllNotes: true } : {}),
+        ...({}),
         // Printed as Excel's File > Print prints, not as its Save as PDF
         // (the spilled tails, CRITERIA XC-155).
         printRoute: true,
@@ -23929,7 +22033,7 @@ function SpreadsheetWindow({
       if (authority === "timeout" || authority === "waited" || serverExportInFlightRef.current) return;
       const capturedSession = captureExportSheetViewSession();
       const savedPage = await saveCurrentDraftForServerExport("pdf");
-      const key = `${pageId}:${savedPage.content_version}:${JSON.stringify(scope)}:${notesShownAll}`;
+      const key = `${pageId}:${savedPage.content_version}:${JSON.stringify(scope)}:${false}`;
       if (lastPreparedPrintRef.current === key) return;
       lastPreparedPrintRef.current = key;
       await preparePageExport({
@@ -23937,7 +22041,7 @@ function SpreadsheetWindow({
         format: "pdf",
         expectedContentVersion: savedPage.content_version,
         spreadsheetView: { ...(await spreadsheetPdfViewForSavedPage(savedPage, capturedSession)), ...scope },
-        ...(notesShownAll ? { showAllNotes: true } : {}),
+        ...({}),
         printRoute: true,
       });
     } catch {
@@ -25320,59 +23424,6 @@ function SpreadsheetWindow({
     setDataQueryError(reason);
     return reason;
   };
-  const openDataQuery = (existing?: DataQueryRun): boolean => {
-    if (!dataQueryWritable) return false;
-    try {
-      const sourceSheet = existing ? sheets.find((entry) => entry.id === existing.sourceSheetId) : sheet;
-      if (!sourceSheet) throw new Error("query_source_missing");
-      const present = existing
-        ? sourceSheet.dataTables?.find((table) => table.id === existing.sourceTableId)
-        : sourceSheet.dataTables?.find((table) => activeCell.row >= table.range.r1 && activeCell.row <= table.range.r2 && activeCell.col >= table.range.c1 && activeCell.col <= table.range.c2);
-      const area = present?.range ?? (hasMultiSelection ? selRect : surroundingDataRegion(sourceSheet.cells, activeCell.row, activeCell.col, sourceSheet.rowCount, sourceSheet.columnCount));
-      if (!area) throw new Error("query_source_missing");
-      const allNames = new Set(sheets.flatMap((entry) => [...(entry.dataTables ?? []).map((table) => table.name.toLowerCase()), ...(entry.namedRanges ?? []).map((range) => range.name.toLowerCase())]));
-      const uniqueName = (prefix: string) => { let index = 1; while (allNames.has(`${prefix}${index}`.toLowerCase())) index++; const name = `${prefix}${index}`; allNames.add(name.toLowerCase()); return name; };
-      const headerCells = Array.from({ length: area.c2 - area.c1 + 1 }, (_, index) => sourceSheet.cells[`${area.r1}:${area.c1 + index}`]);
-      const hasTextHeaders = headerCells.every((cell) => cell?.value?.trim() && cell.kind !== "number") && new Set(headerCells.map((cell) => cell.value.toLowerCase())).size === headerCells.length;
-      const sourceTable: DataTable = present ?? {
-        id: crypto.randomUUID(), name: uniqueName("QuerySource"), range: { ...area }, headerRow: hasTextHeaders,
-        columns: headerCells.map((cell, index) => ({ id: index + 1, name: hasTextHeaders ? cell.value : `Column${index + 1}` })),
-      };
-      const source = readDataQuerySource(sourceSheet, sourceTable);
-      const existingTarget = existing ? sheets.find((entry) => entry.id === existing.targetSheetId)?.dataTables?.find((table) => table.id === existing.targetTableId) : undefined;
-      if (existing && !existingTarget) throw new Error("query_target_missing");
-      const targetName = existingTarget?.name ?? uniqueName("QueryResult");
-      const definition: DataQueryDefinition = existing
-        ? { ...existing.definition, sourceName: sourceTable.name }
-        : { version: 1, name: targetName, sourceName: sourceTable.name, steps: [] };
-      if (document.activeElement instanceof HTMLElement) dataQueryReturnFocusRef.current = document.activeElement;
-      setDataQueryError(undefined);
-      setDataQueryManagerOpen(false);
-      setDataQueryDraft({ workbook: sheets, source, request: {
-        definition, queryId: existing?.queryId ?? crypto.randomUUID(), runId: crypto.randomUUID(),
-        sourceSheetId: sourceSheet.id, sourceTableId: sourceTable.id,
-        targetSheetId: existing?.targetSheetId ?? sheet.id, targetTableId: existing?.targetTableId ?? crypto.randomUUID(),
-        targetName, row: existingTarget?.range.r1 ?? area.r1, col: existingTarget?.range.c1 ?? area.c2 + 2,
-        ...(!present ? { createdSourceTable: sourceTable } : {}),
-      } });
-      return true;
-    } catch (error) { showProtectNotice(dataQueryFailure(error)); return false; }
-  };
-  const changeDataQueryHeaders = (hasHeaders: boolean) => {
-    const draft = dataQueryDraft;
-    if (!draft?.request.createdSourceTable || draft.workbook !== liveSheetsRef.current || !dataQueryWritable) return;
-    try {
-      const sourceSheet = draft.workbook.find((entry) => entry.id === draft.request.sourceSheetId);
-      if (!sourceSheet) throw new Error("query_source_missing");
-      const area = draft.request.createdSourceTable.range;
-      const table: DataTable = { ...draft.request.createdSourceTable, headerRow: hasHeaders,
-        columns: Array.from({ length: area.c2 - area.c1 + 1 }, (_, index) => ({ id: index + 1,
-          name: hasHeaders ? sourceSheet.cells[`${area.r1}:${area.c1 + index}`]?.value ?? "" : `Column${index + 1}` })) };
-      const source = readDataQuerySource(sourceSheet, table);
-      setDataQueryDraft({ ...draft, source, request: { ...draft.request, createdSourceTable: table } });
-      setDataQueryError(undefined);
-    } catch (error) { dataQueryFailure(error); }
-  };
   // Adjust column width (External Data Properties): the output columns of
   // each refreshed query that has it fit their content, in the cells' own
   // fonts, as AutoFit Column Width does; on an imported grid in its units.
@@ -25477,69 +23528,6 @@ function SpreadsheetWindow({
     }
     return false;
   };
-  // Imported Power Query queries over this workbook's own tables refresh
-  // here (native-query-refresh.ts): the result replaces the rows of the table
-  // the query loads to, as one ordinary edit. Their parts stay in the file.
-  const nativeWorkbookQueries = useMemo(() => {
-    const own = new Set(dataQueryRuns.map((run) => run.definition.name));
-    return (dataSourceInventoryState.inventory?.queries ?? []).filter((query) => !own.has(query.name));
-  }, [dataQueryRuns, dataSourceInventoryState.inventory]);
-  const nativeQueryRefreshBlockedReason = autosave.readOnly || autosave.loading || sheetViewProjectionActive || guestMode
-    ? t("spreadsheet.helperCopy.queryProperties.readOnly")
-    : null;
-  const nativeQueryFailureText = (name: string, error: unknown): string => {
-    if (!(error instanceof NativeQueryRefreshError)) return t("spreadsheet.nativeQuery.failed", { name });
-    const key = {
-      unsupported: "spreadsheet.nativeQuery.unsupported",
-      m_error: "spreadsheet.nativeQuery.mError",
-      not_loaded: "spreadsheet.nativeQuery.notLoaded",
-      external: "spreadsheet.nativeQuery.externalReason",
-      table_missing: "spreadsheet.nativeQuery.tableMissing",
-      columns_changed: "spreadsheet.nativeQuery.columnsChanged",
-      content_below: "spreadsheet.nativeQuery.contentBelow",
-      resize_refused: "spreadsheet.nativeQuery.resizeRefused",
-      source_unreadable: "spreadsheet.nativeQuery.sourceUnreadable",
-      formula_pending: "spreadsheet.nativeQuery.formulaPending",
-      protected: "spreadsheet.protectionBlocked",
-    }[error.code];
-    return t(key, { name, feature: error.detail, message: error.detail, functions: error.detail, table: error.detail, columns: error.detail, detail: error.detail });
-  };
-  /** Refresh the named imported queries (all refreshable ones when none named). */
-  const refreshNativeQueries = async (names?: readonly string[], options?: { quiet?: boolean }): Promise<boolean> => {
-    if (nativeQueryRefreshBlockedReason || nativeQueryBusyName !== null) return false;
-    const inventory = dataSourceInventoryState.inventory?.queries
-      ? dataSourceInventoryState.inventory
-      : await inspectImportedDataSourceInventory();
-    const queries = (inventory?.queries ?? []).filter((query) => !dataQueryRuns.some((run) => run.definition.name === query.name));
-    const targets = names
-      ? queries.filter((query) => names.includes(query.name))
-      : queries.filter((query) => nativeQueryRefreshable(query) === null);
-    if (!targets.length) return false;
-    let workbook = liveSheetsRef.current;
-    const results = automaticWorksheetFormulaResults ?? backgroundCalculation.projection;
-    let refreshed = 0;
-    for (const query of targets) {
-      setNativeQueryBusyName(query.name);
-      try {
-        const plan = planNativeQueryRefresh(workbook, queries, query.name, {
-          formulaValue: (candidate, row, col) => results?.get(worksheetFormulaResultKey(candidate.name || candidate.id, row, col)),
-          rangeHasLockedCell: rangeHasLockedCellRef.current,
-        });
-        workbook = plan.sheets;
-        refreshed += 1;
-      } catch (error) {
-        if (!options?.quiet || !(error instanceof NativeQueryRefreshError && (error.code === "external" || error.code === "not_loaded")))
-          showProtectNotice(nativeQueryFailureText(query.name, error));
-        // Excel stops a Refresh All at the first query that fails.
-        break;
-      } finally {
-        setNativeQueryBusyName(null);
-      }
-    }
-    if (!refreshed || workbook === liveSheetsRef.current) return false;
-    commitSheets(workbook);
-    return true;
-  };
   /** The imported query table (a table a query loads to) holding the active cell. */
   const activeQueryBackedTable = spreadsheetNativeWriteRoute === "patchback"
     ? sheet.dataTables?.find((entry) => entry.queryBacked && activeCell.row >= entry.range.r1 && activeCell.row <= entry.range.r2 &&
@@ -25547,66 +23535,8 @@ function SpreadsheetWindow({
     : null;
   const workbookHasQueryBackedTables = spreadsheetNativeWriteRoute === "patchback" &&
     sheets.some((entry) => entry.dataTables?.some((table) => table.queryBacked));
-  /** Data > Refresh in an imported query table: the query loading it, read from the file. */
-  const refreshNativeQueryForActiveTable = async (): Promise<boolean> => {
-    const table = activeQueryBackedTable;
-    if (!table) return false;
-    const inventory = dataSourceInventoryState.inventory?.queries
-      ? dataSourceInventoryState.inventory
-      : await inspectImportedDataSourceInventory();
-    const query = (inventory?.queries ?? []).find((entry) => entry.load === "table" && entry.sheetName === sheet.name &&
-      entry.tableName?.toLowerCase() === table.name.toLowerCase());
-    if (!query) {
-      // A text import or web query MRAI has no engine for.
-      showProtectNotice(t("spreadsheet.helperCopy.queryProperties.importedQueryReadOnly"));
-      return false;
-    }
-    return refreshNativeQueries([query.name]);
-  };
-  const queryPropertiesReadOnlyReason = (queryId: string): string | null => {
-    const run = dataQueryRuns.find((entry) => entry.queryId === queryId);
-    const target = run ? sheets.find((entry) => entry.id === run.targetSheetId) : undefined;
-    if (target?.protected) return t("spreadsheet.protectionBlocked");
-    return dataQueryWritable || dataQueryBusy ? null : t("spreadsheet.helperCopy.queryProperties.readOnly");
-  };
-  // Query Properties OK: the settings are one ordinary edit; a new name loads
-  // the query again under it (its connection and M name follow), carrying the
-  // settings in the same step.
-  const applyQueryProperties = (queryId: string, result: { name: string; properties: DataQueryProperties }) => {
-    const live = liveSheetsRef.current;
-    const run = activeDataQueryRuns(live).find((entry) => entry.queryId === queryId);
-    if (!run || !dataQueryWritable) return;
-    if (result.name !== run.definition.name) {
-      let request: DataQueryRunRequest;
-      try { request = dataQueryRefreshRequest(live, run, result.name); }
-      catch (error) { dataQueryFailure(error); return; }
-      void applyDataQueryRequests([request], live, {
-        transform: (planned) => withDataQueryProperties(planned, queryId, result.properties),
-      }).then((done) => { if (done === true) setQueryPropertiesQueryId(null); });
-      return;
-    }
-    try {
-      const next = withDataQueryProperties(live, queryId, result.properties);
-      if (JSON.stringify(next.map((entry) => entry.dataQueries ?? null)) !== JSON.stringify(live.map((entry) => entry.dataQueries ?? null)))
-        commitSheets(next);
-      setQueryPropertiesQueryId(null);
-    } catch (error) { dataQueryFailure(error); }
-  };
-  const applyExternalDataProperties = (queryId: string, draft: Partial<DataQueryProperties>) => {
-    const live = liveSheetsRef.current;
-    if (!dataQueryWritable || !activeDataQueryRuns(live).some((entry) => entry.queryId === queryId)) return;
-    try {
-      const { description, ...current } = effectiveDataQueryProperties(live, queryId);
-      const next = withDataQueryProperties(live, queryId, { ...current, ...(description ? { description } : {}), ...draft });
-      if (JSON.stringify(next.map((entry) => entry.dataQueries ?? null)) !== JSON.stringify(live.map((entry) => entry.dataQueries ?? null)))
-        commitSheets(next);
-      setExternalDataQueryId(null);
-    } catch (error) { dataQueryFailure(error); }
-  };
   useEffect(() => {
-    if (dataQueryDraft && (autosave.readOnly || autosave.loading || sheetViewProjectionActive ||
-        (!dataQueryBusyRef.current && dataQueryDraft.workbook !== sheets))) setDataQueryDraft(null);
-  }, [autosave.loading, autosave.readOnly, dataQueryDraft, sheetViewProjectionActive, sheets]);
+  }, [autosave.loading, autosave.readOnly, false, sheetViewProjectionActive, sheets]);
   useEffect(() => { setDataQueryDraft(null); setDataQueryManagerOpen(false); setQueryPropertiesQueryId(null); setExternalDataQueryId(null); setImportedConnectionId(null); }, [pageId]);
   useSpreadsheetQueryRefreshSchedule({
     pageId,
@@ -25702,50 +23632,6 @@ function SpreadsheetWindow({
     }
     unprotectSheetNow(sheet);
   }, [sheet, sheetProtectionConfigured, unprotectSheetNow]);
-  const confirmProtectSheet = useCallback(
-    (options: SheetProtectionOptions | undefined) => {
-      setProtectSheetDialogOpen(false);
-      // The password hash resolves asynchronously: protect the sheet the
-      // dialog was opened on only while it is still the live active sheet.
-      const liveSheet = liveSheetsRef.current[liveActiveSheetIndexRef.current];
-      if (!liveSheet || liveSheet.id !== sheet.id) return;
-      const nextSheet = sheetWithProtection(liveSheet, options);
-      if (!nextSheet) return;
-      setProtectNotice(null);
-      replaceActiveSheet(nextSheet);
-    },
-    [replaceActiveSheet, sheet.id],
-  );
-
-  const togglePauseProtection = useCallback(() => {
-    const liveWorkbook = liveSheetsRef.current;
-    const liveActiveIndex = liveActiveSheetIndexRef.current;
-    const matches = liveWorkbook.flatMap((candidate, index) =>
-      candidate.id === sheet.id ? [{ candidate, index }] : [],
-    );
-    const activeLiveSheet =
-      matches.length === 1 && matches[0]?.index === liveActiveIndex
-        ? matches[0]?.candidate
-        : null;
-    if (
-      liveWorkbook !== sheets ||
-      activeLiveSheet !== sheet ||
-      activeLiveSheet.protected !== true
-    ) {
-      return false;
-    }
-    const pausing = !pausedSheetProtectionIdsRef.current.has(activeLiveSheet.id);
-    // Excel for the web asks for a protected sheet's password before Pause
-    // Protection; Resume needs none.
-    const verifier = activeLiveSheet.protectionOptions?.password;
-    if (pausing && verifier) {
-      setSheetProtectionPasswordPrompt({ mode: "pause", sheet: activeLiveSheet, verifier });
-      return true;
-    }
-    setProtectNotice(null);
-    setSheetProtectionPaused(activeLiveSheet.id, pausing);
-    return true;
-  }, [setSheetProtectionPaused, sheet, sheets]);
   const completeSheetProtectionPasswordPrompt = useCallback(() => {
     const prompt = sheetProtectionPasswordPrompt;
     setSheetProtectionPasswordPrompt(null);
@@ -25989,36 +23875,6 @@ function SpreadsheetWindow({
   // Undo).
   const [errorCheckingOptionsOpen, setErrorCheckingOptionsOpen] =
     useState(false);
-  const workbookHasIgnoredErrors =
-    errorCheckingOptionsOpen &&
-    sheets.some((candidate) =>
-      ((candidate as { ignoredErrorRanges?: unknown[] }).ignoredErrorRanges?.length ?? 0) > 0 ||
-      Object.values(candidate.cells).some(
-        (cell) => cell?.ignoredErrors !== undefined,
-      ),
-    );
-  const resetIgnoredErrors = () => {
-    if (autosave.readOnly) return;
-    let changed = false;
-    const nextSheets = sheets.map((candidate) => {
-      let nextCells: typeof candidate.cells | null = null;
-      for (const [key, cell] of Object.entries(candidate.cells)) {
-        if (!cell || cell.ignoredErrors === undefined) continue;
-        nextCells ??= { ...candidate.cells };
-        const restored = { ...cell };
-        delete restored.ignoredErrors;
-        nextCells[key] = restored;
-      }
-      const ranged = (candidate as { ignoredErrorRanges?: unknown[] }).ignoredErrorRanges;
-      if (!nextCells && !(Array.isArray(ranged) && ranged.length > 0)) return candidate;
-      changed = true;
-      
-      const { ignoredErrorRanges: _ranges, ...rest } = candidate as typeof candidate & { ignoredErrorRanges?: unknown };
-      void _ranges;
-      return { ...(rest as typeof candidate), cells: nextCells ?? candidate.cells, ...(Array.isArray(ranged) ? { ignoredErrorRanges: [] } : {}) };
-    });
-    if (changed) commitSheets(nextSheets);
-  };
   /**
    * The cells standing in a blocked array's way: everything inside the
    * footprint the anchor's array would have taken that already holds content
@@ -26101,15 +23957,6 @@ function SpreadsheetWindow({
         });
       }
     } else if (finding.rule === "invalid-table-data") {
-      // XLS-A075: the rule the value breaks is edited in Data Validation.
-      fixes.push({
-        id: "data-validation",
-        label: t("spreadsheet.errorOptions.dataValidation"),
-        onSelect: () => {
-          setErrorOptionsMenu(null);
-          openDataValidationDialogFromAuthority();
-        },
-      });
     } else if (finding.rule === "number-stored-as-text") {
       fixes.push({ id: "convert-to-number", label: t("spreadsheet.errorOptions.convertToNumber"), onSelect: convertErrorCellsToNumber, disabledReason: blocked });
     } else if (finding.rule === "inconsistent-calculated-column") {
@@ -28806,129 +26653,6 @@ function SpreadsheetWindow({
       writeSheets,
     ],
   );
-  const applyFreezeAction = useCallback(
-    (action: FreezeAction, anchor?: { row: number; col: number }) => {
-      // Freeze and split are mutually exclusive: applying a freeze removes any
-      // split so a single divider axis governs the layout. Drop the split keys
-      // entirely when clearing so the no-split save path stays byte-identical.
-      // An explicit anchor (Automate > Freeze Selected Cells, Excel's
-      // freezeAt) freezes there whatever split the window has.
-      const next = anchor
-        ? frozenSheet(splitRemovedSheet(sheet), action, anchor)
-        : frozenSheet(sheet, action, { row: activeCell.row, col: activeCell.col });
-      replaceActiveSheet(next);
-      // The frozen panes hold every line above (left of) the freeze from the
-      // sheet's first one, so a view scrolled when freezing would leave the
-      // lines just under the frozen band behind it: the active cell vanished
-      // under the frozen header row (live audit S-083, batch 80). A frozen
-      // axis starts from its first unfrozen line, as Excel's does.
-      const wrap = gridWrapRef.current;
-      const atActiveCell =
-        action === "freezePanes" ||
-        action === "freezeRowsToActive" ||
-        action === "freezeColumnsToActive";
-      if (wrap && atActiveCell) {
-        const frozen = readFreezeConfig({
-          freezeRows: next.freezeRows,
-          freezeCols: next.freezeCols,
-          rowCount: next.rowCount,
-          columnCount: next.columnCount,
-        });
-        if (frozen.freezeRows > 0 && wrap.scrollTop !== 0) wrap.scrollTop = 0;
-        if (frozen.freezeCols > 0 && wrap.scrollLeft !== 0) wrap.scrollLeft = 0;
-      }
-    },
-    [activeCell.col, activeCell.row, replaceActiveSheet, sheet, split],
-  );
-
-  // Split panes (Excel/WPS "View > Split"): toggle a movable divider at the
-  // active cell (split above-and-left of it). A second toggle removes the split.
-  // Split and freeze are mutually exclusive, so toggling a split ON clears any
-  // freeze (a single divider axis governs the offset math). Commits through
-  // the authenticated no-Undo/no-recalc view-state save path. Purely a VIEW
-  // change — cell data and the formula evaluator are untouched.
-  const applySplitToggle = useCallback(() => {
-    if (!splitToggleAvailable) return;
-    // Where the bars land is read from the grid as it is on screen (Excel
-    // splits at the active cell's screen edges without moving anything).
-    const wrap = gridWrapRef.current;
-    const scroll = wrap
-      ? readSplitPaneScroll(wrap, sheetZoom)
-      : { left: 0, top: 0 };
-    const viewport = wrap
-      ? {
-          width: Math.max(0, toContentPx(wrap.clientWidth) - splitRowBand),
-          height: Math.max(0, toContentPx(wrap.clientHeight) - splitColumnBand),
-        }
-      : { width: 0, height: 0 };
-    commitSplitView((liveSheet) => {
-      const liveFreeze = readFreezeConfig({
-        freezeRows: liveSheet.freezeRows,
-        freezeCols: liveSheet.freezeCols,
-        rowCount: liveSheet.rowCount,
-        columnCount: liveSheet.columnCount,
-      });
-      const liveSplit = hasFreeze(liveFreeze)
-        ? { splitRow: 0, splitCol: 0 }
-        : readSplitConfig({
-            splitRow: liveSheet.splitRow,
-            splitCol: liveSheet.splitCol,
-            rowCount: liveSheet.rowCount,
-            columnCount: liveSheet.columnCount,
-          });
-      // Split again removes every split.
-      if (hasSplit(liveSplit)) return splitRemovedSheet(liveSheet);
-      if (
-        activeCell.row < 0 ||
-        activeCell.col < 0 ||
-        activeCell.row >= liveSheet.rowCount ||
-        activeCell.col >= liveSheet.columnCount
-      ) {
-        showProtectNotice(
-          t("spreadsheet.uiCopy.theActiveCellIsOutsideThePersistedSheetExpand"),
-        );
-        return null;
-      }
-      const placed = splitAtActiveCell({
-        active: { row: activeCell.row, col: activeCell.col },
-        scroll: liveSheet === sheet ? scroll : { left: 0, top: 0 },
-        viewport,
-        rowCount: liveSheet.rowCount,
-        columnCount: liveSheet.columnCount,
-        rowSize: rowHeight,
-        colSize: colWidth,
-      });
-      if (!placed) return null;
-      const next = placed.split;
-      // Split and freeze are exclusive: splitting removes the freeze.
-      const nextSheet = splitPlacedSheet(
-        liveSheet,
-        next,
-        placed.topLeftCell,
-        { row: activeCell.row, col: activeCell.col },
-        columnLabel,
-      );
-      splitScrollSeedRef.current = {
-        topology: `${liveSheet.id}:${next.splitRow}:${next.splitCol}`,
-        state: placed.scroll,
-      };
-      return nextSheet;
-    });
-  }, [
-    activeCell.col,
-    activeCell.row,
-    colWidth,
-    commitSplitView,
-    rowHeight,
-    sheet,
-    sheetZoom,
-    showProtectNotice,
-    splitColumnBand,
-    splitRowBand,
-    splitToggleAvailable,
-    t,
-    toContentPx,
-  ]);
 
   const {
     activateSplitPane,
@@ -28955,39 +26679,6 @@ function SpreadsheetWindow({
     splitPaneView,
     splitRenderingSupported,
   });
-
-  // R1C1 reference style (Excel parity): flip the workbook between A1 and R1C1.
-  // Workbook-level (not per-sheet), so it persists via the content top-level
-  // field rather than replaceActiveSheet — set the state and queue a save with
-  // the NEW value so a reload restores it. Purely a DISPLAY/INPUT change; the
-  // stored formulas are untouched.
-  const toggleReferenceStyle = useCallback(() => {
-    const next: ReferenceStyle =
-      referenceStyle === "r1c1" ? "a1" : "r1c1";
-    // queueSave synchronously publishes the draft into collaboration state.
-    // Never call it from a functional state updater: React may evaluate that
-    // updater while rendering this component, and a collaboration listener may
-    // then update another notebook component during SpreadsheetWindow's render.
-    pendingWorkbookSettingsRef.current.referenceStyle = next;
-    setReferenceStyle(next);
-    autosave.queueSave({
-      title,
-      content_json: buildPersistedContent(
-        sheets,
-        next,
-        viewOptions,
-        sheet.id,
-      ),
-    });
-  }, [
-    autosave,
-    buildPersistedContent,
-    referenceStyle,
-    sheets,
-    title,
-    viewOptions,
-    sheet.id,
-  ]);
 
   // Persist the workbook VIEW options (Show Formulas, gridline/heading
   // visibility, custom fill lists). Workbook-level like referenceStyle, so it
@@ -29110,32 +26801,6 @@ function SpreadsheetWindow({
     },
     [commitWorkbookTheme, homeZh, toast, t, viewOptions.nativeThemeDisposition],
   );
-  // View > Gridlines / Headings and Formulas > Show Formulas change the active
-  // sheet, or every sheet of a group, as in Excel, where each worksheet's
-  // view holds them (sheetView @showGridLines / @showRowColHeaders /
-  // @showFormulas): another sheet keeps its own. View
-  // state, like a split: saved, with no Undo step and no recalculation.
-  const toggleSheetViewSwitch = useCallback(
-    (key: SpreadsheetSheetViewSwitch) => {
-      const liveWorkbook = liveSheetsRef.current;
-      const liveSheet = liveWorkbook.find((candidate) => candidate.id === sheet.id);
-      if (!liveSheet) return;
-      const group = new Set(sheetGroupRef.current ?? [liveSheet.id]);
-      const nextSheets = sheetsWithViewSwitch(
-        liveWorkbook,
-        key,
-        liveSheet[key] !== true,
-        (candidate) => group.has(candidate.id),
-      );
-      if (!nextSheets) return;
-      writeSheets(nextSheets);
-      autosave.queueSave({
-        title,
-        content_json: buildPersistedContent(nextSheets, referenceStyle, viewOptions, sheet.id),
-      });
-    },
-    [autosave, buildPersistedContent, referenceStyle, sheet.id, title, viewOptions, writeSheets],
-  );
   // A floating picture held as a `data:` URI is stored beside the page and
   // named by its token (useSpreadsheetPictureObjects), saved like a view
   // switch: no Undo step, no recalculation.
@@ -29153,34 +26818,6 @@ function SpreadsheetWindow({
       });
     },
   });
-  const toggleGridlines = useCallback(
-    () => toggleSheetViewSwitch("hideGridlines"),
-    [toggleSheetViewSwitch],
-  );
-  const toggleHeadings = useCallback(
-    () => toggleSheetViewSwitch("hideHeadings"),
-    [toggleSheetViewSwitch],
-  );
-  const toggleShowFormulas = useCallback(
-    () => toggleSheetViewSwitch("showFormulas"),
-    [toggleSheetViewSwitch],
-  );
-  // View > Formula Bar (Excel 编辑栏). A sheet used as a dashboard wants the
-  // strip gone; Excel has had the toggle since 2007 and this had none.
-  const toggleFormulaBar = useCallback(() => {
-    commitViewOptions((current) => ({
-      ...current,
-      hideFormulaBar: !current.hideFormulaBar,
-    }));
-  }, [commitViewOptions]);
-  // View > Reading mode (WPS 阅读模式): tint the active cell's whole row and
-  // column so the eye can follow one line across a wide table.
-  const toggleReadingMode = useCallback(() => {
-    commitViewOptions((current) => ({
-      ...current,
-      readingMode: !current.readingMode,
-    }));
-  }, [commitViewOptions]);
   // View > Eye-care mode (WPS 护眼模式): swap the white paper for a
   // low-saturation green, the setting people leave on for long sessions.
   const toggleEyeCare = useCallback(() => {
@@ -29213,9 +26850,7 @@ function SpreadsheetWindow({
       if (!nativeOfficeOwnsFocus(root, active)) return;
       event.preventDefault();
       event.stopPropagation();
-      void executeVisibleHomeCommandRef.current(
-        "XLSCTL.FORMULAS.AUDIT.SHOW_FORMULAS",
-      );
+      void undefined;
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -29732,35 +27367,6 @@ function SpreadsheetWindow({
     [replaceActiveSheet, sheet, showProtectNotice, spreadsheetNativeWriteRoute, t],
   );
 
-  // Group the selected lines on `axis` into a new outline group. A row group
-  // uses the selection's row span; a column group its column span. createGroup
-  // validates Excel's nesting rules (contiguous, containment-only, depth <= 8)
-  // and silently no-ops an illegal/duplicate range. A single line can't form a
-  // group (no body to collapse), matching Excel.
-  const groupSelection = useCallback(
-    (axis: OutlineAxis) => {
-      const start = axis === "row" ? selRect.r1 : selRect.c1;
-      const end = axis === "row" ? selRect.r2 : selRect.c2;
-      // Excel raises the selected lines one outline level: a single row
-      // groups on its own, a group made beside another joins it, and a range
-      // crossing a group is legal (see groupLines).
-      const next = groupLines(outlineGroups, axis, { start, end });
-      if (sameOutlineGroups(next, outlineGroups)) return;
-      commitOutlineGroups(next);
-    },
-    [commitOutlineGroups, outlineGroups, selRect],
-  );
-  const ungroupSelection = useCallback(
-    (axis: OutlineAxis) => {
-      const start = axis === "row" ? selRect.r1 : selRect.c1;
-      const end = axis === "row" ? selRect.r2 : selRect.c2;
-      const next = ungroupLines(outlineGroups, axis, { start, end });
-      if (sameOutlineGroups(next, outlineGroups)) return;
-      commitOutlineGroups(next);
-    },
-    [commitOutlineGroups, outlineGroups, selRect],
-  );
-
   // Toggle a specific group's collapsed flag (the gutter [-]/[+] button).
   const toggleOutlineGroup = useCallback(
     (axis: OutlineAxis, range: { start: number; end: number }) => {
@@ -30002,1270 +27608,10 @@ function SpreadsheetWindow({
     ],
   );
 
-  const deleteName = useCallback(
-    (entry: NamedRange): boolean =>
-      commitWorkbookNamedRangeMutation(deletedNameMutation(entry)),
-    [commitWorkbookNamedRangeMutation],
-  );
-
-  const openNameManager = useCallback((): boolean => {
-    const liveWorkbook = liveSheetsRef.current;
-    const liveIndex = liveActiveSheetIndexRef.current;
-    const liveSheet = liveWorkbook[liveIndex];
-    if (!liveSheet || liveSheet !== sheet || liveWorkbook !== sheets) {
-      return false;
-    }
-    if (
-      typeof document !== "undefined" &&
-      document.activeElement instanceof HTMLElement
-    ) {
-      nameManagerReturnFocusRef.current = document.activeElement;
-    }
-    setNameManagerDialogAuthority({
-      workbook: liveWorkbook,
-      activeSheetIndex: liveIndex,
-      sheet: liveSheet,
-      sheetId: liveSheet.id,
-    });
-    setNameManagerMode("list");
-    setNameManagerSelectedIdentity(null);
-    setNameManagerError(null);
-    setNameManagerOpen(true);
-    return true;
-  }, [sheet, sheets]);
-
-  const closeNameManager = useCallback(() => {
-    formulaNameMutationCommandRef.current = null;
-    setNameManagerOpen(false);
-    setNameManagerDialogAuthority(null);
-    setNameManagerMode("list");
-    setNameManagerError(null);
-  }, []);
-
-  const beginCreateNameManagerEntry = useCallback(() => {
-    const selectionRef = `${columnLabel(selRect.c1)}${selRect.r1 + 1}${
-      selRect.r1 === selRect.r2 && selRect.c1 === selRect.c2
-        ? ""
-        : `:${columnLabel(selRect.c2)}${selRect.r2 + 1}`
-    }`;
-    // Excel's New Name prefills Refers to with the selection as an absolute,
-    // sheet-qualified formula (`=回款!$C$4:$C$10`), the form it stores.
-    setNameManagerDraft({
-      name: "",
-      ref:
-        qualifyWorkbookNamedRangeRef(`=${selectionRef}`, sheet.name) ??
-        selectionRef,
-      scope: "workbook",
-      comment: "",
-    });
-    setNameManagerSelectedIdentity(null);
-    setNameManagerError(null);
-    setNameManagerMode("create");
-  }, [selRect, sheet.name]);
-
-  const beginEditNameManagerEntry = useCallback((entry: NamedRange) => {
-    if (entry.nativeBlocker) return;
-    setNameManagerSelectedIdentity(namedRangeIdentity(entry));
-    // Refers to reads as a formula, `=` first, as Excel shows it, a relative
-    // reference from the active cell.
-    const shown = nameRefShownFrom(entry.ref, { row: activeCell.row, col: activeCell.col });
-    setNameManagerDraft({
-      name: entry.name,
-      ref: shown.startsWith("=") ? shown : `=${shown}`,
-      scope: entry.scope ?? "workbook",
-      comment: entry.comment ?? "",
-    });
-    setNameManagerError(null);
-    setNameManagerMode("edit");
-  }, [activeCell.col, activeCell.row]);
-
-  const commitNameManagerMutation = useCallback(
-    (
-      receipt: Extract<
-        NonNullable<typeof formulaNameMutationCommandRef.current>,
-        {
-          controlId:
-            | "XLSCTL.FORMULAS.NAME.MANAGER.APPLY"
-            | "XLSCTL.FORMULAS.NAME.MANAGER.DELETE";
-        }
-      >,
-    ): boolean => {
-      const liveWorkbook = liveSheetsRef.current;
-      const liveIndex = liveActiveSheetIndexRef.current;
-      const liveSheet = liveWorkbook[liveIndex];
-      if (
-        !nameManagerDialogAuthority ||
-        receipt.workbook !== liveWorkbook ||
-        receipt.activeSheetIndex !== liveIndex ||
-        receipt.sheet !== liveSheet ||
-        receipt.sheet.id !== liveSheet?.id ||
-        receipt.sheet.id !== nameManagerDialogAuthority.sheetId ||
-        nameManagerDialogAuthority.workbook !== liveWorkbook ||
-        sheetViewProjectionActiveRef.current
-      ) {
-        return false;
-      }
-      // A renamed name is followed through the references that use it.
-      if (chartsHoldSheetTopology()) return false;
-      const result = nameManagerSheets(
-        liveWorkbook,
-        receipt.sheet,
-        receipt.controlId === "XLSCTL.FORMULAS.NAME.MANAGER.DELETE"
-          ? { kind: "delete", source: receipt.source }
-          : {
-              kind: "apply",
-              action: receipt.action,
-              source: receipt.source,
-              name: receipt.name,
-              ref: receipt.ref,
-              scope: receipt.scope,
-              comment: receipt.comment,
-              base: { row: activeCell.row, col: activeCell.col },
-            },
-        (candidate) => isSheetProtectionEffectiveRef.current(candidate),
-      );
-      if (result === "protected") {
-        showProtectNotice();
-        return false;
-      }
-      if (!result) return false;
-      if (commitSheets(result) === liveWorkbook) return false;
-      // The manager stays open on the workbook it just changed: its next
-      // command (the next Delete, a New after an Edit) acts on THAT workbook,
-      // as the window holds it now (a tiled workbook's write reconciles the
-      // model it was given). Left on the one it opened on, every command
-      // after the first failed the live-workbook check and did nothing, with
-      // no message (live audit S-140); only closing and reopening the manager
-      // let it act again.
-      const committed = liveSheetsRef.current;
-      const committedSheet = committed[liveIndex];
-      if (committedSheet) {
-        setNameManagerDialogAuthority({
-          workbook: committed,
-          activeSheetIndex: liveIndex,
-          sheet: committedSheet,
-          sheetId: committedSheet.id,
-        });
-      }
-      return true;
-    },
-    [activeCell.col, activeCell.row, chartsHoldSheetTopology, commitSheets, nameManagerDialogAuthority, showProtectNotice],
-  );
-
-  // Scenario Manager (Excel/WPS "Scenario Manager"). ---------------------------
-  // Add… / Edit… follow Excel (Microsoft Support, "Switch between various sets
-  // of values by using scenarios"; Scenarios.Add on Microsoft Learn): Add
-  // Scenario takes a name, the changing cells (the selection by default, at
-  // most 32, picked with a RefEdit box), a comment that starts with the
-  // author's name and the date, and Protection (Prevent changes checked by
-  // default, Hide). Its OK checks the name is unique and opens Scenario
-  // Values, one box per changing cell prefilled with the cell's current value
-  // (the stored values when editing). Only Scenario Values' OK writes, through
-  // replaceActiveSheet (one undo step + autosave).
-  const scenarioCellInputText = useCallback(
-    (ref: string): string => {
-      const parsed = parseCellRef(ref);
-      if (!parsed) return "";
-      const cell = sheet.cells[`${parsed.row}:${parsed.col}`];
-      // Excel's Scenario Values shows the cell's VALUE (a formula's current
-      // result), never the text its number format paints: a #,##0.00 cell
-      // showing "1,234.56" starts from 1234.56. A constant reads through the
-      // evaluator so a number, a logical and a text cell keep their type.
-      const value =
-        cell?.formula || !cell?.value
-          ? resolveCellChartScalar(
-              cell,
-              parsed.row,
-              parsed.col,
-              formulaEvaluator,
-              spillOverlay,
-            )
-          : formulaEvaluator.getComputed(parsed.row, parsed.col);
-      return scenarioInputText(value, {
-        locale,
-        textFormat:
-          normalizeNumberFormatCode(cell?.style?.numberFormat) === "@",
-      });
-    },
-    [formulaEvaluator, locale, sheet, spillOverlay],
-  );
-  // A protected sheet without Excel's Edit scenarios hides its Hidden
-  // scenarios and keeps "Prevent changes" scenarios from being edited or
-  // deleted; with the permission both open (Show still needs the changing
-  // cells unlocked, checked where it writes).
-  const scenarioProtectionActive = !sheetProtectionAllowsRef.current(
-    sheet,
-    "editScenarios",
-  );
-  const visibleScenarios = useMemo(
-    () =>
-      scenarioProtectionActive
-        ? scenarios.filter((entry) => entry.hidden !== true)
-        : scenarios,
-    [scenarioProtectionActive, scenarios],
-  );
-  const selectedScenario =
-    visibleScenarios.find(
-      (entry) =>
-        entry.name.toUpperCase() === (scenarioSelectedName ?? "").toUpperCase(),
-    ) ??
-    visibleScenarios[0] ??
-    null;
-  const selectedScenarioLocked =
-    selectedScenario !== null &&
-    scenarioProtectionActive &&
-    selectedScenario.locked === true;
-
-  const openScenarioForm = useCallback(
-    (mode: "add" | "edit") => {
-      setScenarioStatus(null);
-      if (mode === "edit") {
-        if (!selectedScenario || selectedScenarioLocked) return;
-        setScenarioForm({
-          mode,
-          sheetId: sheet.id,
-          originalName: selectedScenario.name,
-          name: selectedScenario.name,
-          changingCells: formatScenarioChangingCells(selectedScenario.cells),
-          comment: selectedScenario.comment ?? "",
-          locked: selectedScenario.locked === true,
-          hidden: selectedScenario.hidden === true,
-          error: null,
-        });
-        return;
-      }
-      const date = new Date().toLocaleDateString(locale);
-      setScenarioForm({
-        mode,
-        sheetId: sheet.id,
-        originalName: null,
-        name: "",
-        changingCells: formatConditionalAppliesTo([selRect]).replace(/^=/, ""),
-        comment: reviewCommentActorName
-          ? t("spreadsheet.scenarioCreatedBy", {
-              name: reviewCommentActorName,
-              date,
-            })
-          : t("spreadsheet.scenarioCreatedOn", { date }),
-        locked: true,
-        hidden: false,
-        error: null,
-      });
-    },
-    [
-      locale,
-      reviewCommentActorName,
-      selRect,
-      selectedScenario,
-      selectedScenarioLocked,
-      sheet.id,
-      t,
-    ],
-  );
-
-  const submitScenarioForm = useCallback(() => {
-    const form = scenarioForm;
-    if (!form) return;
-    const fail = (error: string) =>
-      setScenarioForm((current) => (current ? { ...current, error } : current));
-    const name = form.name.trim();
-    if (name.length === 0) {
-      fail(t("spreadsheet.scenarioNameRequired"));
-      return;
-    }
-    const originalKey = (form.originalName ?? "").toUpperCase();
-    if (
-      scenarios.some(
-        (entry) =>
-          entry.name.toUpperCase() === name.toUpperCase() &&
-          entry.name.toUpperCase() !== originalKey,
-      )
-    ) {
-      fail(t("spreadsheet.scenarioNameExists"));
-      return;
-    }
-    const areas = parseConditionalAppliesTo(form.changingCells, {
-      rowCount: sheet.rowCount,
-      columnCount: sheet.columnCount,
-      sheetName: sheet.name,
-    });
-    const refs = areas ? scenarioChangingCellRefs(areas) : [];
-    if (refs.length === 0) {
-      fail(t("spreadsheet.scenarioBadCells"));
-      return;
-    }
-    if (refs.length > MAX_SCENARIO_CHANGING_CELLS) {
-      fail(
-        t("spreadsheet.scenarioTooManyCells", {
-          count: MAX_SCENARIO_CHANGING_CELLS,
-        }),
-      );
-      return;
-    }
-    const stored = new Map<string, string>();
-    if (form.mode === "edit") {
-      const original = scenarios.find(
-        (entry) => entry.name.toUpperCase() === originalKey,
-      );
-      for (const cell of original?.cells ?? []) stored.set(cell.ref, cell.value);
-    }
-    const current = captureScenario(refs, scenarioCellInputText, name).cells;
-    setScenarioValuesDraft({
-      form: { ...form, name, error: null },
-      refs,
-      values: refs.map(
-        (ref, index) => stored.get(ref) ?? current[index]?.value ?? "",
-      ),
-    });
-  }, [scenarioCellInputText, scenarioForm, scenarios, sheet, t]);
-
-  const commitScenarioValues = useCallback(() => {
-    const draft = scenarioValuesDraft;
-    if (!draft) return;
-    const { form } = draft;
-    setScenarioValuesDraft(null);
-    setScenarioForm(null);
-    if (form.sheetId !== sheet.id) {
-      setScenarioStatus({
-        kind: "error",
-        text: t("spreadsheet.scenarioNotFound"),
-      });
-      return;
-    }
-    // Each box is read the way a cell entry is read, so "1,234.56" or "50%"
-    // is stored as the number itself (the model and <inputCells val> carry
-    // 1234.56 / 0.5), while text keeps what was typed.
-    const scenario: Scenario = {
-      name: form.name.slice(0, MAX_SCENARIO_NAME_LENGTH),
-      cells: draft.refs.map((ref, index) => {
-        const target = parseCellRef(ref);
-        const format = target
-          ? sheet.cells[`${target.row}:${target.col}`]?.style?.numberFormat
-          : undefined;
-        return {
-          ref,
-          value: scenarioEntryValue(draft.values[index] ?? "", {
-            locale,
-            textFormat: normalizeNumberFormatCode(format) === "@",
-          }).slice(0, MAX_SCENARIO_VALUE_LENGTH),
-        };
-      }),
-    };
-    const comment = form.comment.slice(0, MAX_SCENARIO_COMMENT_LENGTH);
-    if (comment.trim() !== "") scenario.comment = comment;
-    if (form.locked) scenario.locked = true;
-    if (form.hidden) scenario.hidden = true;
-    const nextScenarios =
-      form.mode === "edit" && form.originalName !== null
-        ? replaceScenario(scenarios, form.originalName, scenario)
-        : upsertScenario(scenarios, scenario);
-    replaceActiveSheet({ ...sheet, scenarios: nextScenarios });
-    setScenarioSelectedName(scenario.name);
-    setScenarioStatus({
-      kind: "success",
-      text: t("spreadsheet.scenarioAdded", {
-        name: scenario.name,
-        count: scenario.cells.length,
-      }),
-    });
-  }, [locale, replaceActiveSheet, scenarioValuesDraft, scenarios, sheet, t]);
-
-  const startScenarioCellsPick = () => setScenarioCellsPicking({ ...selRect });
-
-  // Show: apply a named scenario's stored {cell → value} overrides to the grid.
-  // Each write goes through updateCellValue folded into a SINGLE replaceActiveSheet
-  // call (one undo step + autosave; replaceActiveSheet is available early, so no
-  // pasteGridIntoCells declaration-order hazard). A scenario whose refs all
-  // erased (every cell deleted) writes nothing — reported, not a crash.
-  const showScenario = useCallback(
-    (name: string) => {
-      const scenario = scenarios.find(
-        (s) => s.name.toUpperCase() === name.trim().toUpperCase(),
-      );
-      if (!scenario) {
-        setScenarioStatus({
-          kind: "error",
-          text: t("spreadsheet.scenarioNotFound"),
-        });
-        return;
-      }
-      const writes = applyScenario(scenario);
-      if (writes.length === 0) {
-        setScenarioStatus({
-          kind: "error",
-          text: t("spreadsheet.scenarioEmpty", { name: scenario.name }),
-        });
-        return;
-      }
-      // Sheet protection (Excel/WPS): refuse the WHOLE Show when any pinned cell
-      // is locked on a protected sheet — never partially overwrite locked cells
-      // (mirrors the paste / fill guard; Excel's Scenario Manager does the same).
-      if (writes.some((write) => !isEditableCell(write.row, write.col))) {
-        showProtectNotice();
-        setScenarioStatus({
-          kind: "error",
-          text: t("spreadsheet.scenarioLocked"),
-        });
-        return;
-      }
-      // Each value goes in as a cell entry (entryLocale), exactly as if typed:
-      // a canonical "1234.56" and a legacy display string "1,234.56" both land
-      // as the number 1234.56, never as text a SUM skips. A changing cell
-      // that holds a formula gets the constant (Excel replaces formulas with
-      // the scenario's values when it is shown).
-      let next = sheet;
-      for (const write of writes) {
-        next = updateCellValue(
-          next,
-          write.row,
-          write.col,
-          write.value,
-          locale,
-          undefined,
-          excelDateSystemArg(workbookDateSystemRef.current),
-        );
-      }
-      replaceActiveSheet(next);
-      setScenarioStatus({
-        kind: "success",
-        text: t("spreadsheet.scenarioShown", {
-          name: scenario.name,
-          count: writes.length,
-        }),
-      });
-    },
-    [
-      scenarios,
-      sheet,
-      replaceActiveSheet,
-      isEditableCell,
-      locale,
-      showProtectNotice,
-      t,
-    ],
-  );
-
-  // Delete: remove a scenario by name; prune the field entirely when none remain
-  // so a sheet with no scenarios serializes byte-for-byte as before.
-  const deleteScenario = useCallback(
-    (name: string) => {
-      const nextScenarios = removeScenario(scenarios, name);
-      const next: SheetModel = { ...sheet };
-      if (nextScenarios.length > 0) next.scenarios = nextScenarios;
-      else delete next.scenarios;
-      replaceActiveSheet(next);
-      setScenarioStatus(null);
-    },
-    [scenarios, replaceActiveSheet, sheet],
-  );
-
-  // Merge… (Excel's Merge Scenarios): pick a worksheet of this workbook; its
-  // scenarios are copied onto the active sheet, at the same cell addresses,
-  // with their comments and protection. A name already taken gets a number
-  // appended (mergeScenarios). One write, one undo step.
-  const openScenarioMerge = useCallback(() => {
-    setScenarioStatus(null);
-    const first = sheets.find((candidate) => !candidate.chartSheet) ?? null;
-    setScenarioMergeDraft({ sheetId: sheet.id, sourceSheetId: first?.id ?? null });
-  }, [sheet.id, sheets]);
-
-  const commitScenarioMerge = useCallback(() => {
-    const draft = scenarioMergeDraft;
-    setScenarioMergeDraft(null);
-    if (!draft) return;
-    if (draft.sheetId !== sheet.id) {
-      setScenarioStatus({ kind: "error", text: t("spreadsheet.scenarioNotFound") });
-      return;
-    }
-    const source = sheets.find((candidate) => candidate.id === draft.sourceSheetId);
-    const sourceScenarios = normalizeScenarios(source?.scenarios);
-    if (sourceScenarios.length === 0) return;
-    const merged = mergeScenarios(scenarios, sourceScenarios);
-    if (merged.added === 0) return;
-    replaceActiveSheet({ ...sheet, scenarios: merged.scenarios });
-    setScenarioSelectedName(
-      merged.scenarios[merged.scenarios.length - merged.added]?.name ?? null,
-    );
-    setScenarioStatus({
-      kind: "success",
-      text: t("spreadsheet.scenarioMerged", { count: merged.added }),
-    });
-  }, [replaceActiveSheet, scenarioMergeDraft, scenarios, sheet, sheets, t]);
-
-  // Summary… (Excel's Scenario Summary): Result cells default to the
-  // selection and may be left empty for this report type. OK builds the
-  // report on a new worksheet before the active one (scenario-summary.ts):
-  // current values, each scenario's changing-cell values shaded, and each
-  // result cell recomputed with the scenario applied. The report holds values,
-  // not formulas, so it does not recalculate afterwards (as Excel's).
-  const openScenarioSummary = useCallback(() => {
-    setScenarioStatus(null);
-    if (visibleScenarios.length === 0) return;
-    setScenarioSummaryDraft({
-      sheetId: sheet.id,
-      resultCells: formatConditionalAppliesTo([selRect]).replace(/^=/, ""),
-      reportType: "summary",
-      error: null,
-    });
-  }, [selRect, sheet.id, visibleScenarios.length]);
-  // Scenario PivotTable report: Excel requires result cells for it, and it
-  // is a PivotTable on a new worksheet. An imported workbook gains that
-  // sheet and its scenario-cache PivotTable in its own package, as Insert
-  // PivotTable > New Worksheet does (spreadsheet_sheet_insertion +
-  // _xlsx_native_pivot_patches).
-  const scenarioPivotUnavailableReason =
-    (scenarioSummaryDraft?.resultCells.trim() ?? "") === ""
-      ? t("spreadsheet.scenarioSummaryPivotNeedsResultCells")
-      : null;
-
-  const commitScenarioSummary = useCallback(async () => {
-    const draft = scenarioSummaryDraft;
-    if (!draft) return;
-    const fail = (error: string) =>
-      setScenarioSummaryDraft((current) => (current ? { ...current, error } : current));
-    if (draft.sheetId !== sheet.id) {
-      setScenarioSummaryDraft(null);
-      setScenarioStatus({ kind: "error", text: t("spreadsheet.scenarioNotFound") });
-      return;
-    }
-    const resultRefs: string[] = [];
-    if (draft.resultCells.trim() !== "") {
-      const areas = parseConditionalAppliesTo(draft.resultCells, {
-        rowCount: sheet.rowCount,
-        columnCount: sheet.columnCount,
-        sheetName: sheet.name,
-      });
-      if (!areas || areas.length === 0) {
-        fail(t("spreadsheet.scenarioSummaryBadCells"));
-        return;
-      }
-      const seen = new Set<string>();
-      for (const area of areas) {
-        for (let row = area.r1; row <= area.r2; row += 1) {
-          for (let col = area.c1; col <= area.c2; col += 1) {
-            const ref = `${columnLabel(col)}${row + 1}`;
-            if (seen.has(ref)) continue;
-            seen.add(ref);
-            resultRefs.push(ref);
-            if (resultRefs.length > MAX_SCENARIO_SUMMARY_RESULT_CELLS) {
-              fail(
-                t("spreadsheet.scenarioSummaryTooManyCells", {
-                  count: MAX_SCENARIO_SUMMARY_RESULT_CELLS,
-                }),
-              );
-              return;
-            }
-          }
-        }
-      }
-    }
-    // "You don't need result cells to generate a scenario summary report, but
-    // you do need them for a scenario PivotTable report" (Microsoft Support).
-    const pivotReport = draft.reportType === "pivot";
-    if (pivotReport && resultRefs.length === 0) {
-      fail(t("spreadsheet.scenarioSummaryPivotNeedsResultCells"));
-      return;
-    }
-    if (!resolveLiveWorkbookTopologyMutation()) return;
-    if (sheets.length >= MAX_SHEETS) {
-      fail(t("spreadsheet.scenarioSummarySheetLimit"));
-      return;
-    }
-
-    // Each scenario's result cells with the scenario's changing cells typed
-    // in: one probe per scenario (what-if-buttons scenarioResultsAsync), in
-    // the calculation session in server mode (never here).
-    const resultCells = resultRefs.flatMap((ref) => parseCellRef(ref) ?? []);
-    const scenarioWrites = visibleScenarios.map((scenario) => ({
-      writes: applyScenario(scenario).map((write) => ({ row: write.row, col: write.col,
-        value: write.value.startsWith("'") ? write.value.slice(1) : write.value })),
-    }));
-    const answered = resultCells.length === 0 ? []
-      : (await sessionWhatIf({ kind: "scenarios", sheetId: sheet.id, scenarios: scenarioWrites, resultCells }) as { values: CellValue[][] } | null)?.values ?? null;
-    if (!answered) {
-      fail(t("spreadsheet.calculationStale.command"));
-      return;
-    }
-    // The workbook may have moved on while the session answered.
-    if (!resolveLiveWorkbookTopologyMutation()) return;
-    const currentValue = (ref: string) => {
-      const parsed = parseCellRef(ref);
-      if (!parsed) return null;
-      const cell = sheet.cells[`${parsed.row}:${parsed.col}`];
-      return cell?.formula || !cell?.value
-        ? resolveCellChartScalar(cell, parsed.row, parsed.col, formulaEvaluator, spillOverlay)
-        : formulaEvaluator.getComputed(parsed.row, parsed.col);
-    };
-    const resultValue = (scenario: Scenario, ref: string) =>
-      answered[visibleScenarios.indexOf(scenario)]?.[resultRefs.indexOf(ref)] ?? null;
-    const resultNumberFormat = (ref: string) => {
-      const parsed = parseCellRef(ref);
-      return parsed
-        ? sheet.cells[`${parsed.row}:${parsed.col}`]?.style?.numberFormat
-        : undefined;
-    };
-    const insertedIndex = activeSheetIndex;
-    const takenNames = new Set(sheets.map((candidate) => candidate.name.toLowerCase()));
-    const takenIds = new Set(sheets.map((candidate) => candidate.id));
-    // "<base>", then "<base> 2", … as Excel names repeated report sheets.
-    const reportSheetName = (base: string) => {
-      let name = base;
-      for (let suffix = 2; takenNames.has(name.toLowerCase()); suffix += 1) {
-        name = `${base} ${suffix}`;
-      }
-      return name;
-    };
-    const reportSheetId = (base: string) => {
-      let id = base;
-      for (let suffix = 2; takenIds.has(id); suffix += 1) id = `${base}-${suffix}`;
-      return id;
-    };
-    const finishReport = (report: SheetModel, top: { row: number; col: number }) => {
-      commitSheets([
-        ...sheets.slice(0, insertedIndex),
-        report,
-        ...sheets.slice(insertedIndex),
-      ]);
-      writeActiveSheetIndex(insertedIndex);
-      setActiveCell(top);
-      setSelectionAnchor(top);
-      setSelectedObjectId(null);
-      clearFillDrag();
-      setScenarioSummaryDraft(null);
-      setScenarioOpen(false);
-      setScenarioStatus(null);
-    };
-
-    if (pivotReport) {
-      // Excel's Scenario PivotTable report: a PivotTable whose cache is the
-      // scenarios (scenario-pivot.ts), placed on its new worksheet by the
-      // helpers Insert PivotTable's new-sheet destination uses, in one commit.
-      const recipe = buildScenarioPivotRecipe({
-        scenarios: visibleScenarios,
-        resultRefs,
-        resultValue,
-        numberFormat: resultNumberFormat,
-        // Scenarios do not record who made them; the report names the
-        // person making it, as Add Scenario's "Created by" does.
-        creator: () => reviewCommentActorName,
-        labels: {
-          by: (cells) => t("spreadsheet.scenarioPivotByField", { cells }),
-        },
-      });
-      const planned = recipe
-        ? pivotConfigForNewSheet(recipe.config, recipe.matrix, sheet.id)
-        : null;
-      if (!recipe || !planned) {
-        fail(t("spreadsheet.scenarioSummaryBadCells"));
-        return;
-      }
-      const reportPlan = planPivotOutput(
-        planned.config,
-        pivotComputationMatrix(planned.config, recipe.matrix),
-        {
-          rowCount: planned.rowCount,
-          columnCount: planned.columnCount,
-          labels: pivotOutputLabels,
-        },
-      );
-      const report = sheetWithPivotColumnsFitted(
-        {
-          id: reportSheetId("scenario-pivottable"),
-          name: reportSheetName(t("spreadsheet.scenarioPivotSheetName")),
-          rowCount: planned.rowCount,
-          columnCount: planned.columnCount,
-          cells: {},
-          ...workbookNameMirrorsForNewSheet(sheets),
-          pivot: planned.config,
-        },
-        reportPlan,
-        planned.config,
-      );
-      finishReport(report, { row: planned.top.r1, col: planned.top.c1 });
-      return;
-    }
-
-    const built = buildScenarioSummarySheet({
-      scenarios: visibleScenarios,
-      resultRefs,
-      currentValue,
-      resultValue,
-      numberFormat: resultNumberFormat,
-      labels: {
-        title: t("spreadsheet.scenarioSummaryTitle"),
-        currentValues: t("spreadsheet.scenarioSummaryCurrentValues"),
-        changingCells: t("spreadsheet.scenarioSummaryChangingCells"),
-        resultCells: t("spreadsheet.scenarioSummaryResultCellsHeading"),
-        notes: [
-          t("spreadsheet.scenarioSummaryNote1"),
-          t("spreadsheet.scenarioSummaryNote2"),
-          t("spreadsheet.scenarioSummaryNote3"),
-        ],
-      },
-    });
-
-    finishReport(
-      {
-        id: reportSheetId("scenario-summary"),
-        name: reportSheetName(t("spreadsheet.scenarioSummaryTitle")),
-        rowCount: built.rowCount,
-        columnCount: built.columnCount,
-        cells: built.cells,
-        columnWidths: built.columnWidths,
-        outlineGroups: built.outlineGroups,
-      },
-      { row: 0, col: 0 },
-    );
-  }, [
-    activeSheetIndex,
-    sessionWhatIf,
-    clearFillDrag,
-    commitSheets,
-    formulaEvaluator,
-    groupHiddenRows,
-    hiddenRows,
-    mergeSpans,
-    namedRanges,
-    pivotOutputLabels,
-    resolveLiveWorkbookTopologyMutation,
-    reviewCommentActorName,
-    scenarioSummaryDraft,
-    sheet,
-    sheets,
-    spillOverlay,
-    t,
-    visibleScenarios,
-    writeActiveSheetIndex,
-  ]);
-
-  // Goal Seek (Excel/WPS what-if): vary the "changing" input cell until the "set"
-  // formula cell reaches the target. The numeric solver lives in goal-seek.ts
-  // (pure + injectable); here we only build the `evaluate(x)` closure over the
-  // sheet and validate the inputs. Solve is deliberately mutation-free: it stores
-  // a bounded candidate for the result step below, which is the only place that
-  // can commit through the normal undo + autosave path. The closure clones the cell
-  // map and overrides ONLY the changing cell, rebuilding a fresh evaluator with the
-  // SAME options (names / filter-hidden / group-hidden / merged-cover) the live grid
-  // uses, so the recomputed set-cell value matches what's rendered.
-  const runGoalSeek = useCallback(async () => {
-    setGoalSeekPending(null);
-    const setRef = parseCellRef(goalSeekSetCell);
-    const changeRef = parseCellRef(goalSeekChangeCell);
-    if (!setRef) {
-      setGoalSeekStatus({
-        kind: "error",
-        text: t("spreadsheet.goalSeekBadSetCell"),
-      });
-      return;
-    }
-    if (!changeRef) {
-      setGoalSeekStatus({
-        kind: "error",
-        text: t("spreadsheet.goalSeekBadChangeCell"),
-      });
-      return;
-    }
-    const target = Number(goalSeekTarget.trim());
-    if (goalSeekTarget.trim() === "" || !Number.isFinite(target)) {
-      setGoalSeekStatus({
-        kind: "error",
-        text: t("spreadsheet.goalSeekBadTarget"),
-      });
-      return;
-    }
-    // The solve is the shared plan (lib/spreadsheet/what-if-buttons): the
-    // changing cell must be an editable constant and the set cell a formula.
-    // The calculation session runs it (never here).
-    const plan = await sessionWhatIf({ kind: "goal-seek", sheetId: sheet.id, setCell: setRef, changeCell: changeRef, target,
-      changeEditable: isEditableCell(changeRef.row, changeRef.col) }) as ReturnType<typeof goalSeekPlan> | null;
-    if (!plan) {
-      setGoalSeekStatus({ kind: "error", text: t("spreadsheet.calculationStale.command") });
-      return;
-    }
-    if (!plan.ok) {
-      if (plan.error === "locked") showProtectNotice();
-      setGoalSeekStatus({
-        kind: "error",
-        text:
-          plan.error === "change-is-formula"
-            ? t("spreadsheet.goalSeekChangeIsFormula")
-            : plan.error === "locked"
-              ? t("spreadsheet.goalSeekLocked")
-              : plan.error === "set-not-formula"
-                ? t("spreadsheet.goalSeekSetNotFormula")
-                : t("spreadsheet.goalSeekNoSolution", {
-                    cell: `${columnLabel(setRef.col)}${setRef.row + 1}`,
-                  }),
-      });
-      return;
-    }
-    const solvedValue = plan.value;
-    setGoalSeekPending({
-      sourceSheet: sheet,
-      row: changeRef.row,
-      col: changeRef.col,
-      value: solvedValue,
-    });
-    setGoalSeekStatus({
-      kind: "success",
-      text: t("spreadsheet.goalSeekSolutionFound", {
-        cell: `${columnLabel(changeRef.col)}${changeRef.row + 1}`,
-        setCell: `${columnLabel(setRef.col)}${setRef.row + 1}`,
-        value: solvedValue,
-        achieved: plan.achieved,
-      }),
-    });
-  }, [
-    goalSeekSetCell,
-    goalSeekChangeCell,
-    goalSeekTarget,
-    sessionWhatIf,
-    sheet,
-    isEditableCell,
-    showProtectNotice,
-    t,
-  ]);
-
-  // Accept the exact candidate produced above. Any intervening sheet mutation or
-  // protection change invalidates the result; Goal Seek never overwrites a newer
-  // value or a newly locked cell. A successful acceptance is one ordinary cell
-  // edit, hence one Undo snapshot and one autosave.
-  const applyGoalSeekResult = useCallback(() => {
-    if (!goalSeekPending) return;
-    if (sheet !== goalSeekPending.sourceSheet) {
-      setGoalSeekPending(null);
-      setGoalSeekStatus({
-        kind: "error",
-        text: t("spreadsheet.goalSeekStaleResult"),
-      });
-      return;
-    }
-    if (!isEditableCell(goalSeekPending.row, goalSeekPending.col)) {
-      showProtectNotice();
-      setGoalSeekPending(null);
-      setGoalSeekStatus({
-        kind: "error",
-        text: t("spreadsheet.goalSeekLocked"),
-      });
-      return;
-    }
-    replaceActiveSheet(
-      updateCellValue(
-        sheet,
-        goalSeekPending.row,
-        goalSeekPending.col,
-        goalSeekPending.value,
-      ),
-    );
-    setGoalSeekPending(null);
-    setGoalSeekStatus(null);
-    setGoalSeekOpen(false);
-  }, [
-    goalSeekPending,
-    isEditableCell,
-    replaceActiveSheet,
-    sheet,
-    showProtectNotice,
-    t,
-  ]);
-
-  const {
-    runSolver,
-  } = useSpreadsheetRunSolver({
-    formulaWorkbook,
-    isEditableCell,
-    sessionWhatIf,
-    setSolverPending,
-    setSolverStatus,
-    setSolverTrialOpen,
-    sheet,
-    showProtectNotice,
-    solverChangingRange,
-    solverConstraints,
-    solverExtra,
-    solverGoalKind,
-    solverGoalValue,
-    solverIgnoreIntegers,
-    solverIterations,
-    solverMethod,
-    solverNonNegative,
-    solverObjectiveCell,
-    solverPrecision,
-    solverTrialContinueRef,
-    solverTrialRef,
-    t,
-  });
-
-  const applySolverResult = useCallback(() => {
-    if (!solverPending) return;
-    // Recompute rather than applying a stale vector. The fresh result remains
-    // pending, so a second explicit Apply is still required before any write.
-    if (sheet !== solverPending.sourceSheet) {
-      setSolverPending(null);
-      void runSolver();
-      return;
-    }
-    if (
-      solverPending.values.some(
-        (cell) => !isEditableCell(cell.row, cell.col),
-      )
-    ) {
-      showProtectNotice();
-      setSolverPending(null);
-      setSolverStatus({ kind: "error", text: t("spreadsheet.solverLocked") });
-      return;
-    }
-    let next = sheet;
-    for (const cell of solverPending.values) {
-      next = updateCellValue(next, cell.row, cell.col, cell.value);
-    }
-    replaceActiveSheet(next);
-    setSolverPending(null);
-    setSolverStatus(null);
-    setSolverOpen(false);
-  }, [
-    isEditableCell,
-    replaceActiveSheet,
-    runSolver,
-    sheet,
-    showProtectNotice,
-    solverPending,
-    t,
-  ]);
-
-  // Remove a constraint row (the Solver dialog's Delete).
-  const removeSolverConstraint = useCallback((index: number) => {
-    setSolverConstraints((rows) => rows.filter((_, i) => i !== index));
-    setSolverPending(null);
-    setSolverStatus(null);
-  }, []);
-
-  // XLS-A073: the constraint list's text ("$A$1 <= 10", "$A$1 = 整数"), the
-  // Add / Change Constraint editor, Reset All and Load/Save Model.
-  const solverConstraintText = useCallback(
-    (constraint: SolverDialogConstraint) =>
-      constraint.op === "int"
-        ? `${constraint.cellRef} = ${t("spreadsheet.uiCopy.solverInteger")}`
-        : constraint.op === "bin"
-          ? `${constraint.cellRef} = ${t("spreadsheet.uiCopy.solverBinary")}`
-          : constraint.op === "dif"
-            ? `${constraint.cellRef} = ${t("spreadsheet.uiCopy.solverAllDifferent")}`
-            : `${constraint.cellRef} ${constraint.op === "==" ? "=" : constraint.op} ${constraint.bound}`,
-    [t],
-  );
-  const openSolverConstraintEditor = useCallback(
-    (index: number | null) => {
-      const current = index === null ? null : solverConstraints[index];
-      setSolverConstraintError(null);
-      setSolverSubDialog({
-        kind: "constraint",
-        index,
-        cellRef: current?.cellRef ?? "",
-        op: current?.op ?? "<=",
-        bound: current?.bound ?? "",
-      });
-    },
-    [solverConstraints],
-  );
-  // OK commits and closes; Add commits and leaves a blank editor for the next.
-  const commitSolverConstraintEditor = useCallback(
-    (close: boolean) => {
-      const draft = solverSubDialog;
-      if (draft?.kind !== "constraint") return;
-      const cellRef = draft.cellRef.trim();
-      const whole = draft.op === "int" || draft.op === "bin" || draft.op === "dif";
-      if (cellRef === "" && draft.bound.trim() === "" && !close) return;
-      if (!parseSolverCells(cellRef)) {
-        setSolverConstraintError(t("spreadsheet.solverBadConstraintCell"));
-        return;
-      }
-      if (!whole) {
-        const bound = draft.bound.trim();
-        if (bound === "" || (!Number.isFinite(Number(bound)) && !parseCellRef(bound))) {
-          setSolverConstraintError(t("spreadsheet.solverBadConstraintBound"));
-          return;
-        }
-      }
-      const row: SolverDialogConstraint = { cellRef, op: draft.op, bound: whole ? "" : draft.bound.trim() };
-      setSolverConstraints((rows) =>
-        draft.index === null ? [...rows, row] : rows.map((entry, i) => (i === draft.index ? row : entry)),
-      );
-      setSolverPending(null);
-      setSolverStatus(null);
-      setSolverConstraintError(null);
-      setSolverSubDialog(
-        close ? null : { kind: "constraint", index: null, cellRef: "", op: "<=", bound: "" },
-      );
-    },
-    [solverSubDialog, t],
-  );
-  // Reset All clears every Solver option and cell selection (Excel asks first).
-  const confirmSolverReset = useCallback(() => {
-        setSolverSubDialog(null);
-        setSolverObjectiveCell("");
-        setSolverGoalKind("max");
-        setSolverGoalValue("");
-        setSolverChangingRange("");
-        setSolverConstraints([]);
-        setSolverSelectedConstraint(null);
-        setSolverNonNegative(DEFAULT_SOLVER_OPTIONS.nonNegative);
-        setSolverMethod(DEFAULT_SOLVER_OPTIONS.method);
-        setSolverPrecision(DEFAULT_SOLVER_OPTIONS.precision);
-        setSolverIterations(DEFAULT_SOLVER_OPTIONS.iterations);
-        setSolverIgnoreIntegers(DEFAULT_SOLVER_OPTIONS.ignoreIntegers);
-        setSolverExtra(DEFAULT_SOLVER_EXTRA_OPTIONS);
-        setSolverPending(null);
-        setSolverStatus(null);
-  }, []);
-  const solverDialogModel = useCallback(
-    (): SolverDialogModel => ({
-      objective: solverObjectiveCell,
-      goal: solverGoalKind,
-      target: solverGoalValue,
-      changing: solverChangingRange,
-      constraints: solverConstraints,
-      nonNegative: solverNonNegative,
-      method: solverMethod,
-      precision: solverPrecision,
-      iterations: solverIterations,
-      ignoreIntegers: solverIgnoreIntegers,
-      extra: solverExtra,
-    }),
-    [solverChangingRange, solverConstraints, solverExtra, solverGoalKind, solverGoalValue, solverIgnoreIntegers, solverIterations, solverMethod, solverNonNegative, solverObjectiveCell, solverPrecision],
-  );
-  // Save: the model's formulas down an empty vertical range from its first cell.
-  const saveSolverModel = useCallback(() => {
-    if (solverSubDialog?.kind !== "model") return;
-    const first = parseSolverCells(solverSubDialog.range)?.[0];
-    if (!first || solverObjectiveCell.trim() === "" || solverChangingRange.trim() === "") {
-      setSolverConstraintError(t("spreadsheet.uiCopy.solverModelAreaInvalid"));
-      return;
-    }
-    const formulas = solverModelFormulas(solverDialogModel());
-    if (formulas.some((_, i) => !isEditableCell(first.row + i, first.col))) {
-      showProtectNotice();
-      return;
-    }
-    let next = sheet;
-    formulas.forEach((formula, i) => {
-      next = updateCellValue(next, first.row + i, first.col, formula);
-    });
-    replaceActiveSheet(next);
-    setSolverConstraintError(null);
-    setSolverSubDialog(null);
-  }, [isEditableCell, replaceActiveSheet, sheet, showProtectNotice, solverChangingRange, solverDialogModel, solverObjectiveCell, solverSubDialog, t]);
-  // Load: the whole model area, top to bottom.
-  const loadSolverModel = useCallback(() => {
-    if (solverSubDialog?.kind !== "model") return;
-    const cells = parseSolverCells(solverSubDialog.range);
-    const model = cells
-      ? parseSolverModel(
-          cells.map((cell) => {
-            const stored = sheet.cells[`${cell.row}:${cell.col}`];
-            return String(stored?.formula ?? stored?.value ?? "");
-          }),
-        )
-      : null;
-    if (!model) {
-      setSolverConstraintError(t("spreadsheet.uiCopy.solverModelAreaInvalid"));
-      return;
-    }
-    setSolverObjectiveCell(model.objective);
-    setSolverGoalKind(model.goal);
-    setSolverGoalValue(model.target);
-    setSolverChangingRange(model.changing);
-    setSolverConstraints(model.constraints);
-    setSolverSelectedConstraint(null);
-    setSolverNonNegative(model.nonNegative);
-    setSolverMethod(model.method);
-    setSolverPrecision(model.precision);
-    setSolverIterations(model.iterations);
-    setSolverIgnoreIntegers(model.ignoreIntegers);
-    setSolverExtra(model.extra);
-    setSolverPending(null);
-    setSolverStatus(null);
-    setSolverConstraintError(null);
-    setSolverSubDialog(null);
-  }, [sheet.cells, solverSubDialog, t]);
-
-  // Excel permits several delimiter switches at once. Keep authored order
-  // stable so preview and commit consume the same parser contract.
-  const resolvedTextToColumnsDelimiters = useMemo(() => {
-    const delimiters: string[] = [];
-    if (textToColumnsDelimiters.tab) delimiters.push("\t");
-    if (textToColumnsDelimiters.semicolon) delimiters.push(";");
-    if (textToColumnsDelimiters.comma) delimiters.push(",");
-    if (textToColumnsDelimiters.space) delimiters.push(" ");
-    if (textToColumnsDelimiters.custom && textToColumnsCustom) {
-      delimiters.push(textToColumnsCustom.slice(0, 1));
-    }
-    return [...new Set(delimiters)];
-  }, [textToColumnsCustom, textToColumnsDelimiters]);
-
-  const setTextToColumnsDelimiterEnabled = useCallback(
-    (key: keyof typeof textToColumnsDelimiters, checked: boolean) => {
-      setTextToColumnsDelimiters((current) => ({
-        ...current,
-        [key]: checked,
-      }));
-      setTextToColumnsStatus(null);
-    },
-    [],
-  );
-
-  const setTextToColumnsColumnFormat = useCallback(
-    (index: number, format: TextToColumnsColumnFormat) => {
-      setTextToColumnsColumnFormats((current) => {
-        const next = Array.from(
-          { length: Math.max(current.length, index + 1) },
-          (_, field) => current[field] ?? "general",
-        );
-        next[index] = format;
-        return next;
-      });
-      setTextToColumnsStatus(null);
-    },
-    [],
-  );
-
-  const setTextToColumnsColumnDateOrder = useCallback(
-    (index: number, dateOrder: DelimitedImportDateOrder) => {
-      setTextToColumnsColumnDateOrders((current) => {
-        const next = Array.from(
-          { length: Math.max(current.length, index + 1) },
-          (_, field) => current[field] ?? "locale",
-        );
-        next[index] = dateOrder;
-        return next;
-      });
-      setTextToColumnsStatus(null);
-    },
-    [],
-  );
-
-  const updateTextToColumnsNumberOptions = useCallback(
-    (changes: Partial<DelimitedImportNumberOptions>) => {
-      setTextToColumnsNumberOptions((current) => ({ ...current, ...changes }));
-      setTextToColumnsStatus(null);
-    },
-    [],
-  );
-
-  const normalizedTextToColumnsBreaks = useMemo(
-    () => parseCsvImportFixedWidthBreaks(textToColumnsBreaks) ?? [],
-    [textToColumnsBreaks],
-  );
-
-  // What Text to Columns splits is the text a cell SHOWS: a formula's result
-  // rather than its source, so ="north,east" splits like north,east and no
-  // code fragment lands in the output (live audit B101).
-  const textToColumnsSourceCells = useCallback(
-    (r1: number, r2: number, col: number): Record<string, { value: string }> => {
-      const view: Record<string, { value: string }> = {};
-      for (let row = r1; row <= r2; row += 1) {
-        const key = `${row}:${col}`;
-        const cell = sheet.cells[key];
-        if (!cell) continue;
-        view[key] = {
-          value: spreadsheetCellIsFormula(cell)
-            ? cellDisplayValue(cell, row, col, false)
-            : String(cell.value ?? ""),
-        };
-      }
-      return view;
-    },
-    [cellDisplayValue, sheet.cells],
-  );
-
-  const textToColumnsSourceLines = useMemo(() => {
-    const rowCount = Math.min(
-      8,
-      Math.max(
-        0,
-        Math.min(selRect.r2, sheet.rowCount - 1) - selRect.r1 + 1,
-      ),
-    );
-    const view = textToColumnsSourceCells(selRect.r1, selRect.r1 + rowCount - 1, selRect.c1);
-    return Array.from({ length: rowCount }, (_, offset) =>
-      view[`${selRect.r1 + offset}:${selRect.c1}`]?.value ?? "",
-    );
-  }, [selRect.c1, selRect.r1, selRect.r2, sheet.rowCount, textToColumnsSourceCells]);
-
-  const updateTextToColumnsFixedWidthBreaks = useCallback(
-    (breaks: readonly number[]) => {
-      setTextToColumnsBreaks(normalizeFixedWidthBreaks(breaks).join(", "));
-      setTextToColumnsStatus(null);
-    },
-    [],
-  );
-
-  const textToColumnsPreview = useMemo(() => {
-    const previewRange = {
-      r1: selRect.r1,
-      r2: Math.min(selRect.r2, selRect.r1 + 4, sheet.rowCount - 1),
-    };
-    const split = (range: { r1: number; r2: number }) =>
-      textToColumnsMode === "fixedWidth"
-        ? splitColumnByFixedWidth(
-            textToColumnsSourceCells(range.r1, range.r2, selRect.c1),
-            selRect.c1,
-            range,
-            normalizedTextToColumnsBreaks,
-            MAX_SHEET_COLS,
-          )
-        : splitColumnByDelimiters(
-            textToColumnsSourceCells(range.r1, range.r2, selRect.c1),
-            selRect.c1,
-            range,
-            {
-              delimiters: resolvedTextToColumnsDelimiters,
-              textQualifier: textToColumnsQualifier,
-              consecutiveDelimiters: textToColumnsConsecutive,
-            },
-            MAX_SHEET_COLS,
-          );
-    const result = split(previewRange);
-    // The preview shows five rows, but the columns the dialog offers formats
-    // for are those of the WHOLE selection: a field that first appears on a
-    // later row still gets its own format (live audit B102).
-    const fullRange = { r1: selRect.r1, r2: Math.min(selRect.r2, sheet.rowCount - 1) };
-    const fullWidth =
-      textToColumnsOpen && fullRange.r2 > previewRange.r2
-        ? (split(fullRange).sourceWidth ?? 0)
-        : 0;
-    const width = Math.max(1, result.sourceWidth ?? result.width, fullWidth);
-    const rows = Array.from(
-      { length: Math.max(0, previewRange.r2 - previewRange.r1 + 1) },
-      () => new Array<string>(width).fill(""),
-    );
-    for (const write of result.writes) {
-      const row = write.row - previewRange.r1;
-      const col = write.col - selRect.c1;
-      if (rows[row] && col >= 0 && col < width) rows[row]![col] = write.value;
-    }
-    return { rows, width };
-  }, [
-    resolvedTextToColumnsDelimiters,
-    selRect.c1,
-    selRect.r1,
-    selRect.r2,
-    sheet.rowCount,
-    textToColumnsConsecutive,
-    textToColumnsMode,
-    textToColumnsOpen,
-    textToColumnsSourceCells,
-    normalizedTextToColumnsBreaks,
-    textToColumnsQualifier,
-  ]);
-
   // Toggle the Text-to-Columns dialog. On open, clear any stale status; the
   // delimiter draft persists across opens (a common workflow re-splits the same
   // way). On close, just hide. Mirrors toggleGoalSeek.
   const toggleTextToColumns = useCallback(() => {
-    if (textToColumnsOpen) {
-      setTextToColumnsOpen(false);
-      return;
-    }
     // Excel checks the selection before the wizard opens: several columns
     // are refused with its one-column message (any number of rows in one
     // column is the usual case), and a selection with nothing in it with
@@ -31289,18 +27635,7 @@ function SpreadsheetWindow({
     setTextToColumnsStep(1);
     setTextToColumnsSelectedColumn(0);
     setTextToColumnsOpen(true);
-  }, [selRect.c1, selRect.c2, selRect.r1, selRect.r2, sheet.cells, sheet.rowCount, showProtectNotice, t, textToColumnsOpen]);
-
-  const closeTextToColumns = useCallback(() => {
-    textToColumnsReturnToGridRef.current = false;
-    setTextToColumnsOpen(false);
-    setTextToColumnsStatus(null);
-    scheduleRaf(() =>
-      (rootRef.current?.querySelector<HTMLElement>(
-        '[data-testid="spreadsheet-ribbon-data-text-to-columns"]',
-      ) ?? textToColumnsToggleRef.current)?.focus({ preventScroll: true }),
-    );
-  }, [scheduleRaf]);
+  }, [selRect.c1, selRect.c2, selRect.r1, selRect.r2, sheet.cells, sheet.rowCount, showProtectNotice, t, false]);
 
   // Insert Function (fx) dialog. The catalog (category -> function names) is
   // derived from the live engine function list, so it always reflects exactly
@@ -31445,17 +27780,6 @@ function SpreadsheetWindow({
       return true;
     },
     [activeCell.col, activeCell.row, pageId, sheet, sheets],
-  );
-  const openFunctionCategoryGallery = useCallback(
-    (category: FunctionCategory, returnFocus?: HTMLElement | null) => {
-      if (!openInsertFunctionGallery(returnFocus)) return false;
-      // React batches both updates, so the shared function dialog opens once
-      // with the exact Function Library category the ribbon command represents.
-      setInsertFunctionCategory(category);
-      setInsertFunctionSelected(null);
-      return true;
-    },
-    [openInsertFunctionGallery],
   );
   // Custom Lists manager (File > Options > Custom Lists). Add the draft (one
   // member per line) as a new custom list, or remove an existing one. The lists
@@ -31645,87 +27969,6 @@ function SpreadsheetWindow({
     undoHistoryRef.current = { past: [], future: [] };
     syncHistoryAvailability();
   };
-  // XLS-A023 — Defined Names ▸ Use in Formula: Excel types the name into the
-  // entry being edited, or starts "=Name" in the active cell.
-  const insertNameIntoFormula = (name: string) => {
-    const row = activeCell.row;
-    const col = activeCell.col;
-    const key = `${row}:${col}`;
-    const focused = document.activeElement;
-    const formulaBar =
-      focused instanceof HTMLElement && focused.matches('[data-testid="spreadsheet-formula"]')
-        ? (focused as HTMLInputElement | HTMLTextAreaElement)
-        : null;
-    const editing =
-      formulaBar !== null ||
-      (editingCell?.sheetId === sheet.id && editingCell.row === row && editingCell.col === col);
-    const findEditor = () =>
-      formulaBar ??
-      rootRef.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-        `input[data-cell="${key}"], textarea[data-cell="${key}"]`,
-      ) ??
-      null;
-    const write = (fresh: boolean) => {
-      const input = findEditor();
-      if (!input) return;
-      const current = fresh ? "" : input.value;
-      const start = fresh ? 0 : (input.selectionStart ?? current.length);
-      const end = fresh ? 0 : (input.selectionEnd ?? current.length);
-      const text = fresh ? `=${name}` : name;
-      const next = current.slice(0, start) + text + current.slice(end);
-      const proto =
-        input instanceof HTMLTextAreaElement
-          ? HTMLTextAreaElement.prototype
-          : HTMLInputElement.prototype;
-      Object.getOwnPropertyDescriptor(proto, "value")?.set?.call(input, next);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.focus({ preventScroll: true });
-      const caret = start + text.length;
-      input.setSelectionRange(caret, caret);
-    };
-    if (editing) {
-      write(false);
-      return;
-    }
-    const input = findEditor();
-    if (!beginCellEditing(row, col, input instanceof HTMLInputElement ? input : null, "enter")) return;
-    window.requestAnimationFrame(() => window.requestAnimationFrame(() => write(true)));
-  };
-  // Paste Names…'s Paste List: the names and what they refer to, two columns
-  // from the active cell down, as Excel writes them.
-  const pasteNameList = () => {
-    const entries = workbookNamedRanges.filter(
-      (entry) =>
-        !entry.hidden &&
-        (entry.scope !== "worksheet" || entry.scopeSheetId === sheet.id),
-    );
-    if (entries.length === 0) return;
-    const r1 = activeCell.row;
-    const c1 = activeCell.col;
-    const range = { r1, c1, r2: r1 + entries.length - 1, c2: c1 + 1 };
-    if (rangeHasLockedCellRef.current(sheet, range)) {
-      showProtectNotice();
-      return;
-    }
-    let next = sheet;
-    entries.forEach((entry, index) => {
-      next = {
-        ...next,
-        cells: {
-          ...next.cells,
-          [`${r1 + index}:${c1}`]: { ...(next.cells[`${r1 + index}:${c1}`] ?? {}), value: entry.name, kind: "text" },
-          [`${r1 + index}:${c1 + 1}`]: {
-            ...(next.cells[`${r1 + index}:${c1 + 1}`] ?? {}),
-            // A relative name as Name Manager shows it from the active cell.
-            value: `'=${nameRefShownFrom(entry.ref, activeCell).replace(/^=/, "")}`,
-            kind: "text",
-          },
-        },
-      };
-    });
-    replaceActiveSheet(next);
-    setPasteNamesDraft(null);
-  };
   const confirmCreateNames = () => {
     if (!createNamesDraft) return;
     if (isSheetProtectionEffectiveRef.current(sheet)) {
@@ -31827,53 +28070,6 @@ function SpreadsheetWindow({
   };
   const newCustomCellStyleId = () =>
     `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  // XLS-A028: Review ▸ Allow Edit Ranges. The dialog edits a draft of the
-  // sheet's ranges; OK writes them as one step.
-  const commitEditRanges = (ranges: ProtectedEditRange[]) => {
-    const live = liveSheetsRef.current[liveActiveSheetIndexRef.current] ?? sheet;
-    replaceActiveSheet({ ...live, protectedRanges: ranges.length > 0 ? ranges : undefined });
-    setEditRangesDialog(null);
-  };
-  const saveEditRangeEditor = async () => {
-    const dialog = editRangesDialog;
-    const editor = dialog?.editor;
-    if (!dialog || !editor) return;
-    const title = editor.title.trim();
-    const others = dialog.ranges.filter((_, index) => index !== editor.index);
-    if (!validProtectedRangeTitle(title)) {
-      setEditRangesDialog({ ...dialog, editor: { ...editor, error: t("spreadsheet.editRanges.badTitle") } });
-      return;
-    }
-    if (others.some((range) => spreadsheetNameFold(range.title) === spreadsheetNameFold(title))) {
-      setEditRangesDialog({ ...dialog, editor: { ...editor, error: t("spreadsheet.editRanges.titleTaken") } });
-      return;
-    }
-    const ref = normalizeProtectedRangeRef(editor.ref, sheet.name);
-    if (!ref) {
-      setEditRangesDialog({ ...dialog, editor: { ...editor, error: t("spreadsheet.editRanges.badRef") } });
-      return;
-    }
-    const previous = editor.index === null ? undefined : dialog.ranges[editor.index];
-    let passwordHash = previous?.passwordHash;
-    if (editor.password !== EDIT_RANGE_PASSWORD_KEPT) {
-      if (!editor.password) passwordHash = undefined;
-      else if (editor.confirm === undefined) {
-        // Excel's Confirm Password step.
-        setEditRangesDialog({ ...dialog, editor: { ...editor, confirm: "", error: undefined } });
-        return;
-      } else if (editor.confirm !== editor.password) {
-        setEditRangesDialog({ ...dialog, editor: { ...editor, confirm: "", error: t("spreadsheet.editRanges.confirmMismatch") } });
-        return;
-      } else {
-        passwordHash = await createProtectionPasswordHash(editor.password);
-      }
-    }
-    const range: ProtectedEditRange = { title, ref, ...(passwordHash ? { passwordHash } : {}) };
-    const ranges = editor.index === null
-      ? [...dialog.ranges, range]
-      : dialog.ranges.map((entry, index) => (index === editor.index ? range : entry));
-    setEditRangesDialog({ ...dialog, ranges, selected: editor.index ?? ranges.length - 1, editor: null });
-  };
   // A keystroke, paste or formula-bar entry refused on a locked cell: inside
   // a password edit range Excel asks for the range's password instead.
   const refuseLockedCellEntry = (row: number, col: number) => {
@@ -31905,35 +28101,6 @@ function SpreadsheetWindow({
   // view's sheets, display options, active sheet and selection back, as one
   // write.
   const workbookCustomViews = viewOptions.customViews ?? [];
-  const addCustomView = () => {
-    const draft = customViewsDialog?.adding;
-    if (!draft) return;
-    const existing = workbookCustomViews.find(
-      (view) => customViewNameKey(view.name) === customViewNameKey(draft.name),
-    );
-    if (!existing && workbookCustomViews.length >= MAX_CUSTOM_VIEWS) return;
-    const view = captureCustomView({
-      id: existing?.id ?? `view-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-      name: draft.name,
-      printSettings: draft.printSettings,
-      hiddenAndFilters: draft.hiddenAndFilters,
-      sheets: sheets as unknown as ({ id: string } & Record<string, unknown>)[],
-      activeSheetId: sheet.id,
-      selection: { ...selRect, row: activeCell.row, col: activeCell.col },
-      display: {
-        hideGridlines: sheetHidesGridlines,
-        hideHeadings: sheetHidesHeadings,
-        hideFormulaBar: viewOptions.hideFormulaBar,
-      },
-    });
-    if (!view) return;
-    // Excel replaces a view of the same name.
-    const nextViews = existing
-      ? workbookCustomViews.map((entry) => (entry.id === existing.id ? view : entry))
-      : [...workbookCustomViews, view];
-    commitViewOptions((current) => ({ ...current, customViews: nextViews }));
-    setCustomViewsDialog(null);
-  };
   // The cell a shown view selects: the dialog hands the keyboard back to it,
   // not to the cell that had it before (whose focus would select it again).
   const customViewShownCellRef = useRef<{ row: number; col: number } | null>(null);
@@ -32234,42 +28401,6 @@ function SpreadsheetWindow({
       );
   };
 
-  // The columns spanned by the current selection (for the Subtotal dialog's
-  // group-by + value-column pickers).
-  const subtotalColumns = useMemo(() => {
-    const cols: number[] = [];
-    for (let c = listSourceRange.c1; c <= listSourceRange.c2; c += 1) cols.push(c);
-    return cols;
-  }, [listSourceRange.c1, listSourceRange.c2]);
-  // Excel's Subtotal takes the list's first row as its column labels (the
-  // "At each change in" box lists them) and never subtotals it. The same
-  // text-over-numbers guess Sort and Remove Duplicates make decides.
-  const subtotalHasHeader = useMemo(() => {
-    if (listSourceRange.r2 <= listSourceRange.r1) return false;
-    try {
-      return currentRegionHasHeaderRow(listSourceRange);
-    } catch {
-      return false;
-    }
-  }, [currentRegionHasHeaderRow, listSourceRange]);
-  const subtotalColumnLabel = useCallback(
-    (column: number): string => {
-      const header = subtotalHasHeader
-        ? cellDisplayValue(
-            sheet.cells[`${listSourceRange.r1}:${column}`],
-            listSourceRange.r1,
-            column,
-            false,
-          ).trim()
-        : "";
-      return (
-        header ||
-        t("spreadsheet.removeDuplicatesColumn", { column: columnLabel(column) })
-      );
-    },
-    [cellDisplayValue, listSourceRange.r1, sheet.cells, subtotalHasHeader, t],
-  );
-
   const removeDuplicatesSourceRange = useMemo(() => {
     if (sheetViewProjectionActive) return null;
     if (hasMultiSelection) return { r1: selRect.r1, c1: selRect.c1, r2: selRect.r2, c2: selRect.c2 };
@@ -32293,27 +28424,11 @@ function SpreadsheetWindow({
     // Do not scan a large connected region on unrelated Home-tab keystrokes:
     // the current region is inferred only while the Data tab or a launcher
     // that needs it is open.
-    if (!removeDuplicatesOpen) return null;
+    return null;
     // One selected cell: Excel's current region around it, merges whole, as
     // Sort takes it (oneCellSortRegion), from a blank cell too.
     return listRegionAtReusing(listRegionRef, sheet.cells, selRect.r1, selRect.c1, sheet.rowCount, sheet.columnCount, mergeSpans, MAX_INFERRED_DATA_REGION_CELLS);
-  }, [activeTable, dataTables, hasMultiSelection, mergeSpans, removeDuplicatesOpen, ribbonTab, selRect.r1, selRect.c1, selRect.r2, selRect.c2, sheet, sheetViewProjectionActive]);
-
-  // The dialog owns the exact range captured when it opened. A later selection
-  // change must not silently retarget a destructive confirmation.
-  const removeDuplicatesRange = removeDuplicatesAuthority?.range ?? selRect;
-  // The captured columns (left..right), used by the dialog's key checklist.
-  const removeDuplicatesColumns = useMemo(() => {
-    const cols: number[] = [];
-    for (
-      let c = removeDuplicatesRange.c1;
-      c <= removeDuplicatesRange.c2;
-      c += 1
-    ) {
-      cols.push(c);
-    }
-    return cols;
-  }, [removeDuplicatesRange.c1, removeDuplicatesRange.c2]);
+  }, [activeTable, dataTables, hasMultiSelection, mergeSpans, false, ribbonTab, selRect.r1, selRect.c1, selRect.r2, selRect.c2, sheet, sheetViewProjectionActive]);
   // Excel's data dialogs (Remove Duplicates, Sort) name each column by its
   // header text while "My data has headers" is checked and by its letter
   // ("Column A") otherwise; a blank header cell falls back to the letter.
@@ -32330,26 +28445,6 @@ function SpreadsheetWindow({
     },
     [cellDisplayValue, sheet.cells],
   );
-  const removeDuplicatesColumnLabels = useMemo(() => {
-    // Only the open dialog renders these; a closed one follows the selection.
-    if (!removeDuplicatesAuthority) return [];
-    const headerRow = removeDuplicatesHasHeader
-      ? removeDuplicatesAuthority.range.r1
-      : null;
-    return removeDuplicatesColumns.map((col) =>
-      dataDialogColumnLabel(
-        headerRow,
-        col,
-        t("spreadsheet.removeDuplicatesColumn", { column: columnLabel(col) }),
-      ),
-    );
-  }, [
-    dataDialogColumnLabel,
-    removeDuplicatesAuthority,
-    removeDuplicatesColumns,
-    removeDuplicatesHasHeader,
-    t,
-  ]);
 
   // Once Remove Duplicates has run, Excel hands the keyboard back to the
   // worksheet, so Ctrl+Z (which the grid owns) undoes the removal at once.
@@ -32368,146 +28463,6 @@ function SpreadsheetWindow({
       rootRef.current?.querySelector<HTMLElement>('table[role="grid"]') ?? null
     );
   }, [activeCell.col, activeCell.row]);
-  // The What-If Analysis dialogs hand focus back to the Data tab's What-If
-  // Analysis button when it is on screen, else to the worksheet.
-  const whatIfAnalysisReturnFocusTarget = useCallback(
-    () =>
-      rootRef.current?.querySelector<HTMLElement>(
-        '[data-testid="spreadsheet-ribbon-data-what-if"]',
-      ) ?? gridActiveCellFocusTarget(),
-    [gridActiveCellFocusTarget],
-  );
-  const closeRemoveDuplicates = useCallback(() => {
-    const returnToGrid = removeDuplicatesReturnToGridRef.current;
-    setRemoveDuplicatesOpen(false);
-    setRemoveDuplicatesAuthority(null);
-    setRemoveDuplicatesStatus(null);
-    window.requestAnimationFrame(() => {
-      if (returnToGrid) {
-        gridActiveCellFocusTarget()?.focus({ preventScroll: true });
-        return;
-      }
-      const prior = removeDuplicatesReturnFocusRef.current;
-      const fallback = rootRef.current?.querySelector<HTMLElement>(
-        '[data-testid="spreadsheet-remove-duplicates-toggle"]',
-      );
-      (prior?.isConnected ? prior : fallback)?.focus({ preventScroll: true });
-    });
-  }, [gridActiveCellFocusTarget]);
-
-  // Remove Duplicates (Excel/WPS "Data > Remove Duplicates"): over the selected
-  // range, drop later rows whose chosen key columns repeat an earlier row, keeping
-  // the first-seen row. The pure removeDuplicateRows helper (reusing the sort/
-  // AutoFilter value normalization) decides equality; here we read the selection's
-  // resolved display values, optionally pin a header row, collapse the kept rows
-  // to the top of the selected rectangle and CLEAR the trailing selected cells.
-  // Cells outside the selected columns never move: Microsoft specifies that only
-  // values in the selected range/table are affected. The rewrite still goes
-  // through the shared mutation path (undo + autosave + protection). Formula
-  // cells travel with their kept row and rebase through the same coordinate
-  // relocation helper as Sort.
-  const runRemoveDuplicates = useCallback(() => {
-    if (!dataDialogWriteAllowedRef.current) return;
-    const authority = removeDuplicatesAuthority;
-    if (
-      authority === null ||
-      authority.sheetId !== sheet.id ||
-      !Number.isInteger(authority.range.r1) ||
-      !Number.isInteger(authority.range.r2) ||
-      !Number.isInteger(authority.range.c1) ||
-      !Number.isInteger(authority.range.c2) ||
-      authority.range.r1 < 0 ||
-      authority.range.r2 < authority.range.r1 ||
-      authority.range.r2 >= sheet.rowCount ||
-      authority.range.c1 < 0 ||
-      authority.range.c2 < authority.range.c1 ||
-      authority.range.c2 >= sheet.columnCount
-    ) {
-      setRemoveDuplicatesStatus({
-        kind: "error",
-        text: t("spreadsheet.removeDuplicatesNoData"),
-      });
-      return;
-    }
-    // The rows, the table and its Totals Row in one transaction
-    // (data-tool-buttons); the dialog reports why a run was refused.
-    const outcome = removeDuplicatesSheet(
-      sheet,
-      {
-        range: authority.range,
-        hasHeader: removeDuplicatesHasHeader,
-        keyColumns: removeDuplicatesKeyCols,
-      },
-      {
-        display: (cell, row, col) => cellDisplayValue(cell, row, col, false),
-        spilled: (row, col) => spillOverlay.spilled.has(`${row}:${col}`),
-        rangeHasLockedCell: (candidate, range) =>
-          rangeHasLockedCellRef.current(candidate, range),
-      },
-    );
-    if (outcome === "protected") {
-      showProtectNotice();
-      return;
-    }
-    if (typeof outcome === "string") {
-      setRemoveDuplicatesStatus({
-        kind: "error",
-        text:
-          outcome === "noData"
-            ? t("spreadsheet.removeDuplicatesNoData")
-            : outcome === "tableMismatch"
-              ? t("spreadsheet.uiCopy.removeDuplicatesRequiresASelectionThatExactlyMatchesIts")
-              : outcome === "tableBlocked"
-                ? t("spreadsheet.uiCopy.thisTableCannotBeResizedUnlessItsHeaderIs")
-                : outcome === "customTotals"
-                  ? t("spreadsheet.uiCopy.theTotalsRowContainsCustomContentNothingWasChanged")
-                  : outcome === "noColumns"
-                    ? t("spreadsheet.removeDuplicatesNoColumns")
-                    : outcome === "merge"
-                      ? t("spreadsheet.sortDialogHasMerge")
-                      : outcome === "outlined"
-                        ? t("spreadsheet.removeDuplicatesOutlined")
-                        : t("spreadsheet.removeDuplicatesSpillBlocked"),
-      });
-      return;
-    }
-    // Excel closes the dialog once the command has run and reports the count
-    // in a one-off message, so the destructive OK cannot be pressed twice.
-    if (!outcome.sheet) {
-      removeDuplicatesReturnToGridRef.current = true;
-      closeRemoveDuplicates();
-      toast({ description: t("spreadsheet.removeDuplicatesNoneFound") });
-      return;
-    }
-    const committed = replaceActiveSheet(outcome.sheet, undefined, "coordinate");
-    // A refused write (protection, chart sheet, unmounted editor) keeps the
-    // dialog and says nothing about rows that were never removed.
-    if (committed === sheets) return;
-    removeDuplicatesReturnToGridRef.current = true;
-    closeRemoveDuplicates();
-    toast({
-      description: t("spreadsheet.removeDuplicatesDone", {
-        removed: outcome.removed,
-        unique: outcome.unique,
-      }),
-    });
-    // cellDisplayValue derives from sheet.cells via formulaEvaluator (sheet is a
-    // dependency), so the callback recomputes when the cell map changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    sheet,
-    sheets,
-    dataTables,
-    locale,
-    closeRemoveDuplicates,
-    removeDuplicatesAuthority,
-    removeDuplicatesHasHeader,
-    removeDuplicatesKeyCols,
-    replaceActiveSheet,
-    showProtectNotice,
-    spillOverlay.spilled,
-    t,
-  ]);
 
   // Open against a bounded sheet/range snapshot. Every launcher shares this
   // authority seam, so the Data ribbon cannot bypass column seeding or later
@@ -33049,54 +29004,6 @@ function SpreadsheetWindow({
     sheet.columnCount,
   ]);
 
-  // The Automate tab's script gallery runs Excel's sample Office Scripts
-  // (lib/spreadsheet/automate-gallery): Unhide All Rows and Columns shows the
-  // hidden lines of the sheet's used range.
-  const runAutomationUnhideAll = useCallback(() => {
-    const used = galleryUsedRange(sheet.cells, gridRowCount, gridColumnCount);
-    const rowsHidden = used ? spanHasHidden(manualHiddenRows, used.r1, used.r2) : false;
-    const colsHidden = used ? spanHasHidden(manualHiddenCols, used.c1, used.c2) : false;
-    if (!used || (!rowsHidden && !colsHidden)) {
-      toast({ description: t("spreadsheet.automate.nothingHidden") });
-      return;
-    }
-    if (rowsHidden && lineFormatBlockedByProtection("row", used.r1, used.r2)) return;
-    if (colsHidden && lineFormatBlockedByProtection("col", used.c1, used.c2)) return;
-    let next = sheet;
-    if (rowsHidden) next = manualHiddenSpanSheet(next, "row", used.r1, used.r2, false) ?? next;
-    if (colsHidden) next = manualHiddenSpanSheet(next, "col", used.c1, used.c2, false) ?? next;
-    replaceActiveSheet(next);
-    toast({ description: t("spreadsheet.automate.unhideAllDone") });
-  }, [
-    gridColumnCount,
-    gridRowCount,
-    lineFormatBlockedByProtection,
-    manualHiddenCols,
-    manualHiddenRows,
-    replaceActiveSheet,
-    sheet,
-    t,
-  ]);
-
-  // Count Empty Rows: the rows of the used range (by values) in which no
-  // cell's value, a formula's result, has any text.
-  const runAutomationCountBlankRows = useCallback(() => {
-    const used = galleryValueUsedRange(sheet.cells, gridRowCount, gridColumnCount);
-    if (!used) {
-      toast({ description: t("spreadsheet.automate.noDataOnSheet") });
-      return;
-    }
-    const count = galleryCountEmptyRows(used, (row, col) => {
-      const cell = sheet.cells[`${row}:${col}`];
-      if (!cell) return "";
-      return spreadsheetCellIsFormula(cell) ? formulaEvaluator.getComputed(row, col) : cell.value;
-    });
-    const range = `${columnLabel(used.c1)}${used.r1 + 1}:${columnLabel(used.c2)}${used.r2 + 1}`;
-    toast({
-      description: t("spreadsheet.automate.blankRowsResult", { count, range }),
-    });
-  }, [formulaEvaluator, gridColumnCount, gridRowCount, sheet.cells, t]);
-
   // LOCATE / SELECT BLANKS: find every empty cell in the op range and move the
   // cursor to the FIRST one (the rect-only selection model can't represent a
   // discontiguous set of all blanks — true multi-blank selection is deferred), and
@@ -33402,176 +29309,6 @@ function SpreadsheetWindow({
     schedulePageSetupFieldFocus(target);
   }, [pageSetupOpen, schedulePageSetupFieldFocus]);
 
-  // Detailed Page Layout entries share one Page Setup dialog. Quick menus do
-  // not open it; their More entry lands on the matching tab and field.
-  const openPageSetupField = useCallback(
-    (
-      target: PageSetupFocusTarget,
-      triggerTestId: PageSetupReturnFocusTestId,
-    ) => {
-      if (target === "customMargins" && !resolveLivePageSetupSheet()) return;
-      const trigger = rootRef.current?.querySelector(
-        `[data-testid="${triggerTestId}"]`,
-      );
-      if (trigger instanceof HTMLButtonElement) {
-        pageSetupReturnFocusRef.current = {
-          tab: ribbonTab,
-          triggerTestId,
-        };
-      } else {
-        pageSetupReturnFocusRef.current = null;
-      }
-      pageSetupFocusTargetRef.current = target;
-      void 0;
-      if (pageSetupOpen) {
-        setPageSetupTab(pageSetupTabForFocusTarget(target));
-        if (target === "scalingWidth" || target === "scalingHeight") {
-          setPsDraft((current) =>
-            current.scaling?.kind === "fitToPages" ||
-            current.scaling?.kind === "fitToWidth"
-              ? current
-              : {
-                  ...current,
-                  scaling: { kind: "fitToPages", widthPages: 1, heightPages: 1 },
-                },
-          );
-        }
-        schedulePageSetupFieldFocus(target);
-        return;
-      }
-      togglePageSetup();
-    },
-    [
-      pageSetupOpen,
-      resolveLivePageSetupSheet,
-      ribbonTab,
-      schedulePageSetupFieldFocus,
-      togglePageSetup,
-    ],
-  );
-
-  const commitPageSetupPrintArea = useCallback(
-    (printArea: string | null, source: PageSetupSourceAuthority) => {
-      const liveSheet = resolveLivePageSetupSheet(true, source);
-      if (!liveSheet) return false;
-      const change = printSettingsWithPrintArea(liveSheet.printSettings, printArea);
-      return change ? commitPageLayoutSettings(liveSheet, change.settings) : false;
-    },
-    [commitPageLayoutSettings, resolveLivePageSetupSheet],
-  );
-
-  const insertPageBreakAtSelection = useCallback(() => {
-    const source = pageSetupMutationCommandRef.current;
-    const liveSelection = readPageSetupSelectionSnapshot();
-    const liveSheet = source
-      ? resolveLivePageSetupSheet(true, source)
-      : null;
-    if (
-      !source ||
-      source.controlId !== "XLSCTL.PAGE_LAYOUT.BREAKS.INSERT" ||
-      !liveSelection ||
-      !liveSheet ||
-      !spreadsheetPageSetupWriterReceiptMatches({
-        expectedControlId: "XLSCTL.PAGE_LAYOUT.BREAKS.INSERT",
-        receiptControlId: source.controlId,
-        sourceWorkbook: source.workbook,
-        sourceActiveSheetIndex: source.activeSheetIndex,
-        sourceSheet: source.sheet,
-        sourceSheetId: source.sheetId,
-        liveWorkbook: liveSheetsRef.current,
-        liveActiveSheetIndex: liveActiveSheetIndexRef.current,
-        liveSheet,
-        liveSheetId: liveSheet.id,
-        receiptRow: source.row,
-        receiptCol: source.col,
-        liveRow: liveSelection.active.row,
-        liveCol: liveSelection.active.col,
-        receiptSelectionEpoch: source.selectionEpoch,
-        liveSelectionEpoch: liveSelection.epoch,
-      })
-    ) {
-      return false;
-    }
-    const { rows, cols } = manualBreaksInsertedAt(
-      liveSheet.printSettings,
-      liveSelection.active.row,
-      liveSelection.active.col,
-    );
-    return commitManualPageBreaks(rows, cols, source);
-  }, [
-    commitManualPageBreaks,
-    readPageSetupSelectionSnapshot,
-    resolveLivePageSetupSheet,
-  ]);
-
-  const removePageBreakAtSelection = useCallback(() => {
-    const source = pageSetupMutationCommandRef.current;
-    const liveSelection = readPageSetupSelectionSnapshot();
-    const liveSheet = source
-      ? resolveLivePageSetupSheet(true, source)
-      : null;
-    if (
-      !source ||
-      source.controlId !== "XLSCTL.PAGE_LAYOUT.BREAKS.REMOVE" ||
-      !liveSelection ||
-      !liveSheet ||
-      !spreadsheetPageSetupWriterReceiptMatches({
-        expectedControlId: "XLSCTL.PAGE_LAYOUT.BREAKS.REMOVE",
-        receiptControlId: source.controlId,
-        sourceWorkbook: source.workbook,
-        sourceActiveSheetIndex: source.activeSheetIndex,
-        sourceSheet: source.sheet,
-        sourceSheetId: source.sheetId,
-        liveWorkbook: liveSheetsRef.current,
-        liveActiveSheetIndex: liveActiveSheetIndexRef.current,
-        liveSheet,
-        liveSheetId: liveSheet.id,
-        receiptRow: source.row,
-        receiptCol: source.col,
-        liveRow: liveSelection.active.row,
-        liveCol: liveSelection.active.col,
-        receiptSelectionEpoch: source.selectionEpoch,
-        liveSelectionEpoch: liveSelection.epoch,
-      })
-    ) {
-      return false;
-    }
-    const { rows, cols } = manualBreaksRemovedAt(
-      liveSheet.printSettings,
-      liveSelection.active.row,
-      liveSelection.active.col,
-    );
-    return commitManualPageBreaks(rows, cols, source);
-  }, [
-    commitManualPageBreaks,
-    readPageSetupSelectionSnapshot,
-    resolveLivePageSetupSheet,
-  ]);
-
-  const resetManualPageBreaks = useCallback(() => {
-    const source = pageSetupMutationCommandRef.current;
-    if (
-      !source ||
-      source.controlId !== "XLSCTL.PAGE_LAYOUT.BREAKS.RESET"
-    ) {
-      return false;
-    }
-    return commitManualPageBreaks([], [], source);
-  }, [commitManualPageBreaks]);
-
-  const commitPageMarginPreset = useCallback(
-    (preset: MarginPreset, source: PageSetupSourceAuthority) => {
-      const liveSheet = resolveLivePageSetupSheet(true, source);
-      if (!liveSheet) return false;
-      const change = printSettingsWithMarginPreset(
-        liveSheet.printSettings,
-        preset,
-      );
-      return change ? commitPageLayoutSettings(liveSheet, change.settings) : false;
-    },
-    [commitPageLayoutSettings, resolveLivePageSetupSheet],
-  );
-
   // Apply the Page Setup dialog draft back to the active sheet's printSettings
   // as ONE write (one Undo). A field the user never touched is written back
   // exactly as the live sheet holds it; a touched field is validated as
@@ -33657,173 +29394,6 @@ function SpreadsheetWindow({
     resolveLivePageSetupSheet,
   ]);
 
-  const togglePrintHeadings = useCallback(() => {
-    const source = pageSetupMutationCommandRef.current;
-    if (
-      !source ||
-      source.controlId !== "XLSCTL.PAGE_LAYOUT.HEADINGS.PRINT"
-    ) {
-      return false;
-    }
-    const liveSheet = source
-      ? resolveLivePageSetupSheet(true, source)
-      : null;
-    if (!liveSheet) return false;
-    return commitPageLayoutSettings(
-      liveSheet,
-      printSettingsWithPrintOptionToggled(liveSheet.printSettings, "showHeadings").settings,
-    );
-  }, [commitPageLayoutSettings, resolveLivePageSetupSheet]);
-  // Excel's Sheet Options ▸ Gridlines ▸ Print (`printOptions@gridLines`);
-  // the print default is off, so only the explicit true is stored.
-  const togglePrintGridlines = useCallback(() => {
-    const source = pageSetupMutationCommandRef.current;
-    if (
-      !source ||
-      source.controlId !== "XLSCTL.PAGE_LAYOUT.GRIDLINES.PRINT"
-    ) {
-      return false;
-    }
-    const liveSheet = resolveLivePageSetupSheet(true, source);
-    if (!liveSheet) return false;
-    return commitPageLayoutSettings(
-      liveSheet,
-      printSettingsWithPrintOptionToggled(liveSheet.printSettings, "showGridlines").settings,
-    );
-  }, [commitPageLayoutSettings, resolveLivePageSetupSheet]);
-
-  // Reset the "define rule" dialog draft back to its initial state (list kind,
-  // all params cleared). Called after a successful define so reopening the dialog
-  // never leaks the previous rule's params into a new definition.
-  const resetValidationDialogDraft = useCallback(() => {
-    setValKind("any");
-    setValOperator("between");
-    setValIgnoreBlank(true);
-    setValListValues("");
-    setValShowDropDown(true);
-    setValMin("");
-    setValMax("");
-    setValInteger(false);
-    setValMinLength("");
-    setValMaxLength("");
-    setValFormula("");
-    setValDateMin("");
-    setValDateMax("");
-    setValWeekdaysOnly(false);
-    setValNotBeforeToday(false);
-    setValNotAfterToday(false);
-    setValTimeMin("");
-    setValTimeMax("");
-    setValDepSourceRow("");
-    setValDepSourceCol("");
-    setValDepPerRow(false);
-    setValDepOptions("");
-    setValDepDefault("");
-    setValInputTitle("");
-    setValInputMessage("");
-    setValShowInputMessage(true);
-    setValErrorTitle("");
-    setValErrorMessage("");
-    setValErrorStyle("stop");
-    setValShowErrorMessage(true);
-  }, []);
-
-  // Excel opens Data Validation on the active cell's own rule, its settings,
-  // input message and error alert ready to change; a cell without one opens
-  // on Any value.
-  const loadValidationDialogDraft = useCallback(
-    (openedRule: ValidationRule | null, base?: { r1: number; c1: number }) => {
-      resetValidationDialogDraft();
-      setValApplyToSame(false);
-      setValidationOpenedRule(openedRule);
-      if (!openedRule) return;
-      // The draft's relative formulas read from the selection's top-left,
-      // where OK writes the rule: loaded from the rule's own top-left, an
-      // unchanged OK on a cell inside the range re-based A20<=B20 onto A21
-      // and the constraint went blind (B513).
-      let rule = openedRule;
-      if (base && (base.r1 !== openedRule.range.r1 || base.c1 !== openedRule.range.c1)) {
-        const height = openedRule.range.r2 - openedRule.range.r1;
-        const width = openedRule.range.c2 - openedRule.range.c1;
-        rule =
-          rebaseValidationRule(
-            openedRule,
-            { r1: base.r1, c1: base.c1, r2: base.r1 + height, c2: base.c1 + width },
-            shiftFormula,
-          ) ?? openedRule;
-      }
-      setValIgnoreBlank(rule.ignoreBlank !== false);
-      setValShowInputMessage(rule.showInputMessage !== false);
-      setValShowErrorMessage(rule.showErrorMessage !== false);
-      setValInputTitle(rule.inputTitle ?? "");
-      setValInputMessage(rule.inputMessage ?? "");
-      setValErrorTitle(rule.errorTitle ?? "");
-      setValErrorMessage(rule.errorMessage ?? "");
-      setValErrorStyle(rule.errorStyle ?? "stop");
-      setValKind(rule.kind);
-      const bound = (value: string | number | undefined) =>
-        value === undefined ? "" : String(value);
-      switch (rule.kind) {
-        case "list":
-          setValListValues(
-            rule.sourceRange
-              ? rule.sourceRange.trim().startsWith("=")
-                ? rule.sourceRange.trim()
-                : `=${rule.sourceRange.trim()}`
-              : rule.values.join(","),
-          );
-          setValShowDropDown(rule.showDropDown !== false);
-          break;
-        case "number":
-          setValOperator(rule.operator ?? "between");
-          setValMin(rule.minFormula !== undefined ? `=${rule.minFormula}` : bound(rule.min));
-          setValMax(rule.maxFormula !== undefined ? `=${rule.maxFormula}` : bound(rule.max));
-          setValInteger(rule.integer === true);
-          break;
-        case "text":
-          setValOperator(rule.operator ?? "between");
-          setValMinLength(bound(rule.minLength));
-          setValMaxLength(bound(rule.maxLength));
-          break;
-        case "formula":
-          setValFormula(rule.formula);
-          break;
-        case "date":
-          setValOperator(rule.operator ?? "between");
-          setValDateMin(bound(rule.min));
-          setValDateMax(bound(rule.max));
-          setValWeekdaysOnly(
-            (rule.weekdays ?? []).join(",") === "1,2,3,4,5",
-          );
-          setValNotBeforeToday(rule.notBefore === "today");
-          setValNotAfterToday(rule.notAfter === "today");
-          break;
-        case "time":
-          setValOperator(rule.operator ?? "between");
-          setValTimeMin(bound(rule.min));
-          setValTimeMax(bound(rule.max));
-          break;
-        case "dependent":
-          {
-            const source = dependentSourceDraft(rule.source);
-            setValDepSourceRow(source.row);
-            setValDepSourceCol(source.col);
-          }
-          setValDepPerRow(rule.sourceMode === "perRow");
-          setValDepOptions(
-            Object.entries(rule.options)
-              .map(([key, options]) => `${key}: ${options.join(", ")}`)
-              .join("\n"),
-          );
-          setValDepDefault((rule.optionsDefault ?? []).join(", "));
-          break;
-        default:
-          break;
-      }
-    },
-    [resetValidationDialogDraft],
-  );
-
   // The dialog's fields as one draft (validation-buttons builds the rule).
   const validationDraftFields = useMemo(
     (): ValidationDraft => ({
@@ -33834,20 +29404,20 @@ function SpreadsheetWindow({
       showDropDown: valShowDropDown,
       min: valMin,
       max: valMax,
-      integer: valInteger,
+      integer: false,
       formula: valFormula,
       dateMin: valDateMin,
       dateMax: valDateMax,
-      weekdaysOnly: valWeekdaysOnly,
-      notBeforeToday: valNotBeforeToday,
-      notAfterToday: valNotAfterToday,
+      weekdaysOnly: false,
+      notBeforeToday: false,
+      notAfterToday: false,
       timeMin: valTimeMin,
       timeMax: valTimeMax,
       minLength: valMinLength,
       maxLength: valMaxLength,
       depSourceRow: valDepSourceRow,
       depSourceCol: valDepSourceCol,
-      depPerRow: valDepPerRow,
+      depPerRow: false,
       depOptions: valDepOptions,
       depDefault: valDepDefault,
       showInputMessage: valShowInputMessage,
@@ -33863,7 +29433,7 @@ function SpreadsheetWindow({
       valDateMin,
       valDepDefault,
       valDepOptions,
-      valDepPerRow,
+      false,
       valDepSourceCol,
       valDepSourceRow,
       valErrorMessage,
@@ -33873,22 +29443,22 @@ function SpreadsheetWindow({
       valInputMessage,
       valInputTitle,
       valIgnoreBlank,
-      valInteger,
+      false,
       valKind,
       valListValues,
       valMax,
       valMaxLength,
       valMin,
       valMinLength,
-      valNotAfterToday,
-      valNotBeforeToday,
+      false,
+      false,
       valOperator,
       valShowDropDown,
       valShowErrorMessage,
       valShowInputMessage,
       valTimeMax,
       valTimeMin,
-      valWeekdaysOnly,
+      false,
     ],
   );
   const buildValidationDraftRule = useCallback(
@@ -33896,26 +29466,6 @@ function SpreadsheetWindow({
       validationRuleFromDraft(range, validationDraftFields),
     [validationDraftFields],
   );
-  const {
-    clearValidationForSelection,
-    defineValidationForSelection,
-    validationPatchbackBlockerMessage,
-  } = useSpreadsheetValidationCommands({
-    buildValidationDraftRule,
-    dataValidationMutationCommandRef,
-    isSheetProtectionEffectiveRef,
-    liveActiveSheetIndexRef,
-    liveSheetsRef,
-    rangeHasLockedCellRef,
-    readPageSetupSelectionSnapshot,
-    replaceActiveSheet,
-    setValidationError,
-    spreadsheetNativeWriteRoute,
-    t,
-    valApplyToSame,
-    validationDraftFields,
-    validationOpenedRule,
-  });
 
   const selectionHasValidation = useMemo(
     () =>
@@ -34937,13 +30487,6 @@ function SpreadsheetWindow({
     setFilterMenuCol(null);
   }, [commitActiveSheetViewFilters, replaceActiveSheet, sheet, worksheetAutoFilter]);
 
-  const captureSheetViewReturnFocus = useCallback(() => {
-    sheetViewReturnFocusRef.current =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
-  }, []);
-
   const commitSheetViewRuntime = useCallback(
     (
       nextSheet: SheetModel,
@@ -35198,116 +30741,6 @@ function SpreadsheetWindow({
     sheet.id,
     sheetViewSession,
   ]);
-  const resolveSheetViewScopePrompt = useCallback(
-    (choice: "me" | "everyone" | "cancel") => {
-      const prompt = sheetViewScopePrompt;
-      setSheetViewScopePrompt(null);
-      if (!prompt || choice === "cancel") return;
-      if (prompt.remember) {
-        writeSheetViewScopePreference(choice);
-        setSheetViewScopePreference(choice);
-      }
-      if (choice === "me") {
-        runActionInOwnSheetView(prompt.action);
-        return;
-      }
-      bypassSheetViewScopeOnceRef.current = true;
-      dispatchSheetViewScopedAction(prompt.action);
-    },
-    [dispatchSheetViewScopedAction, runActionInOwnSheetView, sheetViewScopePrompt],
-  );
-
-  const {
-    commitSheetViewName,
-    openSheetViewOptions,
-    switchSheetView,
-  } = useSpreadsheetSheetViewSwitching({
-    captureSheetViewReturnFocus,
-    commitSheetViewRuntime,
-    mergeSpans,
-    setSheetViewDialog,
-    sheet,
-    sheetViewSession,
-    sheetViewSynthesizedRef,
-    sheetViewUnavailable,
-  });
-
-  const commitSheetViewDialog = useCallback(() => {
-    if (!sheetViewDialog) return;
-    const result = commitSheetViewName(sheetViewDialog);
-    if (result.ok) setSheetViewDialog(null);
-    else setSheetViewDialog({ ...sheetViewDialog, error: result.error });
-  }, [commitSheetViewName, sheetViewDialog]);
-
-  const duplicateSelectedSheetView = useCallback(() => {
-    if (sheetViewDialog?.mode !== "options") return;
-    const nextViews = sheetViewsWithDuplicate(
-      sheet.namedSheetViews ?? [],
-      sheetViewDialog.selectedId,
-    );
-    if (!nextViews) return;
-    if (
-      commitSheetViewRuntime(
-        { ...sheet, namedSheetViews: nextViews },
-        sheetViewSession?.sheetId === sheet.id ? sheetViewSession : null,
-        true,
-      )
-    ) {
-      setSheetViewDialog(null);
-    }
-  }, [commitSheetViewRuntime, sheet, sheetViewDialog, sheetViewSession]);
-
-  const deleteSelectedSheetView = useCallback(() => {
-    if (sheetViewDialog?.mode !== "options") return;
-    const active =
-      sheetViewSession?.sheetId === sheet.id &&
-      sheetViewSession.activeViewId === sheetViewDialog.selectedId;
-    const session = sheetViewSession;
-    const deleted = sheetWithoutSheetView(
-      sheet,
-      sheetViewDialog.selectedId,
-      active && session
-        ? (base) => applySheetViewFilters(base, session.defaultState)
-        : undefined,
-    );
-    if (!deleted) return;
-    const { sheet: nextSheet, removesFinalOwnedView } = deleted;
-    const currentSession =
-      sheetViewSession?.sheetId === sheet.id ? sheetViewSession : null;
-    let nextSession = active ? null : currentSession;
-    if (
-      removesFinalOwnedView &&
-      nextSession?.activeViewId === "temporary"
-    ) {
-      // The deleted view owned the previous synthetic AutoFilter identity.
-      // Keep the temporary runtime view alive, but give it a fresh transient
-      // identity and an empty default so persistence cannot resurrect the
-      // deleted view's filterId/ref/ownership receipt.
-      nextSession = {
-        sheetId: nextSession.sheetId,
-        activeViewId: "temporary",
-        // The Tables' default criteria are unaffected by the worksheet
-        // AutoFilter the deleted view owned.
-        defaultState: nextSession.defaultState.tables
-          ? { tables: nextSession.defaultState.tables }
-          : {},
-        ...(nextSession.sortState ? { sortState: nextSession.sortState } : {}),
-        ...(nextSession.tables ? { tables: nextSession.tables } : {}),
-        filterId: createNamedSheetViewId(),
-        ref: defaultNamedSheetViewRef(nextSheet),
-        ownsAutoFilter: true,
-      };
-    }
-    if (
-      commitSheetViewRuntime(
-        nextSheet,
-        nextSession,
-        true,
-      )
-    ) {
-      setSheetViewDialog(null);
-    }
-  }, [commitSheetViewRuntime, sheet, sheetViewDialog, sheetViewSession]);
 
   const {
     sortDataTable,
@@ -35892,34 +31325,6 @@ function SpreadsheetWindow({
   // transaction (one Undo); the picker's sheet must still be the live,
   // unchanged active sheet when the picture has been read.
   const sheetBackgroundPicture = readSheetBackgroundPicture(sheet);
-  const toggleSheetBackground = (): boolean => {
-    const liveWorkbook = liveSheetsRef.current;
-    const sheetIndex = liveActiveSheetIndexRef.current;
-    const liveSheet = liveWorkbook[sheetIndex];
-    if (!liveSheet || liveSheet.chartSheet) return false;
-    if (isSheetProtectionEffectiveRef.current(liveSheet)) {
-      showProtectNotice();
-      return false;
-    }
-    if (readSheetBackgroundPicture(liveSheet)) {
-      const next: SheetModel = { ...liveSheet };
-      delete next.backgroundPicture;
-      return replaceActiveSheet(next) !== liveWorkbook;
-    }
-    const input = sheetBackgroundInputRef.current;
-    if (!input) return false;
-    const requestId = pictureInsertRequestRef.current + 1;
-    pictureInsertRequestRef.current = requestId;
-    sheetBackgroundRequestRef.current = {
-      requestId,
-      workbook: liveWorkbook,
-      sheetIndex,
-      sheet: liveSheet,
-    };
-    input.value = "";
-    input.click();
-    return true;
-  };
   const handleSheetBackgroundFileChange = (
     event: ReactChangeEvent<HTMLInputElement>,
   ) => {
@@ -36197,50 +31602,6 @@ function SpreadsheetWindow({
   };
   // How far the live stroke's preview is moved to stand over a frozen pane.
   const [inkPreviewShift, setInkPreviewShift] = useState({ x: 0, y: 0 });
-  const placeSpreadsheetTrackpadStroke = useCallback(
-    (points: readonly DocumentInkPoint[]) => {
-      const liveSheet = liveSheetsRef.current[liveActiveSheetIndexRef.current] ?? null;
-      if (!liveSheet || liveSheet.id !== sheet.id) return;
-      if (!sheetProtectionAllowsRef.current(liveSheet, "editObjects")) return;
-      const liveObjects = liveSheet.objects || [];
-      if (liveObjects.length >= MAX_SHEET_OBJECTS) return;
-      const stageRect = inkTrackpadStageMarkerRef.current?.parentElement?.getBoundingClientRect();
-      if (!stageRect || stageRect.width <= 0 || stageRect.height <= 0) return;
-      const contentPerScreenX = gridStageSize.totalWidth / stageRect.width;
-      const contentPerScreenY = gridStageSize.totalHeight / stageRect.height;
-      const preset = inkPresetRef.current;
-      const first = points[0];
-      const paneOrigin = first ? inkPaneOrigin(stageRect, first.x, first.y) : stageRect;
-      const stagePoints = points.map((point) => ({
-        x: Math.max(
-          SPREADSHEET_HEADER_WIDTH_PX,
-          Math.min(gridStageSize.totalWidth, (point.x - paneOrigin.left) * contentPerScreenX),
-        ),
-        y: Math.max(
-          SPREADSHEET_HEADER_HEIGHT_PX,
-          Math.min(gridStageSize.totalHeight, (point.y - paneOrigin.top) * contentPerScreenY),
-        ),
-      }));
-      const fitted = inkToShapeRef.current ? spreadsheetInkToShapeObject(stagePoints, preset) : null;
-      const inkObject =
-        fitted ??
-        createSpreadsheetInkShapeObject({
-          points: stagePoints,
-          tool: preset.tool,
-          color: preset.color,
-          width: spreadsheetInkWidthPx(preset.widthPt),
-          effect: preset.effect,
-        });
-      if (!inkObject) return;
-      replaceActiveSheet({
-        ...liveSheet,
-        objects: [...liveObjects, inkObject as unknown as SpreadsheetObject],
-      });
-      // Ink to Math / Ink to Text: the stroke joins the writing being read.
-      if (!fitted) inkStrokeLandedRef.current(inkObject.id, false);
-    },
-    [gridStageSize.totalHeight, gridStageSize.totalWidth, replaceActiveSheet, sheet.id],
-  );
 
   const deleteSelectedInk = useCallback(() => {
     if (!sheetProtectionAllowsRef.current(sheet, "editObjects")) return false;
@@ -43479,37 +38840,6 @@ function SpreadsheetWindow({
     return true;
   }, [captureReviewCommentDialogAuthority, commentsPaneOpen, scheduleRaf]);
 
-  const openCellNoteComposer = useCallback((): boolean => {
-    reviewNewNoteCloseAutoFocusRef.current = false;
-    if (!resolveLiveRemarkSheet() || isThreadComment(activeComment)) {
-      return false;
-    }
-    setCommentsPaneOpen(false);
-    setChartSharedFormatPaneOpen(false);
-    setReviewCommentDialogAuthority(null);
-    setCommentEditorKind("note");
-    const draft = initialNoteDraft(activeComment, reviewCommentActorName);
-    noteSessionRef.current = {
-      baseline: isNoteComment(activeComment) ? activeComment.text : "",
-      col: activeCell.col,
-      focused: false,
-      row: activeCell.row,
-      sheetId: sheet.id,
-    };
-    noteDraftRef.current = draft;
-    setCommentDraft(draft);
-    reviewNewNoteCloseAutoFocusRef.current = true;
-    setCommentOpen(true);
-    return true;
-  }, [
-    activeCell.col,
-    activeCell.row,
-    activeComment,
-    resolveLiveRemarkSheet,
-    reviewCommentActorName,
-    sheet.id,
-  ]);
-
   useEffect(() => {
     if (!commentOpen || commentEditorKind !== "note") return;
 
@@ -43677,13 +39007,6 @@ function SpreadsheetWindow({
     reviewCommentPageAuthorityIsCurrent,
     sheet,
   ]);
-
-  // Review > Notes > Show All Notes is a toggle: every note stays open beside
-  // its cell, read-only, until it is chosen again. It opens no editor.
-  const showWorkbookNotes = useCallback(() => {
-    if (notedCellCount === 0 && !notesShownAll) return;
-    setNotesShownAll((shown) => !shown);
-  }, [notedCellCount, notesShownAll]);
 
   // The thread an embed comment session's route answered goes into its cell
   // on screen as the page now holds it (null: deleted). The server already
@@ -43854,26 +39177,6 @@ function SpreadsheetWindow({
     activeComment,
     activeKey,
     closeCellCommentSurface,
-    replaceActiveSheet,
-    resolveLiveRemarkSheet,
-  ]);
-
-  // Review > Notes > Show/Hide Note (also on the cell menu): the active cell's
-  // note stays open on the sheet until it is chosen again. It is the note's
-  // own state, saved with the workbook, so it is one undoable edit.
-  const toggleActiveCellNoteVisible = useCallback((): boolean => {
-    if (!hasNote(activeComment)) return false;
-    const liveSheet = resolveLiveRemarkSheet();
-    const nextSheet = liveSheet
-      ? sheetWithNoteVisibilityToggled(liveSheet, activeCell.row, activeCell.col)
-      : null;
-    if (!nextSheet) return false;
-    replaceActiveSheet(nextSheet);
-    return true;
-  }, [
-    activeCell.col,
-    activeCell.row,
-    activeComment,
     replaceActiveSheet,
     resolveLiveRemarkSheet,
   ]);
@@ -45962,31 +41265,13 @@ function SpreadsheetWindow({
     },
     [hasActiveFilter, locale, resolveAdvancedFilterMode, t],
   );
-  const advancedFilterInPlaceDisabledReason =
-    advancedFilterModeDisabledReason("in-place");
-  const advancedFilterCopyDisabledReason =
-    advancedFilterModeDisabledReason("copy");
-  const advancedFilterModeAvailability = {
-    "in-place": {
-      enabled: resolveAdvancedFilterMode("in-place").enabled,
-      ...(advancedFilterInPlaceDisabledReason
-        ? { reason: advancedFilterInPlaceDisabledReason }
-        : {}),
-    },
-    copy: {
-      enabled: resolveAdvancedFilterMode("copy").enabled,
-      ...(advancedFilterCopyDisabledReason
-        ? { reason: advancedFilterCopyDisabledReason }
-        : {}),
-    },
-  } as const;
 
   // Macro recorder controls (Excel/WPS "Record Macro"). Recording captures edits
   // relative to the active cell at start; replaying writes them at a new target.
   const applyAdvancedFilterNow = useCallback(
     (request: AdvancedFilterRequest, answered: ReadonlyMap<string, ReadonlyMap<string, EngineValue>> | null): { ok: boolean; message: string } => {
 
-      const authority = advancedFilterAuthority;
+      const authority = null;
       if (authority === null || authority.sheetId !== sheet.id) {
         return {
           ok: false,
@@ -46064,29 +41349,7 @@ function SpreadsheetWindow({
         message: plan.duplicatesRemoved > 0 ? t("spreadsheet.dynamicCopy.filteredRowsDeduplicated", { count: plan.matched, duplicates: plan.duplicatesRemoved }) : t("spreadsheet.dynamicCopy.filteredRows", { count: plan.matched }),
       };
     },
-    [advancedFilterModeDisabledReason, advancedFilterAuthority, cellDisplayValue, formulaEvaluator, isEditableCell, replaceActiveSheet, resolveAdvancedFilterMode, sheet, spillOverlay.spilled, t],
-  );
-  const runAdvancedFilter = useCallback(
-    (request: AdvancedFilterRequest): { ok: boolean; message: string } | Promise<{ ok: boolean; message: string }> => {
-      // C2: criteria formulas (Excel's computed criteria) are evaluated by the
-      // calculation session over the list's records first; the plan then reads
-      // their verdicts. Unanswered (no session, the server unable to answer,
-      // a rule past the bounds): the filter is refused, never evaluated here.
-      const criteriaRules = advancedFilterCriteriaFormulas(sheet, request).map((rule) => ({ sheetId: sheet.id, ...rule }));
-      if (criteriaRules.length === 0) return applyAdvancedFilterNow(request, null);
-      const unanswered = { ok: false, message: t("spreadsheet.calculationStale.command") };
-      const evaluateRules = sessionEvaluateRulesRef.current;
-      if (!evaluateRules) return unanswered;
-      const startSheet = sheet;
-      // The answer is for this sheet as it is now (the session call waits
-      // for its calculation): the plan runs on the render that holds it.
-      return evaluateRules(criteriaRules).catch(() => null).then((answered) =>
-        liveSheetsRef.current[liveActiveSheetIndexRef.current] !== startSheet
-          ? { ok: false, message: t("spreadsheet.uiCopy.theWorksheetChangedReopenAdvancedFilter") }
-          : !answered || criteriaRules.some((rule) => !answered.has(calculationRuleKey(rule))) ? unanswered
-            : applyAdvancedFilterNowRef.current(request, answered));
-    },
-    [applyAdvancedFilterNow, sheet, t],
+    [advancedFilterModeDisabledReason, null, cellDisplayValue, formulaEvaluator, isEditableCell, replaceActiveSheet, resolveAdvancedFilterMode, sheet, spillOverlay.spilled, t],
   );
   const applyAdvancedFilterNowRef = useRef(applyAdvancedFilterNow);
   useInsertionEffect(() => { applyAdvancedFilterNowRef.current = applyAdvancedFilterNow; });
@@ -46193,37 +41456,6 @@ function SpreadsheetWindow({
     | null
   >(null);
 
-  // Excel's Create Forecast Worksheet reads the selected data: the first
-  // column (or row) is the timeline, the next the values. One cell inside a
-  // list takes the list around it, as the other data tools do.
-  const forecastDefaultRanges = useMemo(() => {
-    return { timeline: "", values: "" };
-    const area = hasMultiSelection
-      ? { r1: selRect.r1, c1: selRect.c1, r2: selRect.r2, c2: selRect.c2 }
-      : listRegionAt(sheet.cells, selRect.r1, selRect.c1, sheet.rowCount, sheet.columnCount, mergeSpans);
-    if (!area) return { timeline: "", values: "" };
-    const r1 = Math.min(area.r1, area.r2), r2 = Math.max(area.r1, area.r2);
-    const c1 = Math.min(area.c1, area.c2), c2 = Math.max(area.c1, area.c2);
-    if (c2 > c1) {
-      // Columns: the header row (text over numbers) stays out, as Excel's does.
-      const first = String(sheet.cells[`${r1}:${c1}`]?.value ?? "").trim();
-      const headed = r2 > r1 && first !== "" && Number.isNaN(Number(first));
-      const top = headed ? r1 + 1 : r1;
-      return { timeline: spreadsheetRangeA1({ r1: top, c1, r2, c2: c1 }), values: spreadsheetRangeA1({ r1: top, c1: c1 + 1, r2, c2: c1 + 1 }) };
-    }
-    if (r2 > r1) return { timeline: spreadsheetRangeA1({ r1, c1, r2: r1, c2 }), values: spreadsheetRangeA1({ r1: r1 + 1, c1, r2: r1 + 1, c2 }) };
-    return { timeline: "", values: "" };
-  }, [false, hasMultiSelection, mergeSpans, selRect.r1, selRect.c1, selRect.r2, selRect.c2, sheet.cells, sheet.rowCount, sheet.columnCount]);
-  const {
-    runForecastSheet,
-  } = useSpreadsheetRunForecastSheet({
-    forecastOutputWriterRef,
-    locale,
-    sheet,
-    t,
-    workbookStructureProtectedReason,
-  });
-
   // With Automatic Except for Data Tables, F9 (Shift+F9: the active sheet's)
   // lets the held table results calculate: the automatic calculation runs
   // over the source without the hold, and the effect above holds its answer.
@@ -46309,13 +41541,6 @@ function SpreadsheetWindow({
     }
     return entries;
   }, [personalMacros, sheet.id, sheets]);
-  const macroDialogEntries = useMemo(
-    () =>
-      macroDialogScope === "all"
-        ? macroEntries
-        : macroEntries.filter((entry) => entry.store === macroDialogScope),
-    [macroDialogScope, macroEntries],
-  );
   // The active sheet's macro of that name first, then the workbook's, then
   // the Personal Macro Workbook's.
   const resolveMacroByName = useCallback(
@@ -46339,25 +41564,6 @@ function SpreadsheetWindow({
     },
     [t],
   );
-  // Write a macro back where it lives, or remove it (`next` null).
-  const saveMacroEntry = useCallback(
-    (entry: MacroDialogEntry, next: SpreadsheetMacro | null) => {
-      if (entry.store === "personal") {
-        savePersonalMacros(
-          next ? upsertMacro(personalMacros, next) : removeMacro(personalMacros, entry.macro.name),
-        );
-        return;
-      }
-      const target = sheets.find((candidate) => candidate.id === entry.sheetId);
-      if (!target) return;
-      const list = normalizeMacros(target.macros);
-      const updated = next ? upsertMacro(list, next) : removeMacro(list, entry.macro.name);
-      const nextSheet: SheetModel = { ...target, macros: updated.length > 0 ? updated : undefined };
-      if (target.id === sheet.id) replaceActiveSheet(nextSheet);
-      else commitSheets(sheets.map((candidate) => (candidate.id === target.id ? nextSheet : candidate)));
-    },
-    [commitSheets, personalMacros, replaceActiveSheet, savePersonalMacros, sheet.id, sheets],
-  );
 
   // Record Macro: the dialog comes first (name, shortcut, where to store it,
   // description), then the recording runs until Stop Recording, which saves
@@ -46371,25 +41577,6 @@ function SpreadsheetWindow({
       });
     },
     [macroEntries, rememberAutomationTrigger],
-  );
-  const startMacroRecording = useCallback(
-    (request: RecordMacroRequest) => {
-      // An absolute recording names the cells themselves: its steps count
-      // from the sheet origin, so the recorded cell IS the step.
-      const relative = false;
-      macroRecordingMetaRef.current = { ...request, mode: relative ? "relative" : "absolute" };
-      macroAnchorRef.current = relative
-        ? { row: activeCell.row, col: activeCell.col }
-        : { row: 0, col: 0 };
-      macroStepsRef.current = [];
-      macroExplicitStepRef.current = null;
-      macroRecordNoticeRef.current = false;
-      macroRecordingRef.current = true;
-      setMacroRecording(true);
-      setMacroRecordDialog(null);
-      toast({ description: t("spreadsheet.automate.recordingStarted") });
-    },
-    [activeCell.col, activeCell.row, false, t],
   );
   const stopMacroRecording = useCallback(() => {
     if (!macroRecordingRef.current) return;
@@ -46764,14 +41951,6 @@ function SpreadsheetWindow({
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, []);
-  // The Automation Catalog's list runs and deletes the active sheet's macros.
-  const runMacro = useCallback(
-    (name: string) => {
-      const macro = resolveMacroByName(name);
-      if (macro) startMacroRun(macro, "run");
-    },
-    [resolveMacroByName, startMacroRun],
-  );
 
   // Office-Scripts-style imperative scripting (the modern, sandbox-safe VBA
   // equivalent). Snapshot the active sheet → run the user's JS in the EXISTING
@@ -46787,155 +41966,6 @@ function SpreadsheetWindow({
   useInsertionEffect(() => {
     scriptApplyRuntimeRef.current = { pageId, sheets, activeIndex: activeSheetIndex, sheet, replaceActiveSheet };
   });
-  const runScript = useCallback(async () => {
-    if (scriptRunning) return;
-    setScriptRunning(true);
-    setScriptStatus(null);
-    const startedPageId = pageId, startedSheet = sheet;
-    try {
-      const cells: SnapshotCell[] = [];
-      for (const [key, cell] of Object.entries(sheet.cells)) {
-        const parts = key.split(":");
-        const r = Number(parts[0]);
-        const c = Number(parts[1]);
-        if (!Number.isInteger(r) || !Number.isInteger(c)) continue;
-        const stored = cell?.value ?? "";
-        if (stored === "") continue;
-        // A formula cell reads as what it computes (Office Scripts' getValue),
-        // not as its formula text; an error reads as its text (#DIV/0!).
-        let raw: string = stored;
-        if (stored.startsWith("=")) {
-          const computed = formulaEvaluator.getComputed(r, c);
-          raw =
-            typeof computed === "number" || typeof computed === "string"
-              ? String(computed)
-              : typeof computed === "boolean"
-                ? (computed ? "TRUE" : "FALSE")
-                : computed === null
-                  ? ""
-                  : computed.code;
-          if (raw === "") continue;
-        }
-        // Surface numeric cells as numbers so scripts can do arithmetic on a
-        // getCell() read; everything else stays the stored string.
-        const trimmed = raw.trim();
-        const num = Number(trimmed);
-        const value =
-          trimmed !== "" && Number.isFinite(num) && String(num) === trimmed
-            ? num
-            : raw;
-        cells.push([r, c, value]);
-      }
-      const snapshot: SheetSnapshot = {
-        rowCount: sheet.rowCount,
-        columnCount: sheet.columnCount,
-        cells,
-      };
-      const harness = buildScriptHarness(scriptText, snapshot);
-      const result = await runInSandbox("javascript", harness, {
-        timeoutMs: 5000,
-      });
-      if (result.error) {
-        setScriptStatus({ ok: false, message: result.error });
-        return;
-      }
-      const raw = parseScriptWrites(result.logs);
-      if (raw === null) {
-        setScriptStatus({
-          ok: false,
-          message: t("spreadsheet.scriptNoResult"),
-        });
-        return;
-      }
-      // Wait for the render of the live workbook (a remote load may still be
-      // committing), then re-resolve the target sheet by identity.
-      let live: typeof scriptApplyRuntimeRef.current | null = null;
-      for (let attempt = 0; attempt < 8 && editorMountedRef.current; attempt += 1) {
-        const runtime = scriptApplyRuntimeRef.current;
-        if (runtime.sheets === liveSheetsRef.current && runtime.activeIndex === liveActiveSheetIndexRef.current) { live = runtime; break; }
-        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      }
-      if (!editorMountedRef.current) return;
-      if (!live || live.pageId !== startedPageId || livePageIdRef.current !== startedPageId || live.sheet.id !== startedSheet.id) {
-        setScriptStatus({ ok: false, message: t("spreadsheet.scriptTargetGone") });
-        return;
-      }
-      const target = live.sheet;
-      // A write past the used extent grows the sheet to hold it, as a macro
-      // replay does; only a write past the worksheet's own end is dropped.
-      const { writes, dropped, truncated, rowCount: grownRows, columnCount: grownCols } = normalizeScriptWrites(raw, {
-        rowCount: target.rowCount,
-        columnCount: target.columnCount,
-        maxRows: MAX_GRID_ROWS,
-        maxColumns: MAX_GRID_COLUMNS,
-      });
-      if (writes.length === 0) {
-        setScriptStatus({
-          ok: dropped === 0,
-          message:
-            t("spreadsheet.scriptNoWrites") +
-            (dropped > 0 ? ` ${t("spreadsheet.scriptDropped", { count: dropped })}` : ""),
-        });
-        return;
-      }
-      // A cell the script writes that someone else changed during the run is
-      // a conflict: the script computed from the value that is gone.
-      if (target !== startedSheet && writes.some(({ row, col }) => {
-        const before = startedSheet.cells[`${row}:${col}`], after = target.cells[`${row}:${col}`];
-        return before !== after && JSON.stringify(before ?? null) !== JSON.stringify(after ?? null);
-      })) {
-        setScriptStatus({ ok: false, message: t("spreadsheet.scriptTargetChanged") });
-        return;
-      }
-      // Protection parity against the LIVE sheet: refuse the whole batch if
-      // any target cell is locked now, including protection that arrived
-      // while the script ran.
-      if (writes.some((w) => !isCellEditableRef.current(target, w.row, w.col))) {
-        showProtectNotice();
-        setScriptStatus({
-          ok: false,
-          message: t("spreadsheet.scriptProtected"),
-        });
-        return;
-      }
-      const nextCells = copyCellMap(target.cells);
-      for (const w of writes) {
-        writeCellValueInto(nextCells, w.row, w.col, w.value);
-      }
-      const committed = live.replaceActiveSheet({
-        ...target,
-        cells: nextCells,
-        rowCount: Math.max(target.rowCount, grownRows),
-        columnCount: Math.max(target.columnCount, grownCols),
-      });
-      if (committed === live.sheets || committed[live.activeIndex]?.cells !== nextCells) {
-        setScriptStatus({ ok: false, message: t("spreadsheet.scriptProtected") });
-        return;
-      }
-      const notes: string[] = [];
-      if (truncated) notes.push(t("spreadsheet.scriptTruncated"));
-      if (dropped > 0)
-        notes.push(t("spreadsheet.scriptDropped", { count: dropped }));
-      setScriptStatus({
-        ok: true,
-        message:
-          t("spreadsheet.scriptApplied", { count: writes.length }) +
-          (notes.length ? ` ${notes.join(" ")}` : ""),
-      });
-    } catch (err) {
-      setScriptStatus({ ok: false, message: String(err) });
-    } finally {
-      setScriptRunning(false);
-    }
-  }, [
-    formulaEvaluator,
-    scriptRunning,
-    scriptText,
-    sheet,
-    pageId,
-    showProtectNotice,
-    t,
-  ]);
 
   const {
     renderWatchDock,
@@ -46955,19 +41985,6 @@ function SpreadsheetWindow({
     watchPanelOpen,
     workbookWatchRows,
   });
-
-  const deleteMacro = useCallback(
-    (name: string) => {
-      const entry = macroEntries.find(
-        (candidate) =>
-          candidate.store === "workbook" &&
-          candidate.sheetId === sheet.id &&
-          candidate.macro.name.toLowerCase() === name.toLowerCase(),
-      );
-      if (entry) saveMacroEntry(entry, null);
-    },
-    [macroEntries, saveMacroEntry, sheet.id],
-  );
 
   const openSymbolPicker = useCallback(() => {
     const row = activeCell.row;
@@ -48215,406 +43232,6 @@ function SpreadsheetWindow({
     setTextToColumnsStatus(null);
     return true;
   };
-  const runTextToColumns = useCallback(() => {
-    if (!dataDialogWriteAllowedRef.current) return;
-    // A non-empty destination opens an asynchronous overwrite confirmation.
-    // Capture the exact worksheet + selection that produced the preview so its
-    // delayed callback cannot write an old split plan into a newly active tab
-    // after switching sheets, editing, Undo/Redo, or changing protection.
-    const snapshotSheet = sheet;
-    const snapshotSelectionKey = `${selRect.r1}:${selRect.r2}:${selRect.c1}:${selRect.c2}`;
-    const r2 = Math.min(selRect.r2, sheet.rowCount - 1);
-    // The same worksheet, selection and source text as the preview, judged by
-    // what they hold: the sheet object is rebuilt by a save another window of
-    // the workbook makes, which used to refuse the confirmed write as stale
-    // (live audit S-186).
-    const commitAuthorityIsCurrent = () => {
-      const live = moveCopySheetLiveAuthorityRef.current;
-      const liveSelection = autoFitAuthorityRef.current;
-      if (
-        !dataDialogWriteAllowedRef.current ||
-        live?.pageId !== pageId ||
-        live.sheet.id !== snapshotSheet.id ||
-        live.workbook[live.activeSheetIndex]?.id !== snapshotSheet.id ||
-        liveSelection.sheet.id !== snapshotSheet.id ||
-        liveSelection.selectionKey !== snapshotSelectionKey
-      ) return false;
-      if (live.sheet === snapshotSheet) return true;
-      for (let row = selRect.r1; row <= r2; row += 1) {
-        const key = `${row}:${selRect.c1}`;
-        const before = snapshotSheet.cells[key];
-        const after = live.sheet.cells[key];
-        if ((before?.value ?? "") !== (after?.value ?? "") || (before?.formula ?? "") !== (after?.formula ?? "")) return false;
-      }
-      return true;
-    };
-    // The wizard closed for the replace prompt: it opens again to say why.
-    const rejectStaleCommit = () => {
-      setTextToColumnsStatus({
-        kind: "error",
-        text: t("spreadsheet.uiCopy.theWorksheetOrSelectionChangedRunTextToColumns"),
-      });
-      setTextToColumnsOpen(true);
-    };
-    const plan = textToColumnsRequest({
-      range: { r1: selRect.r1, r2, c1: selRect.c1, c2: selRect.c2 },
-      sourceCells: textToColumnsSourceCells(selRect.r1, r2, selRect.c1),
-      split:
-        textToColumnsMode === "fixedWidth"
-          ? { mode: "fixedWidth", breaks: normalizedTextToColumnsBreaks }
-          : {
-              mode: "delimited",
-              delimiters: resolvedTextToColumnsDelimiters,
-              qualifier: textToColumnsQualifier,
-              consecutive: textToColumnsConsecutive,
-            },
-      destination: parseCellRef(textToColumnsDestination.trim()),
-      columnFormats: textToColumnsColumnFormats,
-      dateOrders: textToColumnsColumnDateOrders,
-      fieldCount: textToColumnsPreview.width,
-      locale,
-      numberOptions: textToColumnsNumberOptions,
-      date1904: excelDateSystemArg(workbookDateSystemRef.current),
-      rangeHasLockedCell: (range) => rangeHasLockedCellRef.current(sheet, range),
-      valueAt: (row, col) => sheet.cells[`${row}:${col}`]?.value ?? "",
-    });
-    if (!plan.ok) {
-      if (plan.error === "locked") {
-        showProtectNotice();
-        return;
-      }
-      if (plan.error === "no-split" && textToColumnsReenterRef.current()) return;
-      const messages = {
-        "single-column": "spreadsheet.textToColumnsSingleColumn",
-        "bad-destination": "spreadsheet.textToColumnsBadDestination",
-        "number-separators": "spreadsheet.uiCopy.theDecimalAndThousandsSeparatorsMustBeDifferent",
-        "bad-breaks": "spreadsheet.textToColumnsBadBreaks",
-        "bad-delimiter": "spreadsheet.textToColumnsBadDelimiter",
-        "no-split": "spreadsheet.textToColumnsNoSplit",
-        "all-skipped": "spreadsheet.textToColumnsAllSkipped",
-        "out-of-bounds": "spreadsheet.textToColumnsOutOfBounds",
-      } as const;
-      setTextToColumnsStatus({ kind: "error", text: t(messages[plan.error]) });
-      return;
-    }
-    const { occupied, request } = plan;
-    // The confirm-gated tail: paste the fan-out grid. Runs either directly
-    // (no non-empty target to clobber) or from the overwrite dialog's
-    // onConfirm (user chose to proceed); cancel just does nothing.
-    const commit = () => {
-      if (!commitAuthorityIsCurrent()) {
-        rejectStaleCommit();
-        return;
-      }
-      const committed = pasteGridIntoCells(
-        request.baseRow,
-        request.baseCol,
-        request.rows,
-        undefined,
-        undefined,
-        undefined,
-        request.options,
-      );
-      if (!committed) return;
-      // Excel's wizard closes on Finish and leaves the sheet focused, as
-      // Remove Duplicates does; the outcome goes to a toast.
-      textToColumnsReturnToGridRef.current = true;
-      setTextToColumnsOpen(false);
-      setTextToColumnsStatus(null);
-      toast({
-        description: t("spreadsheet.textToColumnsDone", {
-          columns: plan.width,
-        }),
-      });
-    };
-    if (occupied) {
-      // The dialog closes before the replace prompt opens, as the delimited
-      // import preview does: the prompt never stacks over a second modal.
-      setTextToColumnsOpen(false);
-      setTextToColumnsStatus(null);
-      setOverwriteConfirm({
-        title: t("spreadsheet.textToColumnsOverwriteConfirm"),
-        onConfirm: commit,
-      });
-      return;
-    }
-    commit();
-  }, [
-    locale,
-    pageId,
-    pasteGridIntoCells,
-    resolvedTextToColumnsDelimiters,
-    selRect.r1,
-    selRect.r2,
-    selRect.c1,
-    selRect.c2,
-    sheet,
-    showProtectNotice,
-    t,
-    textToColumnsColumnDateOrders,
-    textToColumnsColumnFormats,
-    textToColumnsConsecutive,
-    textToColumnsDestination,
-    textToColumnsMode,
-    textToColumnsNumberOptions,
-    textToColumnsPreview.width,
-    textToColumnsQualifier,
-    normalizedTextToColumnsBreaks,
-  ]);
-
-  // Data > Subtotal (Excel/WPS): over the selected data region, insert a SUBTOTAL
-  // summary row after each run of equal grouping-column values plus a grand total
-  // at the bottom, and build the outline grouping so each block collapses under
-  // its summary. The pure planSubtotals helper computes the rebuilt matrix +
-  // groups from the region's DISPLAY values; here we write the rebuilt region
-  // back (growing the sheet) and set the outline groups in ONE replaceActiveSheet
-  // so undo/redo + autosave cover it as a single step. Declared late (after
-  // cellDisplayValue + the mutation path) like the other data-tool handlers.
-  const runSubtotal = useCallback(() => {
-    // The summary rows, their SUBTOTAL formulas and the outline in one
-    // transaction (data-tool-buttons). The "{group}" token is a literal the
-    // helper substitutes (NOT a next-intl ICU placeholder), so the translated
-    // suffix is appended to each group's value: "East" + " Total".
-    const outcome = subtotaledSheet(
-      sheet,
-      {
-        range: listSourceRange,
-        hasHeader: subtotalHasHeader,
-        groupColumn: subtotalGroupCol,
-        valueColumns: subtotalValueCols,
-        fn: subtotalFunction,
-        labelTemplate: `{group} ${t("spreadsheet.subtotalRowSuffix")}`,
-        grandTotalLabel: t("spreadsheet.subtotalGrandTotalLabel"),
-        ...subtotalOptions,
-      },
-      {
-        display: (cell, row, col) => cellDisplayValue(cell, row, col, false),
-        rangeHasLockedCell: (candidate, range) =>
-          rangeHasLockedCellRef.current(candidate, range),
-        maxRows: MAX_SHEET_ROWS,
-      },
-    );
-    if (outcome === "protected") {
-      showProtectNotice();
-      return;
-    }
-    if (typeof outcome === "string") {
-      setSubtotalStatus({
-        kind: "error",
-        text:
-          outcome === "needColumns"
-            ? t("spreadsheet.subtotalNeedColumns")
-            : outcome === "noData"
-              ? t("spreadsheet.subtotalNoData")
-              : t("spreadsheet.subtotalTooManyRows"),
-      });
-      return;
-    }
-    replaceActiveSheet(outcome.sheet);
-    setSubtotalStatus({
-      kind: "success",
-      text: t("spreadsheet.subtotalDone", { count: outcome.inserted }),
-    });
-    setSubtotalOpen(false);
-  }, [
-    subtotalGroupCol,
-    subtotalHasHeader,
-    subtotalValueCols,
-    subtotalFunction,
-    subtotalOptions,
-    listSourceRange,
-    sheet,
-    cellDisplayValue,
-    replaceActiveSheet,
-    showProtectNotice,
-    t,
-  ]);
-
-  // Subtotal's "Remove All" (XLS-A064): the list's SUBTOTAL rows, its row
-  // outline and the page breaks between its groups go. From one cell the list
-  // is the current region around it, as Excel finds it.
-  const removeAllSubtotals = useCallback(() => {
-    const single = selRect.r1 === selRect.r2 && selRect.c1 === selRect.c2;
-    const range = single
-      ? currentRegionAt(
-          sheet.cells,
-          selRect.r1,
-          selRect.c1,
-          sheet.rowCount,
-          sheet.columnCount,
-          mergeSpans,
-        )
-      : selRect;
-    const outcome = removeSubtotalsSheet(sheet, range, {
-      rangeHasLockedCell: (candidate, area) =>
-        rangeHasLockedCellRef.current(candidate, area),
-    });
-    if (outcome === "protected" || outcome === "blocked") {
-      showProtectNotice();
-      return;
-    }
-    if (outcome === "none") {
-      setSubtotalStatus({
-        kind: "error",
-        text: t("spreadsheet.subtotalNothingToRemove"),
-      });
-      return;
-    }
-    replaceActiveSheet(outcome.sheet, undefined, "coordinate");
-    setSubtotalStatus(null);
-    setSubtotalOpen(false);
-    toast({
-      description: t("spreadsheet.subtotalRemoved", { count: outcome.removed }),
-    });
-  }, [mergeSpans, replaceActiveSheet, selRect, sheet, showProtectNotice, t]);
-
-  // Run a one-variable What-If Data Table. The input values are the selected
-  // column's rows; for each, the column-input cell is overridden, the sheet is
-  // recomputed (reusing the same evaluator Goal Seek uses), and the formula cell's
-  // numeric result is written to the column immediately to the right. Results are
-  // static computed values (a what-if snapshot), written through the shared paste
-  // path (undo + autosave + sheet-protection). Declared after pasteGridIntoCells
-  // because it writes through that shared path.
-  const runWhatIfTable = useCallback(async () => {
-    // The overwrite confirmation is asynchronous. Authenticate its eventual
-    // write against the exact worksheet + selection that produced the result;
-    // otherwise a tab switch, edit, Undo/Redo, or protection change could let
-    // the captured paste callback stamp stale values into the then-active tab.
-    const snapshotSheet = sheet;
-    const snapshotSelectionKey = `${selRect.r1}:${selRect.r2}:${selRect.c1}:${selRect.c2}`;
-    const commitAuthorityIsCurrent = () => {
-      const live = moveCopySheetLiveAuthorityRef.current;
-      const liveSelection = autoFitAuthorityRef.current;
-      return (
-        live?.pageId === pageId &&
-        live.sheet === snapshotSheet &&
-        live.workbook[live.activeSheetIndex] === snapshotSheet &&
-        liveSelection.sheet === snapshotSheet &&
-        liveSelection.selectionKey === snapshotSelectionKey
-      );
-    };
-    // Only the overwrite prompt's deferred write can go stale, and the dialog
-    // has closed by then, so the refusal goes to a toast.
-    const rejectStaleCommit = () => {
-      toast({
-        variant: "destructive",
-        description: t(
-          "spreadsheet.uiCopy.theWorksheetOrSelectionChangedRunTheDataTable",
-        ),
-      });
-    };
-    // Excel's Data Table closes on OK once the table is written and leaves
-    // the sheet focused, as Text to Columns does; the count goes to a toast.
-    const finishDataTable = (filled: number) => {
-      whatIfReturnToGridRef.current = true;
-      setWhatIfOpen(false);
-      setWhatIfStatus(null);
-      toast({ description: t("spreadsheet.whatIfDone", { count: filled }) });
-    };
-    // The dialog closes before the overwrite prompt opens, so the prompt
-    // never stacks over a second modal (Text to Columns does the same).
-    const confirmOverwrite = (onConfirm: () => void) => {
-      setWhatIfOpen(false);
-      setWhatIfStatus(null);
-      setOverwriteConfirm({
-        title: t("spreadsheet.whatIfOverwriteConfirm"),
-        onConfirm,
-      });
-    };
-    // Either box may stay empty, not both; a box with text must name a cell
-    // (Excel: "Input cell reference is not valid.").
-    const rowText = whatIfRowInputCell.trim();
-    const columnText = whatIfInputCell.trim();
-    if (rowText === "" && columnText === "") {
-      setWhatIfStatus({ kind: "error", text: t("spreadsheet.uiCopy.dataTableNeedInputCell") });
-      return;
-    }
-    const inputRef = columnText === "" ? null : parseCellRef(columnText);
-    const rowInputRef = rowText === "" ? null : parseCellRef(rowText);
-    // An input cell lies outside the table: not among its results nor its
-    // row and column of values (MS-XLS Table), else it would feed itself.
-    const insideTable = (cell: { row: number; col: number } | null) =>
-      cell !== null &&
-      cell.row >= selRect.r1 && cell.row <= selRect.r2 &&
-      cell.col >= selRect.c1 && cell.col <= selRect.c2;
-    if (
-      (columnText !== "" && !inputRef) || (rowText !== "" && !rowInputRef) ||
-      insideTable(inputRef) || insideTable(rowInputRef)
-    ) {
-      setWhatIfStatus({ kind: "error", text: t("spreadsheet.uiCopy.dataTableInvalidInputCell") });
-      return;
-    }
-    // The inputs, probes and results are the shared plan
-    // (lib/spreadsheet/what-if-buttons); a non-empty cell asks first. The
-    // calculation session probes (never here).
-    const tableRequest = { ...(inputRef ? { columnInput: inputRef } : {}), ...(rowInputRef ? { rowInput: rowInputRef } : {}) };
-    const plan = await sessionWhatIf({ kind: "data-table", sheetId: sheet.id, selection: selRect, ...tableRequest }) as ReturnType<typeof dataTablePlan> | null;
-    if (!plan) {
-      setWhatIfStatus({ kind: "error", text: t("spreadsheet.calculationStale.command") });
-      return;
-    }
-    if (!plan.ok) {
-      const messages = {
-        "not-formula": "spreadsheet.uiCopy.dataTableNoFormula",
-        "two-way-too-small": "spreadsheet.whatIfTwoWayTooSmall",
-        "no-inputs": "spreadsheet.uiCopy.dataTableNoInputs",
-        "no-input-cell": "spreadsheet.uiCopy.dataTableNeedInputCell",
-        "no-results": "spreadsheet.whatIfNoResults",
-        "no-room": "spreadsheet.whatIfNoRoom",
-      } as const;
-      setWhatIfStatus({ kind: "error", text: t(messages[plan.error]) });
-      return;
-    }
-    // Confirm-gated tail: write the result grid. Runs directly when nothing
-    // non-empty would be clobbered, else from the overwrite dialog's
-    // onConfirm (cancel does nothing — same as the old confirm gate).
-    const commit = () => {
-      if (!commitAuthorityIsCurrent()) {
-        rejectStaleCommit();
-        return;
-      }
-      // The results stay live (Excel's {=TABLE(row,col)}): the table's
-      // definition lands with its first values, one undo step, and every
-      // calculation recomputes them (what-if-table-definition). A table it
-      // writes over whole is replaced.
-      const definition = {
-        ref: whatIfTableRef({
-          r1: plan.baseRow,
-          c1: plan.baseCol,
-          r2: plan.baseRow + plan.grid.length - 1,
-          c2: plan.baseCol + Math.max(1, ...plan.grid.map((line) => line.length)) - 1,
-        }),
-        ...(rowInputRef ? { rowInput: `${columnToLetters(rowInputRef.col)}${rowInputRef.row + 1}` } : {}),
-        ...(inputRef ? { colInput: `${columnToLetters(inputRef.col)}${inputRef.row + 1}` } : {}),
-      };
-      const committed = pasteGridIntoCells(
-        plan.baseRow, plan.baseCol, plan.grid, undefined, undefined, undefined, {},
-        (pasted) => {
-          const tables = normalizeWhatIfTables([...(pasted.whatIfTables ?? []), definition], {
-            rowCount: pasted.rowCount, columnCount: pasted.columnCount,
-          });
-          return tables.length > 0 ? { ...pasted, whatIfTables: tables } : pasted;
-        },
-      );
-      if (!committed) return;
-      finishDataTable(plan.filled);
-    };
-    if (plan.occupied) {
-      confirmOverwrite(commit);
-      return;
-    }
-    commit();
-  }, [
-    whatIfInputCell,
-    whatIfRowInputCell,
-    sessionWhatIf,
-    selRect,
-    sheet,
-    pasteGridIntoCells,
-    locale,
-    pageId,
-    t,
-  ]);
 
   // Filled once writeOpenEntryText is declared (below): an open entry's paste
   // of several lines writes through it (S-161).
@@ -48719,7 +43336,7 @@ function SpreadsheetWindow({
       // does that over the pasted column, which it selects first.
       setPasteOptionsOffer(null);
       setSelectionAnchor({ row: offer.bottom, col: offer.col });
-      if (!textToColumnsOpen) toggleTextToColumns();
+      toggleTextToColumns();
       return;
     }
     replaySmartTag(offer.committed, (base) => ({
@@ -50850,14 +45467,6 @@ function SpreadsheetWindow({
     selRect.c2,
   );
   const homeLineFormatBlockedReason = t("spreadsheet.protectionBlocked");
-
-  const validationDialogTabs = [
-    { id: "settings", label: t("dashboard.calendar.kind.settings") },
-    { id: "input", label: t("spreadsheet.uiCopy.inputMessage") },
-    { id: "error", label: t("spreadsheet.uiCopy.errorAlert") },
-    { id: "ime", label: t("spreadsheet.uiCopy.iMEMode") },
-  ] as const;
-  const validationImeUnavailableReason = t("spreadsheet.uiCopy.thisWebEditorHasNoVerifiedPersistableWorksheetIME");
   const webDataReviewViewLabels = {
     getTransform: t("spreadsheet.localCopy.dataReviewView.getTransform"),
     getData: t("spreadsheet.localCopy.dataReviewView.getData"),
@@ -51929,52 +46538,6 @@ function SpreadsheetWindow({
     setQuickActionsOpen(false);
     setSeriesDialogOpen(true);
   };
-  const openDataValidationDialogFromAuthority = (): boolean => {
-    if (validationDialogOpen) {
-      closeValidationDialog();
-      return true;
-    }
-    const selection = readPageSetupSelectionSnapshot();
-    const liveWorkbook = liveSheetsRef.current;
-    const liveIndex = liveActiveSheetIndexRef.current;
-    const liveSheet = liveWorkbook[liveIndex];
-    if (
-      !selection ||
-      liveWorkbook !== sheets ||
-      liveIndex !== activeSheetIndex ||
-      liveSheet !== sheet ||
-      typeof liveSheet.id !== "string" ||
-      liveSheet.id.length === 0
-    ) {
-      return false;
-    }
-    dataValidationDialogAuthorityRef.current = {
-      controlId: "XLSCTL.DATA.VALIDATION.MRAI.APPLY",
-      workbook: liveWorkbook,
-      activeSheetIndex: liveIndex,
-      sheet: liveSheet,
-      sheetId: liveSheet.id,
-      selection,
-    };
-    const openedRule = ruleForCell(
-      normalizeRules(liveSheet.validations),
-      selection.active.row,
-      selection.active.col,
-    );
-    // The Data Validation card renders at window level, so it needs neither
-    // Home nor the quick-actions flyout: the ribbon stays on the tab the
-    // command was given from, as Excel's does (Microsoft Support, "Show or
-    // hide the ribbon in Office"), and the flyout — a native popover, in the
-    // browser's top layer — shuts so it never floats over the modal dim.
-    loadValidationDialogDraft(openedRule, selection.range);
-    setQuickActionsOpen(false);
-    setValidationSourcePicking(null);
-    setValidationClearPending(false);
-    setValidationDialogTab("settings");
-    setValidationDialogOpen(true);
-    setValidationError(null);
-    return true;
-  };
   // Source's Collapse Dialog (Excel's RefEdit): the dialog shrinks to the
   // Source box while a range is selected on the sheet, then expands with the
   // dialog's own selection put back, so OK still applies to the cells it
@@ -51999,22 +46562,6 @@ function SpreadsheetWindow({
     setActiveCell({ row: authority.row, col: authority.col });
     setSelectionAnchor({ row: authority.row, col: authority.col });
   };
-  const startValidationSourcePick = () => {
-    const authority = dataValidationDialogAuthorityRef.current;
-    if (!authority) return;
-    validationSourcePickOriginRef.current = authority.selection;
-    validationSourcePickReboundRef.current = null;
-    setValidationSourcePicking({ ...authority.selection.range });
-  };
-  const finishValidationSourcePick = () => {
-    const origin = validationSourcePickOriginRef.current;
-    validationSourcePickOriginRef.current = null;
-    setValidationSourcePicking(null);
-    if (!origin) return;
-    validationSourcePickReboundRef.current = origin;
-    setActiveCell(origin.active);
-    setSelectionAnchor(origin.anchor ?? origin.active);
-  };
   // The dialog's selection, put back, is written more than once while the
   // dialog comes back (its focus lands, the grid answers): each write is a new
   // epoch of the same cells, and binding only the first left OK disabled for
@@ -52023,7 +46570,7 @@ function SpreadsheetWindow({
   useLayoutEffect(() => {
     const origin = validationSourcePickReboundRef.current;
     if (!origin) return;
-    if (!validationDialogOpen) {
+    {
       validationSourcePickReboundRef.current = null;
       return;
     }
@@ -52249,115 +46796,25 @@ function SpreadsheetWindow({
       : activeNamedSheetView
         ? "named"
         : "default";
-  const currentSheetViewLabel = sheetViewMode === "temporary"
-    ? webDataReviewViewLabels.temporaryView
-    : activeNamedSheetView?.name ?? webDataReviewViewLabels.defaultView;
-  // The Sheet View box is typed into directly, as on Excel for the web: Enter
-  // keeps a temporary view under the typed name or renames the active named
-  // one; Escape and leaving the box put the current name back. `null` means
-  // the box shows the live name; a string is an unsent draft.
-  const [sheetViewNameDraft, setSheetViewNameDraft] = useState<string | null>(
-    null,
-  );
-  const [sheetViewNameError, setSheetViewNameError] = useState<
-    "invalid" | "duplicate" | "blocked" | null
-  >(null);
-  const resetSheetViewNameBox = () => {
-    setSheetViewNameDraft(null);
-    setSheetViewNameError(null);
-  };
   const sheetViewNameDraftPending =
     false;
-  const submitSheetViewNameBox = (): boolean => {
-    const typed = null;
-    if (typed === null) return false;
-    // Unchanged name: nothing to write, just leave edit mode.
-    if (sheetViewMode === "named" && typed === currentSheetViewLabel) {
-      resetSheetViewNameBox();
-      return true;
-    }
-    const result = commitSheetViewName(
-      sheetViewMode === "temporary"
-        ? { mode: "keep", name: typed }
-        : {
-            mode: "options",
-            selectedId: activeNamedSheetView?.id ?? "",
-            name: typed,
-          },
-    );
-    if (result.ok) resetSheetViewNameBox();
-    else setSheetViewNameError(result.error);
-    return result.ok;
-  };
-  // View > Sheet View > Keep, as Excel has it: a temporary view is kept at once
-  // under the next free default name ("View1"), and renamed in the box
-  // afterwards. A name already typed into the box wins, exactly as Enter does.
-  const keepSheetViewFromRibbon = (): boolean => {
-    if (sheetViewMode !== "temporary" || sheetViewNameDraftPending) {
-      return submitSheetViewNameBox();
-    }
-    const result = commitSheetViewName({
-      mode: "keep",
-      name: nextDefaultNamedSheetViewName(
-        sheet.namedSheetViews ?? [],
-        (index) => t("spreadsheet.view.defaultSheetViewName", { index }),
-      ),
-    });
-    if (result.ok) resetSheetViewNameBox();
-    else setSheetViewNameError(result.error);
-    return result.ok;
-  };
   const sheetViewNativeAuthoringBlocker =
     sheetViewAuthoringBlocker(sheet) ??
     ((sheet.namedSheetViews ?? []).some((view) => Boolean(view.nativeBlocker))
       ? "native"
       : null);
-  const dataValidationDialogReceiptIsCurrent = (): boolean => {
-    const authority = dataValidationDialogAuthorityRef.current;
-    const liveSelection = readPageSetupSelectionSnapshot();
-    const liveWorkbook = liveSheetsRef.current;
-    const liveIndex = liveActiveSheetIndexRef.current;
-    const liveSheet = liveWorkbook[liveIndex];
-    return Boolean(
-      authority &&
-        liveSelection &&
-        liveSheet &&
-        spreadsheetDataValidationWriterReceiptMatches({
-          expectedControlId: "XLSCTL.DATA.VALIDATION.MRAI.APPLY",
-          receiptControlId: authority.controlId,
-          sourceWorkbook: authority.workbook,
-          sourceActiveSheetIndex: authority.activeSheetIndex,
-          sourceSheet: authority.sheet,
-          sourceSheetId: authority.sheetId,
-          sourceSelectionEpoch: authority.selection.epoch,
-          sourceRange: authority.selection.range,
-          liveWorkbook,
-          liveActiveSheetIndex: liveIndex,
-          liveSheet,
-          liveSheetId: liveSheet.id,
-          liveSelectionEpoch: liveSelection.epoch,
-          liveRange: liveSelection.range,
-        }) &&
-        !isSheetProtectionEffectiveRef.current(liveSheet) &&
-        !rangeHasLockedCellRef.current(liveSheet, liveSelection.range),
-    );
-  };
   const dataValidationDialogAuthorityCurrent =
-    validationDialogOpen && dataValidationDialogReceiptIsCurrent();
+    false;
   const dataValidationApplyAvailable =
     dataValidationDialogAuthorityCurrent &&
-    (validationClearPending
-      ? selectionHasValidation &&
-        (spreadsheetNativeWriteRoute !== "patchback" ||
-          selectedValidationRulesPatchbackReady)
-      : spreadsheetNativeWriteRoute !== "patchback" ||
+    (spreadsheetNativeWriteRoute !== "patchback" ||
         (selectedValidationRulesPatchbackReady &&
           validationDraftRule !== null &&
           spreadsheetDataValidationPatchbackRuleSupported(validationDraftRule)));
   const dataValidationClearDraftAvailable =
     dataValidationDialogAuthorityCurrent &&
     selectionHasValidation &&
-    !validationClearPending;
+    true;
   const activeTableStyleEditable = Boolean(
     activeTable &&
       activeTableSource &&
@@ -52525,109 +46982,8 @@ function SpreadsheetWindow({
               "workspace_ai_egress_workload_denied"
           ? "spreadsheet.capability.workspaceAiEgressPolicyUnavailable"
           : "spreadsheet.capability.workspaceAiProviderUnavailable";
-  const openDataFromPicture = (): boolean => {
-    const source = dataFromPictureLaunchSourceRef.current;
-    dataFromPictureLaunchSourceRef.current = null;
-    const liveWorkbook = liveSheetsRef.current;
-    const liveIndex = liveActiveSheetIndexRef.current;
-    const liveSheet = liveWorkbook[liveIndex] ?? null;
-    const selection = readPageSetupSelectionSnapshot();
-    const pageAuthority = reviewCommentPageAuthorityRef.current;
-    if (
-      !source ||
-      !dataFromPictureCapability.available ||
-      // The page authority also lets an embed comment session comment on
-      // a read-only page; only a writable page takes a picture's data.
-      !pageAuthority?.allowed ||
-      pageAuthority.readOnly ||
-      !selection ||
-      !liveSheet ||
-      isSheetProtectionEffectiveRef.current(liveSheet) ||
-      rangeHasLockedCellRef.current(liveSheet, selection.range)
-    ) {
-      return false;
-    }
-    setDataFromPictureDialogAuthority({
-      source,
-      workbook: liveWorkbook,
-      activeSheetIndex: liveIndex,
-      sheet: liveSheet,
-      sheetId: liveSheet.id,
-      selection,
-      pageAuthorityGeneration: pageAuthority.generation,
-      capability: dataFromPictureCapability,
-    });
-    return true;
-  };
-  const commitDataFromPicture = (
-    rows: readonly (readonly string[])[],
-    result: SpreadsheetDataFromPictureResult,
-  ): boolean => {
-    const authority = dataFromPictureDialogAuthority;
-    const liveWorkbook = liveSheetsRef.current;
-    const liveIndex = liveActiveSheetIndexRef.current;
-    const liveSheet = liveWorkbook[liveIndex] ?? null;
-    const liveSelection = readPageSetupSelectionSnapshot();
-    const livePageAuthority = reviewCommentPageAuthorityRef.current;
-    const columnCount = rows[0]?.length ?? 0;
-    const rectangular =
-      rows.length > 0 &&
-      columnCount > 0 &&
-      rows.length <= 200 &&
-      columnCount <= 100 &&
-      rows.length * columnCount <= 10_000 &&
-      rows.every((row) => row.length === columnCount);
-    if (
-      !authority ||
-      !rectangular ||
-      !liveSheet ||
-      !liveSelection ||
-      authority.workbook !== liveWorkbook ||
-      authority.activeSheetIndex !== liveIndex ||
-      authority.sheet !== liveSheet ||
-      authority.sheetId !== liveSheet.id ||
-      authority.capability !== dataFromPictureCapability ||
-      authority.source !== result.source ||
-      authority.capability.policyVersion !== result.policyVersion ||
-      authority.capability.policyMarkerSha256 !==
-        result.policyMarkerSha256 ||
-      !livePageAuthority?.allowed ||
-      livePageAuthority.generation !== authority.pageAuthorityGeneration ||
-      liveSelection.epoch !== authority.selection.epoch ||
-      liveSelection.active.row !== authority.selection.active.row ||
-      liveSelection.active.col !== authority.selection.active.col ||
-      liveSelection.range.r1 !== authority.selection.range.r1 ||
-      liveSelection.range.r2 !== authority.selection.range.r2 ||
-      liveSelection.range.c1 !== authority.selection.range.c1 ||
-      liveSelection.range.c2 !== authority.selection.range.c2
-    ) {
-      return false;
-    }
-    const target = {
-      r1: liveSelection.active.row,
-      c1: liveSelection.active.col,
-      r2: liveSelection.active.row + rows.length - 1,
-      c2: liveSelection.active.col + columnCount - 1,
-    };
-    if (
-      target.r2 >= MAX_GRID_ROWS ||
-      target.c2 >= MAX_GRID_COLUMNS ||
-      rangeHasLockedCellRef.current(liveSheet, target)
-    ) {
-      return false;
-    }
-    const values = rows.map((row) =>
-      row.map((value) => (value.startsWith("=") ? `'${value}` : value)),
-    );
-    const committed = pasteGridIntoCells(target.r1, target.c1, values);
-    if (committed) setDataFromPictureDialogAuthority(null);
-    return committed;
-  };
   const workbookProtectionDialogCurrent = Boolean(
-    workbookProtectionDialogAuthority &&
-      workbookProtectionDialogAuthority.workbook === liveSheetsRef.current &&
-      workbookProtectionDialogAuthority.sourceProtection ===
-        workbookStructureProtectionRef.current,
+    null,
   );
   const workbookProtectionVerifier = workbookProtectionActive(workbookStructureProtection)
     ? workbookStructureProtectionPassword(workbookStructureProtection)
@@ -52980,7 +47336,7 @@ function SpreadsheetWindow({
     dataFormRestoreAvailable:
       dataFormOpenAvailable &&
       dataFormDraft.length > 0 &&
-      dataFormCriteria === null,
+      true,
     dataFormDeleteAvailable,
     dataFormDeleteApplyAvailable,
     dataValidationApplyAvailable,
@@ -56879,68 +51235,6 @@ function SpreadsheetWindow({
       pivotChartCreateCommandRef.current = null;
     }
   };
-  const openWorkbookProtectionDialog = (): boolean => {
-    const liveWorkbook = liveSheetsRef.current;
-    const sourceProtection = workbookStructureProtectionRef.current;
-    if (
-      liveWorkbook !== sheets ||
-      sourceProtection !== workbookStructureProtection
-    ) {
-      return false;
-    }
-    workbookProtectionMutationCommandRef.current = null;
-    setWorkbookProtectionPasswordDraft("");
-    setWorkbookProtectionConfirmDraft(null);
-    setWorkbookProtectionStructure(true);
-    setWorkbookProtectionError(null);
-    setWorkbookProtectionDialogAuthority({
-      workbook: liveWorkbook,
-      sourceProtection,
-    });
-    return true;
-  };
-  const executeWorkbookProtectionReceiptWriter = (): boolean => {
-    const receipt = workbookProtectionMutationCommandRef.current;
-    try {
-      const liveWorkbook = liveSheetsRef.current;
-      const liveProtection = workbookStructureProtectionRef.current;
-      const liveIndex = liveActiveSheetIndexRef.current;
-      const liveSheet = liveWorkbook[liveIndex];
-      if (
-        !receipt ||
-        receipt.controlId !==
-          "XLSCTL.REVIEW.PROTECT.WORKBOOK.MRAI.APPLY" ||
-        receipt.workbook !== liveWorkbook ||
-        receipt.sourceProtection !== liveProtection ||
-        !liveSheet ||
-        liveProtection?.nativeBlocker ||
-        workbookProtectionActive(liveProtection) ===
-          workbookProtectionActive(receipt.nextProtection)
-      ) {
-        return false;
-      }
-      pushUndoHistory({
-        sheets: liveWorkbook,
-        workbookStructureProtection: liveProtection ?? null,
-      }, { sheets: liveWorkbook, workbookStructureProtection: receipt.nextProtection ?? null });
-      writeWorkbookStructureProtection(receipt.nextProtection);
-      autosave.queueSave({
-        title,
-        content_json: buildPersistedContent(
-          liveWorkbook,
-          referenceStyle,
-          viewOptions,
-          liveSheet.id,
-          dataSourceInventoryState.inventory,
-          calcState.mode,
-          receipt.nextProtection ?? null,
-        ),
-      });
-      return true;
-    } finally {
-      workbookProtectionMutationCommandRef.current = null;
-    }
-  };
   const executeSparklineBooleanOption = (
     controlId: SparklineDesignWriterControlId,
     field: keyof Sparkline,
@@ -58790,301 +53084,71 @@ function SpreadsheetWindow({
       setCondError(null);
       setCondDialog({ kind: "newRule" });
     },
-    "spreadsheet.pageLayout.applyMarginPreset": () => {
-      const receipt = pageSetupMutationCommandRef.current;
-      try {
-        if (
-          receipt?.controlId !== "XLSCTL.PAGE_LAYOUT.MARGINS.APPLY" ||
-          !receipt.preset
-        ) {
-          return false;
-        }
-        return commitPageMarginPreset(receipt.preset, receipt);
-      } finally {
-        pageSetupMutationCommandRef.current = null;
-      }
-    },
+    "spreadsheet.pageLayout.applyMarginPreset": () => false,
     // Excel "Add to Print Area": the selection joins the existing print area
     // as a further area, printed on its own page, in one print-settings write.
-    "spreadsheet.pageLayout.addToPrintArea": () => {
-      const receipt = pageSetupMutationCommandRef.current;
-      try {
-        const range = receipt?.range;
-        const liveSelection = readPageSetupSelectionSnapshot();
-        const liveSheet = receipt
-          ? resolveLivePageSetupSheet(true, receipt)
-          : null;
-        const liveRange = liveSelection
-          ? spreadsheetRangeA1(liveSelection.range)
-          : null;
-        if (
-          !receipt ||
-          receipt.controlId !== "XLSCTL.PAGE_LAYOUT.PRINT_AREA.ADD" ||
-          typeof range !== "string" ||
-          !liveSelection ||
-          !liveSheet ||
-          receipt.sheetId !== liveSheet.id ||
-          !spreadsheetPageSetupWriterReceiptMatches({
-            expectedControlId: "XLSCTL.PAGE_LAYOUT.PRINT_AREA.ADD",
-            receiptControlId: receipt.controlId,
-            sourceWorkbook: receipt.workbook,
-            sourceActiveSheetIndex: receipt.activeSheetIndex,
-            sourceSheet: receipt.sheet,
-            sourceSheetId: receipt.sheetId,
-            liveWorkbook: liveSheetsRef.current,
-            liveActiveSheetIndex: liveActiveSheetIndexRef.current,
-            liveSheet,
-            liveSheetId: liveSheet.id,
-            receiptSelectionEpoch: receipt.selectionEpoch,
-            liveSelectionEpoch: liveSelection.epoch,
-            receiptRange: range,
-            liveRange,
-          })
-        ) {
-          return false;
-        }
-        const current = normalizePrintSettings(liveSheet.printSettings)?.printArea;
-        if (!current) return false;
-        return commitPageSetupPrintArea(addPrintAreaRange(current, range) ?? null, receipt);
-      } finally {
-        pageSetupMutationCommandRef.current = null;
-      }
-    },
+    "spreadsheet.pageLayout.addToPrintArea": () => false,
     "spreadsheet.pageLayout.applyPageSetup": applyPageSetup,
     "spreadsheet.pageLayout.clearPageSetup": clearPageSetup,
-    "spreadsheet.pageLayout.clearPrintArea": () => {
-      const receipt = pageSetupMutationCommandRef.current;
-      try {
-        if (
-          receipt?.controlId !== "XLSCTL.PAGE_LAYOUT.PRINT_AREA.CLEAR"
-        ) {
-          return false;
-        }
-        return commitPageSetupPrintArea(null, receipt);
-      } finally {
-        pageSetupMutationCommandRef.current = null;
-      }
-    },
-    "spreadsheet.pageLayout.insertPageBreak": insertPageBreakAtSelection,
-    "spreadsheet.pageLayout.openCustomMargins": () =>
-      openPageSetupField(
-        "customMargins",
-        "spreadsheet-ribbon-page-layout-margins",
-      ),
-    "spreadsheet.pageLayout.openOrientation": () =>
-      openPageSetupField(
-        "orientation",
-        "spreadsheet-ribbon-page-layout-orientation",
-      ),
+    "spreadsheet.pageLayout.clearPrintArea": () => false,
+    "spreadsheet.pageLayout.insertPageBreak": () => false,
+    "spreadsheet.pageLayout.openCustomMargins": () => false,
+    "spreadsheet.pageLayout.openOrientation": () => false,
     "spreadsheet.pageLayout.openPageSetup": togglePageSetup,
-    "spreadsheet.pageLayout.openPaperSize": () =>
-      openPageSetupField("size", "spreadsheet-ribbon-page-layout-size"),
-    "spreadsheet.pageLayout.openPrintArea": () =>
-      openPageSetupField(
-        "printArea",
-        "spreadsheet-ribbon-page-layout-print-area",
-      ),
-    "spreadsheet.pageLayout.openPrintTitles": () =>
-      openPageSetupField(
-        "repeatRows",
-        "spreadsheet-ribbon-page-layout-print-titles",
-      ),
-    "spreadsheet.pageLayout.openScaleHeight": () =>
-      openPageSetupField(
-        "scalingHeight",
-        "spreadsheet-ribbon-page-layout-scale-height",
-      ),
-    "spreadsheet.pageLayout.openScaleSettings": () =>
-      openPageSetupField(
-        "scalingKind",
-        "spreadsheet-ribbon-page-layout-scale-to-fit-settings",
-      ),
-    "spreadsheet.pageLayout.openScaleWidth": () =>
-      openPageSetupField(
-        "scalingWidth",
-        "spreadsheet-ribbon-page-layout-scale-width",
-      ),
-    "spreadsheet.pageLayout.removePageBreak": removePageBreakAtSelection,
-    "spreadsheet.pageLayout.resetPageBreaks": resetManualPageBreaks,
-    "spreadsheet.pageLayout.setPrintArea": () => {
-      const receipt = pageSetupMutationCommandRef.current;
-      try {
-        const printArea = receipt?.range;
-        const liveSelection = readPageSetupSelectionSnapshot();
-        const liveSheet = receipt
-          ? resolveLivePageSetupSheet(true, receipt)
-          : null;
-        const liveRange = liveSelection
-          ? spreadsheetRangeA1(liveSelection.range)
-          : null;
-        if (
-          !receipt ||
-          receipt.controlId !== "XLSCTL.PAGE_LAYOUT.PRINT_AREA.SET" ||
-          typeof printArea !== "string" ||
-          !liveSelection ||
-          !liveSheet ||
-          receipt.sheetId !== liveSheet.id ||
-          !spreadsheetPageSetupWriterReceiptMatches({
-            expectedControlId: "XLSCTL.PAGE_LAYOUT.PRINT_AREA.SET",
-            receiptControlId: receipt.controlId,
-            sourceWorkbook: receipt.workbook,
-            sourceActiveSheetIndex: receipt.activeSheetIndex,
-            sourceSheet: receipt.sheet,
-            sourceSheetId: receipt.sheetId,
-            liveWorkbook: liveSheetsRef.current,
-            liveActiveSheetIndex: liveActiveSheetIndexRef.current,
-            liveSheet,
-            liveSheetId: liveSheet.id,
-            receiptSelectionEpoch: receipt.selectionEpoch,
-            liveSelectionEpoch: liveSelection.epoch,
-            receiptRange: printArea,
-            liveRange,
-          })
-        ) {
-          return false;
-        }
-        return commitPageSetupPrintArea(printArea, receipt);
-      } finally {
-        pageSetupMutationCommandRef.current = null;
-      }
-    },
-    "spreadsheet.pageLayout.togglePageBreakPreview": () => {
-      setSpreadsheetViewMode((mode) =>
-        mode === "pageBreakPreview" ? "normal" : "pageBreakPreview",
-      );
-      return true;
-    },
-    "spreadsheet.pageLayout.togglePrintHeadings": togglePrintHeadings,
-    "spreadsheet.pageLayout.togglePrintGridlines": togglePrintGridlines,
+    "spreadsheet.pageLayout.openPaperSize": () => false,
+    "spreadsheet.pageLayout.openPrintArea": () => false,
+    "spreadsheet.pageLayout.openPrintTitles": () => false,
+    "spreadsheet.pageLayout.openScaleHeight": () => false,
+    "spreadsheet.pageLayout.openScaleSettings": () => false,
+    "spreadsheet.pageLayout.openScaleWidth": () => false,
+    "spreadsheet.pageLayout.removePageBreak": () => false,
+    "spreadsheet.pageLayout.resetPageBreaks": () => false,
+    "spreadsheet.pageLayout.setPrintArea": () => false,
+    "spreadsheet.pageLayout.togglePageBreakPreview": () => false,
+    "spreadsheet.pageLayout.togglePrintHeadings": () => false,
+    "spreadsheet.pageLayout.togglePrintGridlines": () => false,
     "spreadsheet.data.clearFilters": clearAllFilters,
     "spreadsheet.data.flashFill": runFlashFill,
-    "spreadsheet.data.openDataForm": () => {
-      openDataForm();
-      return true;
-    },
-    "spreadsheet.data.previousDataFormRecord": () => {
-      if (!dataFormOpenAvailable) return false;
-      if (dataFormCriteria) findDataFormNext(-1);
-      else stepDataFormRecord(-1);
-      return true;
-    },
-    "spreadsheet.data.nextDataFormRecord": () => {
-      if (!dataFormOpenAvailable) return false;
-      if (dataFormCriteria) findDataFormNext(1);
-      else stepDataFormRecord(1);
-      return true;
-    },
-    "spreadsheet.data.newDataFormRecord": () => {
-      if (!dataFormOpenAvailable) return false;
-      addDataFormRecord();
-      return true;
-    },
-    "spreadsheet.data.requestDeleteDataFormRecord": () => {
-      if (!dataFormDeleteAvailable) return false;
-      requestDeleteDataFormRecord();
-      return true;
-    },
-    "spreadsheet.data.applyDeleteDataFormRecord": () => {
-      if (!dataFormDeleteApplyAvailable) return false;
-      confirmDeleteDataFormRecord();
-      return true;
-    },
-    "spreadsheet.data.toggleDataFormCriteria": () => {
-      if (!dataFormOpenAvailable || !dataFormRecord) return false;
-      setDataFormStatus(null);
-      setDataFormCriteria((current) =>
-        current ? null : dataFormRecord.fields.map(() => ""),
-      );
-      return true;
-    },
-    "spreadsheet.data.restoreDataFormRecord": () => {
-      if (!dataFormOpenAvailable || dataFormDraft.length === 0) return false;
-      setDataFormDraft([]);
-      setDataFormRecordBaseline(null);
-      setDataFormStatus(null);
-      return true;
-    },
-    "spreadsheet.data.closeDataForm": () => {
-      if (!dataFormOpen) return false;
-      closeDataForm();
-      return true;
-    },
-    "spreadsheet.data.groupColumns": () => groupSelection("col"),
-    "spreadsheet.data.groupRows": () => groupSelection("row"),
+    "spreadsheet.data.openDataForm": () => false,
+    "spreadsheet.data.previousDataFormRecord": () => false,
+    "spreadsheet.data.nextDataFormRecord": () => false,
+    "spreadsheet.data.newDataFormRecord": () => false,
+    "spreadsheet.data.requestDeleteDataFormRecord": () => false,
+    "spreadsheet.data.applyDeleteDataFormRecord": () => false,
+    "spreadsheet.data.toggleDataFormCriteria": () => false,
+    "spreadsheet.data.restoreDataFormRecord": () => false,
+    "spreadsheet.data.closeDataForm": () => false,
+    "spreadsheet.data.groupColumns": () => false,
+    "spreadsheet.data.groupRows": () => false,
     "spreadsheet.data.analyzeData": openDataAnalysis,
-    "spreadsheet.data.importTextCsv": () => dataTextImportInputRef.current?.click(),
-    "spreadsheet.data.importWorkbook": () => csvImportInputRef.current?.click(),
-    "spreadsheet.data.fromTableRange": () => openDataQuery(),
-    "spreadsheet.data.refresh": () => selectedDataQuery || !activeQueryBackedTable
-      ? refreshDataQueries(selectedDataQuery ? [selectedDataQuery] : [])
-      : refreshNativeQueryForActiveTable(),
-    "spreadsheet.data.refreshAll": async () => {
-      // Excel keeps Refresh All live in a workbook with no connection, and a
-      // press there does nothing (measured, Excel for Mac 16).
-      const runs = dataQueryRunsForRefreshAll(sheets, dataQueryRuns);
-      if (!runs.length && spreadsheetNativeWriteRoute !== "patchback") return true;
-      const own = await refreshDataQueries(runs);
-      // The workbook's imported queries over its own tables refresh too;
-      // an external one stays as Excel saved it.
-      const imported = spreadsheetNativeWriteRoute === "patchback" ? await refreshNativeQueries(undefined, { quiet: true }) : false;
-      return own || imported;
-    },
+    "spreadsheet.data.importTextCsv": () => false,
+    "spreadsheet.data.importWorkbook": () => false,
+    "spreadsheet.data.fromTableRange": () => false,
+    "spreadsheet.data.refresh": () => false,
+    "spreadsheet.data.refreshAll": () => false,
     // Data > Properties: External Data Properties of the query table the
     // active cell is in (Excel greys it elsewhere).
-    "spreadsheet.data.connectionProperties": () => {
-      if (!selectedDataQuery) return false;
-      if (document.activeElement instanceof HTMLElement) dataQueryReturnFocusRef.current = document.activeElement;
-      setDataQueryError(undefined);
-      setExternalDataQueryId(selectedDataQuery.queryId);
-      return true;
-    },
-    "spreadsheet.data.pictureFromFile": openDataFromPicture,
-    "spreadsheet.data.pictureFromClipboard": openDataFromPicture,
+    "spreadsheet.data.connectionProperties": () => false,
+    "spreadsheet.data.pictureFromFile": () => false,
+    "spreadsheet.data.pictureFromClipboard": () => false,
     // Excel keeps Queries & Connections live with no query at all: the pane
     // opens and lists none. A workbook bound to its original package reads
     // that package's connections instead.
-    "spreadsheet.data.queriesConnections": () => {
-      const packageBound =
-        spreadsheetNativeWriteRoute === "patchback" ||
-        Boolean(autosave.page?.editable_page_patchback?.resource_id) ||
-        dataSourceInventoryState.status !== "idle";
-      if (dataQueryRuns.length || !packageBound) { setDataQueryManagerOpen(true); return true; }
-      return openDataSourceInventory("connections");
-    },
-    "spreadsheet.data.workbookLinks": () =>
-      openDataSourceInventory("workbookLinks"),
-    "spreadsheet.data.openDataValidation":
-      openDataValidationDialogFromAuthority,
-    "spreadsheet.data.clearValidationDraft": () => {
-      if (!dataValidationDialogReceiptIsCurrent()) return false;
-      resetValidationDialogDraft();
-      setValidationError(null);
-      setValidationClearPending(true);
-      return true;
-    },
-    "spreadsheet.data.applyDataValidation": () => {
-      try {
-        const applied = validationClearPending
-          ? clearValidationForSelection()
-          : defineValidationForSelection();
-        if (!applied) return false;
-        resetValidationDialogDraft();
-        closeValidationDialog();
-        return true;
-      } finally {
-        dataValidationMutationCommandRef.current = null;
-      }
-    },
-    "spreadsheet.data.openAdvancedFilter": openAdvancedFilter,
+    "spreadsheet.data.queriesConnections": () => false,
+    "spreadsheet.data.workbookLinks": () => false,
+    "spreadsheet.data.openDataValidation": () => false,
+    "spreadsheet.data.clearValidationDraft": () => false,
+    "spreadsheet.data.applyDataValidation": () => false,
+    "spreadsheet.data.openAdvancedFilter": () => false,
     "spreadsheet.data.toggleAutoFilter": toggleWorksheetAutoFilter,
-    "spreadsheet.data.openRemoveDuplicates": () => requestSort({ kind: "removeDuplicates" }),
+    "spreadsheet.data.openRemoveDuplicates": () => false,
     "spreadsheet.data.openSortDialog": openSortDialogFromRibbon,
-    "spreadsheet.data.openTextToColumns": toggleTextToColumns,
+    "spreadsheet.data.openTextToColumns": () => false,
     "spreadsheet.data.reapplyFilters": reapplyAllFilters,
     "spreadsheet.data.sortAscending": () => requestSort({ kind: "quick", direction: "asc" }),
     "spreadsheet.data.sortDescending": () => requestSort({ kind: "quick", direction: "desc" }),
-    "spreadsheet.data.ungroupColumns": () => ungroupSelection("col"),
-    "spreadsheet.data.ungroupRows": () => ungroupSelection("row"),
+    "spreadsheet.data.ungroupColumns": () => false,
+    "spreadsheet.data.ungroupRows": () => false,
     "spreadsheet.formulas.openInsertFunction": openInsertFunctionGallery,
     "spreadsheet.formulas.applyFunctionArguments": confirmFunctionArgs,
     "spreadsheet.formulas.applyAutoSum": () => {
@@ -59115,75 +53179,17 @@ function SpreadsheetWindow({
         formulaAutoSumCommandRef.current = null;
       }
     },
-    "spreadsheet.formulas.openFunctionCategory.financial": () =>
-      openFunctionCategoryGallery("financial"),
-    "spreadsheet.formulas.openFunctionCategory.logical": () =>
-      openFunctionCategoryGallery("logical"),
-    "spreadsheet.formulas.openFunctionCategory.text": () =>
-      openFunctionCategoryGallery("text"),
-    "spreadsheet.formulas.openFunctionCategory.dateTime": () =>
-      openFunctionCategoryGallery("dateTime"),
-    "spreadsheet.formulas.openFunctionCategory.lookupReference": () =>
-      openFunctionCategoryGallery("lookup"),
-    "spreadsheet.formulas.openFunctionCategory.mathTrig": () =>
-      openFunctionCategoryGallery("math"),
-    "spreadsheet.formulas.openMoreFunctionCategory": () => {
-      const category = formulaFunctionCategoryCommandRef.current;
-      try {
-        if (!category) return false;
-        openFunctionCategoryGallery(category);
-        return true;
-      } finally {
-        formulaFunctionCategoryCommandRef.current = null;
-      }
-    },
-    "spreadsheet.formulas.openAllFunctions": () => {
-      openFunctionCategoryGallery("all");
-      return true;
-    },
-    "spreadsheet.formulas.openNameManager": openNameManager,
-    "spreadsheet.formulas.applyNameManager": () => {
-      const receipt = formulaNameMutationCommandRef.current;
-      try {
-        if (
-          receipt?.controlId !== "XLSCTL.FORMULAS.NAME.MANAGER.APPLY"
-        ) {
-          return false;
-        }
-        const committed = commitNameManagerMutation(receipt);
-        if (committed) closeNameManager();
-        else {
-          setNameManagerError(
-            "spreadsheet.names.sourceChanged",
-          );
-        }
-        return committed;
-      } finally {
-        formulaNameMutationCommandRef.current = null;
-      }
-    },
-    "spreadsheet.formulas.deleteManagedName": () => {
-      const receipt = formulaNameMutationCommandRef.current;
-      try {
-        if (
-          receipt?.controlId !== "XLSCTL.FORMULAS.NAME.MANAGER.DELETE"
-        ) {
-          return false;
-        }
-        const committed = commitNameManagerMutation(receipt);
-        // Excel's Name Manager stays open after Delete (several names can be
-        // deleted in a row); only the deleted row's selection goes.
-        if (committed) setNameManagerSelectedIdentity(null);
-        else {
-          setNameManagerError(
-            "spreadsheet.names.sourceReadOnly",
-          );
-        }
-        return committed;
-      } finally {
-        formulaNameMutationCommandRef.current = null;
-      }
-    },
+    "spreadsheet.formulas.openFunctionCategory.financial": () => false,
+    "spreadsheet.formulas.openFunctionCategory.logical": () => false,
+    "spreadsheet.formulas.openFunctionCategory.text": () => false,
+    "spreadsheet.formulas.openFunctionCategory.dateTime": () => false,
+    "spreadsheet.formulas.openFunctionCategory.lookupReference": () => false,
+    "spreadsheet.formulas.openFunctionCategory.mathTrig": () => false,
+    "spreadsheet.formulas.openMoreFunctionCategory": () => false,
+    "spreadsheet.formulas.openAllFunctions": () => false,
+    "spreadsheet.formulas.openNameManager": () => false,
+    "spreadsheet.formulas.applyNameManager": () => false,
+    "spreadsheet.formulas.deleteManagedName": () => false,
     "spreadsheet.formulas.defineName": () => {
       const receipt = formulaNameMutationCommandRef.current;
       try {
@@ -59206,54 +53212,19 @@ function SpreadsheetWindow({
         formulaNameMutationCommandRef.current = null;
       }
     },
-    "spreadsheet.formulas.deleteName": () => {
-      const receipt = formulaNameMutationCommandRef.current;
-      try {
-        const liveWorkbook = liveSheetsRef.current;
-        const liveIndex = liveActiveSheetIndexRef.current;
-        if (
-          receipt?.controlId !== "XLSCTL.FORMULAS.NAME.DELETE.APPLY" ||
-          receipt.workbook !== liveWorkbook ||
-          receipt.activeSheetIndex !== liveIndex ||
-          receipt.sheet !== liveWorkbook[liveIndex]
-        ) {
-          return false;
-        }
-        return deleteName(receipt.entry);
-      } finally {
-        formulaNameMutationCommandRef.current = null;
-      }
-    },
-    "spreadsheet.formulas.toggleShowFormulas": toggleShowFormulas,
-    "spreadsheet.formulas.tracePrecedents": () =>
-      traceFromActiveCell("precedents"),
-    "spreadsheet.formulas.traceDependents": () =>
-      traceFromActiveCell("dependents"),
-    "spreadsheet.formulas.removeTraceArrows": () => {
-      setTraceSession(null);
-      return true;
-    },
-    "spreadsheet.formulas.toggleErrorCheck": () => {
-      const next = !errorCheckOpen;
-      setErrorCheckOpen(next);
-      if (next) setEvaluateFormulaOpen(false);
-      return true;
-    },
-    "spreadsheet.formulas.toggleEvaluateFormula": () => {
-      if (!evaluateFormulaSource) return false;
-      const next = !evaluateFormulaOpen;
-      setEvaluateFormulaOpen(next);
-      if (next) setErrorCheckOpen(false);
-      return true;
-    },
-    "spreadsheet.formulas.toggleReferenceStyle": toggleReferenceStyle,
-    "spreadsheet.formulas.setCalculationAutomatic": () =>
-      changeCalculationMode("auto"),
-    "spreadsheet.formulas.setCalculationManual": () =>
-      changeCalculationMode("manual"),
-    "spreadsheet.formulas.toggleDate1904": toggleWorkbookDate1904,
-    "spreadsheet.formulas.calculateNow": calculateNow,
-    "spreadsheet.formulas.calculateSheet": calculateActiveSheet,
+    "spreadsheet.formulas.deleteName": () => false,
+    "spreadsheet.formulas.toggleShowFormulas": () => false,
+    "spreadsheet.formulas.tracePrecedents": () => false,
+    "spreadsheet.formulas.traceDependents": () => false,
+    "spreadsheet.formulas.removeTraceArrows": () => false,
+    "spreadsheet.formulas.toggleErrorCheck": () => false,
+    "spreadsheet.formulas.toggleEvaluateFormula": () => false,
+    "spreadsheet.formulas.toggleReferenceStyle": () => false,
+    "spreadsheet.formulas.setCalculationAutomatic": () => false,
+    "spreadsheet.formulas.setCalculationManual": () => false,
+    "spreadsheet.formulas.toggleDate1904": () => false,
+    "spreadsheet.formulas.calculateNow": () => false,
+    "spreadsheet.formulas.calculateSheet": () => false,
     "spreadsheet.insert.createPivot": () => {
       // openPivotCreationDialog explains every refusal of its own; the one it
       // cannot see is the writer receipt going stale between the click and
@@ -59330,7 +53301,7 @@ function SpreadsheetWindow({
           return true;
         },
       ),
-    "spreadsheet.pageLayout.sheetBackground": () => toggleSheetBackground(),
+    "spreadsheet.pageLayout.sheetBackground": () => false,
     "spreadsheet.insert.pictureInCell": () =>
       executeInsertReceiptWriter(
         "XLSCTL.INSERT.PICTURES.PLACE_IN_CELLS",
@@ -59468,8 +53439,7 @@ function SpreadsheetWindow({
         return true;
       }),
     "spreadsheet.insert.createTable": openCreateTableDialog,
-    "spreadsheet.review.accessibility": () =>
-      setReviewDialogMode("accessibility"),
+    "spreadsheet.review.accessibility": () => false,
     // Excel's Review > Delete removes whatever remark the active cell
     // carries: a threaded comment through the receipt writer, a legacy note
     // in place (the cell menu's Delete Note).
@@ -59477,32 +53447,31 @@ function SpreadsheetWindow({
       hasNote(activeComment) && !hasThread(activeComment)
         ? deleteActiveCellNote()
         : executeReviewCommentReceiptWriter("XLSCTL.REVIEW.COMMENT.DELETE"),
-    "spreadsheet.review.lockSelection": () => setSelectionLocked(true),
+    "spreadsheet.review.lockSelection": () => false,
     "spreadsheet.review.newComment": openCellCommentComposer,
-    "spreadsheet.review.newNote": openCellNoteComposer,
+    "spreadsheet.review.newNote": () => false,
     "spreadsheet.review.nextComment": () => stepToComment(1),
     "spreadsheet.review.postComment": () =>
       executeReviewCommentReceiptWriter("XLSCTL.REVIEW.COMMENT.POST"),
-    "spreadsheet.review.performance": () => setReviewDialogMode("performance"),
-    "spreadsheet.review.protectWorkbook": openWorkbookProtectionDialog,
-    "spreadsheet.review.applyWorkbookProtection":
-      executeWorkbookProtectionReceiptWriter,
-    "spreadsheet.review.pauseProtection": togglePauseProtection,
+    "spreadsheet.review.performance": () => false,
+    "spreadsheet.review.protectWorkbook": () => false,
+    "spreadsheet.review.applyWorkbookProtection": () => false,
+    "spreadsheet.review.pauseProtection": () => false,
     "spreadsheet.review.previousComment": () => stepToComment(-1),
-    "spreadsheet.review.showChanges": openChangesPane,
+    "spreadsheet.review.showChanges": () => false,
     "spreadsheet.review.showComments": showWorkbookComments,
-    "spreadsheet.review.showAllNotes": showWorkbookNotes,
-    "spreadsheet.review.showHideNote": toggleActiveCellNoteVisible,
-    "spreadsheet.review.spelling": () => runSpellReview(),
-    "spreadsheet.review.thesaurus": () => openThesaurus(),
-    "spreadsheet.review.statistics": () => setReviewDialogMode("statistics"),
+    "spreadsheet.review.showAllNotes": () => false,
+    "spreadsheet.review.showHideNote": () => false,
+    "spreadsheet.review.spelling": () => false,
+    "spreadsheet.review.thesaurus": () => false,
+    "spreadsheet.review.statistics": () => false,
     "spreadsheet.review.toggleCommentResolved": () =>
       executeReviewCommentReceiptWriter(
         "XLSCTL.REVIEW.COMMENT.RESOLVE_TOGGLE",
       ),
-    "spreadsheet.review.toggleSheetProtection": toggleProtection,
-    "spreadsheet.review.unlockSelection": () => setSelectionLocked(false),
-    "spreadsheet.review.versionHistory": () => setVersionHistoryOpen(true),
+    "spreadsheet.review.toggleSheetProtection": () => false,
+    "spreadsheet.review.unlockSelection": () => false,
+    "spreadsheet.review.versionHistory": () => false,
     "spreadsheet.share.copyLink": () => copySpreadsheetShareLink(),
     "spreadsheet.share.copyWorksheetLink": () =>
       copySpreadsheetShareLink(sheet.id, sheet.name),
@@ -59514,36 +53483,30 @@ function SpreadsheetWindow({
       commitRibbonZoom(rawValue);
       return true;
     },
-    "spreadsheet.view.freezeColumnsToActive": () =>
-      applyFreezeAction("freezeColumnsToActive"),
-    "spreadsheet.view.freezeFirstColumn": () =>
-      applyFreezeAction("freezeFirstColumn"),
-    "spreadsheet.view.freezePanes": () =>
-      applyFreezeAction(freezeActive ? "unfreeze" : "freezePanes"),
-    "spreadsheet.view.freezeRowsToActive": () =>
-      applyFreezeAction("freezeRowsToActive"),
-    "spreadsheet.view.freezeTopRow": () => applyFreezeAction("freezeTopRow"),
-    "spreadsheet.view.defaultSheetView": () => switchSheetView(null),
-    "spreadsheet.view.exitSheetView": () => switchSheetView(null),
-    "spreadsheet.view.fullscreen": () => void toggleSpreadsheetFullscreen(),
-    "spreadsheet.view.immersiveReader": () => setImmersiveReaderOpen(true),
+    "spreadsheet.view.freezeColumnsToActive": () => false,
+    "spreadsheet.view.freezeFirstColumn": () => false,
+    "spreadsheet.view.freezePanes": () => false,
+    "spreadsheet.view.freezeRowsToActive": () => false,
+    "spreadsheet.view.freezeTopRow": () => false,
+    "spreadsheet.view.defaultSheetView": () => false,
+    "spreadsheet.view.exitSheetView": () => false,
+    "spreadsheet.view.fullscreen": () => false,
+    "spreadsheet.view.immersiveReader": () => false,
     // Keep saves what the Sheet View box says, without a dialog.
-    "spreadsheet.view.keepSheetView": () => keepSheetViewFromRibbon(),
-    "spreadsheet.view.normalView": () => setSpreadsheetViewMode("normal"),
-    "spreadsheet.view.navigation": toggleNavigationPane,
-    "spreadsheet.view.newSheetView": beginNewSheetView,
-    "spreadsheet.view.newWindow": openWorkbookWindow,
-    "spreadsheet.view.pageBreakView": () =>
-      setSpreadsheetViewMode("pageBreakPreview"),
-    "spreadsheet.view.pageLayoutView": () =>
-      setSpreadsheetViewMode("pageLayout"),
-    "spreadsheet.view.splitPanes": applySplitToggle,
-    "spreadsheet.view.sheetViewOptions": openSheetViewOptions,
-    "spreadsheet.view.toggleFocusCell": toggleReadingMode,
-    "spreadsheet.view.toggleFormulaBar": toggleFormulaBar,
-    "spreadsheet.view.toggleGridlines": toggleGridlines,
-    "spreadsheet.view.toggleHeadings": toggleHeadings,
-    "spreadsheet.view.zoomReset": zoomReset,
+    "spreadsheet.view.keepSheetView": () => false,
+    "spreadsheet.view.normalView": () => false,
+    "spreadsheet.view.navigation": () => false,
+    "spreadsheet.view.newSheetView": () => false,
+    "spreadsheet.view.newWindow": () => false,
+    "spreadsheet.view.pageBreakView": () => false,
+    "spreadsheet.view.pageLayoutView": () => false,
+    "spreadsheet.view.splitPanes": () => false,
+    "spreadsheet.view.sheetViewOptions": () => false,
+    "spreadsheet.view.toggleFocusCell": () => false,
+    "spreadsheet.view.toggleFormulaBar": () => false,
+    "spreadsheet.view.toggleGridlines": () => false,
+    "spreadsheet.view.toggleHeadings": () => false,
+    "spreadsheet.view.zoomReset": () => false
   };
   const visibleCommandRuntimeRef = useRef<{
     context: SpreadsheetVisibleCommandContext;
@@ -59917,35 +53880,30 @@ function SpreadsheetWindow({
     review: t("spreadsheet.commandStatus.reviewView"),
   } as const;
   const spreadsheetCommandSearchItems: readonly SpreadsheetCommandSearchItem[] =
-    [
-      searchableSpreadsheetCommand(
+    [searchableSpreadsheetCommand(
         "XLSCTL.HOME.EDIT.FIND_SELECT.FIND",
         t("spreadsheet.findPlaceholder"),
         commandSearchGroups.common,
         ["find", "search", "查找", "搜索"],
         "⌘/Ctrl+F",
-      ),
-      searchableSpreadsheetCommand(
+      ), searchableSpreadsheetCommand(
         "XLSCTL.HOME.EDIT.FIND_SELECT.REPLACE",
         t("toolbar.findReplace"),
         commandSearchGroups.common,
         ["replace", "find", "替换", "查找"],
         "⌘/Ctrl+H",
-      ),
-      searchableSpreadsheetCommand(
+      ), searchableSpreadsheetCommand(
         "XLSCTL.HOME.EDIT.FIND_SELECT.GO_TO",
         t("spreadsheet.commandStatus.goToCell"),
         commandSearchGroups.common,
         ["go to", "cell", "range", "定位", "单元格", "区域"],
         "Ctrl+G",
-      ),
-      searchableSpreadsheetCommand(
+      ), searchableSpreadsheetCommand(
         "XLSCTL.HOME.CELLS.FORMAT.FORMAT_CELLS",
         t("spreadsheet.fmtCellsDialog"),
         commandSearchGroups.format,
         ["format cells", "number", "alignment", "格式", "数字", "对齐"],
-      ),
-      searchableSpreadsheetCommand(
+      ), searchableSpreadsheetCommand(
         "XLSCTL.HOME.STYLE.CONDITIONAL.MANAGE_RULES",
         t("spreadsheet.cfManageRules"),
         commandSearchGroups.format,
@@ -59955,96 +53913,47 @@ function SpreadsheetWindow({
           "条件格式",
           "管理规则",
         ],
-      ),
-      searchableSpreadsheetCommand(
-        "XLSCTL.DATA.TOOLS.VALIDATION",
-        t("spreadsheet.dataValidationMenu"),
-        commandSearchGroups.format,
-        ["data validation", "dropdown", "数据验证", "下拉列表"],
-      ),
-      searchableSpreadsheetCommand(
+      ), searchableSpreadsheetCommand(
         "XLSCTL.FORMULAS.INSERT_FUNCTION",
         t("spreadsheet.insertFunctionMenu"),
         commandSearchGroups.formulas,
         ["function", "formula", "insert", "函数", "公式", "插入"],
-      ),
-      searchableSpreadsheetCommand(
-        "XLSCTL.FORMULAS.REFERENCE_STYLE",
-        t("spreadsheet.referenceStyleToggle"),
-        commandSearchGroups.formulas,
-        ["r1c1", "reference style", "a1", "引用样式", "R1C1"],
-      ),
-      searchableSpreadsheetCommand(
-        "XLSCTL.FORMULAS.CALC.OPTIONS.DATE1904",
-        t("spreadsheet.formulas.use1904DateSystem"),
-        commandSearchGroups.formulas,
-        ["1904", "date system", "mac dates", "日期系统", "1904 日期系统"],
-      ),
-      searchableSpreadsheetCommand(
-        "XLSCTL.FORMULAS.NAME.MANAGER",
-        t("spreadsheet.formulas.nameManager"),
-        commandSearchGroups.formulas,
-        ["name manager", "defined name", "名称管理器", "定义名称"],
-      ),
-      searchableSpreadsheetCommand(
-        "XLSCTL.DATA.FORM.MRAI.DIALOG",
-        t("spreadsheet.commandSearch.dataForm"),
-        commandSearchGroups.common,
-        ["form", "data form", "record", "记录单", "表单", "记录"],
-      ),
-      {
+      ), {
         controlId: CUSTOM_LISTS_SEARCH_ID,
         label: t("spreadsheet.customListsMenu"),
         group: commandSearchGroups.common,
         keywords: ["custom lists", "fill series", "自定义序列", "序列"],
         visible: true,
         enabled: true,
-      },
-      {
+      }, {
         controlId: FILL_BLANKS_SEARCH_ID,
         label: t("spreadsheet.fillBlanksMenu"),
         group: commandSearchGroups.common,
         keywords: ["fill blanks", "blank", "locate", "填充空值", "空值", "定位"],
         visible: true,
         enabled: !autosave.readOnly,
-      },
-      {
+      }, {
         controlId: TIMELINE_SEARCH_ID,
         label: t("spreadsheet.timelineMenu"),
         group: commandSearchGroups.common,
         keywords: ["timeline", "date filter", "period", "日程表", "时间线", "日期筛选"],
         visible: true,
         enabled: true,
-      },
-      {
+      }, {
         controlId: EYE_CARE_SEARCH_ID,
         label: t("spreadsheet.commandSearch.eyeCare"),
         group: commandSearchGroups.review,
         keywords: ["eye care", "green", "background", "护眼", "绿色", "底色"],
         visible: true,
         enabled: true,
-      },
-      {
+      }, {
         controlId: SPELL_CHECK_WHILE_TYPING_SEARCH_ID,
         label: t("spreadsheet.commandSearch.spellCheckWhileTyping"),
         group: commandSearchGroups.review,
         keywords: ["spelling", "spell check", "typing", "拼写", "检查", "输入"],
         visible: true,
         enabled: true,
-      },
-      // Not a ribbon command: Excel keeps it under File > Options, which its
-      // own command search also reaches. With background checking switched
-      // off there is no error button left to open it from, so this row is
-      // the way back.
-      {
-        controlId: ERROR_CHECKING_OPTIONS_SEARCH_ID,
-        label: t("spreadsheet.errorOptions.errorCheckingOptions"),
-        group: commandSearchGroups.formulas,
-        keywords: ["error checking", "options", "ignored errors", "错误检查", "选项", "忽略错误"],
-        visible: true,
-        enabled: true,
-      },
-      // File > Options > Data > Automatic Data Conversion (per user).
+      }, // File > Options > Data > Automatic Data Conversion (per user).
       {
         controlId: DATA_CONVERSION_OPTIONS_SEARCH_ID,
         label: t("spreadsheet.dataConversion.optionsTitle"),
@@ -60052,32 +53961,7 @@ function SpreadsheetWindow({
         keywords: ["automatic data conversion", "leading zeros", "csv", "scientific notation", "options", "自动数据转换", "前导零", "选项"],
         visible: true,
         enabled: true,
-      },
-      searchableSpreadsheetCommand(
-        "XLSCTL.REVIEW.PROTECT.SHEET",
-        t(
-          sheetProtectionConfigured
-            ? "spreadsheet.unprotectSheet"
-            : "spreadsheet.protectSheet",
-        ),
-        commandSearchGroups.review,
-        ["protect sheet", "unprotect", "保护工作表", "取消保护"],
-      ),
-      searchableSpreadsheetCommand(
-        "XLSCTL.REVIEW.PROTECT.WORKBOOK",
-        workbookProtectionActive(workbookStructureProtection)
-          ? t("spreadsheet.uiCopy.unprotectWorkbook")
-          : t("spreadsheet.review.protectWorkbook"),
-        commandSearchGroups.review,
-        ["protect workbook", "structure", "保护工作簿", "结构"],
-      ),
-      searchableSpreadsheetCommand(
-        "XLSCTL.VIEW.WINDOW.FREEZE",
-        t(freezeActive ? "spreadsheet.unfreeze" : "spreadsheet.freezePanesMenu"),
-        commandSearchGroups.review,
-        ["freeze panes", "unfreeze", "冻结窗格", "取消冻结"],
-      ),
-    ];
+      }];
   useInsertionEffect(() => { executeVisibleHomeCommandRef.current = executeVisibleCommand; });
   const executeVisibleCommandWithReceipt = (
     controlId: string,
@@ -61652,85 +55536,6 @@ function SpreadsheetWindow({
     workbookTopologyLockedReason,
     workbookTopologyReadOnlyReason,
   });
-  const confirmWorkbookProtection = (): Promise<boolean> => {
-    const authority = workbookProtectionDialogAuthority;
-    const current = workbookStructureProtectionRef.current;
-    if (
-      !authority ||
-      authority.workbook !== liveSheetsRef.current ||
-      authority.sourceProtection !== current ||
-      current?.nativeBlocker
-    ) {
-      setWorkbookProtectionError(
-        current?.nativeBlocker
-          ? workbookProtectionUnsupportedReason
-          : t("spreadsheet.uiCopy.theWorkbookChangedCloseThisDialogAndTryAgain"),
-      );
-      return Promise.resolve(false);
-    }
-    const password = workbookProtectionPasswordDraft;
-    // Protect Workbook with a password: Excel's Confirm Password step first,
-    // then the ISO hash (the typed text is dropped once hashed).
-    if (!workbookProtectionActive(current) && password.length > 0) {
-      if (workbookProtectionConfirmDraft === null) {
-        setWorkbookProtectionConfirmDraft("");
-        setWorkbookProtectionError(null);
-        return Promise.resolve(false);
-      }
-      if (workbookProtectionConfirmDraft !== password) {
-        setWorkbookProtectionError(t("spreadsheet.protectionPassword.mismatch"));
-        return Promise.resolve(false);
-      }
-    }
-    const verifier =
-      workbookProtectionActive(current)
-        ? workbookStructureProtectionPassword(current)
-        : undefined;
-    setWorkbookProtectionBusy(true);
-    const nextProtectionPromise: Promise<
-      WorkbookStructureProtection | undefined | "refused"
-    > =
-      workbookProtectionActive(current)
-        ? verifier
-          ? verifyProtectionPassword(password, verifier).then((status) => {
-              if (status === "verified") return undefined;
-              setWorkbookProtectionError(t(protectionPasswordErrorKey(status)));
-              return "refused" as const;
-            })
-          : Promise.resolve(undefined)
-        : password.length > 0
-          ? createProtectionPasswordHash(password).then((passwordHash) => ({
-              locked: true,
-              passwordKind: "modern" as const,
-              passwordHash,
-            }))
-          : Promise.resolve({ locked: true, passwordKind: "none" as const });
-    return nextProtectionPromise
-      .then((nextProtection) => {
-        if (nextProtection === "refused") return false;
-        workbookProtectionMutationCommandRef.current = {
-          controlId: "XLSCTL.REVIEW.PROTECT.WORKBOOK.MRAI.APPLY",
-          workbook: authority.workbook,
-          sourceProtection: authority.sourceProtection,
-          nextProtection,
-        };
-        setWorkbookProtectionError(null);
-        return executeVisibleCommandWithReceipt(
-          "XLSCTL.REVIEW.PROTECT.WORKBOOK.MRAI.APPLY",
-          () => {
-            workbookProtectionMutationCommandRef.current = null;
-          },
-        ).then((executed) => {
-          if (executed) {
-            setWorkbookProtectionDialogAuthority(null);
-            setWorkbookProtectionPasswordDraft("");
-            setWorkbookProtectionConfirmDraft(null);
-          }
-          return executed;
-        });
-      })
-      .finally(() => setWorkbookProtectionBusy(false));
-  };
   const executePivotContextMutation = (
     controlId: PivotContextWriterControlId,
     nextPivot: PivotConfig | null,
@@ -62265,75 +56070,6 @@ function SpreadsheetWindow({
     });
     return true;
   };
-  const executeNameManagerApply = () => {
-    const authority = nameManagerDialogAuthority;
-    const source = nameManagerMode === "edit" ? selectedNameManagerEntry : null;
-    const name = nameManagerDraft.name.trim();
-    const ref = nameManagerDraft.ref.trim();
-    if (
-      !authority ||
-      (nameManagerMode !== "create" && nameManagerMode !== "edit") ||
-      (nameManagerMode === "edit" && (!source || source.nativeBlocker)) ||
-      !isValidName(name) ||
-      !isValidRef(ref.startsWith("=") ? ref.slice(1).trim() : ref)
-    ) {
-      setNameManagerError(
-        "spreadsheet.names.invalidUnique",
-      );
-      return Promise.resolve(false);
-    }
-    // A typed relative reference is relative to the active cell, as in
-    // Excel. A rename that would hand a sheet's formulas to its local name of
-    // that spelling is refused before anything is written (B509).
-    if (source && renameCapturesReferences(sheets, source, name)) {
-      setNameManagerError("spreadsheet.names.renameCaptured");
-      return Promise.resolve(false);
-    }
-    // A LET variable or LAMBDA parameter of that spelling in a formula that
-    // uses the name would read its own value instead (S-164).
-    if (source && renameCapturedByFormulaLocals(sheets, source, name)) {
-      setNameManagerError("spreadsheet.names.renameCapturedByFormula");
-      return Promise.resolve(false);
-    }
-    formulaNameMutationCommandRef.current = {
-      controlId: "XLSCTL.FORMULAS.NAME.MANAGER.APPLY",
-      action: nameManagerMode,
-      source,
-      name,
-      ref,
-      scope: source?.scope ?? nameManagerDraft.scope,
-      comment: nameManagerDraft.comment,
-      workbook: authority.workbook,
-      sheet: authority.sheet,
-      activeSheetIndex: authority.activeSheetIndex,
-    };
-    return executeVisibleCommandWithReceipt(
-      "XLSCTL.FORMULAS.NAME.MANAGER.APPLY",
-      () => {
-        formulaNameMutationCommandRef.current = null;
-      },
-    );
-  };
-  const executeNameManagerDelete = () => {
-    const authority = nameManagerDialogAuthority;
-    const source = selectedNameManagerEntry;
-    if (!authority || !source || source.nativeBlocker) {
-      return Promise.resolve(false);
-    }
-    formulaNameMutationCommandRef.current = {
-      controlId: "XLSCTL.FORMULAS.NAME.MANAGER.DELETE",
-      source,
-      workbook: authority.workbook,
-      sheet: authority.sheet,
-      activeSheetIndex: authority.activeSheetIndex,
-    };
-    return executeVisibleCommandWithReceipt(
-      "XLSCTL.FORMULAS.NAME.MANAGER.DELETE",
-      () => {
-        formulaNameMutationCommandRef.current = null;
-      },
-    );
-  };
   const executeHomeBorderPreset = (preset: SpreadsheetBorderPreset) => {
     homeBorderPresetCommandRef.current = {
       preset,
@@ -62613,14 +56349,14 @@ function SpreadsheetWindow({
     selectCurrentRegion: () => runGoToSpecial("currentRegion"),
     copyFormulaFromAbove: () => copyFromCellAbove(false),
     copyValueFromAbove: () => copyFromCellAbove(true),
-    editNote: () => runShortcutControl("XLSCTL.REVIEW.NOTE.NEW"),
+    editNote: () => undefined,
     newThreadedComment: () => runShortcutControl("XLSCTL.REVIEW.COMMENT.NEW"),
     insertWorksheet: insertWorksheetBeforeActive,
     nextSheet: () => activateAdjacentSheet(1),
     previousSheet: () => activateAdjacentSheet(-1),
     groupSelection: () => outlineShortcut("GROUP"),
     ungroupSelection: () => outlineShortcut("UNGROUP"),
-    openNameManager: () => runShortcutControl("XLSCTL.FORMULAS.NAME.MANAGER"),
+    openNameManager: () => undefined,
     openInsertFunction: () =>
       runShortcutControl("XLSCTL.FORMULAS.INSERT_FUNCTION"),
     openPasteSpecial: () =>
@@ -62635,9 +56371,9 @@ function SpreadsheetWindow({
     // F7 runs the ribbon's Spelling; the key event tells it which words of
     // an entry being edited are selected.
     checkSpelling: (payload) =>
-      runShortcutControl("XLSCTL.REVIEW.PROOF.SPELL", () => runSpellReview(payload)),
+      undefined,
     openThesaurus: (payload) =>
-      runShortcutControl("XLSCTL.REVIEW.PROOF.THESAURUS", () => openThesaurus(payload)),
+      undefined,
   };
   // Registered at commit, like the registry's first ids, so a key always runs
   // against the grid on screen.
@@ -62673,17 +56409,6 @@ function SpreadsheetWindow({
       hidden: !state.visible,
       onClick: () => executeVisibleCommand(controlId),
     };
-  };
-  const executeDataValidationApply = () => {
-    const authority = dataValidationDialogAuthorityRef.current;
-    if (!authority) return Promise.resolve(false);
-    dataValidationMutationCommandRef.current = authority;
-    return executeVisibleCommandWithReceipt(
-      "XLSCTL.DATA.VALIDATION.MRAI.APPLY",
-      () => {
-        dataValidationMutationCommandRef.current = null;
-      },
-    );
   };
   const visibleInsertMutationActionProps = (
     controlId: string,
@@ -63740,12 +57465,6 @@ function SpreadsheetWindow({
   const homeAccountingCommandState = visibleCommandState(
     "XLSCTL.HOME.NUMBER.ACCOUNTING_MENU",
   );
-  const selectedSheetViewOption =
-    sheetViewDialog?.mode === "options"
-      ? (sheet.namedSheetViews ?? []).find(
-          (view) => view.id === sheetViewDialog.selectedId,
-        ) ?? null
-      : null;
   const commitVisibleZoom = (rawValue: string) => {
     if (!visibleCommandState("XLSCTL.VIEW.ZOOM.VALUE").enabled) return false;
     visibleZoomCommitRef.current = rawValue;
@@ -64438,30 +58157,6 @@ function SpreadsheetWindow({
       initialName: record.macro ?? defaultAssignMacroName(fallbackName),
     });
   };
-  // Store (or with null take off) the macro on the object, one Undo step.
-  const writeObjectMacro = (
-    target: { sheetId: string; collection: "objects" | "charts"; id: string },
-    reference: string | null,
-  ): boolean => {
-    const liveSheet = liveSheetsRef.current[liveActiveSheetIndexRef.current];
-    if (!liveSheet || liveSheet.id !== target.sheetId) return false;
-    if (!sheetProtectionAllowsRef.current(liveSheet, "editObjects")) {
-      showProtectNotice();
-      return false;
-    }
-    const list = (target.collection === "charts" ? liveSheet.charts : liveSheet.objects) ?? [];
-    const current = list.find((item) => item.id === target.id) as { macro?: string } | undefined;
-    if (!current) return false;
-    if ((current.macro ?? null) === reference) return true;
-    const next = { ...current } as { macro?: string };
-    if (reference) next.macro = reference;
-    else delete next.macro;
-    replaceActiveSheet({
-      ...liveSheet,
-      [target.collection]: list.map((item) => (item.id === target.id ? next : item)),
-    } as SheetModel);
-    return true;
-  };
   // A click on an object with a macro runs it (Excel); a macro that is no
   // longer in reach says so, as Excel does.
   const runAssignedMacro = (reference: string) => {
@@ -64522,82 +58217,6 @@ function SpreadsheetWindow({
     t,
     visibleCommandReason,
   });
-
-  const projectedWorkbookLinks = useMemo(() => {
-    let references: readonly ProjectedWorkbookLinkReference[] | undefined;
-    return () => references ??= projectedWorkbookLinkReferences(sheets);
-  }, [sheets]);
-  const workbookLinkReferencesFor = useCallback(
-    (entry: SpreadsheetWorkbookLinkInventoryEntry) => {
-      const displayedFile = entry.displaySource
-        .split("/")
-        .at(-1)
-        ?.trim()
-        .toLocaleLowerCase();
-      return projectedWorkbookLinks().filter(
-        (reference) =>
-          displayedFile &&
-          reference.workbookName.toLocaleLowerCase() === displayedFile,
-      );
-    },
-    [projectedWorkbookLinks],
-  );
-  const findNextWorkbookLink = useCallback(
-    (entry: SpreadsheetWorkbookLinkInventoryEntry) => {
-      const references = workbookLinkReferencesFor(entry);
-      if (references.length === 0) return false;
-      const previous = workbookLinkFindCursorRef.current.get(entry.id) ?? -1;
-      const nextIndex = (previous + 1) % references.length;
-      const reference = references[nextIndex];
-      const targetSheetIndex = sheets.findIndex(
-        (candidate) => candidate.id === reference.sheetId,
-      );
-      if (targetSheetIndex < 0) return false;
-      workbookLinkFindCursorRef.current.set(entry.id, nextIndex);
-      setDataSourceInventoryDialog(null);
-      scheduleRaf(() =>
-        navigateToSheetCell(
-          targetSheetIndex,
-          reference.row,
-          reference.col,
-        ),
-      );
-      return true;
-    },
-    [navigateToSheetCell, scheduleRaf, sheets, workbookLinkReferencesFor],
-  );
-
-  const dataSourceInventoryRows =
-    dataSourceInventoryDialog === "workbookLinks"
-      ? [
-          {
-            id: "workbook-links",
-            label: t("spreadsheet.uiCopy.externalWorkbookLinks"),
-            count:
-              dataSourceInventoryState.inventory?.workbookLinkParts ?? 0,
-          },
-        ]
-      : [
-          {
-            id: "connections",
-            label: t("spreadsheet.uiCopy.workbookConnections"),
-            count: dataSourceInventoryState.inventory?.connectionParts ?? 0,
-          },
-          {
-            id: "query-tables",
-            label: t("spreadsheet.uiCopy.queryTables"),
-            count: dataSourceInventoryState.inventory?.queryTableParts ?? 0,
-          },
-          {
-            id: "linked-data",
-            label: t("spreadsheet.uiCopy.linkedDataTypeParts"),
-            count: dataSourceInventoryState.inventory?.linkedDataParts ?? 0,
-          },
-        ];
-  const dataSourceInventoryTitle =
-    dataSourceInventoryDialog === "workbookLinks"
-      ? webDataReviewViewLabels.workbookLinks
-      : webDataReviewViewLabels.queriesConnections;
 
   // A cell's text run over its empty neighbours, as Page Layout and the
   // inactive split panes draw it. `ignoreEditing`: a split pane keeps showing
@@ -64976,8 +58595,7 @@ function SpreadsheetWindow({
     for (const row of rows) for (const col of titleCols) if (keys[`${row}:${col}`]) return true;
     const rowLow = Math.min(...rows), rowHigh = Math.max(...rows);
     const colLow = Math.min(...cols), colHigh = Math.max(...cols);
-    if (mergeSpans.some((merge) => merge.row <= rowHigh && merge.row + merge.rowSpan - 1 >= rowLow
-      && merge.col <= colHigh && merge.col + merge.colSpan - 1 >= colLow)) return true;
+    if (pageLayoutMergeKeepsPage(mergeSpans, rows, cols)) return true;
     if (pageLayoutSpansKeepPage((sheet as { rowSpans?: unknown }).rowSpans, [rowLow, rowHigh], [colLow, colHigh],
       () => rows.some((row) => cols.some((col) => {
         const cell = sheet.cells[`${row}:${col}`];
@@ -68496,33 +62114,8 @@ function SpreadsheetWindow({
         }}
       />
       </> : null}
-      {renderSpreadsheetWorkbookProtectionDialog({
-        confirmWorkbookProtection,
-        setWorkbookProtectionConfirmDraft,
-        setWorkbookProtectionDialogAuthority,
-        setWorkbookProtectionError,
-        setWorkbookProtectionPasswordDraft,
-        setWorkbookProtectionStructure,
-        t,
-        visibleCommandState,
-        workbookProtectionBusy,
-        workbookProtectionConfirmDraft,
-        workbookProtectionDialogAuthority,
-        workbookProtectionError,
-        workbookProtectionMutationCommandRef,
-        workbookProtectionPasswordDraft,
-        workbookProtectionPasswordInputRef,
-        workbookProtectionStructure,
-        workbookProtectionUnsupportedReason,
-        workbookProtectionVerifier,
-        workbookStructureProtection,
-      })}
-      {protectSheetDialogOpen ? (
-        <SpreadsheetProtectSheetDialog
-          onConfirm={confirmProtectSheet}
-          onCancel={() => setProtectSheetDialogOpen(false)}
-        />
-      ) : null}
+      {null}
+      {null}
       {sheetProtectionPasswordPrompt ? (
         <SpreadsheetProtectionPasswordDialog
           title={
@@ -68608,98 +62201,27 @@ function SpreadsheetWindow({
         t,
         togglePivotSlicerInsertField,
       })}
-      {dataQueryDraft && <SpreadsheetDataQueryDialog key={dataQueryDraft.request.runId}
-        translate={t} source={dataQueryDraft.source} initialDefinition={dataQueryDraft.request.definition}
-        hasHeaders={dataQueryDraft.request.createdSourceTable?.headerRow} onHeadersChange={changeDataQueryHeaders}
-        fixedDestination={dataQueryRuns.some((run) => run.queryId === dataQueryDraft.request.queryId)}
-        initialDestination={`=$${columnLabel(dataQueryDraft.request.col)}$${dataQueryDraft.request.row + 1}`}
-        busy={dataQueryBusy} error={dataQueryError} returnFocusRef={dataQueryReturnFocusRef} rangePick={rangePick}
-        onCancel={() => setDataQueryDraft(null)} onLoad={(definition, destination) => {
-          // Excel's RefEdit form "=$F$1" as well as "$F$1" and "F1".
-          const target = parseCellRef(destination.trim().replace(/^=\s*/, ""));
-          if (!target) { dataQueryFailure(new Error("query_range_invalid")); return; }
-          // Load runs against the workbook as it is NOW: a save receipt or a
-          // peer's merge while the editor stood replaced the workbook the
-          // draft captured, and Load used to refuse that silently.
-          void applyDataQueryRequests([{ ...dataQueryDraft.request, definition, row: target.row, col: target.col }], liveSheetsRef.current).then((done) => {
-            if (done === false && !dataQueryBusyRef.current) dataQueryFailure(new Error("query_source_stale"));
-          });
-        }} />}
-      {dataQueryManagerOpen && <SpreadsheetQueryConnectionsDialog translate={t} runs={dataQueryRuns}
-        statusFor={dataQueryStatusFor}
-        descriptionFor={(run) => effectiveDataQueryProperties(sheets, run.queryId).description}
-        busy={dataQueryBusy || !dataQueryWritable} error={dataQueryError}
-        onClose={() => setDataQueryManagerOpen(false)} onEdit={(run) => { openDataQuery(run); }}
-        onRefresh={(run) => { void refreshDataQueries([run]); }}
-        onProperties={(run) => { setDataQueryError(undefined); setQueryPropertiesQueryId(run.queryId); }} />}
+      {false}
+      {false}
       {(() => {
-        const run = externalDataQueryId ? dataQueryRuns.find((entry) => entry.queryId === externalDataQueryId) : undefined;
+        const run = undefined;
         if (!run) return null;
-        const usedIn = dataQueryUsedIn(sheets, run);
-        return <SpreadsheetExternalDataPropertiesDialog key={`external-${run.id}`} translate={t}
-          tableName={usedIn?.tableName ?? run.targetName} queryName={run.definition.name}
-          properties={effectiveDataQueryProperties(sheets, run.queryId)}
-          readOnlyReason={queryPropertiesReadOnlyReason(run.queryId)} busy={dataQueryBusy} error={dataQueryError}
-          returnFocusRef={dataQueryReturnFocusRef}
-          onCancel={() => setExternalDataQueryId(null)}
-          onApply={(draft) => applyExternalDataProperties(run.queryId, draft)}
-          onOpenQueryProperties={() => { setDataQueryError(undefined); setQueryPropertiesQueryId(run.queryId); }} />;
+        return null;
       })()}
       {(() => {
-        const run = queryPropertiesQueryId ? dataQueryRuns.find((entry) => entry.queryId === queryPropertiesQueryId) : undefined;
+        const run = undefined;
         if (!run) return null;
-        return <SpreadsheetQueryPropertiesDialog key={`query-${run.id}`} translate={t}
-          queryName={run.definition.name}
-          otherQueryNames={dataQueryRuns.filter((entry) => entry.queryId !== run.queryId).map((entry) => entry.definition.name)}
-          properties={effectiveDataQueryProperties(sheets, run.queryId)}
-          usedIn={[dataQueryUsedIn(sheets, run)].filter((use) => use !== null)}
-          readOnlyReason={queryPropertiesReadOnlyReason(run.queryId)} busy={dataQueryBusy} error={dataQueryError}
-          onCancel={() => setQueryPropertiesQueryId(null)}
-          onApply={(result) => applyQueryProperties(run.queryId, result)}
-          onEditQuery={() => { setQueryPropertiesQueryId(null); setExternalDataQueryId(null); openDataQuery(run); }} />;
+        return null;
       })()}
       {(() => {
-        const connection = importedConnectionId
-          ? dataSourceInventoryState.inventory?.connections?.find((entry) => entry.id === importedConnectionId)
-          : undefined;
+        const connection = undefined;
         if (!connection) return null;
-        const kindLabel = connection.kind === "oledb"
-          ? t("spreadsheet.helperCopy.queryProperties.oleDbQuery")
-          : connection.kind === "odbc"
-            ? t("spreadsheet.helperCopy.queryProperties.connectionTypeOdbc")
-            : connection.kind === "text"
-              ? t("spreadsheet.helperCopy.queryProperties.connectionTypeText")
-              : connection.kind === "web"
-                ? t("spreadsheet.helperCopy.queryProperties.connectionTypeWeb")
-                : t("spreadsheet.helperCopy.queryProperties.connectionTypeOther");
-        const commandLabel = ({
-          1: t("spreadsheet.helperCopy.queryProperties.commandTypeCube"),
-          2: t("spreadsheet.helperCopy.queryProperties.commandTypeSql"),
-          3: t("spreadsheet.helperCopy.queryProperties.commandTypeTable"),
-          4: t("spreadsheet.helperCopy.queryProperties.commandTypeDefault"),
-          5: t("spreadsheet.helperCopy.queryProperties.commandTypeList"),
-        } as Record<number, string>)[connection.commandType ?? 0] ?? "";
         // MRAI keeps the connection untouched in the file; nothing here can
         // change it, and it cannot refresh in the browser.
         const reason = connection.powerQuery
           ? t("spreadsheet.helperCopy.queryProperties.importedQueryReadOnly")
           : t("spreadsheet.helperCopy.queryProperties.importedReadOnly");
-        return <SpreadsheetQueryPropertiesDialog key={`imported-${connection.id}`} translate={t}
-          title={connection.powerQuery ? undefined : t("spreadsheet.helperCopy.queryProperties.connectionPropertiesTitle")}
-          nameLabel={connection.powerQuery ? undefined : t("spreadsheet.helperCopy.queryProperties.connectionName")}
-          queryName={connection.name} otherQueryNames={[]}
-          properties={{ ...DATA_QUERY_PROPERTY_DEFAULTS, description: connection.description,
-            backgroundRefresh: connection.backgroundRefresh, refreshInterval: connection.refreshInterval,
-            refreshOnLoad: connection.refreshOnLoad, removeDataOnSave: connection.removeDataOnSave,
-            excludeFromRefreshAll: connection.excludeFromRefreshAll }}
-          usedIn={connection.usedIn}
-          definition={{ connectionType: kindLabel, connectionFile: connection.connectionFile,
-            alwaysUseConnectionFile: connection.alwaysUseConnectionFile, connectionString: connection.connectionString,
-            savePassword: connection.savePassword, commandType: commandLabel, commandText: connection.commandText }}
-          definitionNote={reason} editQueryAvailable={false}
-          readOnlyReason={reason} busy={false}
-          onCancel={() => setImportedConnectionId(null)} onApply={() => setImportedConnectionId(null)}
-          onEditQuery={() => undefined} />;
+        return null;
       })()}
       {dataQueryForeground ? (
         <OfficeDialogShell
@@ -68717,208 +62239,9 @@ function SpreadsheetWindow({
           onCancel={() => { dataQueryCancelRef.current = true; setDataQueryForeground((current) => current ? { ...current, cancelled: true } : current); }}
         />
       ) : null}
-      {nativeQueryFormulaName && nativeWorkbookQueries.some((query) => query.name === nativeQueryFormulaName) ? (
-        <SpreadsheetNativeQueryFormulaDialog
-          translate={t}
-          query={nativeWorkbookQueries.find((query) => query.name === nativeQueryFormulaName)!}
-          onClose={() => setNativeQueryFormulaName(null)}
-        />
-      ) : null}
       {null}
-      <OfficeDialogShell
-        open={dataSourceInventoryDialog !== null}
-        title={dataSourceInventoryTitle}
-        description={
-          t("spreadsheet.uiCopy.readOnlyInspectionOfExternalDataPartsInThe")
-        }
-        defaultActionLabel={
-          dataSourceInventoryState.status === "error"
-            ? t("spreadsheet.uiCopy.retryInspection")
-            : t("editor.band.done")
-        }
-        cancelActionLabel={t("common.close")}
-        defaultActionDisabled={dataSourceInventoryState.status === "loading"}
-        onDefaultAction={() => {
-          if (dataSourceInventoryState.status === "error") {
-            void inspectImportedDataSourceInventory();
-            return;
-          }
-          setDataSourceInventoryDialog(null);
-        }}
-        onCancel={() => setDataSourceInventoryDialog(null)}
-        initialFocus="cancel"
-        testIdPrefix="spreadsheet-data-source-inventory"
-      >
-        <div aria-live="polite" className="grid gap-3">
-          {dataSourceInventoryState.status === "loading" ||
-          dataSourceInventoryState.status === "idle" ? (
-            <EditorLoadingState
-              kind="spreadsheet"
-              minimal
-              label={t("spreadsheet.uiCopy.safelyInspectingSourceWorkbookParts")}
-              testId="spreadsheet-data-source-inventory-loading"
-              announce={false}
-            />
-          ) : dataSourceInventoryState.status === "error" ? (
-            <div
-              className={dialogParts.message}
-              data-tone="warning"
-              data-testid="spreadsheet-data-source-inventory-error"
-            >
-              {t("spreadsheet.uiCopy.theSourceXLSXCouldNotBeObtainedOrSafely")}
-            </div>
-          ) : (
-            <div data-testid="spreadsheet-data-source-inventory-results">
-              {dataSourceInventoryDialog === "workbookLinks" ? (
-                <div className="grid max-h-[360px] gap-2 overflow-y-auto pr-1">
-                  {dataSourceInventoryState.inventory?.workbookLinks.length ? (
-                    dataSourceInventoryState.inventory.workbookLinks.map(
-                      (entry) => {
-                        const references = workbookLinkReferencesFor(entry);
-                        const unavailableReason = t("spreadsheet.uiCopy.aVerifiedSameDomainWorkbookProviderAccountPermissionAnd");
-                        return (
-                          <article
-                            key={entry.id}
-                            className={`${dialogParts.well} grid gap-3 p-3`}
-                            data-testid={`spreadsheet-workbook-link-${entry.id}`}
-                          >
-                            <div className="flex items-start gap-2">
-                              <span className="mt-0.5 inline-grid h-7 w-7 shrink-0 place-items-center">
-                                <LinkIcon size={15} aria-hidden="true" />
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <strong
-                                  className="block truncate"
-                                  data-testid={`spreadsheet-workbook-link-${entry.id}-source`}
-                                >
-                                  {entry.displaySource}
-                                </strong>
-                                <span className={`${dialogParts.hint} block truncate font-mono`}>
-                                  {entry.partName}
-                                </span>
-                              </span>
-                              <span className={dialogParts.hint}>
-                                {entry.sourceKind === "web"
-                                  ? "Web"
-                                  : entry.sourceKind === "file"
-                                    ? t("toolbar.file")
-                                    : t("spreadsheet.uiCopy.unknown")}
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <button
-                                type="button"
-                                disabled={references.length === 0}
-                                title={
-                                  references.length > 0
-                                    ? undefined
-                                    : t("spreadsheet.uiCopy.noProjectedFormulaReferenceCanBeLocatedInThe")
-                                }
-                                className={dialogParts.compactButton}
-                                data-testid={`spreadsheet-workbook-link-${entry.id}-find-next`}
-                                onClick={() => findNextWorkbookLink(entry)}
-                              >
-                                {t("spreadsheet.findNext")}
-                                {references.length > 0
-                                  ? ` (${references.length})`
-                                  : ""}
-                              </button>
-                              {[
-                                t("dashboard.memoryRefresh"),
-                                t("spreadsheet.uiCopy.changeSource"),
-                                t("spreadsheet.uiCopy.openWorkbook"),
-                                t("spreadsheet.uiCopy.breakLink"),
-                              ].map((label) => (
-                                <button
-                                  key={label}
-                                  type="button"
-                                  disabled
-                                  aria-label={`${label}: ${unavailableReason}`}
-                                  title={unavailableReason}
-                                  className={dialogParts.compactButton}
-                                >
-                                  {label}
-                                </button>
-                              ))}
-                            </div>
-                          </article>
-                        );
-                      },
-                    )
-                  ) : (
-                    <div className={`${dialogParts.well} flex items-center justify-between gap-4 px-3 py-2`}>
-                      <span>
-                        {t("spreadsheet.uiCopy.externalWorkbookLinkParts")}
-                      </span>
-                      <span className="min-w-8 text-center font-semibold tabular-nums">
-                        {dataSourceInventoryState.inventory
-                          ?.workbookLinkParts ?? 0}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <>
-                <SpreadsheetNativeQueriesList
-                  translate={t}
-                  locale={locale}
-                  queries={nativeWorkbookQueries}
-                  refreshBlockedReason={nativeQueryRefreshBlockedReason}
-                  busyName={nativeQueryBusyName}
-                  onRefresh={(name) => { void refreshNativeQueries([name]); }}
-                  onViewFormula={setNativeQueryFormulaName}
-                />
-                {dataSourceInventoryState.inventory?.connections?.length ? (
-                  <ul className={dialogParts.list} aria-label={t("spreadsheet.helperCopy.queryProperties.workbookConnections")}
-                    data-testid="spreadsheet-data-source-connections">
-                    {dataSourceInventoryState.inventory.connections.map((connection) => (
-                      <li key={connection.id} className={`${dialogParts.listItem} flex items-center gap-2`}>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate">{connection.name}</span>
-                          {connection.description ? (
-                            <span className={`${dialogParts.hint} block truncate`}>{connection.description}</span>
-                          ) : null}
-                        </span>
-                        <button type="button" className={dialogParts.compactButton}
-                          data-testid={`spreadsheet-data-source-connection-properties-${connection.id}`}
-                          onClick={() => setImportedConnectionId(connection.id)}>
-                          {t("spreadsheet.helperCopy.queryProperties.properties")}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                <div className={dialogParts.list}>
-                  {dataSourceInventoryRows.map((row) => (
-                    <div
-                      key={row.id}
-                      className={`${dialogParts.listItem} flex items-center justify-between gap-4`}
-                      data-testid={`spreadsheet-data-source-inventory-${row.id}`}
-                    >
-                      <span>{row.label}</span>
-                      <span
-                        className="min-w-8 text-center font-semibold tabular-nums"
-                        data-testid={`spreadsheet-data-source-inventory-${row.id}-count`}
-                      >
-                        {row.count}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                </>
-              )}
-            </div>
-          )}
-          <p
-            className={dialogParts.message}
-            data-testid="spreadsheet-data-source-inventory-boundary"
-          >
-            {spreadsheetNativeWriteRoute === "patchback"
-              ? t("spreadsheet.uiCopy.thesePartsArePreservedByTheOriginalPackageXLSX")
-              : t("spreadsheet.uiCopy.thisPageHasNoOriginalPackagePatchbackRouteThe")}
-          </p>
-        </div>
-      </OfficeDialogShell>
+      {null}
+      {null}
       {renderSpreadsheetDelimitedImportDialog({
         rangePick,
         confirmDelimitedImportPreview,
@@ -69108,25 +62431,8 @@ function SpreadsheetWindow({
               ) : null}
             </OfficeDialogShell>
           ) : null}
-          <ForecastSheetDialog
-            open={false}
-            translate={t}
-            onApply={runForecastSheet}
-            onClose={closeForecast}
-            defaultTimeline={forecastDefaultRanges.timeline}
-            defaultValues={forecastDefaultRanges.values}
-            rangePick={rangePick}
-          />
-          <AdvancedFilterDialog
-            open={advancedFilterOpen && advancedFilterAuthority !== null}
-            translate={t}
-            defaultList={advancedFilterAuthority?.defaultList ?? ""}
-            defaultCriteria={advancedFilterAuthority?.defaultCriteria ?? ""}
-            modeAvailability={advancedFilterModeAvailability}
-            onApply={runAdvancedFilter}
-            onClose={closeAdvancedFilter}
-            rangePick={rangePick}
-          />
+          {null}
+          {null}
           {errorOptionsMenu && errorOptionsFinding ? (
             <SpreadsheetErrorOptionsMenu
               anchor={errorOptionsMenu}
@@ -69135,18 +62441,7 @@ function SpreadsheetWindow({
               onClose={() => setErrorOptionsMenu(null)}
             />
           ) : null}
-          {errorCheckingOptionsOpen ? (
-            <SpreadsheetErrorCheckingOptionsDialog
-              hasIgnoredErrors={workbookHasIgnoredErrors}
-              resetDisabledReason={
-                autosave.readOnly
-                  ? (autosave.readOnlyReason ?? t("spreadsheet.commandStatus.noEditAccess"))
-                  : undefined
-              }
-              onResetIgnoredErrors={resetIgnoredErrors}
-              onClose={() => setErrorCheckingOptionsOpen(false)}
-            />
-          ) : null}
+          {null}
           {errorCheckOpen ? (
             <Suspense fallback={<SpreadsheetDialogLoading label={t("common.loading")} />}>
               <ErrorCheckPanel
@@ -74140,20 +67435,7 @@ function SpreadsheetWindow({
         items={spreadsheetCommandSearchItems}
         translate={t}
         onExecute={(controlId) => {
-          const local: Readonly<Record<string, () => void>> = {
-            [ERROR_CHECKING_OPTIONS_SEARCH_ID]: () =>
-              setErrorCheckingOptionsOpen(true),
-            [DATA_CONVERSION_OPTIONS_SEARCH_ID]: openDataConversionOptions,
-            [EYE_CARE_SEARCH_ID]: toggleEyeCare,
-            [SPELL_CHECK_WHILE_TYPING_SEARCH_ID]: toggleSpellCheck,
-            [TIMELINE_SEARCH_ID]: () => setTimelinePanelOpen(true),
-            [FILL_BLANKS_SEARCH_ID]: () => toggleFillBlanks(),
-            [CUSTOM_LISTS_SEARCH_ID]: () => toggleCustomLists(),
-            // The Form command lives on no visible tab (Excel adds it from
-            // Customize the Ribbon); found here it opens wherever the
-            // ribbon is, not only while the Data tab has its button.
-            "XLSCTL.DATA.FORM.MRAI.DIALOG": () => { if (!dataFormOpen) openDataForm(); },
-          };
+          const local: Readonly<Record<string, () => void>> = { [DATA_CONVERSION_OPTIONS_SEARCH_ID]: openDataConversionOptions, [EYE_CARE_SEARCH_ID]: toggleEyeCare, [SPELL_CHECK_WHILE_TYPING_SEARCH_ID]: toggleSpellCheck, [TIMELINE_SEARCH_ID]: () => setTimelinePanelOpen(true), [FILL_BLANKS_SEARCH_ID]: () => toggleFillBlanks(), [CUSTOM_LISTS_SEARCH_ID]: () => toggleCustomLists() };
           const run = local[controlId];
           if (!run) return executeVisibleCommand(controlId);
           run();
@@ -74343,21 +67625,7 @@ function SpreadsheetWindow({
           }}
         />
       ) : null}
-      {dataFromPictureDialogAuthority ? (
-        <SpreadsheetDataFromPictureDialog
-          open
-          locale={locale}
-          pageId={pageId}
-          source={dataFromPictureDialogAuthority.source}
-          capability={dataFromPictureDialogAuthority.capability}
-          returnFocusRef={dataFromPictureTriggerRef}
-          onCancel={() => {
-            dataFromPictureLaunchSourceRef.current = null;
-            setDataFromPictureDialogAuthority(null);
-          }}
-          onCommit={commitDataFromPicture}
-        />
-      ) : null}
+      {null}
       {/* The Docs glass mini toolbar over characters selected in the cell
           being edited (Excel's Mini Toolbar on a selection). */}
       {/* While an on-screen keyboard is up for a cell, the formula bar or a
@@ -74483,19 +67751,7 @@ function SpreadsheetWindow({
         ribbon can open them on their own. */}
       {/* Excel's Spelling dialog (Review > Spelling, F7): a card over the
           workbook without a dimmer, so the flagged cell stays in view. */}
-      {spellingLaunch ? (
-        <SpreadsheetSpellingDialog
-          key={spellingLaunch.id}
-          launch={spellingLaunch}
-          scope={pageId}
-          host={spellingHostFor(spellingLaunch.scope)}
-          onClose={() => {
-            setSpellingLaunch(null);
-            // The keyboard goes back to the grid, on the cell last checked.
-            returnFocusToActiveCellRef.current();
-          }}
-        />
-      ) : null}
+      {null}
       <OfficeDialogShell open={chartMoveDialog!==null} title={t("spreadsheet.uiCopy.moveChart")} description={null} defaultActionLabel={t("spreadsheet.fmtOk")} cancelActionLabel={t("common.cancel")}
         onDefaultAction={applyDesktopChartMove} onCancel={()=>setChartMoveDialog(null)} returnFocusRef={chartMoveTriggerRef} testIdPrefix="spreadsheet-chart-move">
         <label className={dialogParts.row}><input type="radio" name="chart-move-destination" checked={chartMoveDialog?.target==="new"} onChange={()=>setChartMoveDialog(draft=>draft?{...draft,target:"new",error:undefined}:draft)}/><SpreadsheetDialogIcon name="newSheet" />{t("spreadsheet.uiCopy.newSheet")}
@@ -74582,41 +67838,7 @@ function SpreadsheetWindow({
           }
         />
       ) : null}
-      {renderSpreadsheetNameManagerDialog({
-        rangePick,
-        beginCreateNameManagerEntry,
-        beginEditNameManagerEntry,
-        closeNameManager,
-        executeNameManagerApply,
-        executeNameManagerDelete,
-        formulaNameMutationCommandRef,
-        gridActiveCellFocusTarget,
-        nameManagerDraft,
-        nameManagerDraftProblem,
-        nameManagerError,
-        nameManagerFilter,
-        nameManagerInputRef,
-        nameManagerMode,
-        nameManagerOpen,
-        nameManagerProblemId,
-        nameManagerReturnFocusRef,
-        nameManagerRows,
-        nameManagerSelectedIdentity,
-        nameManagerSort,
-        selectedNameManagerEntry,
-        setNameManagerDraft,
-        setNameManagerError,
-        setNameManagerFilter,
-        setNameManagerMode,
-        setNameManagerSelectedIdentity,
-        setNameManagerSort,
-        sheet,
-        sheets,
-        t,
-        visibleCommandDomStateProps,
-        visibleCommandReason,
-        visibleCommandState,
-      })}
+      {null}
       {renderSpreadsheetRenamePivotTableDialog({
         commitNavigationPivotRename,
         navigationActionReturnFocusRef,
@@ -74641,31 +67863,9 @@ function SpreadsheetWindow({
         setNavigationPictureRenameDraft,
         t,
       })}
-      {renderSpreadsheetSheetViewScopeDialog({
-        resolveSheetViewScopePrompt,
-        setSheetViewScopePrompt,
-        sheetViewScopePrompt,
-        t,
-      })}
-      {renderSpreadsheetSheetViewOptionsDialog({
-        commitSheetViewDialog,
-        deleteSelectedSheetView,
-        duplicateSelectedSheetView,
-        selectedSheetViewOption,
-        setSheetViewDialog,
-        sheet,
-        sheetViewDialog,
-        sheetViewDialogInputRef,
-        sheetViewReturnFocusRef,
-        t,
-        webDataReviewViewLabels,
-      })}
-      {renderSpreadsheetAccessibilityDialog({
-        reviewDialogMode,
-        setReviewDialogMode,
-        t,
-        workbookReviewStats,
-      })}
+      {null}
+      {null}
+      {null}
       {versionHistoryOpen &&
       !guestMode &&
       pageId &&
@@ -74712,24 +67912,7 @@ function SpreadsheetWindow({
           edges={SPREADSHEET_TASK_PANE_EDGES}
           pane="changes"
         >
-          <SpreadsheetChangesPane
-            entries={changeLog.pane.entries}
-            status={changeLog.pane.status}
-            hasMore={changeLog.pane.hasMore}
-            loadingMore={changeLog.pane.loadingMore}
-            retentionDays={changeLog.pane.retentionDays}
-            scope={changeLog.pane.scope}
-            activeSheetName={sheet.name}
-            rangeText={changeLog.pane.rangeText}
-            rangeInvalid={changeLog.pane.rangeInvalid}
-            locale={locale}
-            onScopeChange={(next) => changeLog.pane.changeScope(next, selRect)}
-            onRangeTextChange={changeLog.pane.setRangeText}
-            onApplyRange={() => changeLog.pane.applyRange(changeLog.pane.rangeText)}
-            onLoadMore={changeLog.pane.loadMore}
-            onSelect={selectChangeEntry}
-            onClose={changeLog.closePane}
-          />
+          {null}
         </OfficeDockedPane>
       ) : null}
       {/* Go To Special (Home > Find & Select > Go To Special...): Excel's
@@ -74759,26 +67942,7 @@ function SpreadsheetWindow({
           on the left, Excel's buttons down the right, and Close as the only
           way out -- Excel's form has no OK. Enter in a field steps to the next
           record, saving the edit on the way, as Excel's does; Escape closes. */}
-      {dataFormOpen ? (
-        renderSpreadsheetDataFormDialog({
-          closeDataForm,
-          dataFormCriteria,
-          dataFormDialogRef,
-          dataFormRecord,
-          dataFormShape,
-          dataFormStatus,
-          dataFormValues,
-          executeVisibleCommand,
-          gridActiveCellFocusTarget,
-          setDataFormCriteria,
-          setDataFormDraft,
-          setDataFormRecordBaseline,
-          sheet,
-          t,
-          visibleCommandDomActionProps,
-          visibleCommandState,
-        })
-      ) : null}
+      {null}
       {/* The conditional-format panel, out of the drawer for the same
           reason as the others: anchored inside a collapsed subtree it
           could not render at all. */}
@@ -74851,17 +68015,7 @@ function SpreadsheetWindow({
           value={funcArgsValues[funcArgsPicking.index] ?? ""}
         />
       ) : null}
-      {validationDialogOpen && validationSourcePicking ? (
-        <SpreadsheetRangePickerBar
-          dialogLabel={t("spreadsheet.dataValidationMenu")}
-          expandLabel={t("spreadsheet.cfDialog.expand")}
-          inputLabel={t("spreadsheet.validationSource")}
-          onChange={setValListValues}
-          onDone={finishValidationSourcePick}
-          testIdPrefix="spreadsheet-validation-source"
-          value={valListValues}
-        />
-      ) : null}
+      {null}
       {/* Data > Data Validation on the shared shell: Excel's four tabs
           (Settings, Input Message, Error Alert, IME Mode) in the tab strip,
           Clear All at the footer's start, then Cancel and OK. Collapse
@@ -74881,93 +68035,7 @@ function SpreadsheetWindow({
           visibleCommandState,
         })
       ) : null}
-      {validationDialogOpen && !validationSourcePicking ? (
-        renderSpreadsheetDataValidationDialog({
-          closeValidationDialog,
-          executeDataValidationApply,
-          gridActiveCellFocusTarget,
-          setValApplyToSame,
-          setValDateMax,
-          setValDateMin,
-          setValDepDefault,
-          setValDepOptions,
-          setValDepPerRow,
-          setValDepSourceCol,
-          setValDepSourceRow,
-          setValErrorMessage,
-          setValErrorStyle,
-          setValErrorTitle,
-          setValFormula,
-          setValidationClearPending,
-          setValidationDialogTab,
-          setValidationError,
-          setValIgnoreBlank,
-          setValInputMessage,
-          setValInputTitle,
-          setValInteger,
-          setValKind,
-          setValListValues,
-          setValMax,
-          setValMaxLength,
-          setValMin,
-          setValMinLength,
-          setValNotAfterToday,
-          setValNotBeforeToday,
-          setValOperator,
-          setValShowDropDown,
-          setValShowErrorMessage,
-          setValShowInputMessage,
-          setValTimeMax,
-          setValTimeMin,
-          setValWeekdaysOnly,
-          spreadsheetNativeWriteRoute,
-          startValidationSourcePick,
-          t,
-          valApplyToSame,
-          valDateMax,
-          valDateMin,
-          valDepDefault,
-          valDepOptions,
-          valDepPerRow,
-          valDepSourceCol,
-          valDepSourceRow,
-          valErrorMessage,
-          valErrorStyle,
-          valErrorTitle,
-          valFormula,
-          validationClearPending,
-          validationDialogTab,
-          validationDialogTabs,
-          validationDraftRule,
-          validationError,
-          validationImeUnavailableReason,
-          validationKindRef,
-          validationOpenedRule,
-          validationPatchbackBlockerMessage,
-          valIgnoreBlank,
-          valInputMessage,
-          valInputTitle,
-          valInteger,
-          valKind,
-          valListValues,
-          valMax,
-          valMaxLength,
-          valMin,
-          valMinLength,
-          valNotAfterToday,
-          valNotBeforeToday,
-          valOperator,
-          valShowDropDown,
-          valShowErrorMessage,
-          valShowInputMessage,
-          valTimeMax,
-          valTimeMin,
-          valWeekdaysOnly,
-          visibleCommandDomActionProps,
-          visibleCommandReason,
-          visibleCommandState,
-        })
-      ) : null}
+      {null}
       <SpreadsheetSortDialog
         open={sortDialogOpen && sortDialogAuthority !== null}
         levels={sortDialogLevels}
@@ -76025,154 +69093,13 @@ function SpreadsheetWindow({
           returnFocusTarget={gridActiveCellFocusTarget}
         />
       ) : null}
-      {macroRecordDialog ? (
-        <SpreadsheetRecordMacroDialog
-          defaultName={macroRecordDialog.name}
-          takenNames={new Set(macroEntries.map((entry) => entry.macro.name.toLowerCase()))}
-          personalAvailable={personalMacroStorage() !== null}
-          onStart={startMacroRecording}
-          onCancel={() => setMacroRecordDialog(null)}
-          returnFocusRef={automationDialogReturnFocusRef}
-          // OK starts the recording: as in Excel the keyboard is back on
-          // the active cell, so the first typed step lands in the sheet.
-          returnFocusTarget={() => (macroRecordingRef.current ? gridActiveCellFocusTarget() : null)}
-        />
-      ) : null}
-      {assignMacroTarget ? (
-        <SpreadsheetAssignMacroDialog
-          entries={macroDialogEntries}
-          scope={macroDialogScope}
-          onScopeChange={setMacroDialogScope}
-          initialName={assignMacroTarget.initialName}
-          onAssign={(entry) => {
-            const target = assignMacroTarget;
-            setAssignMacroTarget(null);
-            writeObjectMacro(
-              target,
-              entry ? assignedMacroReference(entry.store, entry.macro.name) : null,
-            );
-          }}
-          onRecord={(name) => {
-            // Excel's Record… records a macro of the typed name, which the
-            // object is assigned.
-            const target = assignMacroTarget;
-            setAssignMacroTarget(null);
-            if (writeObjectMacro(target, name)) openRecordMacroDialog(name);
-          }}
-          onCancel={() => setAssignMacroTarget(null)}
-          returnFocusRef={automationDialogReturnFocusRef}
-        />
-      ) : null}
-      {macroDialogOpen ? (
-        <SpreadsheetMacroDialog
-          entries={macroDialogEntries}
-          scope={macroDialogScope}
-          onScopeChange={setMacroDialogScope}
-          onRun={(entry) => {
-            setMacroDialogOpen(false);
-            startMacroRun(entry.macro, "run");
-          }}
-          onStepInto={(entry) => {
-            setMacroDialogOpen(false);
-            startMacroRun(entry.macro, "step");
-          }}
-          onEdit={(entry) => {
-            setMacroDialogOpen(false);
-            setMacroEditEntry(entry);
-          }}
-          onCreate={(name) => {
-            setMacroDialogOpen(false);
-            openRecordMacroDialog(name);
-          }}
-          onDelete={(entry) => {
-            // Excel asks before deleting a macro.
-            if (window.confirm(t("spreadsheet.macroDialog.confirmDelete", { name: entry.macro.name }))) {
-              saveMacroEntry(entry, null);
-            }
-          }}
-          onOptions={(entry) => {
-            setMacroDialogOpen(false);
-            setMacroOptionsEntry(entry);
-          }}
-          onScripts={() => {
-            setMacroDialogOpen(false);
-            setAutomationCatalogOpen(true);
-          }}
-          onCancel={() => setMacroDialogOpen(false)}
-          returnFocusRef={automationDialogReturnFocusRef}
-        />
-      ) : null}
-      {macroOptionsEntry ? (
-        <SpreadsheetMacroOptionsDialog
-          macro={macroOptionsEntry.macro}
-          onSave={({ shortcut, description }) => {
-            const next: SpreadsheetMacro = { ...macroOptionsEntry.macro };
-            if (shortcut) next.shortcut = shortcut;
-            else delete next.shortcut;
-            if (description) next.description = description;
-            else delete next.description;
-            saveMacroEntry(macroOptionsEntry, next);
-            setMacroOptionsEntry(null);
-            setMacroDialogOpen(true);
-          }}
-          onCancel={() => {
-            setMacroOptionsEntry(null);
-            setMacroDialogOpen(true);
-          }}
-          returnFocusRef={automationDialogReturnFocusRef}
-        />
-      ) : null}
-      {macroEditEntry ? (
-        <SpreadsheetMacroEditDialog
-          macro={macroEditEntry.macro}
-          origin={macroReplayOrigin(macroEditEntry.macro, {
-            row: macroEditEntry.macro.anchorRow ?? 0,
-            col: macroEditEntry.macro.anchorCol ?? 0,
-          })}
-          onSave={(steps) => {
-            saveMacroEntry(macroEditEntry, { ...macroEditEntry.macro, steps });
-            setMacroEditEntry(null);
-            setMacroDialogOpen(true);
-          }}
-          onCancel={() => {
-            setMacroEditEntry(null);
-            setMacroDialogOpen(true);
-          }}
-          returnFocusRef={automationDialogReturnFocusRef}
-        />
-      ) : null}
-      {renderSpreadsheetLocalScriptDialog({
-        automationDialogReturnFocusRef,
-        closeLocalScriptEditor,
-        runScript,
-        scriptDialogOpen,
-        scriptEditorRef,
-        scriptRunning,
-        scriptStatus,
-        scriptText,
-        setScriptText,
-        t,
-      })}
-      {automationCatalogOpen ? (
-        renderSpreadsheetAutomationCatalogDialog({
-          applyFreezeAction,
-          automationDialogReturnFocusRef,
-          clearSelectionBy,
-          deleteMacro,
-          freezeActive,
-          homeNoHyperlinksReason,
-          homeSelectionFacets,
-          macros,
-          manualHiddenCols,
-          manualHiddenRows,
-          openLocalScriptEditor,
-          runAutomationCountBlankRows,
-          runAutomationUnhideAll,
-          runMacro,
-          setAutomationCatalogOpen,
-          t,
-        })
-      ) : null}
+      {null}
+      {null}
+      {null}
+      {null}
+      {null}
+      {null}
+      {null}
       {immersiveReaderUsedRef.current ? <SpreadsheetImmersiveReader
         projection={immersiveReaderProjection}
         open={immersiveReaderOpen}
@@ -76272,99 +69199,15 @@ function SpreadsheetWindow({
           t,
         })
       ) : null}
-      {textToColumnsOpen ? (
-        renderSpreadsheetTextToColumnsDialog({
-          rangePick,
-          closeTextToColumns,
-          dataDialogWriteAllowedRef,
-          gridActiveCellFocusTarget,
-          locale,
-          normalizedTextToColumnsBreaks,
-          rootRef,
-          runTextToColumns,
-          selRect,
-          setTextToColumnsBreaks,
-          setTextToColumnsColumnDateOrder,
-          setTextToColumnsColumnFormat,
-          setTextToColumnsConsecutive,
-          setTextToColumnsCustom,
-          setTextToColumnsDelimiterEnabled,
-          setTextToColumnsDestination,
-          setTextToColumnsMode,
-          setTextToColumnsQualifier,
-          setTextToColumnsSelectedColumn,
-          setTextToColumnsStatus,
-          setTextToColumnsStep,
-          t,
-          textToColumnsBreaks,
-          textToColumnsColumnDateOrders,
-          textToColumnsColumnFormats,
-          textToColumnsConsecutive,
-          textToColumnsCustom,
-          textToColumnsDelimiters,
-          textToColumnsDestination,
-          textToColumnsMode,
-          textToColumnsNumberOptions,
-          textToColumnsPreview,
-          textToColumnsQualifier,
-          textToColumnsReturnToGridRef,
-          textToColumnsSelectedColumn,
-          textToColumnsSourceLines,
-          textToColumnsStatus,
-          textToColumnsStep,
-          textToColumnsToggleRef,
-          updateTextToColumnsFixedWidthBreaks,
-          updateTextToColumnsNumberOptions,
-        })
-      ) : null}
-      {removeDuplicatesOpen && removeDuplicatesAuthority !== null ? (
-        renderSpreadsheetRemoveDuplicatesDialog({
-          closeRemoveDuplicates,
-          dataDialogWriteAllowedRef,
-          gridActiveCellFocusTarget,
-          removeDuplicatesColumnLabels,
-          removeDuplicatesColumns,
-          removeDuplicatesHasHeader,
-          removeDuplicatesKeyCols,
-          removeDuplicatesReturnFocusRef,
-          removeDuplicatesReturnToGridRef,
-          removeDuplicatesStatus,
-          rootRef,
-          runRemoveDuplicates,
-          setRemoveDuplicatesHasHeader,
-          setRemoveDuplicatesKeyCols,
-          setRemoveDuplicatesStatus,
-          t,
-        })
-      ) : null}
+      {null}
+      {null}
       {/* Data > Subtotal, Custom Lists, Locate / Fill Blanks, Fill > Series
           and Insert Sparkline: window-level modals on the shared Office
           dialog shell (focus trap, Escape = Cancel, Enter = the default
           action). Their launchers close Home's All-tools drawer first, as
           Sort's do, so the drawer's native popover never floats over the
           dim, and each returns focus to the grid on close, as Excel does. */}
-      {subtotalOpen ? (
-        renderSpreadsheetSubtotalDialog({
-          gridActiveCellFocusTarget,
-          removeAllSubtotals,
-          runSubtotal,
-          selRect,
-          setSubtotalFunction,
-          setSubtotalGroupCol,
-          setSubtotalOpen,
-          setSubtotalOptions,
-          setSubtotalStatus,
-          setSubtotalValueCols,
-          subtotalColumnLabel,
-          subtotalColumns,
-          subtotalFunction,
-          subtotalGroupCol,
-          subtotalOptions,
-          subtotalStatus,
-          subtotalValueCols,
-          t,
-        })
-      ) : null}
+      {null}
       {/* Custom Lists (File > Options > Custom Lists): user-editable fill
           lists for drag-fill, alongside the built-in weekday/month/CJK lists.
           Add commits a list at once, so the way out is Close, not Cancel. */}
@@ -76551,27 +69394,7 @@ function SpreadsheetWindow({
           onCancel={() => setPrintDialog(null)}
         />
       ) : null}
-      {dataFormDeletePending && typeof document !== "undefined"
-        ? createPortal(
-            <ConfirmDialog
-              open
-              controlId="XLSCTL.DATA.FORM.MRAI.DELETE.APPLY"
-              title={t("spreadsheet.uiCopy.deleteThisRecord")}
-              body={
-                t("spreadsheet.uiCopy.theCurrentRecordWillBeRemovedFromThisList")
-              }
-              confirmLabel={t("presentation.comments.delete")}
-              confirmVariant="destructive"
-              onConfirm={() =>
-                void executeVisibleCommand(
-                  "XLSCTL.DATA.FORM.MRAI.DELETE.APPLY",
-                )
-              }
-              onCancel={() => setDataFormDeletePending(null)}
-            />,
-            popupPortalTarget ?? document.body,
-          )
-        : null}
+      {null}
       {activeDataFormValidationIssue && typeof document !== "undefined"
         ? createPortal(
             <ConfirmDialog
@@ -76603,26 +69426,7 @@ function SpreadsheetWindow({
       {/* Goal Seek: Set cell, To value, By changing cell. OK solves without
           writing and reports the status; while a result is pending OK keeps
           it (Excel's Goal Seek Status OK) and Cancel/Escape discards it. */}
-      {renderSpreadsheetGoalSeekDialog({
-        rangePick,
-        applyGoalSeekResult,
-        goalSeekChangeCell,
-        goalSeekOpen,
-        goalSeekPending,
-        goalSeekSetCell,
-        goalSeekSetInputRef,
-        goalSeekStatus,
-        goalSeekTarget,
-        runGoalSeek,
-        setGoalSeekChangeCell,
-        setGoalSeekOpen,
-        setGoalSeekPending,
-        setGoalSeekSetCell,
-        setGoalSeekStatus,
-        setGoalSeekTarget,
-        t,
-        whatIfAnalysisReturnFocusTarget,
-      })}
+      {null}
       {/* XLS-A073 Solver Parameters, as Excel lays it out: Set Objective,
           To Max / Min / Value Of, By Changing Variable Cells, the Subject to
           the Constraints list with Add / Change / Delete / Reset All /
@@ -76632,146 +69436,23 @@ function SpreadsheetWindow({
           Solver Results "Keep Solver Solution") and Cancel restores. The
           sub-dialogs (Add/Change Constraint, Options, Load/Save Model) take
           the window while they are up. */}
-      {renderSpreadsheetSolverParametersDialog({
-        rangePick,
-        applySolverResult,
-        openSolverConstraintEditor,
-        removeSolverConstraint,
-        runSolver,
-        setSolverChangingRange,
-        setSolverGoalKind,
-        setSolverGoalValue,
-        setSolverMethod,
-        setSolverNonNegative,
-        setSolverObjectiveCell,
-        setSolverOpen,
-        setSolverPending,
-        setSolverSelectedConstraint,
-        setSolverStatus,
-        setSolverSubDialog,
-        solverChangingRange,
-        solverConstraints,
-        solverConstraintText,
-        solverGoalKind,
-        solverGoalValue,
-        solverMethod,
-        solverNonNegative,
-        solverObjectiveCell,
-        solverObjectiveInputRef,
-        solverOpen,
-        solverPending,
-        solverSelectedConstraint,
-        solverStatus,
-        solverSubDialog,
-        solverTrialContinueRef,
-        solverTrialOpen,
-        t,
-        whatIfAnalysisReturnFocusTarget,
-      })}
+      {null}
       {/* Add Constraint / Change Constraint: Cell Reference, the relation
           (<=, =, >=, int, bin, dif) and Constraint. Add keeps the dialog
           open for the next one, as Excel's Add button does. */}
-      {renderSpreadsheetSolverConstraintDialog({
-        rangePick,
-        commitSolverConstraintEditor,
-        setSolverSubDialog,
-        solverConstraintError,
-        solverOpen,
-        solverSubDialog,
-        t,
-      })}
+      {null}
       {/* Solver Options (All Methods): Constraint Precision, Ignore Integer
           Constraints, Iterations. */}
-      {renderSpreadsheetSolverOptionsDialog({
-        setSolverExtra,
-        setSolverIgnoreIntegers,
-        setSolverIterations,
-        setSolverOptionsTab,
-        setSolverPrecision,
-        setSolverSubDialog,
-        solverExtra,
-        solverIgnoreIntegers,
-        solverIterations,
-        solverOpen,
-        solverOptionsTab,
-        solverPrecision,
-        solverSubDialog,
-        t,
-      })}
+      {null}
       {/* Load/Save Model: "a cell range for the model area". */}
-      <OfficeDialogShell
-        open={solverOpen && solverSubDialog?.kind === "model"}
-        title={t("spreadsheet.uiCopy.solverLoadSaveModel")}
-        description={t("spreadsheet.uiCopy.solverModelAreaHint")}
-        testIdPrefix="spreadsheet-solver-model"
-        defaultActionTestId="spreadsheet-solver-model-load"
-        defaultActionLabel={t("spreadsheet.uiCopy.solverLoad")}
-        cancelActionLabel={t("spreadsheet.solverCancel")}
-        onDefaultAction={loadSolverModel}
-        onCancel={() => setSolverSubDialog(null)}
-        footerStart={
-          <button
-            type="button"
-            className={dialogParts.button}
-            onClick={saveSolverModel}
-            data-testid="spreadsheet-solver-model-save"
-          >
-            {t("spreadsheet.uiCopy.solverSave")}
-          </button>
-        }
-        className="sm:max-w-[380px]"
-      >
-        {solverSubDialog?.kind === "model" ? (
-          <label className={dialogParts.field}>
-            <span className={dialogParts.label}>{t("spreadsheet.uiCopy.solverModelArea")}</span>
-            <input
-              value={solverSubDialog.range}
-              onChange={(event) => setSolverSubDialog({ kind: "model", range: event.target.value })}
-              spellCheck={false}
-              data-testid="spreadsheet-solver-model-range"
-            />
-          </label>
-        ) : null}
-        {solverConstraintError ? (
-          <span role="alert" className={dialogParts.error} data-testid="spreadsheet-solver-model-error">
-            {solverConstraintError}
-          </span>
-        ) : null}
-      </OfficeDialogShell>
-      <OfficeDialogShell
-        open={solverOpen && solverSubDialog?.kind === "reset"}
-        title={t("spreadsheet.uiCopy.solverResetAll")}
-        description={t("spreadsheet.uiCopy.solverResetAllConfirm")}
-        testIdPrefix="spreadsheet-solver-reset-confirm"
-        defaultActionTestId="spreadsheet-solver-reset-ok"
-        defaultActionLabel={t("spreadsheet.fmtOk")}
-        cancelActionLabel={t("spreadsheet.solverCancel")}
-        onDefaultAction={confirmSolverReset}
-        onCancel={() => setSolverSubDialog(null)}
-        className="sm:max-w-[360px]"
-      />
+      {null}
+      {null}
       {/* Data Table (XLS-A070): Row input cell and Column input cell; the
           selection's layout names the formulas. OK writes the table over the
           selection through the shared paste path, confirming first when it
           would overwrite values, and closes onto the sheet; a refusal keeps
           the dialog open with its message. */}
-      {renderSpreadsheetDataTableWhatIfDialog({
-        rangePick,
-        gridActiveCellFocusTarget,
-        runWhatIfTable,
-        setWhatIfInputCell,
-        setWhatIfOpen,
-        setWhatIfRowInputCell,
-        setWhatIfStatus,
-        t,
-        whatIfAnalysisReturnFocusTarget,
-        whatIfFormulaInputRef,
-        whatIfInputCell,
-        whatIfOpen,
-        whatIfReturnToGridRef,
-        whatIfRowInputCell,
-        whatIfStatus,
-      })}
+      {null}
       {/* Scenario Manager, laid out as Excel's: the scenario list with Add…,
           Delete and Edit… beside it, the selected scenario's changing cells
           and comment below, Show and Close in the footer. Every action
@@ -76780,101 +69461,25 @@ function SpreadsheetWindow({
           can be neither edited nor deleted. The manager hides while Add /
           Edit Scenario, Scenario Values, Merge Scenarios or Scenario Summary
           is up. */}
-      {renderSpreadsheetScenarioManagerDialog({
-        deleteScenario,
-        openScenarioForm,
-        openScenarioMerge,
-        openScenarioSummary,
-        scenarioForm,
-        scenarioManagerFocusRef,
-        scenarioMergeDraft,
-        scenarioOpen,
-        scenarioStatus,
-        scenarioSummaryDraft,
-        scenarioValuesDraft,
-        selectedScenario,
-        selectedScenarioLocked,
-        setScenarioOpen,
-        setScenarioSelectedName,
-        setScenarioStatus,
-        showScenario,
-        t,
-        visibleScenarios,
-        whatIfAnalysisReturnFocusTarget,
-      })}
+      {null}
       {/* Add Scenario / Edit Scenario. OK validates and moves on to Scenario
           Values; Cancel and Escape go back to the manager. The Changing
           cells box collapses to the picker bar while a range is selected. */}
-      {renderSpreadsheetScenarioEditDialog({
-        scenarioCellsPicking,
-        scenarioForm,
-        scenarioNameInputRef,
-        scenarioOpen,
-        scenarioValuesDraft,
-        setScenarioCellsPicking,
-        setScenarioForm,
-        startScenarioCellsPick,
-        submitScenarioForm,
-        t,
-      })}
-      {scenarioOpen && scenarioForm !== null && scenarioCellsPicking ? (
-        <SpreadsheetRangePickerBar
-          dialogLabel={
-            scenarioForm.mode === "edit"
-              ? t("spreadsheet.scenarioEditTitle")
-              : t("spreadsheet.scenarioAddTitle")
-          }
-          expandLabel={t("spreadsheet.cfDialog.expand")}
-          inputLabel={t("spreadsheet.scenarioChangingCells")}
-          onChange={(changingCells) =>
-            setScenarioForm((current) =>
-              current ? { ...current, changingCells, error: null } : current,
-            )
-          }
-          onDone={() => setScenarioCellsPicking(null)}
-          testIdPrefix="spreadsheet-scenario-cells"
-          value={scenarioForm.changingCells}
-        />
-      ) : null}
+      {null}
+      {null}
       {/* Scenario Values: one box per changing cell, prefilled; OK stores the
           scenario, Cancel goes back to the manager without writing. */}
-      {renderSpreadsheetScenarioValuesDialog({
-        commitScenarioValues,
-        scenarioFirstValueInputRef,
-        scenarioOpen,
-        scenarioValuesDraft,
-        setScenarioForm,
-        setScenarioValuesDraft,
-        t,
-      })}
+      {null}
       {/* Merge Scenarios (Excel): the Book (this workbook) and its sheets; the
           number of scenarios on the picked sheet shows below, and OK copies
           them onto the active sheet. Cancel goes back to the manager. */}
-      {renderSpreadsheetScenarioMergeDialog({
-        commitScenarioMerge,
-        scenarioMergeDraft,
-        scenarioMergeFocusRef,
-        scenarioOpen,
-        setScenarioMergeDraft,
-        sheets,
-        t,
-        title,
-      })}
+      {null}
       {/* Scenario Summary (Excel): Report type (Scenario summary, or the
           Scenario PivotTable report, which needs result cells) and Result
           cells, prefilled with the selection and allowed empty for the
           summary. OK builds the report sheet; a bad reference keeps the
           dialog open. */}
-      {renderSpreadsheetScenarioSummaryDialog({
-        rangePick,
-        commitScenarioSummary,
-        scenarioOpen,
-        scenarioPivotUnavailableReason,
-        scenarioSummaryDraft,
-        scenarioSummaryFocusRef,
-        setScenarioSummaryDraft,
-        t,
-      })}
+      {null}
       {/* Overwrite confirm (Text-to-Columns / What-If Data Table): replaces the
           blocking window.confirm(). Portaled to <body> because the window shell
           is transform-positioned, which would otherwise trap this fixed overlay
@@ -85780,45 +78385,7 @@ function SpreadsheetWindow({
                 ) : null}
                 {null}
               <span ref={inkTrackpadStageMarkerRef} hidden />
-              <DocumentInkTrackpad
-                open={false}
-                preset={inkPresetRef.current}
-                title={t("toolbar.drawTrackpad")}
-                hint={t("toolbar.drawTrackpadHint")}
-                anchor={() => inkTrackpadStageMarkerRef.current?.parentElement ?? null}
-                page={() => {
-                  // The grid under the headers: ink never lands on a header.
-                  const stage = inkTrackpadStageMarkerRef.current?.parentElement;
-                  const rect = stage?.getBoundingClientRect();
-                  if (!rect || rect.width <= 0 || rect.height <= 0) return null;
-                  // The headings stay at the scrollport's edge however far
-                  // the grid has scrolled: the frame keeps clear of them there.
-                  const wrap = gridWrapRef.current;
-                  const wrapRect = wrap?.getBoundingClientRect();
-                  const headingRight =
-                    (wrapRect ? wrapRect.left + (wrap?.clientLeft ?? 0) : rect.left) +
-                    (SPREADSHEET_HEADER_WIDTH_PX * rect.width) / gridStageSize.totalWidth;
-                  const headingBottom =
-                    (wrapRect ? wrapRect.top + (wrap?.clientTop ?? 0) : rect.top) +
-                    (SPREADSHEET_HEADER_HEIGHT_PX * rect.height) / gridStageSize.totalHeight;
-                  return {
-                    left: Math.max(
-                      rect.left +
-                        (SPREADSHEET_HEADER_WIDTH_PX * rect.width) / gridStageSize.totalWidth,
-                      headingRight,
-                    ),
-                    top: Math.max(
-                      rect.top +
-                        (SPREADSHEET_HEADER_HEIGHT_PX * rect.height) / gridStageSize.totalHeight,
-                      headingBottom,
-                    ),
-                    right: rect.right,
-                    bottom: rect.bottom,
-                  };
-                }}
-                onStroke={placeSpreadsheetTrackpadStroke}
-                onClose={() => setInkTrackpad(false)}
-              />
+              {null}
               {null}
               {/* The SmartArt diagram frame (PowerPoint's SmartArt border):
                   drawn around every member while one of them is selected. Its
@@ -86347,58 +78914,14 @@ function SpreadsheetWindow({
         cellLabel={remarkCellLabel}
         editingKey={commentOpen ? activeKey : null}
         getComment={liveActiveSheetComment}
-        notesPinned={notesShownAll}
+        notesPinned={false}
         rootRef={rootRef}
         shownNotesPresent={shownNotesPresent}
         translate={t}
         version={sheet}
       />
-      {navigationPaneOpen ? (
-        <OfficeDockedPane
-          docks={sheetTaskPaneDocks}
-          edges={SPREADSHEET_TASK_PANE_EDGES}
-          pane="navigation"
-        >
-          <SpreadsheetNavigationPane
-            className={spreadsheetHomeStyles.chartFormatPaneFill}
-            sheets={navigationSheets}
-            activeSheetId={sheet.id}
-            selectedElement={selectedNavigationElement}
-            labels={{
-              title: t("spreadsheet.view.navigationPaneTitle"),
-              close: t("spreadsheet.view.navigationClose"),
-              expandSheet: (values) => t("spreadsheet.view.navigationExpandSheet", { sheet: values.sheet }),
-              collapseSheet: (values) => t("spreadsheet.view.navigationCollapseSheet", { sheet: values.sheet }),
-              sheets: t("spreadsheet.view.navigationSheets"),
-              search: t("spreadsheet.view.navigationSearch"),
-              clearSearch: t("spreadsheet.view.navigationSearchClear"),
-              namedRanges: t("spreadsheet.view.navigationNamedRanges"),
-              tables: t("spreadsheet.view.navigationTables"),
-              charts: t("spreadsheet.view.navigationCharts"),
-              pivotTables: t("spreadsheet.view.navigationPivotTables"),
-              images: t("spreadsheet.view.navigationImages"),
-              shapes: t("spreadsheet.view.navigationShapes"),
-              emptyWorkbook: t("spreadsheet.view.navigationEmpty"),
-              noMatches: t("spreadsheet.view.navigationNoMatches"),
-              emptySheet: (values) => t("spreadsheet.view.navigationEmptySheet", { sheet: values.sheet }),
-              elementActions: (values) => t("spreadsheet.view.navigationElementActions", { element: values.element }),
-            }}
-            onClose={closeNavigationPane}
-            onSelectSheet={selectNavigationSheet}
-            onSelectElement={selectNavigationElement}
-            onElementAction={handleNavigationElementAction}
-          />
-        </OfficeDockedPane>
-      ) : null}
-      {thesaurusOpen ? (
-        <OfficeDockedPane
-          docks={sheetTaskPaneDocks}
-          edges={SPREADSHEET_TASK_PANE_EDGES}
-          pane="thesaurus"
-        >
-          {null}
-        </OfficeDockedPane>
-      ) : null}
+      {null}
+      {null}
       {null}
       {selectionPaneOpen ? (
         renderSpreadsheetSelectionPane({
@@ -86464,7 +78987,7 @@ function SpreadsheetWindow({
         exportStatus,
         exportWarmup,
         filterVisibility,
-        macroRecording,
+        macroRecording: false,
         openRecordMacroDialog,
         renderSpreadsheetZoomDial,
         selectionStatisticsSource,
@@ -87036,22 +79559,8 @@ function SpreadsheetWindow({
           </div>
         </OfficeDialogShell>
       ) : null}
-      {renderSpreadsheetEditRangesDialog({
-        commandDialogReturnFocusTarget,
-        commitEditRanges,
-        editRangesDialog,
-        selRect,
-        setEditRangesDialog,
-        sheet,
-        t,
-      })}
-      {renderSpreadsheetEditRangeConfirmDialog({
-        commandDialogReturnFocusTarget,
-        editRangesDialog,
-        saveEditRangeEditor,
-        setEditRangesDialog,
-        t,
-      })}
+      {null}
+      {null}
       {editRangeUnlock ? (
         // XLS-A028: Excel's Unlock Range prompt.
         <OfficeDialogShell
@@ -87173,13 +79682,7 @@ function SpreadsheetWindow({
           </div>
         </OfficeDialogShell>
       ) : null}
-      {renderSpreadsheetAddCustomViewDialog({
-        addCustomView,
-        commandDialogReturnFocusTarget,
-        customViewsDialog,
-        setCustomViewsDialog,
-        t,
-      })}
+      {null}
       {customViewsDialog?.confirmDelete ? (
         <OfficeDialogShell
           open
@@ -87231,16 +79734,7 @@ function SpreadsheetWindow({
           className="sm:max-w-[380px]"
         />
       ) : null}
-      {renderSpreadsheetPasteNamesDialog({
-        commandDialogReturnFocusTarget,
-        insertNameIntoFormula,
-        pasteNameList,
-        pasteNamesDraft,
-        setPasteNamesDraft,
-        sheet,
-        t,
-        workbookNamedRanges,
-      })}
+      {null}
       {sheetScreenClipping ? (
         <OfficeScreenClippingOverlay
           file={sheetScreenClipping}
@@ -87844,39 +80338,6 @@ function SpreadsheetWindow({
               ),
               shortcut: officeShortcut("formatCells"),
             };
-            // Get Data from Table/Range: the Data tab's own query command.
-            const getDataItem = commandItem(
-              "spreadsheet-context-get-data",
-              t("spreadsheet.contextMenu.getDataFromTable"),
-              "XLSCTL.DATA.QUERY.FROM_TABLE_RANGE",
-              "getData",
-              true,
-            );
-            // Show Changes: the sheet tab's command, offered on the grid as
-            // Excel for the web does.
-            const showChangesItem: ContextItem = {
-              ...commandItem(
-                "spreadsheet-context-show-changes",
-                t("spreadsheet.review.showChanges"),
-                "XLSCTL.REVIEW.CHANGES.SHOW",
-                "showChanges",
-                true,
-              ),
-              onSelect: () => {
-                void 0;
-                // Excel narrows the pane to the cell or range right-clicked.
-                changeLogOpenRequestRef.current = {
-                  scope: "range",
-                  r1: selRect.r1,
-                  c1: selRect.c1,
-                  r2: selRect.r2,
-                  c2: selRect.c2,
-                };
-                scheduleRaf(
-                  () => void executeVisibleCommand("XLSCTL.REVIEW.CHANGES.SHOW"),
-                );
-              },
-            };
             // Insert N rows above / below and N columns left / right: the
             // row and column menus' commands, on the selection's lines.
             // On a protected sheet each item answers to its own Excel
@@ -87982,15 +80443,7 @@ function SpreadsheetWindow({
                     rowMenu ? autoFitRows(lines) : autoFitColumns(lines),
                 },
               ];
-              body = [
-                ...clipboardSection,
-                separator("structure"),
-                renderItem(rowMenu ? insertRowsAboveItem : insertColumnsLeftItem),
-                renderItem(rowMenu ? insertRowsBelowItem : insertColumnsRightItem),
-                renderItem(rowMenu ? deleteRowsItem : deleteColumnsItem),
-                renderItem(clearContentsItem),
-                separator("lines"),
-                renderItem({
+              body = [...clipboardSection, separator("structure"), renderItem(rowMenu ? insertRowsAboveItem : insertColumnsLeftItem), renderItem(rowMenu ? insertRowsBelowItem : insertColumnsRightItem), renderItem(rowMenu ? deleteRowsItem : deleteColumnsItem), renderItem(clearContentsItem), separator("lines"), renderItem({
                   testId: rowMenu
                     ? "spreadsheet-context-hide-rows"
                     : "spreadsheet-context-hide-cols",
@@ -88001,8 +80454,7 @@ function SpreadsheetWindow({
                       }),
                   icon: glyph("hide"),
                   onSelect: rowMenu ? hideRowsInSelection : hideColsInSelection,
-                }),
-                // Unhide always sits under Hide, as on Excel's desktop
+                }), // Unhide always sits under Hide, as on Excel's desktop
                 // header menu (XLS-A077), and is live as Excel's is; with no
                 // hidden line in the selection it says how to reach one
                 // (video audit S05).
@@ -88015,22 +80467,14 @@ function SpreadsheetWindow({
                   onSelect: rowMenu
                     ? unhideRowsInSelection
                     : unhideColsInSelection,
-                }),
-                renderSubmenu(
+                }), renderSubmenu(
                   rowMenu ? "row-height" : "column-width",
                   rowMenu
                     ? t("spreadsheet.contextMenu.rowHeight")
                     : t("spreadsheet.contextMenu.columnWidth"),
                   sizeEntries,
                   rowMenu ? "rowHeight" : "columnWidth",
-                ),
-                separator("format"),
-                renderItem(formatCellsItem),
-                separator("query"),
-                renderItem(getDataItem),
-                separator("review"),
-                renderItem(showChangesItem),
-              ];
+                ), separator("format"), renderItem(formatCellsItem), separator("query"), separator("review")];
             } else {
               const { row: activeRow, col: activeCol } = activeCell;
               const activeModel = sheet.cells[`${activeRow}:${activeCol}`];
@@ -88429,9 +80873,6 @@ function SpreadsheetWindow({
               const pickListEmpty =
                 pickListOptionsFor(cellContextMenu.row, cellContextMenu.col)
                   .length === 0;
-              const defineNameState = visibleCommandState(
-                "XLSCTL.FORMULAS.NAME.MANAGER",
-              );
               // Under a link the sheet holds over an area the cell has that
               // link to edit, open and remove, as a cell with its own has.
               const overActive = linkOverPlace(activeModel, sheetHyperlinkAreas, activeRow, activeCol);
@@ -88630,41 +81071,27 @@ function SpreadsheetWindow({
                     ),
                   ]
                 : [];
-              body = [
-                ...clipboardSection,
-                separator("structure"),
-                renderSubmenu(
+              body = [...clipboardSection, separator("structure"), renderSubmenu(
                   "insert-cells",
                   t("spreadsheet.contextMenu.insert"),
                   insertEntries,
                   "insert",
-                ),
-                renderSubmenu(
+                ), renderSubmenu(
                   "delete-cells",
                   t("spreadsheet.contextMenu.delete"),
                   deleteEntries,
                   "delete",
-                ),
-                ...tableMenus,
-                renderItem(clearContentsItem),
-                separator("data"),
-                renderSubmenu(
+                ), ...tableMenus, renderItem(clearContentsItem), separator("data"), renderSubmenu(
                   "filter",
                   t("spreadsheet.contextMenu.filter"),
                   filterEntries,
                   "filter",
-                ),
-                renderSubmenu(
+                ), renderSubmenu(
                   "sort",
                   t("spreadsheet.contextMenu.sort"),
                   sortEntries,
                   "sort",
-                ),
-                ...tableCommandMenu,
-                separator("cell"),
-                renderItem(formatCellsItem),
-                ...linkItems.map((item) => renderItem(item)),
-                // A picture placed in the active cell (Excel: right-click
+                ), ...tableCommandMenu, separator("cell"), renderItem(formatCellsItem), ...linkItems.map((item) => renderItem(item)), // A picture placed in the active cell (Excel: right-click
                 // the picture, Picture in Cell > Place over Cells; View Alt
                 // Text).
                 ...(activeCellPicture
@@ -88706,11 +81133,7 @@ function SpreadsheetWindow({
                         "picture",
                       ),
                     ]
-                  : []),
-                separator("query"),
-                renderItem(getDataItem),
-                separator("review"),
-                renderItem({
+                  : []), separator("query"), separator("review"), renderItem({
                   testId: "spreadsheet-context-comment",
                   label: t("spreadsheet.contextMenu.newComment"),
                   icon: glyph("newComment"),
@@ -88733,24 +81156,8 @@ function SpreadsheetWindow({
                     setSelectedObjectId(null);
                     openCellCommentComposer();
                   },
-                }),
-                // Excel's cell menu offers New Note on a plain cell and Edit
-                // Note plus Delete Note on a cell that has one.
-                renderItem({
-                  ...commandItem(
-                    "spreadsheet-context-note",
-                    hasNote(activeModel?.comment)
-                      ? t("spreadsheet.review.editNote")
-                      : t("spreadsheet.contextMenu.newNote"),
-                    "XLSCTL.REVIEW.NOTE.NEW",
-                    "newNote",
-                    true,
-                  ),
-                  shortcut: officeShortcut("newNote"),
-                }),
-                ...(hasNote(activeModel?.comment)
-                  ? [
-                      renderItem({
+                }), ...(hasNote(activeModel?.comment)
+                  ? [renderItem({
                         testId: "spreadsheet-context-delete-note",
                         label: t("spreadsheet.contextMenu.deleteNote"),
                         icon: glyph("delete"),
@@ -88766,28 +81173,13 @@ function SpreadsheetWindow({
                               )
                             : undefined,
                         onSelect: deleteActiveCellNote,
-                      }),
-                      // Show/Hide Note keeps the note open on the sheet.
-                      renderItem(
-                        commandItem(
-                          "spreadsheet-context-show-hide-note",
-                          t("spreadsheet.review.showHideNote"),
-                          "XLSCTL.REVIEW.NOTE.SHOW_HIDE",
-                          "hide",
-                        ),
-                      ),
-                    ]
-                  : []),
-                separator("share"),
-                renderSubmenu(
+                      })]
+                  : []), separator("share"), renderSubmenu(
                   "copy-link",
                   t("spreadsheet.contextMenu.copyLink"),
                   copyLinkEntries,
                   "copyLink",
-                ),
-                renderItem(showChangesItem),
-                separator("extras"),
-                // The product's own rows, after Excel for the web's: Pick From
+                ), separator("extras"), // The product's own rows, after Excel for the web's: Pick From
                 // Drop-down List (the distinct values already in the column,
                 // offered on the right-clicked cell) and Define Name….
                 renderItem({
@@ -88804,26 +81196,7 @@ function SpreadsheetWindow({
                     setListPicker(null);
                     setPickFromList({ row, col });
                   },
-                }),
-                // Define Name… is Excel's New Name dialog, which here is the
-                // Name Manager's own New Name form.
-                renderItem({
-                  testId: "spreadsheet-context-define-name",
-                  label: t("spreadsheet.contextMenu.defineName"),
-                  icon: glyph("rename"),
-                  disabled: !defineNameState.enabled,
-                  reason: defineNameState.enabled
-                    ? undefined
-                    : visibleCommandReason(defineNameState.reasonKey),
-                  opensUi: true,
-                  onSelect: () =>
-                    void executeVisibleCommand(
-                      "XLSCTL.FORMULAS.NAME.MANAGER",
-                    ).then((opened) => {
-                      if (opened) beginCreateNameManagerEntry();
-                    }),
-                }),
-              ];
+                })];
             }
             // Rendered on <body>: the menu is fixed to the viewport at the
             // press's client coordinates, and an ancestor with a transform

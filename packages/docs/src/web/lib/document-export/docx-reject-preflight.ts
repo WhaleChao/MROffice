@@ -12,7 +12,7 @@ import {
 import {
   projectTrackedChanges,
   type RevisionExportPolicy,
-} from "@mrnote/core/web/lib/document-export/revision-policy.ts";
+} from "./revision-policy";
 
 export interface DocumentExportTreeNode {
   readonly type?: string;

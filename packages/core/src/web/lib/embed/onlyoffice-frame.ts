@@ -42,7 +42,14 @@ export type OnlyofficeEvent =
   | "onMetaChange"
   | "onRequestRefreshFile"
   | "onOutdatedVersion"
-  | "onRequestReferenceData";
+  | "onRequestReferenceData"
+  | "onRequestCreateNew"
+  | "onRequestSharingSettings"
+  | "onMakeActionLink"
+  | "onRequestReferenceSource"
+  | "onRequestOpen"
+  | "onRequestUsers"
+  | "onRequestSendNotify";
 
 /** A group permission: null for every group, else the groups named ("" is
  * the people in no group; [] nobody's). */
@@ -90,6 +97,80 @@ export interface OnlyofficeView {
   /** editorConfig.region (a BCP 47 tag): the spreadsheet editor's number
    * separators; null, the interface language's. */
   readonly region: string | null;
+  /** customization.about (+ customer, white label). */
+  readonly about: OnlyofficeAbout;
+  /** customization.hideRulers / hideNotes / hideRightMenu (null: not said). */
+  readonly hideRulers: boolean | null;
+  readonly hideNotes: boolean | null;
+  readonly hideRightMenu: boolean | null;
+  /** customization.unit (location / region before it), null: the editors' own. */
+  readonly unit: "cm" | "pt" | "inch" | null;
+  /** customization.font's size (px), white label. */
+  readonly fontSize: number | null;
+  readonly anonymous: { readonly request: boolean; readonly label: string | null };
+  readonly features: OnlyofficeFeatures;
+  /** customization.layout's switches that are off (dotted keys, e.g. "statusBar", "toolbar.draw"). */
+  readonly hidden: readonly string[];
+  /** createUrl / onRequestCreateNew, templates, recent. */
+  readonly create: { readonly url: string | null; readonly event: boolean };
+  readonly templates: readonly { readonly title: string | null; readonly url: string; readonly image: string | null }[];
+  readonly recent: readonly { readonly title: string | null; readonly url: string; readonly folder: string | null }[];
+  readonly coEditing: { readonly mode: "fast" | "strict"; readonly change: boolean };
+  /** type "embedded": the embedded viewer's buttons and where its bar sits. */
+  readonly embedded: OnlyofficeEmbedded | null;
+  /** editorConfig.actionLink: where the file opens (a bookmark, a comment). */
+  readonly actionLink: { readonly type: "bookmark" | "comment"; readonly data: string } | null;
+   
+  readonly info: OnlyofficeInfo;
+}
+
+export interface OnlyofficeAbout {
+  readonly visible: boolean;
+  readonly customer: {
+    readonly name: string | null;
+    readonly address: string | null;
+    readonly mail: string | null;
+    readonly phone: string | null;
+    readonly www: string | null;
+    readonly info: string | null;
+    readonly logo: string | null;
+    readonly logoDark: string | null;
+  } | null;
+}
+
+/** A setting the integration fixes at open (`mode`) and may let the person change (`change`). */
+export interface OnlyofficeSetting<T> {
+  readonly mode: T | null;
+  readonly change: boolean;
+}
+
+export interface OnlyofficeFeatures {
+  readonly spellcheck: OnlyofficeSetting<boolean> | null;
+  readonly roles: boolean;
+  readonly tabStyle: OnlyofficeSetting<"fill" | "line"> | null;
+  readonly tabBackground: OnlyofficeSetting<"header" | "toolbar"> | null;
+}
+
+export interface OnlyofficeEmbedded {
+  readonly embedUrl: string | null;
+  readonly fullscreenUrl: string | null;
+  readonly saveUrl: string | null;
+  readonly shareUrl: string | null;
+  readonly toolbarDocked: "top" | "bottom";
+}
+
+export interface OnlyofficeSharing {
+  readonly user: string;
+  readonly permissions: string | null;
+  readonly isLink: boolean;
+}
+
+export interface OnlyofficeInfo {
+  readonly owner: string | null;
+  readonly uploaded: string | null;
+  readonly folder: string | null;
+  /** null: the config names none (the Info pane lists none). */
+  readonly sharingSettings: readonly OnlyofficeSharing[] | null;
 }
 
 export interface OnlyofficeMobile {
@@ -115,6 +196,86 @@ function text(value: unknown, max = 200): string | null {
 function url(value: unknown): string | null {
   if (typeof value !== "string" || value.length > 2048) return null;
   return /^https:\/\//.test(value) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(value) ? value : null;
+}
+
+/** A picture: an address (shown through the session's picture route) or a data: image. */
+function picture(value: unknown): string | null {
+  if (typeof value === "string" && /^data:image\/[a-z0-9.+-]+;base64,/i.test(value) && value.length <= 400_000) return value;
+  return url(value);
+}
+
+function setting<T extends string | boolean>(value: unknown, allowed: readonly T[]): OnlyofficeSetting<T> | null {
+  if (!value || typeof value !== "object") return null;
+  const wire = value as Record<string, unknown>;
+  return { mode: (allowed as readonly unknown[]).includes(wire.mode) ? (wire.mode as T) : null, change: wire.change !== false };
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function readAbout(value: unknown): OnlyofficeAbout {
+  const wire = record(value);
+  const customer = wire.customer && typeof wire.customer === "object" ? record(wire.customer) : null;
+  return {
+    visible: wire.visible !== false,
+    customer: customer
+      ? {
+          name: text(customer.name, 120),
+          address: text(customer.address, 240),
+          mail: text(customer.mail, 160),
+          phone: text(customer.phone, 60),
+          www: text(customer.www, 240),
+          info: text(customer.info, 500),
+          logo: picture(customer.logo),
+          logoDark: picture(customer.logoDark),
+        }
+      : null,
+  };
+}
+
+function readFeatures(value: unknown): OnlyofficeFeatures {
+  const wire = record(value);
+  return {
+    spellcheck: setting(wire.spellcheck, [true, false] as const),
+    roles: wire.roles !== false,
+    tabStyle: setting(wire.tabStyle, ["fill", "line"] as const),
+    tabBackground: setting(wire.tabBackground, ["header", "toolbar"] as const),
+  };
+}
+
+function readEmbedded(value: unknown): OnlyofficeEmbedded | null {
+  if (!value || typeof value !== "object") return null;
+  const wire = record(value);
+  return {
+    embedUrl: url(wire.embedUrl),
+    fullscreenUrl: url(wire.fullscreenUrl),
+    saveUrl: url(wire.saveUrl),
+    shareUrl: url(wire.shareUrl),
+    toolbarDocked: wire.toolbarDocked === "bottom" ? "bottom" : "top",
+  };
+}
+
+/** setSharingSettings' list (or document.info.sharingSettings). */
+export function readSharing(value: unknown): OnlyofficeSharing[] | null {
+  if (!Array.isArray(value)) return null;
+  const out: OnlyofficeSharing[] = [];
+  for (const item of value.slice(0, 50)) {
+    const wire = record(item);
+    const user = text(wire.user, 160);
+    if (user) out.push({ user, permissions: text(wire.permissions, 80), isLink: wire.isLink === true });
+  }
+  return out;
+}
+
+function readInfo(value: unknown): OnlyofficeInfo {
+  const wire = record(value);
+  return {
+    owner: text(wire.owner, 160),
+    uploaded: text(wire.uploaded, 80),
+    folder: typeof wire.folder === "string" ? wire.folder.slice(0, 240) : null,
+    sharingSettings: readSharing(wire.sharingSettings),
+  };
 }
 
 /** The session view's `onlyoffice`, or null (another kind of session). */
@@ -166,6 +327,33 @@ export function readOnlyofficeView(view: unknown): OnlyofficeView | null {
     outdated: wire.outdated === true,
     metaVersion: typeof wire.meta_version === "number" ? wire.meta_version : 0,
     mobile: readMobile(wire.mobile),
+    about: readAbout(wire.about),
+    hideRulers: typeof wire.hideRulers === "boolean" ? wire.hideRulers : null,
+    hideNotes: typeof wire.hideNotes === "boolean" ? wire.hideNotes : null,
+    hideRightMenu: typeof wire.hideRightMenu === "boolean" ? wire.hideRightMenu : null,
+    unit: wire.unit === "cm" || wire.unit === "pt" || wire.unit === "inch" ? wire.unit : null,
+    fontSize: typeof record(wire.font).size === "number" ? (record(wire.font).size as number) : null,
+    anonymous: { request: record(wire.anonymous).request !== false, label: text(record(wire.anonymous).label, 40) },
+    features: readFeatures(wire.features),
+    hidden: strings(wire.hidden),
+    create: { url: url(record(wire.create).url), event: record(wire.create).event === true },
+    templates: (Array.isArray(wire.templates) ? wire.templates : []).slice(0, 30).flatMap((item) => {
+      const entry = record(item);
+      const target = url(entry.url);
+      return target ? [{ title: text(entry.title, 240), url: target, image: picture(entry.image) }] : [];
+    }),
+    recent: (Array.isArray(wire.recent) ? wire.recent : []).slice(0, 30).flatMap((item) => {
+      const entry = record(item);
+      const target = url(entry.url);
+      return target ? [{ title: text(entry.title, 240), url: target, folder: text(entry.folder, 240) }] : [];
+    }),
+    coEditing: { mode: record(wire.coEditing).mode === "strict" ? "strict" : "fast", change: record(wire.coEditing).change !== false },
+    embedded: readEmbedded(wire.embedded),
+    actionLink:
+      (record(wire.actionLink).type === "bookmark" || record(wire.actionLink).type === "comment") && text(record(wire.actionLink).data, 200)
+        ? { type: record(wire.actionLink).type as "bookmark" | "comment", data: text(record(wire.actionLink).data, 200)! }
+        : null,
+    info: readInfo(wire.info),
   };
 }
 
@@ -288,6 +476,66 @@ export function onlyofficeAllowsFilterChange(): boolean {
 
 export function onlyofficeAllowsContentControlChange(): boolean {
   return current === null || current.modifyContentControl;
+}
+
+/** customization.layout: whether the switch `key` (e.g. "statusBar",
+ * "toolbar.file.info") is on. Outside a session, everything is. */
+export function onlyofficeShows(key: string): boolean {
+  return current === null || !current.hidden.includes(key);
+}
+
+/** customization.hideRulers as the ruler's state at open: Docs' document
+ * editor shows it unless hidden, its presentation editor hides it unless
+ * hideRulers is false. null outside a session (the editor's own default). */
+export function onlyofficeRulerAtOpen(editor: "document" | "presentation"): boolean | null {
+  if (!current) return null;
+  if (current.hideRulers !== null) return !current.hideRulers;
+  return editor === "document";
+}
+
+/** customization.hideNotes: the presentation editor's notes pane at open (null: its own). */
+export function onlyofficeNotesAtOpen(): boolean | null {
+  return current && current.hideNotes !== null ? !current.hideNotes : null;
+}
+
+/** features.roles false: a PDF form's role manager and role picker are not offered. */
+export function onlyofficeAllowsRoles(): boolean {
+  return current === null || current.features.roles;
+}
+
+// ---------------------------------------------------------------------------
+// Action links (onMakeActionLink → setActionLink)
+// ---------------------------------------------------------------------------
+
+let actionLinkWaiter: ((link: string | null) => void) | null = null;
+
+/** Whether the page makes links to a bookmark (onMakeActionLink): the
+ * Bookmark dialog's Get Link is offered. */
+export function onlyofficeMakesActionLinks(): boolean {
+  return handlesEvent("onMakeActionLink");
+}
+
+/** Ask the page for a link that opens the file at `action` (its
+ * setActionLink answers; null after 15 s without an answer). */
+export function requestOnlyofficeActionLink(action: { readonly type: "bookmark" | "comment"; readonly data: string }): Promise<string | null> {
+  actionLinkWaiter?.(null);
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      actionLinkWaiter = null;
+      resolve(null);
+    }, 15_000);
+    actionLinkWaiter = (link) => {
+      window.clearTimeout(timer);
+      actionLinkWaiter = null;
+      resolve(link);
+    };
+    emitIntegrationEvent("onMakeActionLink", { action });
+  });
+}
+
+/** setActionLink's link (the integration channel hands it here). */
+export function deliverOnlyofficeActionLink(link: string): void {
+  actionLinkWaiter?.(typeof link === "string" && link ? link.slice(0, 4096) : null);
 }
 
 /** customization.submitForm false: the form's Submit is not offered. */

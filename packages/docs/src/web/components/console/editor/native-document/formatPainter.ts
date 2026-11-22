@@ -33,8 +33,8 @@ import {
 import { OPEN_TYPE_FEATURES_MARK, TEXT_EFFECTS_MARK } from "@mrnote/core/web/components/console/editor/extensions/TextEffects.ts";
 import { isBoldSelection } from "@mrnote/core/web/components/console/editor/native-document/boldExtension.ts";
 import { resolveDir, type TextDirection } from "@mrnote/core/web/components/console/editor/native-document/documentLayout.ts";
-import { EAL_MARK_NAME } from "@mrnote/core/web/components/console/editor/native-document/eastAsianLayoutExtension.ts";
-import { HIDDEN_TEXT_MARK } from "@mrnote/core/web/components/console/editor/native-document/hiddenTextExtension.ts";
+import { EAL_MARK_NAME } from "./eastAsianLayoutExtension";
+import { HIDDEN_TEXT_MARK } from "./hiddenTextExtension";
 import { paragraphKeepFlag } from "@mrnote/core/web/components/console/editor/native-document/paragraphPagination.ts";
 import { readPreciseIndents } from "@mrnote/core/web/components/console/editor/native-document/preciseIndent.ts";
 

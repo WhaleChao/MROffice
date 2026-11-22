@@ -11,7 +11,7 @@
 import type { EditorState } from "@tiptap/pm/state";
 
 import { normalizeBulletStyle } from "@mrnote/core/web/components/console/editor/native-document/bulletListStyle.ts";
-import { normalizeBulletAlign } from "@mrnote/core/web/components/console/editor/native-document/bulletListExtension.ts";
+import { normalizeBulletAlign } from "./bulletListExtension";
 import type { DocumentListDialogContext } from "./DocumentListDefinitionDialogs";
 import {
   headingListAtSelection,
@@ -28,7 +28,7 @@ import { normalizeListStart, normalizeListStyleType } from "@mrnote/core/web/com
 import {
   orderedListItemAtSelection,
   outermostOrderedList,
-} from "@mrnote/core/web/components/console/editor/native-document/orderedListExtension.ts";
+} from "./orderedListExtension";
 
 export function documentListDialogContext(
   state: EditorState,

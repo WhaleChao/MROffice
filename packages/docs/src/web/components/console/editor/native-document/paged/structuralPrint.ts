@@ -46,7 +46,7 @@ import {
   resolveSectionSheetBands,
 } from "@mrnote/core/web/components/console/editor/native-document/headerFooter.ts";
 import { buildBandRichDom, clipBandsToHalfPage, keepBandObjectsOnPaper, paintBandTextWarps, wrapBandTextAroundObjects } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
-import { stripFormattingMarks } from "@mrnote/core/web/components/console/editor/native-document/formattingMarksExtension.ts";
+import { stripFormattingMarks } from "../formattingMarksExtension";
 import {
   buildFootnoteZoneDom,
   type PagedEditingSeamNote,

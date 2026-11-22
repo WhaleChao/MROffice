@@ -132,3 +132,24 @@ export function gridCellWithDefaultLook<C extends object>(
   if (!blank) { blank = { value: "", kind: "text", style: look }; blankOfDefault.set(look, blank); }
   return blank as C;
 }
+
+/**
+ * The style a copy of the cell `cell` carries: what the position shows, as
+ * Excel copies it. A cell holding a style of its own copies that style; a cell
+ * holding none (the explicit default `{}`, or no style) is xf 0 and copies the
+ * sheet's `defaultStyle` when `useDefault` (the grid draws it so), said
+ * explicitly, so its paste is xf 0's look again and the save writes it in xf 0.
+ * Pasted as `{}` over a cell of another format, the window's copy wrote that
+ * cell a format without xf 0's vertical centre (xlsx-rounds R474-X10 ui C:
+ * A8 of xf 0 copied over E8). `undefined` for no cell: the caller copies the
+ * position's line format there.
+ */
+export function copiedCellStyle<S extends object>(
+  sheet: DefaultLookSheet,
+  cell: { readonly style?: S | null } | undefined,
+  useDefault = true,
+): S | undefined {
+  if (!cell) return undefined;
+  if (nonEmpty(cell.style)) return cell.style;
+  return useDefault && nonEmpty(sheet.defaultStyle) ? (sheet.defaultStyle as S) : (cell.style ?? undefined);
+}

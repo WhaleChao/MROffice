@@ -48,7 +48,7 @@ import { announceCommandResult } from "./spreadsheetWindowHelpers";
 import { type RichPasteOptions } from "./spreadsheetWindowScopeConstants";
 import { type SheetEvaluator } from "@mrnote/core/web/lib/spreadsheet/formula-engine.ts";
 import { type ResolvedNativeGrid } from "../../../../lib/spreadsheet/row-column-buttons";
-import { type GridRect } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
+import { type GridRect } from "../../../../lib/spreadsheet/grid-nav";
 import { type Dispatch, type SetStateAction } from "react";
 import { excelDateSystemArg } from "@mrnote/core/web/lib/spreadsheet/excel-1900-calendar.ts";
 

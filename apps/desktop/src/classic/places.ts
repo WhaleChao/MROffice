@@ -241,8 +241,15 @@ export class Places {
    * A folder's folders and openable documents, folders first, in natural
    * order (2 before 10), hidden items left out; at most
    * ``MAX_LISTED_ENTRIES``, with ``total`` the count of all of them.
+   * ``omit``: folders (resolved) left out of this listing: the places the
+   * tree already shows beside this one (Desktop, Documents and Downloads are
+   * rows of their own, so the home folder does not list them a second time).
    */
-  async list(candidate: unknown, collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" })): Promise<PlaceListing> {
+  async list(
+    candidate: unknown,
+    collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" }),
+    omit?: ReadonlySet<string>,
+  ): Promise<PlaceListing> {
     if (!plainAbsolute(candidate)) return { ok: false, error: "invalid" };
     const dir = this.resolve(candidate);
     if (!dir) {
@@ -278,6 +285,7 @@ export class Places {
             const stat = await fs.promises.stat(itemPath);
             if (stat.isDirectory()) {
               if (PACKAGE_EXTENSIONS.has(path.extname(dirent.name).toLowerCase())) return null;
+              if (omit?.size && omit.has(await fs.promises.realpath(itemPath))) return null;
               return { name: dirent.name, kind: "folder", size: 0, mtimeMs: Math.round(stat.mtimeMs) };
             }
             if (stat.isFile() && isOpenablePath(dirent.name)) {

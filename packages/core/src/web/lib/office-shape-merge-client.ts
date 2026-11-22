@@ -19,7 +19,7 @@
  */
 
 import { callEngine } from "./engine-host/client";
-import type { ToolsMergeShapesOperation } from "./engine-host/tools-types";
+import type { ToolsMergeShapesOperation } from "@/lib/engine-host/tools-types";
 import {
   normalizePresentationCustomPath,
   PRESENTATION_CUSTOM_PATH_GRID,

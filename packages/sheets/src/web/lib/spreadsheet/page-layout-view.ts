@@ -415,6 +415,29 @@ export function printedMergeHoldsAt(
 }
 
 /**
+ * Whether a merge keeps a page that holds no cell of its own: one covering a
+ * row and a column the page prints (`rows`, `cols`: the page's printed lines,
+ * hidden ones left out). A merge in a hidden row keeps nothing: R474-X74's
+ * CASOS merges I3:O3, Q3:V3 and W3:Z3 in hidden row 3, and Windows Excel
+ * prints A:G and H:N (the latter for D59:H59), not O:U or V:Z (14 pages; 16
+ * before). The API's page_shows_line_formats_only goes by the printed rows
+ * and columns alike.
+ */
+export function pageLayoutMergeKeepsPage(
+  merges: readonly { row: number; col: number; rowSpan: number; colSpan: number }[],
+  rows: readonly number[],
+  cols: readonly number[],
+): boolean {
+  if (!rows.length || !cols.length) return false;
+  const rowLow = Math.min(...rows), rowHigh = Math.max(...rows);
+  const colLow = Math.min(...cols), colHigh = Math.max(...cols);
+  return merges.some((merge) => merge.row <= rowHigh && merge.row + merge.rowSpan - 1 >= rowLow
+    && merge.col <= colHigh && merge.col + merge.colSpan - 1 >= colLow
+    && rows.some((row) => row >= merge.row && row < merge.row + merge.rowSpan)
+    && cols.some((col) => col >= merge.col && col < merge.col + merge.colSpan));
+}
+
+/**
  * Whether a row's `spans` (the file's ``spans``) keep a page that holds no
  * cell of its own: only where the page paints a row's or column's format (a
  * fill or border on its blanks, `paintsLineFormat`) -- R51-X06's bordered
