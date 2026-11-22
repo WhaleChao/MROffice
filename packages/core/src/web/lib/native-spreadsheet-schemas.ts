@@ -2489,6 +2489,9 @@ export const spreadsheetSheetSchema = z
               ),
             hyperlinkTooltip: z.string().max(255).optional(),
             hyperlinkDisplay: z.string().max(65_530).optional(),
+            
+            // `hyperlinkRank` counts it (the cells' elements listed before it).
+            hyperlinkRank: z.number().int().min(0).max(10_000_000).optional(),
           })
           .strict(),
       )

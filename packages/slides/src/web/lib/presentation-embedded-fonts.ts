@@ -19,7 +19,7 @@
 import { apiGet } from "@mrnote/core/web/lib/api.ts";
 import { noteFontFaceSource } from "@mrnote/core/web/lib/font-face-declarations.ts";
 import { officeFontSubstitution } from "@mrnote/core/web/lib/office-fonts/substitutes.ts";
-import { windowsOfficeInstalled } from "@mrnote/core/web/lib/office-fonts/windows-office-faces.ts";
+import { windowsOfficeHas, windowsOfficeInstalled } from "@mrnote/core/web/lib/office-fonts/windows-office-faces.ts";
 
 export type PresentationEmbeddedFontRole = "regular" | "bold" | "italic" | "boldItalic";
 
@@ -190,10 +190,17 @@ function registerFace(alias: string, row: EmbeddedFontRow): Promise<boolean> {
 
 
 
+
+
+
+
+
 export function presentationEmbeddedRegularSentinels(
   roles: readonly PresentationEmbeddedFontRole[],
+  typeface?: string,
 ): readonly ("normal" | "italic")[] {
   if (!roles.length || roles.some((role) => role === "regular" || role === "italic")) return [];
+  if (typeface !== undefined && !windowsOfficeHas(typeface)) return [];
   return ["normal", "italic"];
 }
 
@@ -237,7 +244,7 @@ export async function registerPresentationEmbeddedFonts(body: unknown): Promise<
       const ready = await Promise.all(faces.map((face) => registerFace(alias, face)));
       if (!ready.some(Boolean)) return;
       await Promise.all(
-        presentationEmbeddedRegularSentinels(faces.map((face) => face.role)).map((style) =>
+        presentationEmbeddedRegularSentinels(faces.map((face) => face.role), faces[0].family).map((style) =>
           registerSentinel(alias, style, faces[0]),
         ),
       );

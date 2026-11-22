@@ -65,6 +65,9 @@ export interface LiveSpreadsheetEditor {
   /** A new sheet after the last (the window's Insert Sheet), named ``name``
    * when given; null when the workbook refused it. */
   addSheet(name?: string): { id: string; name: string } | null;
+  /** The person's selection on the open sheet (0-based): its active cell and
+   * the selected rectangle. */
+  selection?(): { sheetId: string; row: number; col: number; r1: number; c1: number; r2: number; c2: number } | null;
 }
 
 export interface LivePresentationEditor {
@@ -110,6 +113,24 @@ export type LiveEditorHandle = LiveDocumentEditor | LiveSpreadsheetEditor | Live
 
 const handles = new Map<string, LiveEditorHandle[]>();
 const listeners = new Set<() => void>();
+/** Hear every registration and unregistration (lib/desktop-ai-screen). */
+const changeListeners = new Set<() => void>();
+
+function changed(): void {
+  for (const listener of [...listeners]) listener();
+  for (const listener of [...changeListeners]) listener();
+}
+
+/** The pages with a live editor now, each with the kind of its newest. */
+export function liveEditorPages(): { pageId: string; kind: LiveEditorHandle["kind"] }[] {
+  return [...handles.entries()].filter(([, list]) => list.length > 0).map(([pageId, list]) => ({ pageId, kind: list[0]!.kind }));
+}
+
+/** ``listener`` runs whenever an editor registers or goes; returns the unsubscribe. */
+export function onLiveEditorsChange(listener: () => void): () => void {
+  changeListeners.add(listener);
+  return () => changeListeners.delete(listener);
+}
 
 /** Register ``handle`` for ``pageId`` while the editor is mounted; returns
  * the unregister. The newest registration of a page answers first. */
@@ -118,13 +139,15 @@ export function registerLiveEditor(pageId: string, handle: LiveEditorHandle): ()
   const list = handles.get(pageId) ?? [];
   list.unshift(handle);
   handles.set(pageId, list);
-  for (const listener of [...listeners]) listener();
+  changed();
   return () => {
     const current = handles.get(pageId);
     if (!current) return;
     const at = current.indexOf(handle);
-    if (at >= 0) current.splice(at, 1);
+    if (at < 0) return;
+    current.splice(at, 1);
     if (current.length === 0) handles.delete(pageId);
+    for (const listener of [...changeListeners]) listener();
   };
 }
 

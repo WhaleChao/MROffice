@@ -204,6 +204,30 @@ export function nativeDefaultViewRows(metrics: NativeRowMetrics | undefined, hid
   return rowPx > 0 ? start + Math.ceil(EXCEL_OPEN_VIEW_GRID_PX / rowPx) : undefined;
 }
 
+/** The first row below the grid Windows Excel shows a sheet in when it opens
+ * the workbook (EXCEL_OPEN_VIEW_GRID_PX at the sheet's zoom, below its frozen
+ * rows and from its opening top row), measured by the rows' stated heights
+ * (the file's ht, its last fit) or the default: a sheet at 100% fits those
+ * rows at its own zoom where the rest take the zoom of the zoomed-out sheet
+ * the workbook opens on (lookwin p258/p260-lw). The API's
+ * _open_view_rows_by_stated. */
+export function nativeOpenViewRowsByStated(metrics: NativeRowMetrics | undefined, zoomScale?: unknown, freezeRows?: unknown, openingTopRow?: unknown): number {
+  const fallback = metrics?.default.heightPt;
+  const defaultPt = typeof fallback === "number" && fallback > 0 && fallback <= 409.5 ? fallback : 15;
+  const zoom = typeof zoomScale === "number" && Number.isInteger(zoomScale) && zoomScale >= 10 && zoomScale <= 400 ? zoomScale / 100 : 1;
+  const frozen = typeof freezeRows === "number" && Number.isInteger(freezeRows) && freezeRows > 0 && freezeRows < 1_048_576 ? freezeRows : 0;
+  let row = typeof openingTopRow === "number" && Number.isInteger(openingTopRow) && openingTopRow > frozen && openingTopRow < 1_048_576
+    ? openingTopRow : frozen;
+  let reach = 0;
+  while (reach < EXCEL_OPEN_VIEW_GRID_PX && row < 1_048_576) {
+    const stated = metrics?.rows[String(row)]?.heightPt;
+    const height = typeof stated === "number" && stated >= 0 && stated <= 409.5 ? stated : defaultPt;
+    reach += Math.floor(Math.floor(height / .75 + .5) * zoom + .5);
+    row += 1;
+  }
+  return row;
+}
+
 /** Excel's row limit applies to computed heights as well as authored heights. */
 export function clampNativeAutomaticRowHeight(height: number): number {
   return Math.min(409.5 / .75, height);

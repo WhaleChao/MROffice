@@ -96,7 +96,33 @@ export async function proofOfParagraphAsFormatsBlock(
     // them: the window then asks the weight of it as of any box -- a line of
     // it with an emoji on it takes Bold the same way, `type3Pictures`.)
     return Object.freeze({ ...(await pdfWordsFixedTextProof({ sourceBytes: bytes, selection }, "too-large-to-set-again")),
-      ...read.look, ...(read.type3Pictures ? { type3Pictures: true as const } : {}) });
+      ...read.look, ...(read.type3Pictures ? { type3Pictures: true as const } : {}),
+      ...(read.type3Weight ? { type3Weight: true as const } : {}) });
+  } catch {
+    return null;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+export async function proofOfBoxBoldByType3Passes(
+  bytes: Uint8Array,
+  selection: PdfNativeTextPreparationRequest["selection"],
+): Promise<PdfNativeListTextSelectionProof | null> {
+  try {
+    const read = await mraiNativeTextTakesFormatsWhereItStands({ sourceBytes: bytes, selection });
+    if (!read?.type3Passes) return null;
+    const { pdfWordsFixedTextProof } = await import("./source-text-fallback");
+    return Object.freeze({ ...(await pdfWordsFixedTextProof({ sourceBytes: bytes, selection }, "weight-drawn-again")),
+      ...read.look, type3Text: true as const, ...(read.type3Weight ? { type3Weight: true as const } : {}) });
   } catch {
     return null;
   }
@@ -274,9 +300,15 @@ export async function prepareAndZeroizePdfNativeText(
               reason: error instanceof Error ? error.message.slice(0, 600) : String(error).slice(0, 600) }));
           } catch { /* diagnostics never throw */ }
         }
-        const opened = await openPdfNativeTextInFallbackLane(bytes, input.selection, error);
-        proof = await withStandingLook(opened.proof);
-        blankedSource = opened.blankedSource;
+        // (A box bold by a Type3 show drawn again opens for its weight: the
+        
+        const bold = await proofOfBoxBoldByType3Passes(bytes, input.selection);
+        if (bold) proof = bold;
+        else {
+          const opened = await openPdfNativeTextInFallbackLane(bytes, input.selection, error);
+          proof = await withStandingLook(opened.proof);
+          blankedSource = opened.blankedSource;
+        }
       }
       
       // lines the page draws glyphs their font only calls white space (the

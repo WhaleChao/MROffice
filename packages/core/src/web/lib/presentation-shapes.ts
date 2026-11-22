@@ -1959,6 +1959,7 @@ import { officeRectPathGradientBackground } from "./office-path-gradient";
 import { officeStrokeAlign, type OfficeStrokeAlign } from "./office-shape-line-align";
 import { officeLineFamilyDash, officeStrokeDash, officeStrokeDashArray, type OfficeStrokeDash } from "./office-stroke-dash";
 import { officeStrokeDetail, type OfficeStrokeCap, type OfficeStrokeJoin } from "./office-stroke-detail";
+import { POWERPOINT_SHADOW_BLUR_DEVIATION } from "./office-shadow-effects";
 // Re-exported so the canvas aims its SVG drop shadow with the SAME measured
 // vector the CSS box shadow uses, instead of deriving a second one.
 export { officeShadowOffset };
@@ -2412,7 +2413,8 @@ export function boxShapeCss(
     css.background = shapeFillBackground(style, box);
   }
   if (style.shadow) css.boxShadow = SHAPE_SHADOW_CSS;
-  if(style.shapeShadow)css.boxShadow=officeShadowCss(style.shapeShadow);
+  // Blurred as PowerPoint blurs a shape's shadow (`POWERPOINT_SHADOW_BLUR_DEVIATION`).
+  if(style.shapeShadow)css.boxShadow=officeShadowCss(style.shapeShadow,{blurDeviation:POWERPOINT_SHADOW_BLUR_DEVIATION});
   if (style.opacity < DEFAULT_SHAPE_OPACITY) css.opacity = style.opacity / 100;
   // Compositing: only emit `mix-blend-mode` for a non-default mode so an
   // ordinary (normal) shape keeps no blend property and renders byte-for-byte.

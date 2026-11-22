@@ -147,6 +147,12 @@ contextBridge.exposeInMainWorld("mraiDesktop", {
     enabled: () => ipcRenderer.invoke("mrai:original-autosave"),
     setEnabled: (on: boolean) => ipcRenderer.invoke("mrai:original-autosave", Boolean(on)),
   },
+  /** "Send usage statistics": the app's daily counts for the operators'
+   * dashboard, no names or content (src/classic/usage-report.ts). */
+  usageReports: {
+    enabled: () => ipcRenderer.invoke("mrai:usage-reports"),
+    setEnabled: (on: boolean) => ipcRenderer.invoke("mrai:usage-reports", Boolean(on)),
+  },
   /** The places on this computer the sidebar shows as a folder tree
    * (src/classic/places-ipc.ts; apps/web lib/desktop-places.ts). Every path
    * is checked by the app: inside the home folder, no contents read. */
@@ -249,6 +255,40 @@ contextBridge.exposeInMainWorld("mraiDesktop", {
       const handler = () => listener();
       ipcRenderer.on("mrai:update-changed", handler);
       return () => ipcRenderer.removeListener("mrai:update-changed", handler);
+    },
+  },
+  /** The AI screen (src/classic/ai-screen): AI apps on this computer --
+   * terminal assistants, AI editors -- open, read and edit documents in this
+   * window through the app's local MCP endpoint. The notebook canvas serves
+   * the app's requests (apps/web components/notebook/useDesktopAiScreen):
+   * ``serve`` answers each with ``handler``; ``pages`` says which documents
+   * it shows; Settings reads and changes the endpoint and its allowed apps. */
+  aiScreen: {
+    serve: (handler: (request: unknown) => Promise<unknown>) => {
+      const listener = (_event: unknown, nonce: unknown, request: unknown) => {
+        void Promise.resolve()
+          .then(() => handler(request))
+          .catch((error: unknown) => ({
+            ok: false,
+            error: { code: "embed_command_failed", message: error instanceof Error ? error.message : String(error) },
+          }))
+          .then((answer) => ipcRenderer.invoke("mrai:ai-screen-answer", String(nonce), answer));
+      };
+      ipcRenderer.on("mrai:ai-screen-request", listener);
+      void ipcRenderer.invoke("mrai:ai-screen-serve", true);
+      return () => {
+        ipcRenderer.removeListener("mrai:ai-screen-request", listener);
+        void ipcRenderer.invoke("mrai:ai-screen-serve", false);
+      };
+    },
+    pages: (pages: unknown) => ipcRenderer.invoke("mrai:ai-screen-pages", Array.isArray(pages) ? pages : []),
+    state: () => ipcRenderer.invoke("mrai:ai-screen-state"),
+    setEnabled: (on: boolean) => ipcRenderer.invoke("mrai:ai-screen-set-enabled", on === true),
+    revoke: (name: string) => ipcRenderer.invoke("mrai:ai-screen-revoke", String(name)),
+    onChange: (listener: () => void) => {
+      const handler = () => listener();
+      ipcRenderer.on("mrai:ai-screen-changed", handler);
+      return () => ipcRenderer.removeListener("mrai:ai-screen-changed", handler);
     },
   },
   aiAccount: () => ipcRenderer.invoke("mrai:ai-account"),

@@ -43,7 +43,7 @@ import {
   isOfficePictureEffectPreset,
   officePictureEffectPresetEffects,
 } from "./office-picture-effect-presets";
-import { officeShadowCss, type OfficeShadowEffect } from "./office-shadow-effects";
+import { officeShadowCss, officeShadowSilhouette, type OfficeShadowEffect } from "./office-shadow-effects";
 
 const EMU_PER_PX = 9_525;
 
@@ -109,12 +109,18 @@ function rgba(hex: string, alpha: number): string {
  * along `dir`, its blur and colour. A Perspective shadow's scale and skew
  * are not in it (the silhouette draws those).
  */
-export function officeShapeShadowDropShadow(shadow: OfficeShadowEffect): string {
+export function officeShapeShadowDropShadow(
+  shadow: OfficeShadowEffect,
+  /** The Gaussian deviation its blur radius draws, per unit of it (default 1/4, as before; PowerPoint's: `POWERPOINT_SHADOW_BLUR_DEVIATION`). */
+  blurDeviation = 0.25,
+): string {
   const radians = (shadow.dir / 60_000) * (Math.PI / 180);
   const distance = px(shadow.dist);
   const x = Math.round(Math.cos(radians) * distance * 100) / 100 + 0;
   const y = Math.round(Math.sin(radians) * distance * 100) / 100 + 0;
-  return `drop-shadow(${x}px ${y}px ${px(shadow.blurRad) / 2}px ${rgba(shadow.color, shadow.alpha)})`;
+  // drop-shadow() takes the blur radius CSS reads as twice the deviation.
+  const radius = blurDeviation === 0.25 ? px(shadow.blurRad) / 2 : Math.round(px(shadow.blurRad) * 2 * blurDeviation * 100) / 100;
+  return `drop-shadow(${x}px ${y}px ${radius}px ${rgba(shadow.color, shadow.alpha)})`;
 }
 
 /** The opacity a Perspective shadow's silhouette is drawn at (its colour's alpha). */
@@ -1181,6 +1187,23 @@ export function officeShapeEffectsPaint(
     readonly frame?: OfficeShapeFrame;
     /** The shape is filled with a gradient (a 2003 3-D Style face keeps it unshaded). */
     readonly gradientFill?: boolean;
+    /**
+     * The Gaussian deviation an outer shadow's blur radius draws, per unit of
+     * it: PowerPoint's (`POWERPOINT_SHADOW_BLUR_DEVIATION`) for a slide's
+     * shape; unstated, each drawing's own reading as before.
+     */
+    readonly shadowBlurDeviation?: number;
+    
+
+
+
+
+
+
+
+
+
+    readonly scaledShadowSilhouette?: { readonly blurDeviation?: number };
   } = {},
 ): OfficeShapeEffectsPaint | null {
   const sketch = normalizeOfficeLineSketch(options.sketch);
@@ -1524,8 +1547,20 @@ export function officeShapeEffectsPaint(
     );
     base = "innerShadowed";
   } else if (shadow) {
-    const css = officeShadowCss(shadow, size);
-    if (css?.under) {
+    const css = officeShadowCss(shadow, size, options.shadowBlurDeviation === undefined ? {} : { blurDeviation: options.shadowBlurDeviation });
+    const scaledSilhouette =
+      options.scaledShadowSilhouette &&
+      (css?.under || (shadow.sx ?? 100_000) !== 100_000 || (shadow.sy ?? 100_000) !== 100_000)
+        ? officeShadowSilhouette(
+            shadow,
+            options.scaledShadowSilhouette.blurDeviation === undefined
+              ? {}
+              : { blurDeviation: options.scaledShadowSilhouette.blurDeviation },
+          )
+        : null;
+    if (scaledSilhouette) {
+      silhouette = { ...scaledSilhouette, hex: shadow.color };
+    } else if (css?.under) {
       silhouette = {
         color: rgba(shadow.color, shadow.alpha),
         hex: shadow.color,
@@ -1534,7 +1569,7 @@ export function officeShapeEffectsPaint(
         filter: css.under.filter ? String(css.under.filter) : "",
       };
     } else {
-      cssFilters.push(officeShapeShadowDropShadow(shadow));
+      cssFilters.push(officeShapeShadowDropShadow(shadow, options.shadowBlurDeviation));
     }
   }
 

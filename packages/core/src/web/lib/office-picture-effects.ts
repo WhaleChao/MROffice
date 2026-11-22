@@ -773,7 +773,11 @@ function dropShadowOf(boxShadow: string): string | null {
 export function officePictureEffectsCss(
   value: unknown,
   size: { readonly width: number; readonly height: number },
-  options: { readonly scale?: number } = {},
+  options: {
+    readonly scale?: number;
+    /** The Gaussian deviation an outer shadow's blur radius draws, per unit of it (PowerPoint's: `POWERPOINT_SHADOW_BLUR_DEVIATION`). */
+    readonly shadowBlurDeviation?: number;
+  } = {},
 ): OfficePictureEffectsCss | null {
   const effects = normalizeOfficePictureEffects(value);
   if (!effects) return null;
@@ -794,7 +798,9 @@ export function officePictureEffectsCss(
     const color = rgba(glow.color, glow.alpha);
     filters.push(`drop-shadow(0 0 ${blur}px ${color})`, `drop-shadow(0 0 ${blur}px ${color})`);
   }
-  const shadow = effects.shadow && effects.shadow !== "none" ? officeShadowCss(effects.shadow, size) : null;
+  const shadow = effects.shadow && effects.shadow !== "none"
+    ? officeShadowCss(effects.shadow, size, options.shadowBlurDeviation === undefined ? {} : { blurDeviation: options.shadowBlurDeviation })
+    : null;
   // An outer shadow of the picture's own size follows what the picture draws,
   // as PowerPoint's does: its transparent pixels cast none, its see-through
   // ones (Transparency) a lighter one, and the shadow shows through them.

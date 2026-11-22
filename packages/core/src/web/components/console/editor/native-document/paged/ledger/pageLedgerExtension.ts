@@ -864,6 +864,8 @@ function projectSheetsUnobserved(view: EditorView, cache?: LedgerMeasureCache | 
   // follower that cannot start at its column's foot.
   const columnSheetOptions = {
     keepNextCutsLastLines: (normalizeWordCompatibilityMode(view.state.doc.attrs.wordCompatibilityMode) ?? 0) >= 15,
+    // Earlier modes (and none) balance a section's columns their own way.
+    wordLegacyBalance: (normalizeWordCompatibilityMode(view.state.doc.attrs.wordCompatibilityMode) ?? 0) < 15,
   };
   for (const index of projectedIndexes) projectUnequalColumnSheet(sheets[index], footZones?.[index] ?? 0, columnSheetOptions);
   step("columns");
@@ -1539,6 +1541,7 @@ function planLedgerPass(
       gapPx: view.state.doc.attrs?.wordSpacingAddsUp === true ? ledgerAddedGapPx : ledgerGapPx,
       oracle,
       keepChainBacksUp: (normalizeWordCompatibilityMode(view.state.doc.attrs.wordCompatibilityMode) ?? 0) >= 15,
+      wordLegacyBalance: (normalizeWordCompatibilityMode(view.state.doc.attrs.wordCompatibilityMode) ?? 0) < 15,
       ...(own ? { start: hasNotes && notesCarryLeadingAfter(view) ? own.start : { ...own.start, leadingAfterPx: 0 } } : {}),
       ...(stopAt ? { stopAt } : {}),
     });
@@ -1564,7 +1567,7 @@ function planLedgerPass(
     const r = (value: number) => (Number.isFinite(value) ? value.toFixed(2) : String(value));
     const oracle: LedgerSplitOracle = {
       planHead(request) {
-        const key = `${request.atom.index}|${r(request.availablePx)}|${r(request.fullCapacityPx)}|${request.pageEmpty ? 1 : 0}|${request.from ? `${request.from.key}@${r(request.from.headHeightPx)}@${r(request.from.tailHeightPx)}` : "-"}`;
+        const key = `${request.atom.index}|${r(request.availablePx)}|${r(request.fullCapacityPx)}|${request.pageEmpty ? 1 : 0}|${request.keepReleased ? 1 : 0}|${request.from ? `${request.from.key}@${r(request.from.headHeightPx)}@${r(request.from.tailHeightPx)}` : "-"}`;
         const known = asked.get(key);
         if (known !== undefined) return known;
         const answer = source.oracle.planHead(request);

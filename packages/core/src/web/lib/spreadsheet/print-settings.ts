@@ -1620,6 +1620,9 @@ export interface PaginateInput {
   colWidth: number;
   rowSizes?: readonly number[];
   colSizes?: readonly number[];
+  /** The column positions hidden source columns stand right before, within
+   * the printed range (paginateAxis ``hiddenLed``; the API's hidden_led_cols). */
+  hiddenLedCols?: readonly number[];
   /** Page Setup > Sheet > Row and column headings: the column-letter band's
    * height and the row-number column's width, in points at the same scale as
    * the rows and columns. They print inside the margins, so they take their
@@ -1637,6 +1640,7 @@ function paginateAxis(
   fallbackSize: number,
   sizes: readonly number[] | undefined,
   manualBreaks: readonly number[] | undefined,
+  hiddenLed?: ReadonlySet<number>,
 ): Array<[number, number]> {
   const sizeAt = (index: number) => {
     const candidate = sizes?.[index];
@@ -1655,7 +1659,14 @@ function paginateAxis(
   if (total <= repeatCount) return [[repeatCount, Math.max(repeatCount, total - 1)]];
   const ranges: Array<[number, number]> = [];
   let start = repeatCount;
+  let overflowed = true;
   while (start < total) {
+    // Hidden lines are zero-width members of Windows Excel's bands: ones that
+    // open a band (the range's first, or after a band of one line wider than
+    // the page) before a line wider than the page stand a band of their own,
+    // its pages blank (lookwin R466-X78: A:B hidden before a 120-character C,
+    // 8 blank pages). The API's paginate_axis ``hidden_led``.
+    if (hiddenLed?.has(start) && overflowed && sizeAt(start) > available) ranges.push([start, start - 1]);
     let end = start;
     let used = 0;
     while (end < total) {
@@ -1666,6 +1677,7 @@ function paginateAxis(
       end += 1;
     }
     ranges.push([start, Math.max(start, end - 1)]);
+    overflowed = used > available;
     start = Math.max(start + 1, end);
   }
   return ranges;
@@ -1714,7 +1726,7 @@ export function paginateSheet(input: PaginateInput): PageBreakResult {
   const rowRanges = paginateAxis(
     totalRows,
     repeatRowCount,
-    dataAreaHeight - headingHeight - spare,
+    dataAreaHeight - headingHeight - printPageRowSparePoints(settings.scaling),
     rowHeight,
     rowSizes,
     printManualBreaksApply(settings.scaling, "row") ? settings.manualRowBreaks : undefined,
@@ -1726,6 +1738,7 @@ export function paginateSheet(input: PaginateInput): PageBreakResult {
     colWidth,
     colSizes,
     printManualBreaksApply(settings.scaling, "col") ? settings.manualColBreaks : undefined,
+    input.hiddenLedCols?.length ? new Set(input.hiddenLedCols) : undefined,
   );
 
   return { rowRanges, colRanges, repeatRowCount, repeatColCount };
@@ -1748,6 +1761,19 @@ export const PRINT_FIT_SPARE_POINTS = (8.25 * 72) / 600;
 
 export function printPageSparePoints(scaling: PrintScaling | undefined): number {
   return !scaling || scaling.kind === "percent" ? PRINT_PAGE_SPARE_POINTS : PRINT_FIT_SPARE_POINTS;
+}
+
+/** A row wants more than PRINT_PAGE_SPARE_POINTS free, a column that much
+ * will do (lookwin probe p34b: a row leaving exactly 7 dots starts a page, one
+ * leaving 7.5 fits; a column leaving 7 fits. R467-X11's first page, 15.24 +
+ * 46 x 14.52 = 683.16 of 684 pt, breaks a row sooner, as Excel): the sliver
+ * past 7 dots a row's room loses at a percent scale; the API's
+ * PRINT_ROW_SPARE_EXCESS_POINTS. */
+export const PRINT_ROW_SPARE_EXCESS_POINTS = 72 / 600 / 64;
+
+export function printPageRowSparePoints(scaling: PrintScaling | undefined): number {
+  const spare = printPageSparePoints(scaling);
+  return !scaling || scaling.kind === "percent" ? spare + PRINT_ROW_SPARE_EXCESS_POINTS : spare;
 }
 
 /** A row's printed height in points: Windows Excel prints every row a whole

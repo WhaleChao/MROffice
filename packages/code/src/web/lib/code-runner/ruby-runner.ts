@@ -31,7 +31,7 @@ import {
 export { RUBY_EXECUTION_PROTOCOL, RUBY_EXECUTION_RUNTIME };
 
 export const RUBY_RUNTIME_UNAVAILABLE_MESSAGE =
-  "Ruby 4.0 WASI is unavailable in this browser.";
+  "Ruby 4.0 WASI is unavailable here.";
 
 const READY_TIMEOUT_MS = 30_000;
 const DEFAULT_TIMEOUT_MS = 5_000;

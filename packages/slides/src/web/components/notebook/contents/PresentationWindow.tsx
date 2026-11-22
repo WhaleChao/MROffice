@@ -342,6 +342,7 @@ import {
 } from "../../../lib/presentation-layout-cards";
 import { useDeskWindowUnloadable } from "@mrnote/core/web/lib/desk-window-unload.ts";
 import { getPageYjsTransportSnapshot } from "@mrnote/core/web/lib/collab/ws-provider.ts";
+import { gapSaveFace, pageGapState, subscribePageGapIncomplete } from "@mrnote/core/web/lib/collab/gap-repair.ts";
 import { attachOfficeFontFamily, retainOfficeFontAssets } from "@mrnote/core/web/components/office-ribbon/officeFontAssets.ts";
 import type { OfficeFontFace } from "@mrnote/core/web/components/office-ribbon/officeFontFace.ts";
 import { captureSavedPageHotCacheScope, isSavedPageHotCacheScopeCurrent } from "@mrnote/core/web/lib/saved-page-hot-cache.ts";
@@ -649,7 +650,7 @@ import {
   type DeckPartArrival,
   type DeckPartMerge,
 } from "@mrnote/core/web/lib/deck-page-parts.ts";
-import { DECK_UNDO_CHANGED_ELSEWHERE_CODES, useDeckPageParts } from "./presentation/useDeckPageParts";
+import { DECK_UNDO_CHANGED_ELSEWHERE_CODES, smartArtStructureUndoRefusalKey, useDeckPageParts, type DeckSmartArtStructureResult } from "./presentation/useDeckPageParts";
 import { PAGE_REMOTE_SAVED_EVENT } from "@mrnote/core/web/lib/notebook-events.ts";
 import { MultiRoomHistory, type HistoryRoom } from "@mrnote/core/web/lib/collab/multi-room-history.ts";
 import type { CollaborativeTextChange } from "@mrnote/core/web/lib/collab/json-crdt.ts";
@@ -6587,6 +6588,9 @@ export default function PresentationWindow({
   /** Duplicate Slide on a deck held as parts: the server's copy (set with
    * useDeckPageParts further down); false when it does not start. */
   const deckPartsDuplicateRef = useRef<(ids: readonly string[]) => boolean>(() => false);
+  /** The parts hook's server SmartArt node command (TRIAGE S11o), for the Text Pane's commands. */
+  const deckPartsSmartArtStructureRef = useRef<(slideId: string, request: unknown) => Promise<DeckSmartArtStructureResult>>(
+    async () => ({ ok: false, code: "unavailable", message: "" }));
   /** The deck's slides-only commit (`commitSlides`, declared further down). */
   const commitSlidesRef = useRef<(next: SlideModel[]) => void>(() => undefined);
   /** A deck held as parts in a shared session: the live room of each loaded
@@ -7809,6 +7813,7 @@ export default function PresentationWindow({
   useRegisterWindowSaveStatus(
     embeddedPresentation ? undefined : windowId,
     autosave.saveStatus,
+    pageId,
   );
 
   const activeSlide =
@@ -21933,6 +21938,20 @@ export default function PresentationWindow({
     saveBodyNow: () => autosave.saveNow(),
     // Only what says the step's slides moved on says someone changed them.
     // Past a second, the member is told: the wait is the server's, not nothing.
+    // A SmartArt node command's Undo the server refused (TRIAGE S11o): said
+    // so and logged, never a step that silently did nothing.
+    onStructureUndoRefused: (code) => {
+      reportClientError(
+        { name: "PresentationSmartArtStructureUndoRefused", message: code.slice(0, 80) },
+        { source: "window", windowType: "presentation" },
+      );
+      toast({
+        // A step kept in the history to try again (the deck still saving)
+        // never says it can no longer be undone.
+        title: t(`presentation.${smartArtStructureUndoRefusalKey(code)}`),
+        variant: "destructive",
+      });
+    },
     onUndoRunning: () => {
       let said: ReturnType<typeof toast> | null = null;
       const later = window.setTimeout(() => { said = toast({ title: t("ai.editUndoing"), duration: 300_000 }); }, 1000);
@@ -21960,12 +21979,24 @@ export default function PresentationWindow({
   const deckStructureAwaitingServer = deckPartsView.structureUnsaved();
   const deckRoomsAwaitingServer = deckStructureAwaitingServer ||
     [...deckPartsView.rooms().values()].some((room) => room.unacknowledged);
-  const deckSaveStatus = autosave.saveStatus !== "saved" ? autosave.saveStatus
+  // A deck whose room document holds a gap it could not fill (gap-repair): its
+  // face says what its reopen waits for, one reading for both (pageGapState).
+  // "synced" once the room keeps every edit its windows made; until then never
+  // "saved" -- the newest edits are still on their way to the room's database.
+  const deckGap = useSyncExternalStore(
+    useCallback((listener: () => void) => subscribePageGapIncomplete(pageId, listener), [pageId]),
+    () => pageGapState(pageId),
+    () => "none" as const,
+  );
+  const deckSaveStatusPlain = autosave.saveStatus !== "saved" ? autosave.saveStatus
     : deckPartsView.structureRefused() ? "unsaved"
       // The server's write of the room into the page has not come (or failed).
       : deckRoomsAwaitingServer || autosave.roomFoldBehind === true ? "saving" : autosave.saveStatus;
+  const deckGapFace = gapSaveFace(deckGap, deckSaveStatusPlain);
+  const deckSaveStatus = deckGapFace === "synced" ? deckSaveStatusPlain : deckGapFace;
   // A save this browser could not send: the server's live room holds every edit.
-  const deckShowsSynced = autosave.syncedToServer === true && autosave.saveStatus === "unsaved";
+  const deckShowsSynced = deckGapFace === "synced" ||
+    (deckGap === "none" && autosave.syncedToServer === true && autosave.saveStatus === "unsaved");
   // Slides whose save must write them into the PowerPoint file (a reused
   // slide, a native copy, a font resolution, a SmartArt structure) and the
   // saved page does not hold yet: the first such save after the deck's
@@ -22008,6 +22039,7 @@ export default function PresentationWindow({
   deckPartsRoomsRef.current = deckPartsView.rooms;
   deckStructureSettledRef.current = deckPartsView.whenStructureSettled;
   const duplicateDeckSlides = deckPartsView.duplicateSlides;
+  deckPartsSmartArtStructureRef.current = deckPartsView.smartArtStructure;
   const deckDuplicateBusyRef = useRef(false);
   /** The first copy a server Duplicate made: current once it arrives. */
   const deckCopyToSelectRef = useRef<string | null>(null);
@@ -41082,6 +41114,47 @@ export default function PresentationWindow({
         : { operation, pointId };
       const request = buildNativeSmartArtStructureRequest(profile.group, command, profile.profile);
       if (!request) throw new Error("native_smartart_stale_profile");
+      if (deckParts.active) {
+        // A deck held as parts (TRIAGE S11o): the server plans and writes the
+        // command in one step, each slide back to its part; its Undo is the
+        // server's too. A plan committed here was saved as a body and parts
+        // apart, neither of which it was made on.
+        const written = await deckPartsSmartArtStructureRef.current(slide.id, request);
+        if (!written.ok) {
+          reportClientError(
+            { name: "PresentationSmartArtStructureRefused", message: written.code.slice(0, 80) },
+            { source: "window", windowType: "presentation" },
+          );
+          if (nativeCopyContextRef.current.active && nativeCopyContextRef.current.pageId === context.pageId) {
+            const pending = Number(written.details?.pendingSlides);
+            toast({
+              title: written.code === "deck_parts_pending"
+                ? t("presentation.deckParts.structurePending", { count: Number.isFinite(pending) ? pending : 0 })
+                : written.code === "database_busy"
+                  ? t("presentation.smartartContext.structureSaving")
+                : written.code === "deck_parts_conflict" || written.code === "document_part_conflict" || written.code === "unsaved" ||
+                    written.code === "room_busy"
+                  ? t("presentation.smartartContext.structureDeckChanged")
+                  : t("presentation.editSaveFailed"),
+              variant: "destructive",
+            });
+          }
+          return;
+        }
+        // The slide as the server wrote it, once its part is read again.
+        for (let waited = 0; waited < 15_000; waited += 200) {
+          if (slidesRef.current.find(s => s.id === slide.id)?.blocks.some(b => b.id === written.selectedBlockId)) break;
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        const applied = slidesRef.current.find(s => s.id === slide.id), primary = applied?.blocks.find(b => b.id === written.selectedBlockId);
+        const group = applied && readNativeSmartArtGroup(applied.blocks, primary);
+        if (!group) return;
+        const selection = new Set(group.members.map(b => b.id));
+        selectedBlockIdsRef.current = selection; selectedBlockIdRef.current = written.selectedBlockId;
+        setSelectedBlockIds(selection); setSelectedBlockId(written.selectedBlockId);
+        selectSmartArtOutlineItem(written.focusPointId); setSmartArtTextPaneOpen(true);
+        return;
+      }
       const plan = await requestNativeSmartArtPlan({ pageId: saved.id, contentVersion: saved.content_version!, slideId: slide.id, request }, controller.signal);
       if (!valid() || controller.signal.aborted) return;
       const nextSlides = normalizeSlides(plan.content);

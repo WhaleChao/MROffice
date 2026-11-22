@@ -24,6 +24,41 @@ export function shouldOfferDefaultApp(state: OfferState, choice: DefaultAppChoic
   return state.extensions.some((ext) => !state.defaultFor.includes(ext));
 }
 
+
+
+
+
+
+
+
+export class LaunchOffer {
+  private holder: number | null = null;
+  private answered = false;
+
+  /** Whether a page may be given the question now. */
+  open(): boolean {
+    return !this.answered && this.holder === null;
+  }
+
+  /** Gives the question to page ``id``; false when it is answered or held by another page. */
+  take(id: number): boolean {
+    if (!this.open()) return false;
+    this.holder = id;
+    return true;
+  }
+
+  /** The person answered (made it the default or said no): not asked again this run. */
+  answer(): void {
+    this.answered = true;
+    this.holder = null;
+  }
+
+  /** Page ``id`` reloaded, went elsewhere or closed: unanswered, the question goes back. */
+  release(id: number): void {
+    if (this.holder === id && !this.answered) this.holder = null;
+  }
+}
+
 export function readDefaultAppChoice(file: string): DefaultAppChoice {
   try {
     const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as { declined?: unknown };

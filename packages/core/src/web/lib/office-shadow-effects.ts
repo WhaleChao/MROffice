@@ -257,9 +257,28 @@ export interface OfficeShadowCss {
   readonly over?: CSSProperties;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+export const POWERPOINT_SHADOW_BLUR_DEVIATION = 1 / (2 * Math.SQRT2);
+
+export interface OfficeShadowCssOptions {
+  /** The Gaussian deviation an outer shadow's blur radius draws, per unit of it (default 1/2: CSS's own reading of a blur radius). */
+  readonly blurDeviation?: number;
+}
+
 export function officeShadowCss(
   value: unknown,
   size: { readonly width: number; readonly height: number },
+  options: OfficeShadowCssOptions = {},
 ): OfficeShadowCss | null {
   const shadow = normalizeOfficeShadowEffect(value);
   if (!shadow) return null;
@@ -268,6 +287,8 @@ export function officeShadowCss(
   const x = Math.round(Math.cos(radians) * distance * 100) / 100 + 0;
   const y = Math.round(Math.sin(radians) * distance * 100) / 100 + 0;
   const blur = px(shadow.blurRad);
+  // An outer shadow's blur, as the CSS blur radius (twice the deviation).
+  const outerBlur = Math.round(blur * 2 * (options.blurDeviation ?? 0.5) * 100) / 100;
   const color = rgba(shadow.color, shadow.alpha);
   const layer: CSSProperties = { position: "absolute", inset: 0, pointerEvents: "none" };
   if (shadow.inner) {
@@ -282,19 +303,56 @@ export function officeShadowCss(
   const ky = (shadow.ky ?? 0) / 60_000;
   if (sx === sy && sx > 0 && !kx && !ky) {
     const spread = Math.round((((sx - 1) * Math.min(size.width, size.height)) / 2) * 100) / 100;
-    return { boxShadow: `${x}px ${y}px ${blur}px ${spread}px ${color}` };
+    return { boxShadow: `${x}px ${y}px ${outerBlur}px ${spread}px ${color}` };
   }
+  const silhouette = officeShadowSilhouette(shadow, options)!;
   return {
     under: {
       ...layer,
       zIndex: -1,
       background: color,
-      filter: blur ? `blur(${Math.round((blur / 2) * 100) / 100}px)` : undefined,
-      transformOrigin: ORIGIN[shadow.algn ?? "b"],
-      // Skewed about the corner, then scaled (a negative scale flips the
-      // shadow below it): Perspective: Upper Left leans up and left,
-      // Lower Left down and left.
-      transform: `translate(${x}px, ${y}px) scale(${sx}, ${sy}) skew(${kx}deg, ${ky}deg)`,
+      filter: silhouette.filter || undefined,
+      transformOrigin: silhouette.transformOrigin,
+      transform: silhouette.transform,
     },
+  };
+}
+
+/**
+ * An outer shadow drawn as a silhouette: whatever casts it, painted in the
+ * shadow colour (`color`, its opacity in it), blurred (`filter`, CSS
+ * `blur()` or ""), moved along `dir` and scaled / skewed about its alignment
+ * corner (`transform` about `transformOrigin`, a box-relative origin). The
+ * scaled or skewed shadow's layer under a shape or picture (`officeShadowCss`'s
+ * `under`), and the silhouette of what a table's cells paint
+ * (`lib/presentation-table-effects`). Null for an inner or unreadable shadow.
+ */
+export interface OfficeShadowSilhouette {
+  readonly color: string;
+  readonly filter: string;
+  readonly transform: string;
+  readonly transformOrigin: string;
+}
+
+export function officeShadowSilhouette(value: unknown, options: OfficeShadowCssOptions = {}): OfficeShadowSilhouette | null {
+  const shadow = normalizeOfficeShadowEffect(value);
+  if (!shadow || shadow.inner) return null;
+  const radians = (shadow.dir / 60_000) * (Math.PI / 180);
+  const distance = px(shadow.dist);
+  const x = Math.round(Math.cos(radians) * distance * 100) / 100 + 0;
+  const y = Math.round(Math.sin(radians) * distance * 100) / 100 + 0;
+  const outerBlur = Math.round(px(shadow.blurRad) * 2 * (options.blurDeviation ?? 0.5) * 100) / 100;
+  const sx = (shadow.sx ?? 100_000) / 100_000;
+  const sy = (shadow.sy ?? 100_000) / 100_000;
+  const kx = (shadow.kx ?? 0) / 60_000;
+  const ky = (shadow.ky ?? 0) / 60_000;
+  return {
+    color: rgba(shadow.color, shadow.alpha),
+    filter: outerBlur ? `blur(${Math.round((outerBlur / 2) * 100) / 100}px)` : "",
+    transformOrigin: ORIGIN[shadow.algn ?? "b"],
+    // Skewed about the corner, then scaled (a negative scale flips the
+    // shadow below it): Perspective: Upper Left leans up and left,
+    // Lower Left down and left.
+    transform: `translate(${x}px, ${y}px) scale(${sx}, ${sy}) skew(${kx}deg, ${ky}deg)`,
   };
 }

@@ -145,7 +145,7 @@ async function blobBytes(blob: Blob): Promise<Uint8Array> {
     });
   }
   throw new MailMergeBatchExportError(
-    "This browser cannot package DOCX blobs.",
+    "DOCX files can't be packaged here.",
   );
 }
 

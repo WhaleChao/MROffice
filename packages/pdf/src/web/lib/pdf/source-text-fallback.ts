@@ -1636,8 +1636,9 @@ export async function pdfWordsFixedTextProof(input: {
   selection: PdfNativeListTextSelectionEvidence;
 }, reason: PdfNativeTextWordsFixedReason = "glyphs-read-as-blanks"): Promise<PdfNativeListTextSelectionProof> {
   // (A paragraph that opens as a block for its formats alone may begin with a
-  // picture glyph: no word of it is set by this proof, in any face.)
-  const anyFace = reason === "too-large-to-set-again";
+  // picture glyph, and a box bold by a Type3 show drawn again with that show:
+  // no word of either is set by this proof, in any face.)
+  const anyFace = reason === "too-large-to-set-again" || reason === "weight-drawn-again";
   const { selection } = input;
   const reading = await pageReading(input.sourceBytes, selection.pageNumber);
   const items = boxItems(selection);

@@ -401,7 +401,7 @@ import {
   type PdfKeystrokeRule,
 } from "@mrnote/core/web/lib/pdf/acroform-scripts.ts";
 import {
-  pdfTextFieldEditFits,
+  pdfTextFieldTakesEdit,
   type RenderedFormField,
   type SelectedFormFieldContext,
 } from "./formFieldSessions";
@@ -5957,8 +5957,10 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
                         return;
                       }
                       if (
-                        !field.scrollable &&
-                        !pdfTextFieldEditFits(target, shownText)
+                        !pdfTextFieldTakesEdit(target, shownText, {
+                          scrollable: field.scrollable,
+                          combActive,
+                        })
                       ) {
                         target.value = shownText;
                         target.scrollLeft = 0;

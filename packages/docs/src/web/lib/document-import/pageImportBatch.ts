@@ -1103,7 +1103,7 @@ export function createPageImportBatchId(): string {
     typeof crypto.randomUUID !== "function"
   ) {
     throw new PageImportBatchProtocolError(
-      "Secure UUID generation is unavailable in this browser.",
+      "Secure UUID generation is unavailable here.",
     );
   }
   return crypto.randomUUID();

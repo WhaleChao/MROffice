@@ -121,6 +121,7 @@ import { officeStrokeDetail } from "@mrnote/core/web/lib/office-stroke-detail.ts
 import { AUTOFIT_EMU_PER_PX } from "../../../../lib/presentation/text-layout-css";
 
 import { documentInkPressures } from "@mrnote/core/web/lib/document-ink.ts";
+import { POWERPOINT_SHADOW_BLUR_DEVIATION } from "@mrnote/core/web/lib/office-shadow-effects.ts";
 
 /** Whether the shape's outline is the package's (`nativeStrokeDisposition`
  * preserve-only): one the page cannot read, kept as the file has it. */
@@ -188,7 +189,7 @@ export function presentationShapeReflectionCss(block: PresentationShapeBlock): s
     if (!effects?.reflection || effects.reflection === "none") return null;
     const width = (typeof block.width === "number" && Number.isFinite(block.width) ? block.width : 952500) / 9525;
     const height = (typeof block.height === "number" && Number.isFinite(block.height) ? block.height : 952500) / 9525;
-    return officeShapeEffectsPaint(effects, { width, height }, { sketch, seed: officeSketchSeed(block.id) })?.reflect || null;
+    return officeShapeEffectsPaint(effects, { width, height }, { sketch, seed: officeSketchSeed(block.id), shadowBlurDeviation: POWERPOINT_SHADOW_BLUR_DEVIATION })?.reflect || null;
   }
   const preset = normalizeOfficeShapeEffectPreset(block.effect);
   return preset ? officeShapeEffectReflectionCss(preset) || null : null;
@@ -237,6 +238,8 @@ export const PresentationShapeGraphic = memo(function PresentationShapeGraphic(p
     const drawn = officeShapeEffectsPaint(effects, { width, height }, {
       sketch,
       seed: officeSketchSeed(props.block.id),
+      // Blurred as PowerPoint blurs a shape's shadow.
+      shadowBlurDeviation: POWERPOINT_SHADOW_BLUR_DEVIATION,
       frame: {
         rotation: typeof turned.rotation === "number" ? turned.rotation : 0,
         flipH: turned.flipH === true,
@@ -826,7 +829,8 @@ function PresentationShapeGraphicBody({
                   ? officeShadowOffset(style.shapeShadow).dy
                   : 3)
               }
-              stdDeviation={style.shapeShadow?style.shapeShadow.blur/2:3}
+              // The deviation PowerPoint blurs a shape's shadow with (its blur radius / 2 sqrt 2).
+              stdDeviation={style.shapeShadow?style.shapeShadow.blur*POWERPOINT_SHADOW_BLUR_DEVIATION:3}
               floodColor={style.shapeShadow?.color??"#0f172a"}
               floodOpacity={style.shapeShadow?.opacity??0.28}
             />

@@ -5,6 +5,8 @@
  */
 import table from "./powerpoint-script-fallbacks.json";
 import { ensureOfficeRangedAliasFamily } from "./substitutes";
+import bulletTable from "./powerpoint-bullet-fallbacks.json";
+import { POWERPOINT_WINDOWS_FACES, STYLE_TAIL, windowsOfficeFace } from "./windows-office-faces";
 
 type FallbackFace = "Calibri" | "Cambria";
 const FACES: ReadonlyMap<string, FallbackFace> = new Map(
@@ -59,4 +61,190 @@ export function withPowerPointScriptFallbacks(stack: string): string {
     }
   }
   return changed ? out.join(", ") : stack;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export interface PowerPointBulletFace {
+  /** The Office face the bullet is drawn in. */
+  readonly face: string;
+  /** Its advance in that face (em), where the table records it; otherwise measured. */
+  readonly advanceEm?: number;
+  /** The bullet's own face may have the character after all (an embedded face, read on the page): tried first. */
+  readonly ownFirst?: true;
+  /**
+   * Where the reader lacks `face` (Cambria Math, Segoe UI Symbol): the served
+   * face and CSS size-adjust (%) that draw the character at Windows' own ink
+   * box (TRIAGE 99, `drawn` in the table) -- STIX Two Math, Cambria Math's
+   * stand-in, draws U+25C6 half as large again as Windows does.
+   */
+  readonly drawnBy?: { readonly family: string; readonly sizeAdjustPercent: number };
+}
+
+interface BulletFaceRow {
+  readonly covers: readonly string[];
+  readonly panoseSerifStyle: number;
+  readonly unitsPerEm?: number;
+  readonly advances?: Readonly<Record<string, readonly number[]>>;
+}
+interface BulletTable {
+  readonly blocks: readonly string[];
+  readonly chain: { readonly serif: readonly string[]; readonly sans: readonly string[] };
+  readonly faces: Readonly<Record<string, BulletFaceRow>>;
+  /** Chain face -> served face -> [character (hex), size-adjust %] (scripts/build-powerpoint-bullet-fallbacks.py --glyphbox). */
+  readonly drawn?: Readonly<Record<string, Readonly<Record<string, readonly (readonly [string, number])[]>>>>;
+}
+
+const BULLETS = bulletTable as unknown as BulletTable;
+const span = (range: string): readonly [number, number] => {
+  const [first, last] = range.split("-");
+  return [parseInt(first, 16), parseInt(last ?? first, 16)];
+};
+const BULLET_BLOCKS = BULLETS.blocks.map(span);
+const BULLET_FACES: ReadonlyMap<string, { readonly name: string; readonly row: BulletFaceRow; readonly covers: readonly (readonly [number, number])[] }> = new Map(
+  Object.entries(BULLETS.faces).map(([name, row]) => [name.toLowerCase(), { name, row, covers: row.covers.map(span) }] as const),
+);
+/** Faces named for a symbol set: their characters are pictures, never fallen back from. */
+const SYMBOL_SET_FACE = /^(wingdings|webdings|symbol$|marlett|ms outlook|bookshelf symbol|mt extra)/i;
+
+/** Chain face (lower case) -> character -> the served face and size-adjust drawing it at Windows' ink box. */
+const BULLET_DRAWN: ReadonlyMap<string, ReadonlyMap<number, { readonly family: string; readonly sizeAdjustPercent: number }>> = new Map(
+  Object.entries(BULLETS.drawn ?? {}).map(([face, byFamily]) => [
+    face.toLowerCase(),
+    new Map(Object.entries(byFamily).flatMap(([family, rows]) => rows.map(([hex, percent]) => [parseInt(hex, 16), { family, sizeAdjustPercent: percent }] as const))),
+  ]),
+);
+
+const within = (ranges: readonly (readonly [number, number])[], code: number) => ranges.some(([first, last]) => first <= code && code <= last);
+
+/** The recorded advance (em) of `code` in a chain face, if any. */
+function bulletAdvanceEm(row: BulletFaceRow, code: number): number | undefined {
+  if (!row.advances || !row.unitsPerEm) return undefined;
+  for (const [start, widths] of Object.entries(row.advances)) {
+    const index = code - parseInt(start, 16);
+    if (index >= 0 && index < widths.length) return widths[index] / row.unitsPerEm;
+  }
+  return undefined;
+}
+
+/** Whether a recorded face has `code`; undefined outside the blocks the table records for it. */
+function bulletFaceHas(face: string, code: number): boolean | undefined {
+  const entry = BULLET_FACES.get(face.toLowerCase());
+  if (!entry) return undefined;
+  if (within(entry.covers, code)) return true;
+  // Outside the shape blocks a face's own characters are not recorded (general punctuation: every face's),
+  // except for the faces whose advances are (the chain faces, Calibri).
+  return entry.row.advances ? false : within(BULLET_BLOCKS, code) ? false : undefined;
+}
+
+
+
+
+
+
+function bulletFaceEntry(face: string): (NonNullable<ReturnType<typeof BULLET_FACES.get>> & { readonly styleOf?: true }) | undefined {
+  let name = face.toLowerCase();
+  const own = BULLET_FACES.get(name);
+  if (own) return own;
+  for (let guard = 0; guard < 3; guard += 1) {
+    const shorter = name.replace(STYLE_TAIL, "").trim();
+    if (!shorter || shorter === name) return undefined;
+    name = shorter;
+    const family = BULLET_FACES.get(name);
+    if (family) return { ...family, styleOf: true };
+  }
+  return undefined;
+}
+
+/** The first chain face behind a serif or sans face that has `code`. */
+function bulletChainFace(serif: boolean, code: number): PowerPointBulletFace | undefined {
+  for (const face of serif ? BULLETS.chain.serif : BULLETS.chain.sans) {
+    const entry = BULLET_FACES.get(face.toLowerCase());
+    if (!entry || !within(entry.covers, code)) continue;
+    const advanceEm = bulletAdvanceEm(entry.row, code);
+    const drawnBy = BULLET_DRAWN.get(entry.name.toLowerCase())?.get(code);
+    return { face: entry.name, ...(advanceEm === undefined ? {} : { advanceEm }), ...(drawnBy ? { drawnBy } : {}) };
+  }
+  return undefined;
+}
+
+
+
+
+
+
+
+
+
+
+const bulletChainIsSans = (style: number) => style >= 11 && style <= 15;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function powerPointBulletFace(
+  typeface: string,
+  char: string,
+  options: { readonly embedded?: boolean; readonly panoseSerifStyle?: number } = {},
+): PowerPointBulletFace | undefined {
+  const name = typeface.trim().replace(/^["']|["']$/g, "").trim();
+  const chars = Array.from(char);
+  // A name with a comma or parenthesis ("Arial,Sans-Serif") is cut by PowerPoint's own reading of it, not here;
+  // a dotted name (".LucidaGrandeUI") is a Mac system face's.
+  if (!name || chars.length !== 1 || SYMBOL_SET_FACE.test(name) || /[,(]/.test(name) || name.startsWith(".")) return undefined;
+  const code = chars[0].codePointAt(0) as number;
+  if (options.embedded && !bulletFaceEntry(name)) {
+    if (!within(BULLET_BLOCKS, code)) return undefined;
+    const fallback = bulletChainFace(!bulletChainIsSans(options.panoseSerifStyle ?? 0), code);
+    return fallback ? { ...fallback, ownFirst: true } : undefined;
+  }
+  // The face PowerPoint has in its place: Office's own pick, else Calibri.
+  const drawn = options.embedded ? undefined : windowsOfficeFace(name, POWERPOINT_WINDOWS_FACES)?.face;
+  const entry = bulletFaceEntry(drawn ?? name);
+  if (!entry) return undefined;
+  const has = bulletFaceHas(entry.name, code);
+  if (has !== false) {
+    if (entry.name.toLowerCase() === name.toLowerCase() || (drawn === undefined && entry.styleOf)) return undefined;
+    // The face drawn in its place has it (Calibri for a face Windows lacks).
+    const advanceEm = has ? bulletAdvanceEm(entry.row, code) : undefined;
+    return advanceEm === undefined ? { face: entry.name } : { face: entry.name, advanceEm };
+  }
+  return bulletChainFace(!bulletChainIsSans(entry.row.panoseSerifStyle), code);
 }

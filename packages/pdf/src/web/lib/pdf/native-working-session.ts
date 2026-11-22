@@ -981,18 +981,43 @@ export function createPdfNativeWorkingSession(options: PdfWorkingSessionOptions)
 
 
 
-export function advancePdfWorkingRecovery(recovery: PdfWorkingRecovery, source: PdfEngineSourceIdentity): PdfWorkingRecovery | null {
+/**
+ * `writtenRecordIds`: the ids of the records the page's journal holds, given
+ * only when the page's file was written with that journal and `source` is
+ * that file. An edit's record carries the edit's id. The queue's first edits
+ * whose records are there reached the file even when the file is none of the
+ * queue's own outputs: it was written again on top of them (the server made
+ * a write this queue's save had lost, then a note's save on it, while the
+ * window was closed). Judged by the last hash alone the queue read as
+ * another version's and was planned again on a file that held its edits
+ * already -- made twice, or never confirmed. Those edits leave the queue;
+ * the file is then the queue's base only when nothing waits behind them
+ * (what does stands on other bytes and is planned again, as before).
+ */
+export function advancePdfWorkingRecovery(recovery: PdfWorkingRecovery, source: PdfEngineSourceIdentity,
+  writtenRecordIds?: ReadonlySet<string> | null): PdfWorkingRecovery | null {
   const landed = recovery.operations.findIndex(operation => operation.outputSha256 === source.sourceSha256);
-  if (landed < 0) return null;
-  const operation = recovery.operations[landed]!;
-  return Object.freeze({ ...recovery, savedSource: source,
-    savedRevision: operation.baseWorkingRevision + 1, operations: recovery.operations.slice(landed + 1) });
+  if (landed >= 0) {
+    const operation = recovery.operations[landed]!;
+    return Object.freeze({ ...recovery, savedSource: source,
+      savedRevision: operation.baseWorkingRevision + 1, operations: recovery.operations.slice(landed + 1) });
+  }
+  if (!writtenRecordIds?.size) return null;
+  let written = 0;
+  while (written < recovery.operations.length && writtenRecordIds.has(recovery.operations[written]!.id)) written += 1;
+  if (!written) return null;
+  const last = recovery.operations[written - 1]!, rest = recovery.operations.slice(written);
+  return Object.freeze({ ...recovery, ...(rest.length ? {} : { savedSource: source }),
+    savedRevision: last.baseWorkingRevision + 1, operations: rest });
 }
 
 /** An edit of a kept queue that the page's version does not take as the
  * queue comes back on it (see restorePdfNativeWorkingSession `onOtherVersion`). */
 export type PdfWorkingRecoveryLostEdit = Readonly<{
   id: string; reason: string;
+  /** The version holds exactly what the edit writes (PdfWorkingUnplannableError
+   * `alreadyThere`): it leaves the queue, and nothing of it is lost. */
+  alreadyThere?: true;
   /** A typed line: what was typed, and the line it was typed on. */
   text?: Readonly<{ selection: PdfNativeListTextSelectionEvidence; replacementText: string }>;
 }>;
@@ -1053,6 +1078,7 @@ export async function restorePdfNativeWorkingSession(options: PdfWorkingSessionO
       cameBackAs.set(recipe.outputSha256, standsOn);
       onOtherVersion.lost(Object.freeze({ id: recipe.id,
         reason: error instanceof Error ? error.message.slice(0, 160) : "unknown",
+        ...(error instanceof PdfWorkingUnplannableError && error.alreadyThere ? { alreadyThere: true as const } : {}),
         ...(recipe.kind === "engine" ? {} : { text: Object.freeze({ selection: recipe.selection, replacementText: recipe.replacementText }) }) }));
       return true;
     };

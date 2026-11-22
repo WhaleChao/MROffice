@@ -50,6 +50,49 @@ const cjkCharIndex = new Map<string, number>([...table.cjk.chars].map((ch, index
 const IDEOGRAPH_INDEX = [...table.cjk.chars].length;
 const alphabetIndex = new Map<string, number>([...table.alphabet].map((ch, index) => [ch, index]));
 
+/**
+ * The characters past Latin-1 whose widths office-wrap-advances-extra.json
+ * holds (lookwin p257-lw: Latin Extended-A U+0100-013F, the Greek letters and
+ * − ≤ ≥ ≠ ≈ ∞ wrap at FreeType's hinted widths as the Latin-1 table does). The
+ * table is a chunk of its own, fetched the first time a cell's text holds one
+ * of them: until it lands such text keeps the caller's own measure, and the
+ * sheet is measured again when it has (officeWrapExtraEpoch). The API's
+ * office_wrap_advances_extra.json is the same table, read whole.
+ */
+const EXTRA_CHARS = /[Ā-ĿΑ-ΡΣ-Ωα-ω−≤≥≠≈∞]/u;
+
+interface ExtraWrapAdvanceTable {
+  readonly chars: string;
+  readonly faces: FaceTable;
+}
+
+let extraTable: { readonly index: ReadonlyMap<string, number>; readonly faces: FaceTable } | null = null;
+let extraLoad: Promise<void> | null = null;
+let extraEpoch = 0;
+const extraListeners = new Set<() => void>();
+
+/** Moves once the extra table has landed: a key part for anything built on hinted wraps. */
+export function officeWrapExtraEpoch(): number {
+  return extraEpoch;
+}
+
+/** Calls `listener` when the extra table lands; returns the unsubscribe. */
+export function onOfficeWrapExtraLoaded(listener: () => void): () => void {
+  extraListeners.add(listener);
+  return () => { extraListeners.delete(listener); };
+}
+
+/** Fetches the extra table once (a failed fetch leaves those characters to the caller's measure). */
+export function loadOfficeWrapExtra(): Promise<void> {
+  extraLoad ??= import("./office-wrap-advances-extra.json").then((module) => {
+    const data = ((module as { default?: unknown }).default ?? module) as ExtraWrapAdvanceTable;
+    extraTable = { index: new Map([...data.chars].map((ch, index) => [ch, index])), faces: data.faces };
+    extraEpoch += 1;
+    for (const listener of [...extraListeners]) listener();
+  }, () => undefined);
+  return extraLoad;
+}
+
 function isIdeograph(ch: string): boolean {
   const code = ch.codePointAt(0) ?? 0;
   // ... or a Hangul syllable or compatibility jamo: every Korean face of
@@ -101,6 +144,31 @@ export function officeHintedWrapRoom(columnPx: number, emPx = 15, normalDigitPx?
   const start = stepped ? 8 * normalDigitPx : OFFICE_HINTED_WRAP_ROOM_STEP_FROM_PX;
   const step = stepped ? 4 * normalDigitPx + 1 : OFFICE_HINTED_WRAP_ROOM_STEP_PX;
   return width - Math.max(0, Math.floor((width - start) / step));
+}
+
+/** The widest digit of a face's regular cut at the whole-pixel ems under the
+ * hinted table's (3-7 px), FreeType's v35 interpreter as the table: lookwin
+ * p244-lw, Normal Arial 10 at 50% steps its room by a 4 px digit; p239-lw,
+ * Calibri 11 at 40% by a 3 px one. The API's _SMALL_EM_DIGIT_PX. */
+const SMALL_EM_DIGIT_PX: Readonly<Record<string, readonly number[]>> = {
+  // ems 3, 4, 5, 6, 7
+  calibri: [2, 2, 3, 3, 4], arial: [2, 2, 3, 3, 4], "times new roman": [2, 2, 3, 3, 4],
+  verdana: [2, 3, 3, 4, 4], tahoma: [2, 2, 3, 3, 4], "aptos narrow": [2, 2, 3, 3, 4],
+};
+
+/** The widest zoom the small-em digits were measured at (p244-lw 50%,
+ * p239-lw 40%). The API's OFFICE_SMALL_EM_DIGIT_MAX_ZOOM. */
+export const OFFICE_SMALL_EM_DIGIT_MAX_ZOOM = 55;
+
+/** A zoomed-out Normal font's widest digit where its em is under the hinted
+ * table's (3-7 px), regular cut only; undefined elsewhere. Asked only for a
+ * sheet at OFFICE_SMALL_EM_DIGIT_MAX_ZOOM or less (the API's
+ * office_small_em_digit_px). */
+export function officeSmallEmDigitPx(face: OfficeHintedWrapFace): number | undefined {
+  if (face.bold || face.italic || !Number.isFinite(face.sizePt) || face.sizePt <= 0) return undefined;
+  const small = SMALL_EM_DIGIT_PX[faceKey(excelWindowsFaceKey(face.family, face.record))];
+  const ppem = Math.floor(face.sizePt * 96 / 72 + 0.5);
+  return small && ppem >= 3 && ppem <= 7 ? small[ppem - 3] : undefined;
 }
 
 /** The widest of a face's ten digits at its whole-pixel em (Excel's max digit width), or undefined (the API's
@@ -226,6 +294,16 @@ export function advancesOf(face: OfficeHintedWrapFace): ((ch: string) => number 
     const at = charIndex.get(ch);
     const own = at === undefined ? undefined : decode(encoded[at]);
     if (own !== undefined) return own + widen;
+    if (at === undefined && EXTRA_CHARS.test(ch)) {
+      // Greek, Latin Extended-A and the math signs from their own chunk, once it has landed.
+      if (!extraTable) {
+        void loadOfficeWrapExtra();
+        return undefined;
+      }
+      const extraAt = extraTable.index.get(ch);
+      const extra = extraAt === undefined ? undefined : decode(extraTable.faces[key]?.[style]?.[ppem]?.[extraAt]);
+      return extra === undefined ? undefined : extra + widen;
+    }
     const cjkAt = cjkCharIndex.get(ch) ?? (isIdeograph(ch) ? IDEOGRAPH_INDEX : undefined);
     if (cjkAt === undefined) return undefined;
     for (const cjk of cjkTables) {
@@ -294,6 +372,9 @@ export function officeHintedWrapRunLines(runs: readonly OfficeHintedWrapRun[], c
   let emPx: number | undefined;
   let digitPx: number | undefined;
   let firstRun = true;
+  // A run in italic anywhere takes the italic cell's room off the cell, at
+  // its em (lookwin p259-lw; the server's office_hinted_wrap_runs).
+  let slanted = false;
   const complex = runs.some((run) => OFFICE_COMPLEX_WRAP_TEXT.test(String(run.text)));
   const scale = complex ? complexRoomScale(runs.find((run) => String(run.text))?.sizePt ?? 11) : 1;
   for (const run of runs) {
@@ -302,6 +383,7 @@ export function officeHintedWrapRunLines(runs: readonly OfficeHintedWrapRun[], c
     const advance = advancesOf(run);
     if (!advance) return undefined;
     text += piece;
+    if (run.italic === true) slanted = true;
     if (complex && OFFICE_COMPLEX_WRAP_TEXT.test(piece)) {
       // Each run's words at its face's Arabic widths (officeHintedWrapLines).
       const shares = officeArabicWrapAdvances(piece, run.family, run.bold === true, run.sizePt);
@@ -321,7 +403,8 @@ export function officeHintedWrapRunLines(runs: readonly OfficeHintedWrapRun[], c
     }
   }
   if (!owners.length) return undefined;
-  return wrapWith(text, (at, ch) => owners[at]?.(ch), columnPx, emPx ?? 15, options, digitPx);
+  return wrapWith(text, (at, ch) => owners[at]?.(ch), columnPx, emPx ?? 15, options, digitPx,
+    slanted ? officeItalicWrapLess(emPx ?? 15) : 0);
 }
 
 /** The rule over `text`, `advanceAt(index, character)` the advance of the

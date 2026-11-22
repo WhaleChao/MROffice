@@ -45,11 +45,20 @@ import {
 
 import { showContextMenu } from "../context-menu";
 import { configureDefaultApp, defaultAppExtensions, defaultAppState, makeDefaultApp } from "../default-app";
-import { readDefaultAppChoice, shouldOfferDefaultApp, writeDefaultAppChoice } from "../default-app-offer";
-import { MAX_OPEN_FILE_PART_BYTES, openablePathsFromArgv, readOpenedFiles, readOpenFilePart } from "../files";
+import { LaunchOffer, readDefaultAppChoice, shouldOfferDefaultApp, writeDefaultAppChoice } from "../default-app-offer";
+import { isOpenablePath, MAX_OPEN_FILE_PART_BYTES, openablePathsFromArgv, readOpenedFiles, readOpenFilePart } from "../files";
 import { loadBundledPage } from "../bundled-page";
 import { FocusOrder } from "../document-target";
-import { autoSaveToOriginalEnabled, writeSettings } from "./desktop-settings";
+import { aiScreenEnabled, autoSaveToOriginalEnabled, writeSettings } from "./desktop-settings";
+import { registerAiScreen } from "./ai-screen";
+import {
+  countOpened,
+  countUsage,
+  countWrite,
+  setUsageReportsEnabled,
+  startUsageReports,
+  usageReportsEnabled,
+} from "./usage-report";
 import {
   linkOf,
   linkOriginal,
@@ -106,6 +115,7 @@ import {
 import {
   cancelLocalModelDownload,
   type LocalModelContext,
+  localModelDir,
   localModelStatus,
   pauseLocalModelDownload,
   removeLocalModelFiles,
@@ -524,6 +534,7 @@ function createWindow(route: string, documents: string[] = [], options: { load?:
   });
   let lastCrashReload = 0;
   contents.on("render-process-gone", (_event, details) => {
+    if (details.reason !== "clean-exit") countUsage("renderer_crashes");
     if (details.reason === "clean-exit" || Date.now() - lastCrashReload < 30_000) return;
     lastCrashReload = Date.now();
     contents.reload();
@@ -616,8 +627,8 @@ function guardContents(contents: WebContents): void {
       buttons: [say("离开", "Leave"), say("留下", "Stay")],
       defaultId: 1,
       cancelId: 1,
-      message: say("要离开此页面吗？", "Leave this page?"),
-      detail: say("你所做的更改可能尚未保存。", "Changes you made may not be saved."),
+      message: say("更改可能尚未保存", "Changes may not be saved"),
+      detail: say("现在离开，尚未保存的更改可能会丢失。", "If you leave now, changes that haven't been saved may be lost."),
     };
     const choice = owner ? dialog.showMessageBoxSync(owner, options) : dialog.showMessageBoxSync(options);
     if (choice === 0) event.preventDefault();
@@ -643,6 +654,7 @@ function fromApp(event: Electron.IpcMainInvokeEvent): boolean {
 function openDocuments(paths: string[], into?: BrowserWindow | null): void {
   const documents = paths.filter((item) => fs.existsSync(item));
   if (!documents.length) return;
+  for (const document of documents) countOpened(document);
   if (!ready) {
     pendingAtLaunch.push(...documents);
     return;
@@ -905,9 +917,11 @@ ipcMain.handle("mrai:reopened-pages-missing", (event, pageIds: unknown) => {
 });
 
 // A file the page holds (dropped or picked): the preload names its path.
-ipcMain.handle("mrai:local-file-token", async (event, filePath: unknown) =>
-  fromApp(event) && typeof filePath === "string" && filePath ? registerLocalFile(launch, filePath) : null,
-);
+ipcMain.handle("mrai:local-file-token", async (event, filePath: unknown) => {
+  if (!fromApp(event) || typeof filePath !== "string" || !filePath) return null;
+  countOpened(filePath);
+  return registerLocalFile(launch, filePath);
+});
 
 ipcMain.handle(
   "mrai:link-original",
@@ -980,9 +994,11 @@ ipcMain.handle("mrai:save-to-original", async (event, request: unknown) => {
     if (!autoSaveToOriginalEnabled()) return { error: "autosave_off", code: "autosave_off" };
     const written = await originalLinksStore.writeOriginal(pageId, null, new Uint8Array(bytes), { auto: true, savedState });
     if (!written.ok) return { error: written.message ?? written.error, code: written.error };
+    countWrite("autosave", false);
     return { path: written.path, name: path.basename(written.path) };
   }
   let target = originalOf(pageId);
+  const linked = Boolean(target);
   if (!target) {
     const owner = BrowserWindow.fromWebContents(event.sender);
     const options = { defaultPath: path.join(app.getPath("documents"), path.basename(filename)) };
@@ -990,8 +1006,10 @@ ipcMain.handle("mrai:save-to-original", async (event, request: unknown) => {
     if (result.canceled || !result.filePath) return null;
     target = result.filePath;
   }
+  const created = !fs.existsSync(target);
   const written = await originalLinksStore.writeOriginal(pageId, target, new Uint8Array(bytes), { savedState });
   if (!written.ok) return { error: written.message ?? written.error, code: written.error };
+  countWrite(linked ? "writeback" : "save_as", created);
   return { path: written.path, name: path.basename(written.path) };
 });
 
@@ -1010,12 +1028,14 @@ ipcMain.handle("mrai:read-open-file", async (event, token: unknown, start: unkno
 // (electron-builder.classic.config.cjs fileAssociations).
 configureDefaultApp({ windowsProgIdPrefix: PRODUCT.progIdPrefix, ...(PRODUCT.registeredApp ? { windowsRegisteredApp: PRODUCT.registeredApp } : {}) });
 const defaultAppChoiceFile = () => path.join(app.getPath("userData"), "default-app-choice.json");
-/** The launch question is asked once per run of the app, whichever window asks. */
-let defaultAppOffered = false;
+/** The launch question: once per run, held by the page that shows it until
+ * the person answers (../default-app-offer.ts LaunchOffer). */
+const launchOffer = new LaunchOffer();
 
 ipcMain.handle("mrai:default-app-state", async (event) => (fromApp(event) ? defaultAppState() : null));
 ipcMain.handle("mrai:make-default-app", async (event, extensions: unknown) => {
   if (!fromApp(event)) return null;
+  launchOffer.answer();
   // Making it the default (at launch or from Settings) takes back an earlier
   // "No thanks": a type another app takes later is asked about again.
   if (readDefaultAppChoice(defaultAppChoiceFile()).declined) {
@@ -1024,18 +1044,36 @@ ipcMain.handle("mrai:make-default-app", async (event, extensions: unknown) => {
   return makeDefaultApp(defaultAppExtensions(extensions));
 });
 /** At launch: whether to ask to open the documents by default (docs in
- * ../default-app-offer.ts); true at most once per run. */
+ * ../default-app-offer.ts). A page that reloads or goes elsewhere while the
+ * system is being asked, or before the person answers, does not keep it:
+ * the next page to ask shows it. */
 ipcMain.handle("mrai:default-app-offer", async (event) => {
-  if (!fromApp(event) || defaultAppOffered) return null;
+  if (!fromApp(event) || !launchOffer.open()) return null;
   const choice = readDefaultAppChoice(defaultAppChoiceFile());
   if (choice.declined) return null;
-  const state = await defaultAppState();
-  if (defaultAppOffered || !shouldOfferDefaultApp(state, choice)) return null;
-  defaultAppOffered = true;
+  const sender = event.sender;
+  let moved = false;
+  const onMove = () => {
+    moved = true;
+  };
+  sender.once("did-navigate", onMove);
+  sender.once("destroyed", onMove);
+  const state = await defaultAppState().finally(() => {
+    if (!sender.isDestroyed()) {
+      sender.removeListener("did-navigate", onMove);
+      sender.removeListener("destroyed", onMove);
+    }
+  });
+  // The page that asked is gone (a reload of the window at launch): its answer would reach nobody.
+  if (moved || sender.isDestroyed() || !shouldOfferDefaultApp(state, choice) || !launchOffer.take(sender.id)) return null;
+  const release = () => launchOffer.release(sender.id);
+  sender.once("did-navigate", release);
+  sender.once("destroyed", release);
   return { supported: state.supported, missing: state.extensions.filter((ext) => !state.defaultFor.includes(ext)) };
 });
 ipcMain.handle("mrai:default-app-decline", async (event) => {
   if (!fromApp(event)) return false;
+  launchOffer.answer();
   writeDefaultAppChoice(defaultAppChoiceFile(), { declined: true });
   return true;
 });
@@ -1070,8 +1108,24 @@ ipcMain.handle("mrai:save-file", async (event, request: unknown) => {
     if (result.canceled || !result.filePath) return null;
     target = result.filePath;
   }
+  const created = !fs.existsSync(target);
   await writeFileAtomically(target, new Uint8Array(bytes));
+  // Back to the file it came from, or to one chosen in the dialog.
+  countWrite(target === originalPath ? "writeback" : "save_as", created);
   return target;
+});
+
+/** Settings › General › "Send usage statistics" (./usage-report.ts). */
+ipcMain.handle("mrai:usage-reports", async (event, on: unknown) => {
+  if (!fromApp(event)) return null;
+  if (typeof on === "boolean") {
+    try {
+      return setUsageReportsEnabled(on);
+    } catch (error) {
+      console.error(`[classic] usage statistics setting not saved: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+  return usageReportsEnabled();
 });
 
 // --- AI sign-in -----------------------------------------------------------------
@@ -1139,6 +1193,25 @@ async function pullProfileCard(): Promise<void> {
 
 registerAgentComputer(() => launch, fromApp);
 registerPlaces(fromApp, (paths, window) => openDocuments(paths, window));
+// AI apps on this computer (terminal assistants, AI editors) use the app as their
+// screen through its local MCP endpoint (./ai-screen): started once the
+// windows can be made, stopped as the app quits.
+const aiScreen = registerAiScreen({
+  appName: () => appName(),
+  product: PRODUCT.id,
+  zh,
+  hidden: HIDDEN,
+  fromApp,
+  openDocuments: (paths) => openDocuments(paths),
+  targetWindow: () => pageWindows.target() ?? null,
+  ready: () => ready,
+  pagesOfFile: (filePath) => originalLinksStore.pagesOfFile(filePath),
+  linkPath: (pageId) => linkOf(pageId)?.path ?? null,
+  isOpenable: isOpenablePath,
+  writeFileAtomically,
+  enabled: aiScreenEnabled,
+  setEnabled: (on) => writeSettings({ aiScreen: on }),
+});
 
 ipcMain.handle("mrai:ai-account", async (event) => {
   if (!fromApp(event)) return null;
@@ -1161,8 +1234,8 @@ ipcMain.handle("mrai:ai-sign-in", async (event, reason: unknown) => {
       message: productWords(say("登录 MR Note 以使用 AI", "Sign in to MR Note to use AI")),
       detail: productWords(
         say(
-          "AI 窗口、Copilot 和选区操作会使用你 MR Note 账号的 AI 额度。登录在浏览器中完成；你的笔记本和文件始终保存在这台电脑上。",
-          "The AI window, Copilot and selection actions use your MR Note account's AI allowance. You sign in in your browser; your notebooks and files stay on this computer.",
+          "AI 窗口、Copilot 和选区操作会使用你 MR Note 账号的 AI 额度。登录会在你的默认浏览器中完成；你的笔记本和文件始终保存在这台电脑上。",
+          "The AI window, Copilot and selection actions use your MR Note account's AI allowance. You sign in in your default browser; your notebooks and files stay on this computer.",
         ),
       ),
     };
@@ -1317,7 +1390,7 @@ function handleLink(url: string): void {
       const options = {
         type: "warning" as const,
         message: say("登录没有完成", "Sign-in did not finish"),
-        detail: say("请重试。如果浏览器里的页面已过期，请从应用里重新开始登录。", "Please try again from the app."),
+        detail: say("请从应用里重新开始登录。", "Please try again from the app."),
       };
       if (window) await dialog.showMessageBox(window, options);
       pending.resolve(false);
@@ -1576,7 +1649,9 @@ function startServices(known: Promise<void>, early: boolean): { spawned: Promise
 
 function watchService(service: Service): void {
   service.child.once("exit", (code) => {
-    if (!quitting) void serviceStopped(service.name, code);
+    if (quitting) return;
+    countUsage("service_crashes");
+    void serviceStopped(service.name, code);
   });
 }
 
@@ -1592,7 +1667,7 @@ async function serviceStopped(name: string, code: number | null): Promise<void> 
     defaultId: 0,
     message: say(`${appName()} 的后台服务意外停止了`, `A background part of ${appName()} stopped`),
     detail: say(
-      `「${name}」已退出（${code ?? "?"}）。重新启动后会回到刚才的页面，已保存的内容不会丢失。日志在：${app.getPath("logs")}`,
+      `「${name}」已退出（${code ?? "?"}）。重新启动后会回到刚才打开的文件，已保存的内容不会丢失。日志在：${app.getPath("logs")}`,
       `"${name}" exited (${code ?? "?"}). Restarting returns you to your pages; saved work is kept. Logs: ${app.getPath("logs")}`,
     ),
   });
@@ -1761,6 +1836,8 @@ function pinOfficeSurface(ses: Session): void {
   // Every window closed (each page settled or its person chose to leave):
   // only now do the services stop.
   app.on("will-quit", (event) => {
+    // No AI app reaches a quitting app: its endpoint and discovery file go first.
+    aiScreen.stop();
     // Windows has no SIGTERM: the API is asked to stop and given a moment,
     // so its shutdown runs as on macOS (the launch cache is kept there:
     // ./launch-cache.ts) instead of a forced kill.
@@ -1848,7 +1925,15 @@ function pinOfficeSurface(ses: Session): void {
     }
     if (!services) where = layout();
     console.log(`[classic] starting ${PRODUCT.id} (${where.development ? "development" : "packaged layout"}, data in ${app.getPath("userData")})`);
+    // The AI screen's endpoint at once (an AI app started with the app waits
+    // for it, some only 10 s): its tools wait for the windows.
+    void aiScreen.start().catch((error: unknown) =>
+      console.error(`[classic] AI screen not started: ${error instanceof Error ? error.message : error}`),
+    );
     account = readAccount();
+    // The day's usage counts, sent while signed in and "Send usage
+    // statistics" is on (./usage-report.ts).
+    startUsageReports({ cloudOrigin: cloudOrigin(), localModelDir: localModelDir() });
     // An unpackaged build only (automated checks, or a developer trying the
     // AI against a local service): a token handed in, never saved.
     if (!app.isPackaged && process.env.MRAI_CLASSIC_TEST_AI_TOKEN) {

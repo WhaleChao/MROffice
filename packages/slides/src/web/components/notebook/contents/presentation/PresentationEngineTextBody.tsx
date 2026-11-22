@@ -24,7 +24,7 @@
  * plan, `lib/text-engine/PLAN-phase2.md`); the canvas follows with its caret.
  */
 
-import { createContext, memo, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties, type ReactElement } from "react";
+import { createContext, Fragment, memo, useCallback, useContext, useEffect, useId, useMemo, useState, useSyncExternalStore, type CSSProperties, type ReactElement } from "react";
 import {
   layoutOfficeTextBody,
   type OfficeParagraphInput,
@@ -55,7 +55,7 @@ import {
 import { textEngineOn } from "@mrnote/core/web/lib/text-engine/page-adapter.ts";
 import type { TextRun } from "@mrnote/core/web/lib/presentation-point-runs.ts";
 import { normalizePresentationTabStops } from "../../../../lib/presentation-tab-stops";
-import { PRESENTATION_SCRIPT_SCALE, runStyleCss, type PresentationFontSizeUnit } from "../../../../lib/presentation/text-layout-css";
+import { cssTextShadowParts, powerPointTextShadowParts, PRESENTATION_SCRIPT_SCALE, runStyleCss, TEXT_SHADOW_BASE_PROPERTY, type PresentationFontSizeUnit } from "../../../../lib/presentation/text-layout-css";
 import { POWERPOINT_MISSING_SCRIPT_FAMILY, type PresentationFontAliases } from "@mrnote/core/web/lib/presentation-font-faces.ts";
 import { presentationDisplayRuns, PresentationSlideNumberContext } from "./PresentationRunsText";
 import type { ParagraphEastAsianLines } from "@mrnote/core/web/lib/presentation-paragraphs.ts";
@@ -175,7 +175,17 @@ interface EngineBodyInput {
   readonly paragraphs: OfficeParagraphInput[];
   /** Each row's runs as drawn (fields shown as the slide shows them). */
   readonly rowRuns: TextRun[][];
+  /**
+   * Each row's runs' text shadow, the CSS `text-shadow` the browser-flowed
+   * drawing gives them (their own over their row's over the body's; "" for
+   * none): SVG text takes no `text-shadow`, so the line draws it itself
+   * (`PresentationEngineLine`'s shadow copy).
+   */
+  readonly rowShadows?: string[][];
 }
+
+/** A `rowShadows` entry read from the shadow's model (`TEXT_SHADOW_BASE_PROPERTY`), which each line scales by its largest size. */
+const ENGINE_SHADOW_BASE_MARK = "model:";
 
 /** Everything the CSS cascade gives a run: its own style over its row's over the body's. */
 function cascade(own: CSSProperties, row: CSSProperties, body: CSSProperties, key: keyof CSSProperties): unknown {
@@ -215,6 +225,7 @@ export function presentationEngineBodyInput(args: {
     if (tabStops.some((stop) => stop.align !== "left")) throw new Unsupported("aligned tab stop");
     const paragraphs: OfficeParagraphInput[] = [];
     const rowRuns: TextRun[][] = [];
+    const rowShadows: string[][] = [];
     // A row's own receipts (readings row 1009) go with it through edits; a
     // body whose rows carry none reads the body's, row by row number.
     const rowsCarryKerning = rows.some((row) => row.nativeKerning !== undefined);
@@ -281,6 +292,7 @@ export function presentationEngineBodyInput(args: {
       };
       const displayed = presentationDisplayRuns(row.runs ?? undefined, args.slideNumber, args.now ?? new Date()) ??
         (row.text ? [{ text: row.text }] : []);
+      const shadows: string[] = [];
       const runs: OfficeTextRunInput[] = displayed.map((run) => {
         if (run.math) throw new Unsupported("equation");
         // WordArt on a run (gradient fills, outlines, effects) and symbol-font
@@ -289,6 +301,15 @@ export function presentationEngineBodyInput(args: {
         if (/[\uf000-\uf0ff]/.test(run.text)) throw new Unsupported("symbol-font characters");
         const css = scriptRunCss(run, row.runs ? runStyleCss(run.style, fontSizeUnit, fontAliases, autofitScale) : {}, rowFontPx);
         const font = fontOf(css);
+        // The shadow as its model reads (unscaled: each line scales it by its
+        // own largest size), else a plain CSS text-shadow as drawn.
+        const base = cascade(css, rowStyle, bodyStyle, TEXT_SHADOW_BASE_PROPERTY as keyof CSSProperties);
+        const drawn = cascade(css, rowStyle, bodyStyle, "textShadow");
+        shadows.push(
+          typeof base === "string" && base.trim()
+            ? `${ENGINE_SHADOW_BASE_MARK}${base.trim()}`
+            : typeof drawn === "string" && drawn.trim() && drawn.trim() !== "none" ? drawn.trim() : "",
+        );
         const spacing = cascade(css, rowStyle, bodyStyle, "letterSpacing");
         const spacingPx = spacing === "normal" ? 0 : need(cssPx(spacing, font.sizePt * PX_PER_PT), "letter spacing");
         return {
@@ -307,6 +328,7 @@ export function presentationEngineBodyInput(args: {
         };
       });
       rowRuns.push(displayed);
+      rowShadows.push(shadows);
       // The font of the line that holds only the mark (or, in a flat body, only a break): readings row 1013.
       const emptyLine = emptyLineFonts[row.index];
       const endFont = emptyLine
@@ -350,6 +372,8 @@ export function presentationEngineBodyInput(args: {
           text: row.markerText ?? "",
           font: markerFont,
           ...(row.markerSymbol ? { symbol: row.markerSymbol } : {}),
+          // A bullet in PowerPoint's fallback face: its width there (`powerPointBulletFace`).
+          ...(row.markerFallback ? { fallback: row.markerFallback } : {}),
           // A picture marker is as wide as it is tall: the text's height.
           ...(row.markerPicture ? { widthPt: markerSizePx * PT_PER_PX } : {}),
           leftPt: Math.max(0, start + offsetPx) * PT_PER_PX,
@@ -392,7 +416,7 @@ export function presentationEngineBodyInput(args: {
         ...(row.fontAlign ? { fontAlign: row.fontAlign } : {}),
       });
     }
-    return { paragraphs, rowRuns };
+    return { paragraphs, rowRuns, rowShadows };
   } catch (error) {
     if (error instanceof Unsupported) return { unsupported: error.message };
     throw error;
@@ -737,7 +761,12 @@ function styleKey(style: unknown): string {
  * stretches' run, look, face and glyph positions. Two lines with one
  * signature (and one body style) draw the same elements.
  */
-function engineLineSignature(line: EngineLaidLine, runs: readonly TextRun[], runInputs: readonly OfficeTextRunInput[]): string {
+function engineLineSignature(
+  line: EngineLaidLine,
+  runs: readonly TextRun[],
+  runInputs: readonly OfficeTextRunInput[],
+  shadows: readonly string[],
+): string {
   let out = `${line.baseline}|${line.top}|${line.bottom}`;
   for (const segment of line.segments) {
     if (segment.tab) continue;
@@ -745,7 +774,7 @@ function engineLineSignature(line: EngineLaidLine, runs: readonly TextRun[], run
     if (!run) continue;
     const input = runInputs[segment.run];
     const font = input?.font;
-    out += `\u0001${segment.run}|${segment.x}|${segment.width}|${styleKey(run.style)}|${font ? `${font.stack}|${font.sizePt}|${font.weight}|${font.italic ? 1 : 0}` : ""}|${input?.allCaps ? 1 : 0}|${scriptShiftPt.get(run) ?? ""}|${segment.baseline ?? ""}|`;
+    out += `\u0001${segment.run}|${segment.x}|${segment.width}|${styleKey(run.style)}|${font ? `${font.stack}|${font.sizePt}|${font.weight}|${font.italic ? 1 : 0}` : ""}|${input?.allCaps ? 1 : 0}|${scriptShiftPt.get(run) ?? ""}|${segment.baseline ?? ""}|${shadows[segment.run] ?? ""}|`;
     for (const glyph of segment.glyphs) out += `${glyph.text}\u0002${glyph.x}\u0003`;
   }
   return out;
@@ -781,7 +810,7 @@ function engineDrawingParts(
       ? `${row.runs ? 1 : 0}|${styleKey(row.rowTextStyle)}|${styleKey(row.markerCss)}|${row.markerText ?? ""}|${row.markerPicture ?? ""}`
       : "-";
     rowKeys.push(rowKey);
-    const signatures = paragraph.lines.map((line) => engineLineSignature(line, runs, runInputs));
+    const signatures = paragraph.lines.map((line) => engineLineSignature(line, runs, runInputs, input.rowShadows?.[rowIndex] ?? []));
     lines.push(signatures);
     whole += `\u0004${rowKey}|${paragraph.marker ? paragraph.marker.x : ""}|${runs.map((run) => run.text.length).join(",")}\u0005${signatures.join("\u0006")}`;
   });
@@ -805,6 +834,17 @@ export function presentationEngineDrawsSame(
   return engineDrawingParts(a, aRows).whole === engineDrawingParts(b, bRows).whole;
 }
 
+/** A stretch of a line under one text shadow ("" none): its spans, outline fills and bands, underlines and x extent (pt). */
+interface EngineLineChunk {
+  readonly shadow: string;
+  readonly spans: ReactElement[];
+  readonly fills: ReactElement[];
+  readonly bands: ReactElement[];
+  readonly underlines: { x0: number; x1: number; top: number; height: number; color: string }[];
+  x0: number;
+  x1: number;
+}
+
 interface EngineLineProps {
   readonly signature: string;
   readonly rowKey: string;
@@ -813,6 +853,8 @@ interface EngineLineProps {
   readonly row: PresentationParagraphRowPlan | undefined;
   readonly runs: readonly TextRun[];
   readonly runInputs: readonly OfficeTextRunInput[];
+  /** Each run's CSS text shadow ("" for none: `EngineBodyInput.rowShadows`). */
+  readonly shadows: readonly string[];
   readonly fontSizeUnit: PresentationFontSizeUnit;
   readonly fontAliases: PresentationFontAliases;
   readonly autofitScale: number;
@@ -826,15 +868,25 @@ interface EngineLineProps {
 
 
 const PresentationEngineLine = memo(
-  function PresentationEngineLine({ line, lineIndex, row, runs, runInputs, fontSizeUnit, fontAliases, autofitScale, colorOverride }: EngineLineProps) {
+  function PresentationEngineLine({ line, lineIndex, row, runs, runInputs, shadows, fontSizeUnit, fontAliases, autofitScale, colorOverride }: EngineLineProps) {
     // Drawn again when glyph outlines a run's outline waits on come.
     useSyncExternalStore(subscribeOfficeTextOutlineGlyphs, officeTextOutlineGlyphsEpoch, officeTextOutlineGlyphsEpoch);
-    const bands: ReactElement[] = [];
-    const fills: ReactElement[] = [];
+    const shadowId = useId().replace(/[^A-Za-z0-9_-]/g, "");
     const rowStyle = row?.rowTextStyle ?? {};
     const rowPaint = svgTextPaint(rowStyle, colorOverride ?? (rowStyle.color as string | undefined));
-    const spans: ReactElement[] = [];
-    const underlines: { x0: number; x1: number; top: number; height: number; color: string }[] = [];
+    // Highlights, each under the shadow of its stretch: PowerPoint casts a
+    // run's text shadow from its highlight box too, under the box, the words'
+    // shadow over it (look-fit probe lf13-tshadow, PowerPoint for Windows
+    
+    const highlightRects: { readonly shadow: string; readonly rect: ReactElement; readonly x0: number; readonly x1: number }[] = [];
+    // The line's stretches in order, cut where the text shadow changes: each
+    // piece its own text element (every glyph keeps its own x, so the cut
+    // moves nothing), drawn under its shadow copy when it casts one.
+    const chunks: EngineLineChunk[] = [];
+    let bands: ReactElement[] = [];
+    let fills: ReactElement[] = [];
+    let spans: ReactElement[] = [];
+    let underlines: EngineLineChunk["underlines"] = [];
     // Text alignment Top stands runs on baselines of their own: then every
     // stretch states its y (a tspan's y holds for the stretches after it).
     const ownBaselines = line.segments.some((segment) => segment.baseline !== undefined);
@@ -844,6 +896,15 @@ const PresentationEngineLine = memo(
       if (segment.tab) return;
       const run = runs[segment.run];
       if (!run) return;
+      const shadow = shadows[segment.run] ?? "";
+      let chunk = chunks[chunks.length - 1];
+      if (!chunk || chunk.shadow !== shadow) {
+        chunk = { shadow, spans: [], fills: [], bands: [], underlines: [], x0: segment.x, x1: segment.x + segment.width };
+        chunks.push(chunk);
+        ({ spans, fills, bands, underlines } = chunk);
+      }
+      chunk.x0 = Math.min(chunk.x0, segment.x);
+      chunk.x1 = Math.max(chunk.x1, segment.x + segment.width);
       const caps = runInputs[segment.run]?.allCaps === true;
       const css = row?.runs ? runStyleCss(run.style, fontSizeUnit, fontAliases, autofitScale) : {};
       // Drawn in exactly the face, size, weight and slant the engine measured.
@@ -875,9 +936,12 @@ const PresentationEngineLine = memo(
       }
       const highlight = typeof run.style?.highlight === "string" ? run.style.highlight : undefined;
       if (highlight) {
-        spans.push(
-          <rect key={`h${segmentIndex}`} x={px(segment.x)} y={px(line.top)} width={px(segment.width)} height={px(line.bottom - line.top)} fill={highlight} />,
-        );
+        highlightRects.push({
+          shadow,
+          x0: segment.x,
+          x1: segment.x + segment.width,
+          rect: <rect key={`h${segmentIndex}`} x={px(segment.x)} y={px(line.top)} width={px(segment.width)} height={px(line.bottom - line.top)} fill={highlight} />,
+        });
       }
       const glyphs = segment.glyphs.filter((glyph) => glyph.text !== "\n");
       const shown = (text: string) => (caps ? text.toUpperCase() : text);
@@ -938,21 +1002,83 @@ const PresentationEngineLine = memo(
         });
       }
     });
-    if (!spans.length) return null;
-    const highlights = spans.filter((span) => span.type === "rect");
-    const texts = spans.filter((span) => span.type !== "rect");
+    if (!chunks.some((chunk) => chunk.spans.length)) return null;
+    const textStyle = { ...SVG_TEXT_STYLE, ...rowPaint };
+    // Consecutive highlights under one shadow, drawn (and cast) together.
+    const highlightPieces: { shadow: string; rects: ReactElement[]; x0: number; x1: number }[] = [];
+    for (const { shadow, rect, x0, x1 } of highlightRects) {
+      const last = highlightPieces[highlightPieces.length - 1];
+      if (last && last.shadow === shadow) {
+        last.rects.push(rect);
+        last.x1 = Math.max(last.x1, x1);
+      } else highlightPieces.push({ shadow, rects: [rect], x0, x1 });
+    }
+    // A drawing under its shadow: the same elements again (`<use>`, no
+    // second copy of the words in the page's text) through an SVG drop
+    // shadow -- `drop-shadow()`'s offset, blur (a Gaussian of half the
+    // radius) and colour, `presentationTextShadowCss`'s own -- under the
+    // drawing, which stays unfiltered: a CSS filter on the words themselves
+    // makes Chrome print them as a picture, no text left in the PDF.
+    // PowerPoint scales a text shadow by the largest drawn size on its line
+    // (`powerPointTextShadowScale`): every run of the line casts at that size.
+    const lineSizePt = Math.max(0, ...line.segments.map((segment) => (segment.tab ? 0 : runInputs[segment.run]?.font.sizePt ?? 0)));
+    const castShadow = (shadow: string, key: string, x0: number, x1: number, drawing: ReactElement): ReactElement => {
+      const modelled = shadow.startsWith(ENGINE_SHADOW_BASE_MARK);
+      const cast = cssTextShadowParts(modelled ? shadow.slice(ENGINE_SHADOW_BASE_MARK.length) : shadow)
+        .map((parts) => (modelled && lineSizePt > 0 ? powerPointTextShadowParts(parts, lineSizePt) : parts));
+      if (!cast.length) return <Fragment key={key}>{drawing}</Fragment>;
+      const group = `${shadowId}-${key}`;
+      const filter = `${shadowId}-${key}-shadow`;
+      // The filter's region, in the line's own space: the stretch's box grown
+      // by each shadow's offset and three deviations of its blur, and by half
+      // the line for strokes and underlines below the line box.
+      const reach = Math.max(...cast.map((parts) => Math.abs(parts.x) + Math.abs(parts.y) + 1.5 * parts.blur)) + px(line.bottom - line.top) / 2 + 2;
+      return (
+        <Fragment key={key}>
+          <filter id={filter} filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB"
+            x={px(x0) - reach} y={px(line.top) - reach} width={px(x1 - x0) + 2 * reach} height={px(line.bottom - line.top) + 2 * reach}>
+            {cast.map((parts, index) => (
+              <Fragment key={index}>
+                <feGaussianBlur in="SourceAlpha" stdDeviation={parts.blur / 2} result={`b${index}`} />
+                <feOffset in={`b${index}`} dx={parts.x} dy={parts.y} result={`o${index}`} />
+                <feFlood floodColor={parts.color} result={`c${index}`} />
+                <feComposite in={`c${index}`} in2={`o${index}`} operator="in" result={`s${index}`} />
+              </Fragment>
+            ))}
+            {/* CSS draws a text-shadow list's first shadow on top. */}
+            <feMerge>{cast.map((_parts, index) => <feMergeNode key={index} in={`s${cast.length - 1 - index}`} />)}</feMerge>
+          </filter>
+          <use
+            href={`#${group}`}
+            filter={`url(#${filter})`}
+            aria-hidden="true"
+            data-presentation-selection-ignore="true"
+            data-testid="presentation-engine-text-shadow"
+            style={{ pointerEvents: "none" }}
+          />
+          <g id={group}>{drawing}</g>
+        </Fragment>
+      );
+    };
     return (
       <g data-testid="presentation-engine-line" data-engine-line={lineIndex}>
-        {highlights}
-        <text y={px(line.baseline)} style={{ ...SVG_TEXT_STYLE, ...rowPaint }}>
-          {texts}
-        </text>
-        {fills.length ? <g aria-hidden="true" data-office-text-outline-fill="">{fills}</g> : null}
-        {bands.length ? <g aria-hidden="true" data-office-text-outline-band="">{bands}</g> : null}
-        {underlines.map((rule, index) => (
-          // PowerPoint's underline is whole points long too.
-          <rect key={`u${index}`} data-testid="presentation-engine-underline" x={px(rule.x0)} y={px(rule.top)} width={px(Math.max(1, Math.round(rule.x1 - rule.x0)))} height={px(rule.height)} fill={rule.color} />
-        ))}
+        {highlightPieces.map((piece, pieceIndex) => castShadow(piece.shadow, `h${pieceIndex}`, piece.x0, piece.x1, <>{piece.rects}</>))}
+        {chunks.map((chunk, chunkIndex) => {
+          const drawing = (
+            <>
+              <text y={px(line.baseline)} style={textStyle}>
+                {chunk.spans}
+              </text>
+              {chunk.fills.length ? <g aria-hidden="true" data-office-text-outline-fill="">{chunk.fills}</g> : null}
+              {chunk.bands.length ? <g aria-hidden="true" data-office-text-outline-band="">{chunk.bands}</g> : null}
+              {chunk.underlines.map((rule, index) => (
+                // PowerPoint's underline is whole points long too.
+                <rect key={`u${index}`} data-testid="presentation-engine-underline" x={px(rule.x0)} y={px(rule.top)} width={px(Math.max(1, Math.round(rule.x1 - rule.x0)))} height={px(rule.height)} fill={rule.color} />
+              ))}
+            </>
+          );
+          return castShadow(chunk.shadow, `t${chunkIndex}`, chunk.x0, chunk.x1, drawing);
+        })}
       </g>
     );
   },
@@ -1038,6 +1164,7 @@ export function PresentationEngineTextBody({
         row={row}
         runs={runs}
         runInputs={runInputs}
+        shadows={input.rowShadows?.[rowIndex] ?? []}
         fontSizeUnit={fontSizeUnit}
         fontAliases={fontAliases}
         autofitScale={autofitScale}

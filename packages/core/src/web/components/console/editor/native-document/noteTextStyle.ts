@@ -187,6 +187,66 @@ function unquoted(token: string): string {
 }
 
 /**
+ * Measured ratios (a face Word's files were not recorded for), per document.
+ * Each measurement is a forced layout of the whole document: R480-D21's print
+ * (480 pages, a Trebuchet MS footer on every sheet) read the same faces over
+ * and over as its bands were drawn, 55 s of its 182 s layout. What the page
+ * draws a stack in changes only when a face starts, finishes or fails
+ * loading, or faces are declared or let go: a reading taken while no face was
+ * loading stands until one of those happens (the font set's events and size
+ * move the epoch). Without a font set, or while a face loads, every call
+ * measures, as before. `window.__docsMeasuredLineMemoOff = true` measures
+ * every time, for an A/B of one build.
+ */
+const measuredRatios = new WeakMap<Document, { epoch: string; ratios: Map<string, number | null> }>();
+const fontSetEvents = new WeakMap<Document, { count: number }>();
+
+function measuredLineMemoOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsMeasuredLineMemoOff?: boolean }).__docsMeasuredLineMemoOff === true;
+}
+
+/** The document's font state, or null when a reading must not be kept. */
+function fontSetEpoch(doc: Document): string | null {
+  const fonts = (doc as Document & { fonts?: FontFaceSet }).fonts;
+  if (!fonts || typeof fonts.addEventListener !== "function") return null;
+  let events = fontSetEvents.get(doc);
+  if (!events) {
+    const counter = { count: 0 };
+    const moved = () => { counter.count += 1; };
+    fonts.addEventListener("loading", moved);
+    fonts.addEventListener("loadingdone", moved);
+    fonts.addEventListener("loadingerror", moved);
+    fontSetEvents.set(doc, counter);
+    events = counter;
+  }
+  if (fonts.status !== "loaded") return null;
+  return `${events.count}|${fonts.size}`;
+}
+
+function measuredRatio(doc: Document, key: string, measure: () => number | null): number | null {
+  if (measuredLineMemoOff()) return measure();
+  const before = fontSetEpoch(doc);
+  if (before !== null) {
+    const kept = measuredRatios.get(doc);
+    if (kept && kept.epoch === before && kept.ratios.has(key)) return kept.ratios.get(key) ?? null;
+  }
+  const ratio = measure();
+  // Kept only when no face was loading before or after it was read: a
+  // reading that set a face loading is taken again once that face is in.
+  const after = fontSetEpoch(doc);
+  if (before !== null && after === before) {
+    let kept = measuredRatios.get(doc);
+    if (!kept || kept.epoch !== after) {
+      kept = { epoch: after, ratios: new Map() };
+      measuredRatios.set(doc, kept);
+    }
+    kept.ratios.set(key, ratio);
+  }
+  return ratio;
+}
+
+/**
  * Word's single line for a face, per em: an East Asian face advances 1.3x
  * its hhea box, every other face its box plus lineGap (the CSS normal box).
  * A recorded Word face answers from its file; any other face is measured
@@ -221,14 +281,16 @@ function singleLineRatio(
       return own;
     }
     if (!wordDocumentFontLineMetrics(unquoted(tokens[0] ?? ""))) {
-      const line = measureOfficeFontLineBox(doc, {
-        font: `${italic ? "italic" : "normal"} ${weight >= 600 ? 700 : 400} ${REFERENCE_PX}px ${stack}`,
-        lineHeight: "normal",
-        measureHeight: true,
+      return measuredRatio(doc, key, () => {
+        const line = measureOfficeFontLineBox(doc, {
+          font: `${italic ? "italic" : "normal"} ${weight >= 600 ? 700 : 400} ${REFERENCE_PX}px ${stack}`,
+          lineHeight: "normal",
+          measureHeight: true,
+        });
+        return line?.heightPx && Number.isFinite(line.heightPx) && line.heightPx > 0
+          ? line.heightPx / REFERENCE_PX
+          : null;
       });
-      return line?.heightPx && Number.isFinite(line.heightPx) && line.heightPx > 0
-        ? line.heightPx / REFERENCE_PX
-        : null;
     }
   }
   for (const token of eastAsian ? tokens : tokens.slice(0, 1)) {
@@ -241,20 +303,22 @@ function singleLineRatio(
     return ratio;
   }
   const font = `normal 400 ${REFERENCE_PX}px ${stack}`;
-  if (eastAsian) {
-    const box = measureOfficeFontBoundingBox(doc, font);
-    return box === undefined
-      ? null
-      : (box * wordDocumentEastAsianSingleLineFactor(unquoted(tokens[0] ?? ""))) / REFERENCE_PX;
-  }
-  const line = measureOfficeFontLineBox(doc, {
-    font,
-    lineHeight: "normal",
-    measureHeight: true,
+  return measuredRatio(doc, key, () => {
+    if (eastAsian) {
+      const box = measureOfficeFontBoundingBox(doc, font);
+      return box === undefined
+        ? null
+        : (box * wordDocumentEastAsianSingleLineFactor(unquoted(tokens[0] ?? ""))) / REFERENCE_PX;
+    }
+    const line = measureOfficeFontLineBox(doc, {
+      font,
+      lineHeight: "normal",
+      measureHeight: true,
+    });
+    return line?.heightPx && Number.isFinite(line.heightPx) && line.heightPx > 0
+      ? line.heightPx / REFERENCE_PX
+      : null;
   });
-  return line?.heightPx && Number.isFinite(line.heightPx) && line.heightPx > 0
-    ? line.heightPx / REFERENCE_PX
-    : null;
 }
 
 function renderStack(family: string): string {

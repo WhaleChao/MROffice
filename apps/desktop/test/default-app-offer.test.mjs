@@ -12,7 +12,7 @@ import { createRequire } from "node:module";
 import { test } from "node:test";
 
 const require = createRequire(import.meta.url);
-const { parseRegValue, readDefaultAppChoice, shouldOfferDefaultApp, writeDefaultAppChoice } = require("../dist/default-app-offer.js");
+const { LaunchOffer, parseRegValue, readDefaultAppChoice, shouldOfferDefaultApp, writeDefaultAppChoice } = require("../dist/default-app-offer.js");
 
 const all = ["docx", "xlsx", "pptx", "pdf", "md", "csv"];
 const state = (defaultFor, extra = {}) => ({ supported: "direct", checked: true, defaultFor, extensions: all, ...extra });
@@ -47,4 +47,24 @@ test("reads a ProgID out of reg query", () => {
   assert.equal(parseRegValue(out), "MROfficeEditors.Document");
   assert.equal(parseRegValue("\r\nHKEY_CLASSES_ROOT\\.pdf\r\n    (默认)    REG_SZ    AcroExch.Document.DC\r\n"), "AcroExch.Document.DC");
   assert.equal(parseRegValue("\r\nHKEY_CLASSES_ROOT\\.md\r\n"), null);
+});
+
+test("the launch question goes back when the page that held it reloads or closes unanswered", () => {
+  const offer = new LaunchOffer();
+  assert.equal(offer.take(1), true);
+  assert.equal(offer.open(), false);
+  assert.equal(offer.take(2), false, "one page at a time");
+  offer.release(2);
+  assert.equal(offer.open(), false, "only the holder gives it back");
+  offer.release(1);
+  assert.equal(offer.take(2), true, "the next page to ask shows it");
+});
+
+test("an answer ends the launch question for the run, whichever page asks next", () => {
+  const offer = new LaunchOffer();
+  assert.equal(offer.take(1), true);
+  offer.answer();
+  offer.release(1);
+  assert.equal(offer.open(), false);
+  assert.equal(offer.take(2), false);
 });

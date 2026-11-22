@@ -65,6 +65,9 @@ export function setSettleBeforeInstall(_settle: () => Promise<void>): void {}
 
 export function setBetaUpdates(_on: boolean): void {}
 
+/** No updater here: nothing to hold back while an AI app works. */
+export function noteAutomationActivity(): void {}
+
 export function startUpdateChecks(options: UpdateOptions = {}): void {
   if (options.displayName) displayName = options.displayName;
 }

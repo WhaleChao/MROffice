@@ -109,6 +109,7 @@ import { querySheetsAll } from "./paged/sheetMeasureMemo";
 import { InkAtRest } from "./paged/inkAtRest";
 import { inkPointerArbiter } from "../../../../lib/ink-pointer-policy";
 import { SHEET_DORMANT_ATTR } from "./paged/sheetDormancy";
+import { measureOutsideEditorObservation } from "./documentLayoutStatus";
 import { COLUMN_BAND_EXCLUSION_ATTR, COLUMN_REGIONS_ATTR, FLOAT_HOST_BEFORE_ATTR, unequalColumnPlacementForBlock } from "./paged/unequalColumnProjection";
 import { TextBoxFrameChromeView, recordTextBoxFramePaint } from "./textBoxFrameChrome";
 
@@ -861,7 +862,25 @@ const bandRunCharged = new WeakMap<HTMLElement, Set<HTMLElement>>();
  * object, `BAND_RUN_RIDE_ATTR` on the rest) and takes back the last pass's
  * that no longer hold. An unchanged value is not written again: the
  * paginator measures a sheet again on any attribute that changes. */
-function publishBandRunCharges(root: HTMLElement, charges: ReadonlyMap<HTMLElement, number | "ride">): void {
+function publishBandRunCharges(view: EditorView, charges: ReadonlyMap<HTMLElement, number | "ride">): void {
+  // A run's charges sit on its blocks, and a paragraph between its objects
+  // is ProseMirror's own element, not a node view that ignores what is
+  // written on it. Written while ProseMirror's DOM observer listened, each
+  // such mark was read as an edit of the paragraph: the observer redraws the
+  // range of every change it gathered, from the first to the last -- whole
+  // pages between two such paragraphs, rebuilt without the column projection
+  // their sheets carried, and a document at rest went between two columns
+  // and one about every half second (R460-D16: 1,277 sheets rebuilt in three
+  // minutes with no input; each rebuilt paragraph lost its mark and the next
+  // pass wrote it again). `window.__dqc2BandRunChargesObserved = true` writes
+  // them observed, as before (A/B).
+  const observed = typeof window !== "undefined" &&
+    (window as Window & { __dqc2BandRunChargesObserved?: boolean }).__dqc2BandRunChargesObserved === true;
+  if (observed) writeBandRunCharges(view.dom as HTMLElement, charges);
+  else measureOutsideEditorObservation(view, () => writeBandRunCharges(view.dom as HTMLElement, charges));
+}
+
+function writeBandRunCharges(root: HTMLElement, charges: ReadonlyMap<HTMLElement, number | "ride">): void {
   const before = bandRunCharged.get(root);
   if (before) {
     for (const element of before) {
@@ -949,7 +968,7 @@ function setMarginPx(element: HTMLElement, property: "marginTop" | "marginBottom
  * under the lowest.
  */
 function layoutMixedBandRuns(
-  root: HTMLElement,
+  view: EditorView,
   candidates: readonly HTMLElement[],
   textBoxBands: readonly HTMLElement[],
   hosts: Map<string, HTMLElement>,
@@ -1121,7 +1140,7 @@ function layoutMixedBandRuns(
       for (const element of laidOut) charges.set(element, "ride");
     }
   }
-  publishBandRunCharges(root, charges);
+  publishBandRunCharges(view, charges);
   for (const wrapper of textBoxBands) {
     const value = marked.has(wrapper) ? (starts.has(wrapper) ? "first" : "member") : null;
     if (value === null) wrapper.removeAttribute(BAND_RUN_ATTR);
@@ -1315,7 +1334,9 @@ function layoutPictures(
       ? flowTopIn(wrapper, cell, hosts, originPx.topPx, scale.y)
       : flowTopOnSheet(wrapper, sheet, hosts, originPx.topPx, scale.y);
     const flowTopPx =
-      floatFlowMode(anchor) === "band" ? Math.min(hostTopPx, originPx.topPx) : hostTopPx;
+      floatFlowMode(anchor) === "band"
+        ? Math.min(cell ? hostTopPx : bandHostTopAcrossSheetPx(wrapper, sheet, hosts, originPx.topPx, scale.y) ?? hostTopPx, originPx.topPx)
+        : hostTopPx;
     geometry = withAnchorCharacterOrigins(view, wrapper, anchor, geometry, container, hosts, flowTopPx, scale);
     // The lines above in the cell are not the page's: no band reaching them.
     const shadow = cell
@@ -2189,6 +2210,58 @@ function flowTopOnSheet(
   // picture 0.26" below its paragraph ran down to the page's foot (R30-D07).
   const pushedPx = unequalColumnPlacementForBlock(host)?.floatPushPx ?? 0;
   return (host.getBoundingClientRect().top - sheet.getBoundingClientRect().top) / (scaleY || 1) - pushedPx - hostSpaceBeforePx(host);
+}
+
+/**
+ * A Top and Bottom picture drawn from the paragraph before it that opens a
+ * sheet of its own while that paragraph ends the sheet before: where the
+ * paragraph's top would stand were it just above the picture, px from the
+ * sheet. The fallback (the picture's own flow place) measured the offset
+ * from the paragraph's BOTTOM: the band asked its whole offset as margin
+ * above it, and the ledger, charging paragraph + offset + picture, never let
+ * the two share a page (corpus R472-D78 p[175]: a 921 px picture 31.6 px
+ * below a 24 px paragraph, 976.6 px for a 967.5 px column; Word measures from
+ * the top, 952.6 px, and draws both on one page). Null when the host is on
+ * this sheet, follows the picture, or something else stands between them.
+ * `window.__docsBandHostAcrossSheetOff = true` keeps the fallback (A/B).
+ */
+function bandHostTopAcrossSheetPx(
+  wrapper: HTMLElement,
+  sheet: HTMLElement,
+  hosts: Map<string, HTMLElement>,
+  originTopPx: number,
+  scaleY: number,
+): number | null {
+  if (typeof window !== "undefined" &&
+    (window as Window & { __docsBandHostAcrossSheetOff?: boolean }).__docsBandHostAcrossSheetOff === true) return null;
+  const hostKey = wrapper.dataset.floatHostAnchor;
+  const host = hostKey ? hosts.get(hostKey) : null;
+  if (!host) return null;
+  const hostSheet = host.closest("article[data-page-sheet]");
+  if (!hostSheet || hostSheet === sheet || host.parentElement !== hostSheet) return null;
+  if (!(host.compareDocumentPosition(wrapper) & Node.DOCUMENT_POSITION_FOLLOWING)) return null;
+  // The block of the sheet the picture is drawn in (its node view's, if any).
+  let block: HTMLElement = wrapper;
+  while (block.parentElement && block.parentElement !== sheet) block = block.parentElement;
+  if (block.parentElement !== sheet) return null;
+  const inFlow = (element: Element): element is HTMLElement => {
+    if (!(element instanceof HTMLElement)) return false;
+    const style = getComputedStyle(element);
+    return style.display !== "none" && style.position !== "absolute" && style.position !== "fixed";
+  };
+  // Another picture of the same paragraph (a band itself, or holding one).
+  const sameHost = (element: HTMLElement): boolean =>
+    element.dataset.floatHostAnchor === hostKey ||
+    element.querySelector(`[data-float-mode="band"][data-float-host-anchor="${CSS.escape(hostKey!)}"]`) !== null;
+  // The picture opens its sheet (after its paragraph's other pictures only)...
+  for (let previous = block.previousElementSibling; previous; previous = previous.previousElementSibling) {
+    if (inFlow(previous) && !sameHost(previous)) return null;
+  }
+  // ...and its paragraph ends the sheet before (its pictures after it only).
+  for (let next = host.nextElementSibling; next; next = next.nextElementSibling) {
+    if (inFlow(next) && !sameHost(next)) return null;
+  }
+  return originTopPx - host.getBoundingClientRect().height / (scaleY || 1) - hostSpaceBeforePx(host);
 }
 
 /**
@@ -3126,6 +3199,13 @@ function layoutChainContinuations(view: EditorView): boolean {
  * rebuilding, and `ignoreMutation` keeps our own attribute writes from looking
  * like user edits. This is how `documentShapeExtension` holds a floating shape.
  */
+/** Harness switch (`window.__docsInlineFitShrinkOff = true`): an in-line
+ * box that resizes to its text keeps its stated height as a floor (as
+ * before; an A/B of one build). */
+function inlineFitShrinkOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsInlineFitShrinkOff?: boolean }).__docsInlineFitShrinkOff === true;
+}
+
 class FloatingTextBoxView implements NodeView {
   dom: HTMLElement;
   contentDOM: HTMLElement;
@@ -3227,10 +3307,18 @@ class FloatingTextBoxView implements NodeView {
       // `a:noAutofit` or nothing stated the next paragraph stands 71 pt on and the
       // words past the foot are clipped; with `a:spAutoFit` the box holds them all.
       // R283-D06's six 136 pt boxes stood 195 pt here, a page each by the end.
+      // One that resizes to its text is as tall as its words, shorter than
+      // its stated height too: that is the height Word last fitted it to,
+      // and Word fits it again (Windows Word, corpus R485-D45: answer boxes
+      // saved 95.3 and 92.6 pt tall drew 89.8 and 83.7 pt, their insets and
+      // paragraphs; held at the saved height, each stood 5-9 pt taller and
+      // the last page ran onto another).
       // A box with no body read (this editor's own) keeps the floor it had.
       const heightPx = `${Number(emuToPx(extent.heightEmu).toFixed(3))}px`;
-      const fixed = attrs.frameBody && typeof attrs.frameBody === "object" && normalizeFloatFrameBody(attrs.frameBody).autofit !== "shape";
-      this.dom.style.minHeight = fixed ? "" : heightPx;
+      const body = attrs.frameBody && typeof attrs.frameBody === "object" ? normalizeFloatFrameBody(attrs.frameBody) : null;
+      const fixed = body !== null && body.autofit !== "shape";
+      const fitted = body !== null && body.autofit === "shape" && !inlineFitShrinkOff();
+      this.dom.style.minHeight = fixed || fitted ? "" : heightPx;
       this.dom.style.height = fixed ? heightPx : "";
       this.contentDOM.style.height = fixed ? "100%" : "";
       this.contentDOM.style.overflow = fixed ? "hidden" : "";
@@ -3355,8 +3443,8 @@ function layout(view: EditorView): LayoutObjects | null {
   layoutBandRuns(objects.bandCandidates, hosts, textBoxBandsBefore);
   publishShapeBandRooms(objects.bandCandidates, hosts, keepOnPage);
   if (wrappers.length === 0) {
-    if (mixedBandRunsOn()) layoutMixedBandRuns(root, objects.bandCandidates, [], hosts);
-    else publishBandRunCharges(root, new Map());
+    if (mixedBandRunsOn()) layoutMixedBandRuns(view, objects.bandCandidates, [], hosts);
+    else publishBandRunCharges(view, new Map());
     return objects;
   }
   for (const wrapper of wrappers) {
@@ -3445,10 +3533,10 @@ function layout(view: EditorView): LayoutObjects | null {
     recordFramePaint(wrapper, anchor, { ...geometry, flowTopPx }, scale, cellShift);
     chromes.get(wrapper)?.sync();
   }
-  if (mixedBandRunsOn()) layoutMixedBandRuns(root, objects.bandCandidates, wrappers.filter(isTextBoxFlowBand), hosts);
+  if (mixedBandRunsOn()) layoutMixedBandRuns(view, objects.bandCandidates, wrappers.filter(isTextBoxFlowBand), hosts);
   else {
     for (const wrapper of wrappers) wrapper.removeAttribute(BAND_RUN_ATTR);
-    publishBandRunCharges(root, new Map());
+    publishBandRunCharges(view, new Map());
   }
   return objects;
 }

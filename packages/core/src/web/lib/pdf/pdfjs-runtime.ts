@@ -11,6 +11,7 @@ import {
   PDF_JS_WORKER_URL,
 } from "./pdfjs-asset-urls";
 import { pdfJsFontDocument } from "./pdfjs-font-document";
+import { pdfJsReadingShowPassesBack } from "./show-passes";
 
 export type CompatiblePdfJsApi = typeof import("pdfjs-dist");
 
@@ -210,7 +211,10 @@ export function loadCompatiblePdfJs(): Promise<CompatiblePdfJsApi> {
     const pdfjs = ((module as { default?: CompatiblePdfJsApi }).default ??
       module) as CompatiblePdfJsApi;
     pdfjs.GlobalWorkerOptions.workerSrc = PDF_JS_WORKER_URL;
-    return withPdfJsFontDocument(pdfjs);
+    // (Every page then hands out its text content with the passes of a bold
+    // Type3 show taken out: the text layer, the find and every other reader
+    // of a page's text read the page as it read before the bold.)
+    return pdfJsReadingShowPassesBack(withPdfJsFontDocument(pdfjs));
   });
   return compatiblePdfJsPromise;
 }

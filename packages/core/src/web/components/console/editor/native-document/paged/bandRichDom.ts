@@ -37,7 +37,7 @@ import { documentChartPlanInputs } from "../../extensions/documentChartHost";
 import { requestChartPicture } from "../../../../../lib/office-charts/chart-picture-client";
 import { documentChartPictureContent } from "../../../../../lib/office-charts/document-chart-picture";
 import { sanitizeChartPicture } from "../../../../../lib/office-charts/chart-picture-sanitize";
-import { normalizeDocumentShapeAttrs } from "../../../../../lib/document-shapes";
+import { documentShapeMemberDrawnLeafAttrs, normalizeDocumentShapeAttrs } from "../../../../../lib/document-shapes";
 import { normalizeOfficeTextWarp, textWarpDrawing } from "../../../../../lib/office-text-warp";
 import { paintTextWarpSurface, TEXT_WARP_CANVAS_ATTRIBUTE } from "../../../../../lib/office-text-warp-render";
 import { textEffectsCss } from "../../extensions/TextEffects";
@@ -1419,7 +1419,14 @@ function appendBandGroupMembers(doc: Document, box: HTMLElement, shape: BandRich
       picture.style.display = "block";
       cell.appendChild(picture);
     }
-    paintShape(svg, normalizeDocumentShapeAttrs({ ...member, source: null }));
+    // At the size it is drawn: its box is in the group's child space
+    // (`documentShapeMemberDrawnLeafAttrs`).
+    paintShape(svg, documentShapeMemberDrawnLeafAttrs(normalizeDocumentShapeAttrs({ ...member, source: null }), {
+      widthEmu: shape.widthEmu,
+      heightEmu: shape.heightEmu,
+      groupCoordinateWidthEmu: shape.groupCoordinateWidthEmu,
+      groupCoordinateHeightEmu: shape.groupCoordinateHeightEmu,
+    }));
     cell.appendChild(svg);
     if (member.text) {
       const label = doc.createElement("span");

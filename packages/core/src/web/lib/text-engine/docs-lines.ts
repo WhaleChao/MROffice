@@ -1148,6 +1148,14 @@ function correctionPullUpOff(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsCorrectionPullUpOff?: boolean }).__docsCorrectionPullUpOff === true;
 }
 
+function pullUpTailSplitOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsPullUpTailSplitOff?: boolean }).__docsPullUpTailSplitOff === true;
+}
+
+function pullUpStickyOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsPullUpStickyOff?: boolean }).__docsPullUpStickyOff === true;
+}
+
 function lastLetterHangOff(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsLastLetterHangOff?: boolean }).__docsLastLetterHangOff === true;
 }
@@ -1859,6 +1867,48 @@ export function docsDrawnWidths(paragraph: DocsParagraph): number[] {
   });
 }
 
+/**
+ * The width the browser draws pieces [from, to) at, read as ranges: each
+ * stretch of text and spaces of one text node is one range (its own box, not
+ * its letters' boxes summed: a letter's box is rounded out to the layout unit
+ * on its own, so a line of letters summed reads wider than the browser lays
+ * it out -- corpus R366-D13, ~1.1 px a line of 11 pt Calibri, 593.03 px for a
+ * line of 591.93 at the engine's advances); atoms and tabs at their advance.
+ * Null when a stretch is not drawn as one box (it wraps, or is not drawn).
+ */
+export function docsStretchDrawnWidth(paragraph: DocsParagraph, from: number, to: number): number | null {
+  const pieces = paragraph.pieces;
+  let total = 0;
+  let at = from;
+  while (at < to) {
+    const first = pieces[at];
+    if (first.kind === "break") { at += 1; continue; }
+    if ((first.kind !== "text" && first.kind !== "space") || !first.node || first.offset === undefined) {
+      total += first.advance;
+      at += 1;
+      continue;
+    }
+    let end = at + 1;
+    let offsetEnd = first.offset + first.text.length;
+    let correction = first.text === SOFT_HYPHEN && first.advance === 0 ? 0 : first.correction ?? 0;
+    while (end < to) {
+      const piece = pieces[end];
+      if ((piece.kind !== "text" && piece.kind !== "space") || piece.node !== first.node || piece.offset !== offsetEnd) break;
+      offsetEnd += piece.text.length;
+      if (!(piece.text === SOFT_HYPHEN && piece.advance === 0)) correction += piece.correction ?? 0;
+      end += 1;
+    }
+    const r = rangeOf(first.node.ownerDocument);
+    r.setStart(first.node, first.offset);
+    r.setEnd(first.node, Math.min(first.node.data.length, offsetEnd));
+    const rects = Array.from(r.getClientRects()).filter((rect) => rect.height > 0);
+    if (rects.length !== 1) return null;
+    total += rects[0].width * paragraph.unscale - correction;
+    at = end;
+  }
+  return total;
+}
+
 export interface DocsLineCorrection {
   /** Pieces [from, to) the correction spans: the line's text, without its
    * trailing spaces. */
@@ -1936,7 +1986,14 @@ export function docsLineItems(pieces: readonly DocsPiece[], from: number, end: n
  */
 export function planDocsLineCorrections(
   paragraph: DocsParagraph, starts: readonly number[], drawn: readonly number[], force: ReadonlySet<number> = new Set(),
-  { roundingSlack = true }: { roundingSlack?: boolean } = {},
+  { roundingSlack = true, measure }: {
+    roundingSlack?: boolean;
+    /** The drawn width of pieces [from, to) read as ranges
+     * (docsStretchDrawnWidth), null where it cannot be: whether the browser
+     * pulls the next word up is read from it, and such a line is drawn to
+     * its width from it. */
+    measure?: (from: number, to: number) => number | null;
+  } = {},
 ): DocsLineCorrection[] {
   const pieces = paragraph.pieces;
   const fit = fitEpsilon(paragraph);
@@ -2029,6 +2086,9 @@ export function planDocsLineCorrections(
     /** The drawn width this line must reach for the browser to leave the
      * next line's first word down, when it would pull that word up. */
     let pullUpTo = 0;
+    /** The line's drawn width the correction is taken from. */
+    let lineBrowser = browser;
+    let rangedPull = false;
     if (!needed && Math.abs(engine - browser) > SAME_WIDTH) {
       // Does the browser keep this line whole?
       if (browser > width + fit) needed = true;
@@ -2043,9 +2103,42 @@ export function planDocsLineCorrections(
           nextWidth += drawn[next];
           next += 1;
         }
-        if (browser + trailing + nextWidth <= width + fit) {
+        // As ranges where the caller can read them: the letters' boxes
+        // summed draw the line wider than the browser fits it. The next word
+        // is read on its own, the trailing spaces at their advance: read as
+        // one range with the spaces, the word was two boxes wherever the
+        // browser broke before it -- as it does once this line is corrected
+        // -- and the check fell back to the letters, so a line corrected on
+        // one reading went uncorrected on the next, and back (corpus
+        // R404-D02, page 1's seam 406 <-> 509 on every keystroke).
+        // `window.__docsPullUpTailSplitOff = true`: spaces and word as one range.
+        const lineDrawn = measure ? measure(from, end) : null;
+        let tailDrawn: number | null = null;
+        if (lineDrawn !== null && measure) {
+          if (pullUpTailSplitOff()) tailDrawn = measure(end, next);
+          else {
+            const word = measure(to, next);
+            tailDrawn = word === null ? null : trailing + word;
+          }
+        }
+        const ranged = lineDrawn !== null && tailDrawn !== null;
+        const line = ranged ? lineDrawn : browser;
+        const tail = ranged ? tailDrawn ?? 0 : trailing + nextWidth;
+        // A line read with its correction standing keeps it while the word
+        // fits within what the reads round (each box read is up to a layout
+        // unit out, and the correction's letter spacing moves where): decided
+        // afresh at the edge, the reading with the correction and the one
+        // without came out on either side and the line went back and forth.
+        // `window.__docsPullUpStickyOff = true`: decided afresh each reading.
+        let band = 0;
+        if (ranged && !pullUpStickyOff() && pieces.slice(from, end).some((piece) => piece.correction)) {
+          band = (docsLineItems(pieces, from, end) + 1) * LAYOUT_UNIT * Math.max(1, paragraph.unscale || 1);
+        }
+        if (line + tail <= width + fit + band) {
           needed = true;
-          if (!correctionPullUpOff()) pullUpTo = width + fit - trailing - nextWidth;
+          lineBrowser = line;
+          if (ranged) rangedPull = true;
+          if (!correctionPullUpOff()) pullUpTo = width + fit - tail;
         }
       }
     }
@@ -2068,14 +2161,18 @@ export function planDocsLineCorrections(
     // with it: corpus R366-D13, "...to detect adrenal" (Word, 468.04 pt with
     // "insufficiency" in 468) drawn 623.77 px of 624 with the word.
     // `window.__docsCorrectionPullUpOff = true`: as before.
-    const target = pullUpTo > 0 ? Math.min(Math.max(engine - slack, pullUpTo + slack), width - slack) : engine - slack;
+    // Read as ranges, the line is past that word by the browser's rounding
+    // of the line's items and of the word too (each box read is a layout
+    // unit out at most).
+    const pullSlack = rangedPull ? Math.max(slack, rounding + LAYOUT_UNIT * Math.max(1, paragraph.unscale || 1)) : slack;
+    const target = pullUpTo > 0 ? Math.min(Math.max(engine - slack, pullUpTo + pullSlack), width - slack) : engine - slack;
     // Word justifies the line a tab left: its spaces take up the room.
     const room = tabOpensNext ? Math.max(0, width - engine) : 0;
     const stretches = room > 0 && spaces > 0 && paragraph.align === "justify";
     out.push({
       from,
       to: end,
-      letterSpacing: (narrow > 0 ? engine - browser - (spaces ? 0 : narrow + slack) : target - browser) / graphemes,
+      letterSpacing: (narrow > 0 ? engine - browser - (spaces ? 0 : narrow + slack) : target - lineBrowser) / graphemes,
       wordSpacing: narrow > 0 && spaces ? -narrow / spaces : stretches ? room / spaces : 0,
       spacesFrom: lastTab + 1,
       tabBreak: tabOpensNext || spaceOpensNext || modelBreak ? to : null,

@@ -26,6 +26,7 @@ import { smartArtGradientCanvasCompanions } from "@mrnote/core/web/lib/office-sm
 import type { SmartArtTextBox } from "@mrnote/core/web/lib/office-smartart/text-box.ts";
 import { SMARTART_LABEL_WRAP_SLACK, spreadsheetShapeTextInset } from "../../../../lib/spreadsheet/shape-text-inset";
 import { officeShadowCss } from "@mrnote/core/web/lib/office-shape-paint.ts";
+import { POWERPOINT_SHADOW_BLUR_DEVIATION } from "@mrnote/core/web/lib/office-shadow-effects.ts";
 import { isSpreadsheetCustomShapeStyle, spreadsheetShapeHasPictureFill, parseSpreadsheetInkPoints, parseSpreadsheetInkPressure, MIN_SHAPE_TEXT_SIZE, MAX_SHAPE_TEXT_SIZE, type SpreadsheetShapeStyle } from "@mrnote/core/web/lib/spreadsheet/shapes.ts";
 import { fitOfficeInlineTextEditor, officeInlineTextCaretFromPoint, officeInlineTextEditorCenteredStyle, officeInlineTextEditorStyle } from "@mrnote/core/web/lib/office-inline-text-editor.ts";
 import { officeShapePreviewBleedFrame } from "@mrnote/core/web/lib/office-shape-catalog.ts";
@@ -531,6 +532,12 @@ export function SpreadsheetShapeView({
       // in its plane before they turn it (`flippedCameraTurn`). The words are
       // drawn outside the flips and take the turn as it is.
       frame: { rotation: typeof rotation === "number" ? rotation : 0, flipH, flipV },
+      // A scaled shadow (Offset: Center's 102 %, a Perspective one) is the
+      // shape's silhouette scaled about its alignment point, blurred as
+      // Excel's PDF draws it (probe xlsx-shscale: 0.347 of `blurRad`, the
+      // deviation PowerPoint's was measured at). An unscaled one keeps its
+      // drop shadow (its blur against Excel's truth: TRIAGE 100b).
+      scaledShadowSilhouette: { blurDeviation: POWERPOINT_SHADOW_BLUR_DEVIATION },
     },
   );
   const effectsId = `spreadsheet-shape-effects-${rimId.replace(/[^A-Za-z0-9_-]/g, "")}`;

@@ -33,7 +33,10 @@ import {
 import {
   normalizeOfficeShadowEffect,
   officeShadowCss,
+  officeShadowSilhouette,
+  POWERPOINT_SHADOW_BLUR_DEVIATION,
   type OfficeShadowEffect,
+  type OfficeShadowSilhouette,
 } from "./office-shadow-effects";
 
 /** The table's shadow: the shared model (`lib/office-shadow-effects`). */
@@ -96,22 +99,17 @@ function px(emu: number): number {
 }
 
 /**
- * The table's Shadow and Reflection on the canvas, approximated with CSS on
- * the table's frame: an outer shadow a `box-shadow` at its offset and blur (a
- * scaled shadow grows by its spread), the reflection a faded mirror image
- * below, as the picture model draws it.
+ * The table's Reflection on its frame, a faded mirror image below, as the
+ * picture model draws it. Its Shadow is not the frame's
+ * (`presentationTableShadowSilhouette`, `presentationTableShadowLayers`).
  */
-export function presentationTableEffectsCss(
-  value: unknown,
-  size: { readonly width: number; readonly height: number },
-): CSSProperties | undefined {
+export function presentationTableEffectsCss(value: unknown): CSSProperties | undefined {
   const effects = normalizePresentationTableEffects(value);
   if (!effects) return undefined;
   const css: CSSProperties = {};
-  const shadow = effects.shadow ? officeShadowCss(effects.shadow, size) : null;
-  // A perspective or inner shadow draws on its own layer
-  // (`presentationTableShadowLayers`).
-  if (shadow?.boxShadow) css.boxShadow = shadow.boxShadow;
+  // The table's own shadow is not the frame's: an outer one is the silhouette
+  // of what its cells paint (`presentationTableShadowSilhouette`), an inner
+  // one its own layer (`presentationTableShadowLayers`).
   const reflection = effects.reflection;
   if (reflection) {
     const start = 100 - reflection.endPos / 1000;
@@ -135,7 +133,7 @@ export function presentationTableFrameCss(block: {
   const background = normalizePresentationTableBackground(block.tableBackground);
   return {
     ...(background ? { background } : {}),
-    ...(presentationTableEffectsCss(block.tableEffects, frameSize(block)) ?? {}),
+    ...(presentationTableEffectsCss(block.tableEffects) ?? {}),
   };
 }
 
@@ -145,10 +143,9 @@ export function frameSize(block: { readonly width?: unknown; readonly height?: u
 }
 
 /**
- * The layers a table's shadow needs beside its frame's own paint: under the
- * table for a perspective shadow, over the cells for an inner one (cell fills
- * would hide an inset shadow on the table itself). Both null for an outer
- * shadow, which is the frame's `box-shadow`.
+ * The layer an inner shadow needs over the table's cells (their fills would
+ * hide an inset shadow on the table itself). Both null for an outer shadow:
+ * that is the silhouette of the cells' paint (`presentationTableShadowSilhouette`).
  */
 export function presentationTableShadowLayers(
   block: {
@@ -163,8 +160,36 @@ export function presentationTableShadowLayers(
    */
   styleShadow?: unknown,
 ): { readonly under: CSSProperties | null; readonly over: CSSProperties | null } {
-  const shadow = normalizePresentationTableEffects(block.tableEffects)?.shadow ?? styleShadow;
-  const css = shadow ? officeShadowCss(shadow, frameSize(block)) : null;
+  const shadow = normalizePresentationTableEffects(block.tableEffects)?.shadow ?? normalizeOfficeShadowEffect(styleShadow);
+  // An outer shadow is the silhouette of the cells' paint
+  // (`presentationTableShadowSilhouette`), not a layer the frame's size.
+  if (!shadow?.inner) return { under: null, over: null };
+  const css = officeShadowCss(shadow, frameSize(block), { blurDeviation: POWERPOINT_SHADOW_BLUR_DEVIATION });
   return { under: css?.under ?? null, over: css?.over ?? null };
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function presentationTableShadowSilhouette(
+  block: { readonly tableEffects?: unknown },
+  /** The table style's background shadow (`tableStyleLookShadowEffect`), when the table states none of its own. */
+  styleShadow?: unknown,
+): OfficeShadowSilhouette | null {
+  const shadow = normalizePresentationTableEffects(block.tableEffects)?.shadow ?? normalizeOfficeShadowEffect(styleShadow);
+  if (!shadow || shadow.inner) return null;
+  return officeShadowSilhouette(shadow, { blurDeviation: POWERPOINT_SHADOW_BLUR_DEVIATION });
 }
 

@@ -123,7 +123,7 @@ export function isImportableImageFile(file: {
 function defaultCreateBitmap(file: Blob): Promise<BitmapLike> {
   if (typeof createImageBitmap !== "function") {
     return Promise.reject(
-      new Error("Image decoding is not supported in this browser."),
+      new Error("Image decoding is not supported here."),
     );
   }
   // "from-image" applies the EXIF orientation while decoding, so the bitmap's

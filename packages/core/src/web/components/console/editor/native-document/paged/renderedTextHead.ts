@@ -123,11 +123,23 @@ interface CachedHeads {
   byOffset: Map<number, RenderedTextHead | null>;
 }
 
+/** The tails measured of one block's fragments as they stand (renderedTextTailHeightPx). */
+interface CachedTails {
+  context: string;
+  parts: readonly HTMLElement[];
+  cutPart: number;
+  byOffset: Map<number, number | null>;
+  /** A fragment of it changed since: never asked again. */
+  dead: boolean;
+}
+
 interface RootState {
   task: TaskHost | null;
   generation: number;
   observer: MutationObserver | null;
   heads: WeakMap<HTMLElement, CachedHeads>;
+  /** Under each fragment the tail reads from (the cut one and every one after). */
+  tails: WeakMap<HTMLElement, CachedTails>;
 }
 
 const stateByRoot = new WeakMap<HTMLElement, RootState>();
@@ -146,6 +158,11 @@ function forgetMutated(state: RootState, root: HTMLElement, records: readonly Mu
     }
     for (let node: Node | null = record.target; node && node !== root; node = node.parentNode) {
       if (state.heads.has(node as HTMLElement)) state.heads.delete(node as HTMLElement);
+      const tails = state.tails.get(node as HTMLElement);
+      if (tails) {
+        tails.dead = true;
+        state.tails.delete(node as HTMLElement);
+      }
     }
   }
 }
@@ -153,7 +170,7 @@ function forgetMutated(state: RootState, root: HTMLElement, records: readonly Mu
 function rootState(root: HTMLElement): RootState {
   let state = stateByRoot.get(root);
   if (!state) {
-    const created: RootState = { task: null, generation: 0, observer: null, heads: new WeakMap() };
+    const created: RootState = { task: null, generation: 0, observer: null, heads: new WeakMap(), tails: new WeakMap() };
     if (typeof MutationObserver === "function") {
       created.observer = new MutationObserver((records) => forgetMutated(created, root, records));
       created.observer.observe(root, { attributes: true, attributeOldValue: true, characterData: true, childList: true, subtree: true });
@@ -541,12 +558,23 @@ function joinedColumnsOff(doc: Document): boolean {
   return (doc.defaultView as (Window & { __docsJoinedColumnsOff?: boolean }) | null)?.__docsJoinedColumnsOff === true;
 }
 
+/** A right-to-left paragraph is read in the copy like any other: its rows
+ * are found by their tops and its characters in document order, neither of
+ * which its direction changes (the copy is the head's own clone, its `dir`
+ * and style with it). Given up there before, every key typed near the seam
+ * of a right-to-left paragraph cut the head's last row away and put it back
+ * a pass later (corpus R491-D06: Arabic, justified, 12 of 32 keys).
+ * `window.__docsJoinedRtlOff = true` gives up as before. */
+function joinedRtlOff(doc: Document): boolean {
+  return (doc.defaultView as (Window & { __docsJoinedRtlOff?: boolean }) | null)?.__docsJoinedRtlOff === true;
+}
+
 function withJoinedCopy<T>(head: HTMLElement, tail: HTMLElement, read: (copy: JoinedCopy) => T | null): T | null {
   const doc = head.ownerDocument;
   const root = head.closest<HTMLElement>(".ProseMirror");
   if (!doc || !root?.isConnected || !root.parentElement || root === head || !root.contains(tail)) return null;
   const style = getComputedStyle(head);
-  if (style.direction === "rtl" || /^(vertical|sideways)/.test(style.writingMode)) return null;
+  if ((style.direction === "rtl" && joinedRtlOff(doc)) || /^(vertical|sideways)/.test(style.writingMode)) return null;
   const sheet = head.closest<HTMLElement>("article[data-page-sheet]");
   // A column's width is not the page's, where the shell lays the copy out:
   // on a page of columns the copy is laid out at the width its two pieces
@@ -615,7 +643,59 @@ function withJoinedCopy<T>(head: HTMLElement, tail: HTMLElement, read: (copy: Jo
  *
  * Null where it cannot be laid out so (see withJoinedCopy's reasons).
  */
-export function renderedTextTailHeightPx(parts: readonly HTMLElement[], cutPart: number, node: Node, offset: number): number | null {
+export function renderedTextTailHeightPx(
+  parts: readonly HTMLElement[],
+  cutPart: number,
+  node: Node,
+  offset: number,
+  /** Where the cut stands in its fragment (its document position less the
+   * fragment's): with it, a tail measured before of the very same fragments
+   * in the same context is not laid out again (renderedTailMemoOff). */
+  cutKey?: number,
+): number | null {
+  if (cutKey === undefined || renderedTailMemoOff(parts[cutPart]?.ownerDocument ?? null)) {
+    return layOutTextTail(parts, cutPart, node, offset);
+  }
+  const root = parts[parts.length - 1]?.closest<HTMLElement>(".ProseMirror");
+  const cut = parts[cutPart];
+  if (!root || !cut) return layOutTextTail(parts, cutPart, node, offset);
+  const state = rootState(root);
+  const task = taskHost(root, state);
+  const fonts = loadedFontsKey(root.ownerDocument);
+  if (!task || fonts === null) return layOutTextTail(parts, cutPart, node, offset);
+  const ancestors: string[][] = [];
+  for (let element = parts[parts.length - 1]!.parentElement; element && element !== root; element = element.parentElement) {
+    ancestors.push([element.tagName, ...attributeSignature(element)]);
+  }
+  const context = JSON.stringify([state.generation, fonts, task.rootWidth, root.className, root.style.cssText, ancestors]);
+  let cached = state.tails.get(cut);
+  if (cached && (cached.dead || cached.context !== context || cached.cutPart !== cutPart || cached.parts.length !== parts.length ||
+      cached.parts.some((part, index) => part !== parts[index]))) cached = undefined;
+  if (cached?.byOffset.has(cutKey)) return cached.byOffset.get(cutKey)!;
+  const height = layOutTextTail(parts, cutPart, node, offset);
+  if (!cached) {
+    cached = { context, parts: parts.slice(), cutPart, byOffset: new Map(), dead: false };
+    for (const part of parts.slice(cutPart)) state.tails.set(part, cached);
+  }
+  cached.byOffset.set(cutKey, height);
+  return height;
+}
+
+
+
+
+
+
+
+
+
+
+
+function renderedTailMemoOff(doc: Document | null): boolean {
+  return (doc?.defaultView as (Window & { __docsRenderedTailMemoOff?: boolean }) | null)?.__docsRenderedTailMemoOff === true;
+}
+
+function layOutTextTail(parts: readonly HTMLElement[], cutPart: number, node: Node, offset: number): number | null {
   const cut = parts[cutPart];
   const last = parts[parts.length - 1];
   if (!cut || !last) return null;
@@ -624,7 +704,7 @@ export function renderedTextTailHeightPx(parts: readonly HTMLElement[], cutPart:
   if (!doc || !root?.isConnected || !root.parentElement || root === last || !cut.contains(node)) return null;
   for (const part of [cut, last]) {
     const style = getComputedStyle(part);
-    if (style.direction === "rtl" || /^(vertical|sideways)/.test(style.writingMode)) return null;
+    if ((style.direction === "rtl" && joinedRtlOff(doc)) || /^(vertical|sideways)/.test(style.writingMode)) return null;
     const sheet = part.closest<HTMLElement>("article[data-page-sheet]");
     if (!sheet) continue;
     if (sheet.hasAttribute(COLUMN_REGIONS_ATTR)) return null;
@@ -690,6 +770,14 @@ function plainTextNodes(nodes: readonly Node[]): Text[] | null {
   return texts;
 }
 
+/** Why the last joinedTextRebreak read nothing (a development trace; see
+ * seamRebreakCut). */
+export let joinedTextRebreakWhy: string | null = null;
+function rebreakWhy(why: string): null {
+  joinedTextRebreakWhy = why;
+  return null;
+}
+
 /** Where a stale page seam of a paragraph belongs (joinedTextRebreak). */
 export interface JoinedTextRebreak {
   /** The piece the new cut falls in, and where: a text node of that piece
@@ -719,60 +807,71 @@ export interface JoinedTextRebreak {
  * found, or when the joined text ends on the head's rows (nothing to cut).
  */
 export function joinedTextRebreak(head: HTMLElement, tail: HTMLElement, rows: number, engineRows?: JoinedEngineRows): JoinedTextRebreak | null {
+  joinedTextRebreakWhy = null;
   const headTexts = plainTextNodes(Array.from(head.childNodes));
   const tailTexts = plainTextNodes(Array.from(tail.childNodes));
-  if (!headTexts || !tailTexts) return null;
+  if (!headTexts || !tailTexts) return rebreakWhy("plain-text");
   const doc = head.ownerDocument;
   // The head's own last row, on the page: where it starts.
   const ownLast = lastCharacter(headTexts);
-  if (!ownLast) return null;
+  if (!ownLast) return rebreakWhy("no-last-char");
   const ownLastBox = characterBox(doc, ownLast.node, ownLast.at);
-  if (!ownLastBox) return null;
+  if (!ownLastBox) return rebreakWhy("no-last-box");
   const headLength = headTexts.reduce((sum, text) => sum + text.length, 0);
   const rowStart = firstCharacter(doc, headTexts, 0, headLength, (box) => !boxesOnDifferentRows(box, ownLastBox));
-  if (rowStart === null) return null;
+  if (rowStart === null) return rebreakWhy("no-row-start");
   return withJoinedCopy(head, tail, ({ copy, headNodes, tailNodes }) => {
     const copyHead = plainTextNodes(headNodes);
     const copyTail = plainTextNodes(tailNodes);
-    if (!copyHead || !copyTail || copyHead.length !== headTexts.length || copyTail.length !== tailTexts.length) return null;
+    if (!copyHead || !copyTail || copyHead.length !== headTexts.length || copyTail.length !== tailTexts.length) return rebreakWhy("copy-pieces");
     const all = [...copyHead, ...copyTail];
     const total = all.reduce((sum, text) => sum + text.length, 0);
+    // A paragraph whose text ends in a line break has one row more than its
+    // characters show: the last, holding only the paragraph mark (Word's
+    // widow floor counts it; no row start or character box says it is
+    // there). Uncounted, a tail of such rows (R488-D02: "questions." then a
+    // break, an empty row and the mark's row on the next page) read as one
+    // row under the floor of two, the seam was cut the old way, before the
+    // head's last row, and the next pass took the row back: a twitch at every
+    // key typed in that row. `window.__docsSeamRebreakMarkRowOff` counts
+    // characters only, as before.
+    const markRow = endsInLineBreak(all) && !seamRebreakMarkRowOff(head) ? 1 : 0;
     const ownText = (index: number, at: number): JoinedTextRebreak | null => {
       const place = characterAt(all, index);
-      if (!place) return null;
+      if (!place) return rebreakWhy("char-at");
       // A row a note reference starts is cut before the reference, which no
       // text offset says: not read so.
-      if (place.at === 0 && referenceStartsRow(copy.ownerDocument, place.node)) return null;
+      if (place.at === 0 && referenceStartsRow(copy.ownerDocument, place.node)) return rebreakWhy("reference-row");
       const nodeIndex = all.indexOf(place.node);
       const side = nodeIndex < copyHead.length ? "head" : "tail";
       const own = side === "head" ? headTexts[nodeIndex] : tailTexts[nodeIndex - copyHead.length];
-      if (!own || own.length !== place.node.length) return null;
+      if (!own || own.length !== place.node.length) return rebreakWhy("own-node");
       return { side, node: own, offset: place.at, rowsAfter: at };
     };
     // The text engine's rows, where it breaks this paragraph (see
     // joinedTextBreaksAtSeam): the row after the one the head's last row
     // starts, and the rows from there on.
     const engine = engineRows?.(copy);
-    if (engine === undefined && engineRows) return null;
+    if (engine === undefined && engineRows) return rebreakWhy("engine-undefined");
     if (engine) {
       const starts: number[] = [];
       for (const row of engine) {
         const nodeIndex = all.indexOf(row.node);
-        if (nodeIndex < 0) return null;
+        if (nodeIndex < 0) return rebreakWhy("engine-node");
         starts.push(all.slice(0, nodeIndex).reduce((sum, text) => sum + text.length, 0) + row.offset);
       }
       starts.sort((a, b) => a - b);
       // The head's rows above its last are the engine's too, or it is not read so.
       const own = starts.indexOf(rowStart);
-      if (own < 0 || own + 1 >= starts.length) return null;
-      return ownText(starts[own + 1], Math.min(rows, starts.length - (own + 1)));
+      if (own < 0 || own + 1 >= starts.length) return rebreakWhy(`engine-own-row ${rowStart} in ${starts.join(",")} of ${total}`);
+      return ownText(starts[own + 1], Math.min(rows, starts.length - (own + 1) + markRow));
     }
     const start = characterAt(all, rowStart);
     const startBox = start ? nextBox(doc, all, rowStart, total) : null;
-    if (!startBox) return null;
+    if (!startBox) return rebreakWhy("browser-start-box");
     // The first character past the row the head's last row starts.
     const cut = firstCharacter(doc, all, rowStart, total, (box) => boxesOnDifferentRows(startBox.box, box));
-    if (cut === null) return null;
+    if (cut === null) return rebreakWhy("browser-cut");
     // Rows from the cut on, as far as the floor asks.
     let counted = 1;
     let from = cut;
@@ -784,8 +883,20 @@ export function joinedTextRebreak(head: HTMLElement, tail: HTMLElement, rows: nu
       counted += 1;
       from = next;
     }
-    return ownText(cut, counted);
+    return ownText(cut, Math.min(rows, counted + markRow));
   });
+}
+
+/** The joined text's last character is a line break (see markRow above). */
+function endsInLineBreak(texts: readonly Text[]): boolean {
+  for (let index = texts.length - 1; index >= 0; index -= 1) {
+    if (texts[index].data.length) return texts[index].data.endsWith("\n");
+  }
+  return false;
+}
+
+function seamRebreakMarkRowOff(element: HTMLElement): boolean {
+  return (element.ownerDocument.defaultView as (Window & { __docsSeamRebreakMarkRowOff?: boolean }) | null)?.__docsSeamRebreakMarkRowOff === true;
 }
 
 /** Whether a note reference right before `text` stands on the row `text`'s

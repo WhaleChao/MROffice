@@ -62,7 +62,8 @@ const HAS: ReadonlySet<string> = new Set(data.windowsHas.map(normalize));
 const INSTALLED: ReadonlySet<string> = new Set((data.windowsInstalled ?? []).map(normalize));
 
 /** Style words a producer appends to a family name ("Avenir Next Demi Bold", "Gotham Black"). */
-const STYLE_TAIL = /[\s-]+(?:thin|hairline|extra[\s-]?light|ultra[\s-]?light|light|lt|semi[\s-]?light|book|regular|rg|normal|roman|medium|md|med|semi[\s-]?bold|demi[\s-]?bold|demi|bold|bd|extra[\s-]?bold|ultra[\s-]?bold|heavy|black|italic|italics|oblique|condensed|cond|cn)$/i;
+/** Style words a producer appends to a family name ("Avenir Next Demi Bold"). */
+export const STYLE_TAIL = /[\s-]+(?:thin|hairline|extra[\s-]?light|ultra[\s-]?light|light|lt|semi[\s-]?light|book|regular|rg|normal|roman|medium|md|med|semi[\s-]?bold|demi[\s-]?bold|demi|bold|bd|extra[\s-]?bold|ultra[\s-]?bold|heavy|black|italic|italics|oblique|condensed|cond|cn)$/i;
 
 /**
  * The face Windows Office draws `family` in, or undefined where Office has it

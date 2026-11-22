@@ -857,6 +857,48 @@ function areaLinksStayInPlace(before: CellMap, after: CellMap, r1: number, r2: n
   }
 }
 
+
+
+
+
+
+
+
+
+function ownLinksUnderHeldAreas(areas: unknown, after: CellMap, r1: number, r2: number, c1: number, c2: number): void {
+  if (!Array.isArray(areas) || areas.length === 0) return;
+  const over: { r1: number; c1: number; r2: number; c2: number; rank: number | undefined }[] = [];
+  for (const area of areas as ({ range?: { r1?: unknown; c1?: unknown; r2?: unknown; c2?: unknown }; hyperlinkRank?: unknown } | null)[]) {
+    const range = area?.range;
+    if (!range) continue;
+    const { r1: a1, c1: b1, r2: a2, c2: b2 } = range;
+    if (typeof a1 !== "number" || typeof b1 !== "number" || typeof a2 !== "number" || typeof b2 !== "number") continue;
+    if (a1 > r2 || a2 < r1 || b1 > c2 || b2 < c1) continue;
+    const rank = area?.hyperlinkRank;
+    over.push({ r1: a1, c1: b1, r2: a2, c2: b2, rank: typeof rank === "number" && Number.isInteger(rank) ? rank : undefined });
+  }
+  if (over.length === 0) return;
+  for (const area of over) {
+    for (let row = Math.max(r1, area.r1); row <= Math.min(r2, area.r2); row += 1) {
+      for (let col = Math.max(c1, area.c1); col <= Math.min(c2, area.c2); col += 1) {
+        const key = `${row}:${col}`;
+        const cell = after[key] as (AreaLinkCell & { hyperlinkUnderArea?: boolean }) | undefined;
+        if (!cell || typeof cell.hyperlink !== "string" || !cell.hyperlink || cell.hyperlinkInArea === true) continue;
+        const own = cell.hyperlinkRank;
+        if (typeof own !== "number" || !Number.isInteger(own)) continue;
+        const covering = over.filter((other) => row >= other.r1 && row <= other.r2 && col >= other.c1 && col <= other.c2);
+        if (covering.some((other) => other.rank === undefined)) continue;
+        const under = covering.some((other) => (other.rank as number) <= own);
+        if (under === (cell.hyperlinkUnderArea === true)) continue;
+        const next = { ...cell } as Record<string, unknown>;
+        if (under) next.hyperlinkUnderArea = true;
+        else delete next.hyperlinkUnderArea;
+        after[key] = next as unknown as SpreadsheetCell;
+      }
+    }
+  }
+}
+
 /**
  * A row format stays on its row number and a cell moves with its row, so a
  * position with no cell shows something else once its row is sorted. Excel
@@ -953,6 +995,7 @@ export function rowSortedSheet<S extends SortButtonSheet>(
     }
   });
   areaLinksStayInPlace(sheet.cells, nextCells, dataR1, r2, c1, c2);
+  ownLinksUnderHeldAreas((sheet as { hyperlinkAreas?: unknown }).hyperlinkAreas, nextCells, dataR1, r2, c1, c2);
   // What the sort did: what is derived from the cells follows it, and a tiled
   // sheet's save sends the order instead of every cell it moved.
   recordCellMapRowPermutation(sheet.cells, nextCells, { dataR1, c1, c2, sourceOrder: [...sourceOrder], relocated });

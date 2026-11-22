@@ -58,6 +58,9 @@ export interface LedgerFragmentMeasure {
    * line pitch, for the page planner's own column layout of the section. */
   regionColumns?: number;
   linePitchPx?: number;
+  /** In a stacked column region, a list balanced by its lines: the lines
+   * either side of a cut in it (`ColumnRegionCharge.minSplitLines`). */
+  regionMinSplitLines?: number;
   /** In a stacked column region: its height in each of the region's columns
    * (unequal columns wrap the same text into different heights). */
   regionHeightsPx?: readonly number[];

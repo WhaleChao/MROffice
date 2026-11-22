@@ -244,6 +244,24 @@ export function pdfTextFieldEditFits(
   );
 }
 
+/**
+ * Whether a text field's input may take the edit now. Only a non-scrolling
+ * field is held to its box. A comb field is never held to it: /MaxLen
+ * already divides it into that many cells (ISO 32000 12.7.4.3) and its
+ * characters are drawn one per cell by an overlay, while the transparent
+ * input underneath is spaced to the cell pitch and so measures wider than
+ * the box at a full value. Measuring it refused the last character of every
+ * comb field marked do-not-scroll (IRS W-9 f1_11: "123" stuck at "12").
+ */
+export function pdfTextFieldTakesEdit(
+  element: HTMLInputElement | HTMLTextAreaElement,
+  previous: string,
+  field: { scrollable: boolean; combActive: boolean },
+): boolean {
+  if (field.scrollable || field.combActive) return true;
+  return pdfTextFieldEditFits(element, previous);
+}
+
 export function pdfTextFieldContentFits(
   element: HTMLInputElement | HTMLTextAreaElement,
 ): boolean {

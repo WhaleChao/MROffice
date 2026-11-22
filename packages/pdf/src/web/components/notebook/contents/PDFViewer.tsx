@@ -309,10 +309,12 @@ import {
   pdfUnsentReplyThreads,
   settlePdfUnsentReplies,
 } from "../../../lib/pdf/annotation-thread-write";
+import { usePdfOutputHydrationAskedAgain } from "../../../lib/pdf/output-hydration-ask-again";
 import {
   createPdfAnnotationReadScope,
   notePdfAnnotationRowWrite,
   notePdfAnnotationWrite,
+  pdfAnnotationReadFailedForAMoment,
   readPdfAnnotationsByType,
 } from "../../../lib/pdf/annotation-read-batch";
 import HighlightEditDialog, {
@@ -331,6 +333,8 @@ import {
   watchPdfAnnotationChanges,
 } from "../../../lib/pdf/annotation-change-signal";
 import { apiStream } from "@mrnote/core/web/lib/api-stream.ts";
+import { embedFillsPdfForm } from "@mrnote/core/web/lib/embed/session-access.ts";
+import { useEmbedAccess } from "@mrnote/core/web/lib/embed/use-embed-access.ts";
 import { isLoggedIn, subscribeAuthState } from "@mrnote/core/web/lib/auth-state.ts";
 import { mergeHydratedAnnotationList } from "../../../lib/pdf/annotation-hydration";
 import { enqueuePdfMarkupWrite, type PdfMarkupWrite } from "../../../lib/pdf/markup-write-queue";
@@ -4084,6 +4088,11 @@ export default function PDFViewer({
       url,
     ],
   );
+  /** The read of each family of output marks that stands failed was one the
+   * server could not answer just then (not its refusal, not a malformed
+   * answer): pdfAnnotationReadFailedForAMoment. */
+  const redactionHydrationFailedForAMomentRef = useRef(false);
+  const shapesHydrationFailedForAMomentRef = useRef(false);
   const redactionHydrationAuthorityRef = useRef<{
     documentIdentity: string;
     generation: number;
@@ -4822,6 +4831,30 @@ export default function PDFViewer({
       return Number.isSafeInteger(nextRevision) ? nextRevision : 1;
     });
   }, [shapesHydrationDocumentIdentity]);
+  // A read of the output's marks the server could not answer for a moment
+  // is asked again by itself (the notice's own retries, further apart each
+  // time), and the annotation lists whose failed read is silent are read
+  // again once the marks are.
+  usePdfOutputHydrationAskedAgain({
+    documentIdentity: `${redactionHydrationDocumentIdentity}\n${shapesHydrationDocumentIdentity}`,
+    failed:
+      redactionHydrationStatusForCurrentDocument === "failed" ||
+      shapesHydrationStatusForCurrentDocument === "failed",
+    ready:
+      redactionHydrationStatusForCurrentDocument === "ready" &&
+      shapesHydrationStatusForCurrentDocument === "ready",
+    round: redactionHydrationAuthority.generation + shapesHydrationAuthority.generation,
+    momentary: () =>
+      (redactionHydrationAuthorityRef.current.status !== "failed" ||
+        redactionHydrationFailedForAMomentRef.current) &&
+      (shapesHydrationAuthorityRef.current.status !== "failed" ||
+        shapesHydrationFailedForAMomentRef.current),
+    askAgain: () => {
+      retryRedactionHydration();
+      retryVisualMaskHydration();
+    },
+    onReadAgain: () => setRemoteAnnotationEpoch((epoch) => epoch + 1),
+  });
   const [shapeSaving, setShapeSaving] = useState(false);
   const shapeSavingRef = useRef(false);
   /** The source each shape's last frame write started from (by shape id):
@@ -5395,9 +5428,24 @@ export default function PDFViewer({
   // Filling as a role (ONLYOFFICE's View form as a role): only its fields,
   // and anyone's, take input. Null: as anyone -- every field.
   const [formFillRole, setFormFillRole] = useState<string | null>(null);
-  const effectiveFormFillRole = formFillRole && formRoles.some((role) => role.name === formFillRole)
-    ? formFillRole : null;
-  const [requestedFormMode, setFormMode] = useState(false);
+  // An embedded fillForms session fills as the role its token names (the
+  // server refuses another role's field whatever is shown here), with fill
+  // mode on from the start: filling is all the session does.
+  const embedFormFillAccess = useEmbedAccess();
+  const embedFormFill = embedFormFillAccess !== null && embedFormFillAccess.mediated &&
+    embedFormFillAccess.effectiveMode === "fillForms";
+  const embedFormRoleWanted = embedFormFill ? (embedFormFillAccess.role?.toLowerCase() ?? null) : null;
+  const embedFormRoleName = embedFormRoleWanted
+    ? (formRoles.find((role) => role.name.toLowerCase() === embedFormRoleWanted)?.name ?? null)
+    : null;
+  const effectiveFormFillRole = embedFormFill
+    ? embedFormRoleName
+    : formFillRole && formRoles.some((role) => role.name === formFillRole)
+      ? formFillRole : null;
+  const [requestedFormMode, setFormMode] = useState(embedFormFill);
+  useEffect(() => {
+    if (embedFormFill) setFormMode(true);
+  }, [embedFormFill]);
   const requestedFormModeRef = useRef(requestedFormMode);
   requestedFormModeRef.current = requestedFormMode;
   // Fill mode as it stood before field authoring (property or delete mode)
@@ -8897,7 +8945,12 @@ export default function PDFViewer({
   // ends a drag is kept at its press, not where it was let go.
   // `own`: on one of the reader's own objects (pdfReaderAnnotationPressOf):
   // what it drags is that object, never a line of the page under it.
-  const nativeTextLastPressRef = useRef<Readonly<{ clientX: number; clientY: number; at?: number; own?: boolean }> | null>(null);
+  // `tool`: made while a tool that takes the page's presses was armed (添加
+  // 链接 draws its frame by a drag; a shape, a stamp, the eraser): the press
+  // and the click that ends it are the tool's, whatever lies under them.
+  const nativeTextLastPressRef = useRef<Readonly<{ clientX: number; clientY: number; at?: number; own?: boolean; tool?: boolean }> | null>(null);
+  /** A tool that takes the page's presses is armed (panToolArmed, below). */
+  const pageToolTakesPressesRef = useRef(false);
   const nativeTextPressKeptRef = useRef<PdfNativeTextPressKept | null>(null);
   const nativeTextLastKeyAtRef = useRef(0);
   // Every primary press is recorded at the pointer stage: the mouse events
@@ -8910,7 +8963,7 @@ export default function PDFViewer({
     const record = (event: PointerEvent) => {
       nativeTextLastPressRef.current = event.button === 0
         ? { clientX: event.clientX, clientY: event.clientY, at: event.timeStamp,
-          own: pdfReaderAnnotationPressOf(event.target) === "object" } : null;
+          own: pdfReaderAnnotationPressOf(event.target) === "object", tool: pageToolTakesPressesRef.current } : null;
     };
     const recordKey = () => { nativeTextLastKeyAtRef.current = Date.now(); };
     window.addEventListener("pointerdown", record, true);
@@ -11130,6 +11183,14 @@ export default function PDFViewer({
           setPdfDoc(document);
           setPages(records);
           setSourceRiskSnapshot(snapshot);
+          // The window is told too. It names the revision in the same render
+          // (the stage's publish and the page's new source are one update),
+          // so the snapshot already reads as the source asked for and no
+          // carry reaches the window: its snapshot stayed the revision
+          // before, the page read as loading for good, and a blank page
+          // inserted meanwhile waited its minute and was lost (pdf-walk-1000
+          
+          onSourceRiskSnapshotChangeRef.current?.(snapshot);
           setOcgLayers(layers);
           setDocPageLabels(labels);
           keptPaintedPagesRef.current.clear();
@@ -20152,6 +20213,32 @@ export default function PDFViewer({
           return false;
         }
         payload = nativePayload;
+        if (embedFillsPdfForm()) {
+          // A session that only fills in the form keeps no reader row (its
+          // account reads the file): the host signs the signature field
+          // through the session's own route, or says why not.
+          const signed: SignatureAnnotation = {
+            id: `embed-signature-${crypto.randomUUID()}`,
+            page: payload.page,
+            x: payload.x,
+            y: payload.y,
+            width: payload.width,
+            height: payload.height,
+            kind: payload.kind,
+            image: payload.image,
+            text: payload.text,
+            font: payload.font,
+            nativeAppearanceImage,
+          };
+          try {
+            await nativeUpsert(signed as ManagedNativeSignatureAnnotation, authorityGenerationAtStart);
+          } catch {
+            setPlacedAnnotationClipboardError(true);
+            return false;
+          }
+          setSignatures((prev) => upsertAnnotationRowById(prev, signed));
+          return true;
+        }
         const result = await apiPost<{ annotation: { id: string } }>(
           `/api/v1/data-items/${dataItemId}/annotations`,
           {
@@ -22379,8 +22466,12 @@ export default function PDFViewer({
             setRedactionBulkRecoveryDataItemId(null);
           }
         }
-      } catch {
+      } catch (error) {
         // Rejection, malformed rows and partial sanitation all stay UNKNOWN.
+        // (A server that could not answer just then is asked again by
+        // itself: usePdfOutputHydrationAskedAgain.)
+        redactionHydrationFailedForAMomentRef.current =
+          pdfAnnotationReadFailedForAMoment(error);
         publishHydrationFailureIfCurrent();
       }
     };
@@ -23190,10 +23281,12 @@ export default function PDFViewer({
           ),
         );
         setShapesHydratedItem(dataItemId ?? null);
-      } catch {
+      } catch (error) {
         // Failure, malformed data and partial sanitation are all UNKNOWN, never
         // an authenticated empty result. Only the still-current request may
         // publish a retryable failure; stale completions remain invisible.
+        shapesHydrationFailedForAMomentRef.current =
+          pdfAnnotationReadFailedForAMoment(error);
         publishHydrationFailureIfCurrent();
       }
     };
@@ -40802,6 +40895,19 @@ export default function PDFViewer({
       // line under it opens, moves or is kept for the page's next revision.
       const stackPress = pdfReaderAnnotationPressOf(element);
       const ownPress = nativeTextLastPressRef.current;
+      // The same of a tool's press (添加链接 on the Edit tab, where Edit
+      // Content stays on): the drag that drew a link's frame over a sentence
+      // opened the line under its start and moved it by the drag -- the page
+      
+      
+      // with no line at all it was "kept for the page's next revision", every
+      // click and key of the window held for the 12 s that never came (the
+      // link's own 保存链接 among them: pdf-walk-1000 rv0369, rv0219).
+      if (event.detail > 0 && (pageToolTakesPressesRef.current || (ownPress?.tool &&
+        (ownPress.at === undefined || event.timeStamp - ownPress.at < 5_000)))) {
+        nativeTextPointerGestureOwnerRef.current = null;
+        return;
+      }
       if (stackPress === "object" || (ownPress?.own && event.detail > 0 &&
         (ownPress.at === undefined || event.timeStamp - ownPress.at < 5_000) &&
         Math.hypot(event.clientX - ownPress.clientX, event.clientY - ownPress.clientY) >= 3)) {
@@ -40952,12 +41058,12 @@ export default function PDFViewer({
           const capture = nativeTextCaptureRef.current;
           // Held inert, the boxes take no pointer: the box under the press
           // is found by its frame, as the kept click finds it.
-          const holdSpan = span ?? (() => {
+          const boxHeldAt = (clientX: number, clientY: number) => {
             let best: HTMLElement | null = null;
             let bestArea = Number.POSITIVE_INFINITY;
             for (const candidate of pageElement.querySelectorAll<HTMLElement>(`span[${PDF_NATIVE_TEXT_EDIT_BOX_ATTR}="true"]`)) {
               const box = pdfNativeTextEditFrameClientRect(candidate);
-              if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) continue;
+              if (clientX < box.left || clientX > box.right || clientY < box.top || clientY > box.bottom) continue;
               const area = (box.right - box.left) * (box.bottom - box.top);
               if (area > 0 && area < bestArea) { best = candidate; bestArea = area; }
             }
@@ -40968,12 +41074,22 @@ export default function PDFViewer({
             for (const ghost of pageElement.querySelectorAll<HTMLElement>(
               '[data-pdf-text-layer-ghost="true"] span[data-pdf-native-text-edit-box-ghost="true"]')) {
               const box = ghost.getBoundingClientRect();
-              if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) continue;
+              if (clientX < box.left || clientX > box.right || clientY < box.top || clientY > box.bottom) continue;
               const area = box.width * box.height;
               if (area > 0 && area < bestArea) { best = ghost; bestArea = area; }
             }
             return best;
-          })();
+          };
+          const holdSpan = span ?? boxHeldAt(event.clientX, event.clientY);
+          // A drag whose press was on no box, shown or held as a picture,
+          // is no box's move: nothing is kept for it and nothing is held. On
+          // a page with no line of its own (a scan) every drag was "kept for
+          // the page's next revision" and the window took no click and no
+          
+          if (drag && press && !boxHeldAt(press.clientX, press.clientY)) {
+            markPdfTextLatency("open.drag-on-no-box");
+            return;
+          }
           // A press while the boxes are held opens the line queued whether
           
           // line pressed before the drawing arrived used to be refused and
@@ -41082,11 +41198,17 @@ export default function PDFViewer({
       // nothing of it is kept for a line -- pdfReaderAnnotationPressOf.)
       const stackPress = pdfReaderAnnotationPressOf(event.target);
       nativeTextLastPressRef.current = event.button === 0
-        ? { clientX: event.clientX, clientY: event.clientY, at: event.timeStamp, own: stackPress === "object" } : null;
+        ? { clientX: event.clientX, clientY: event.clientY, at: event.timeStamp, own: stackPress === "object",
+          tool: pageToolTakesPressesRef.current } : null;
       // A revision going up while the mouse is held replaces the element
       // pressed, and the browser sends no click for it (native-text-lost-click).
       nativeTextPressKeptRef.current?.cancel();
       nativeTextPressKeptRef.current = null;
+      // An armed tool's press is the tool's: no line takes it (see the click).
+      if (pageToolTakesPressesRef.current) {
+        nativeTextPointerGestureOwnerRef.current = null;
+        return;
+      }
       const pressedPage = event.button === 0 && contentEditModeLiveRef.current && event.target instanceof Element &&
         stackPress !== "object"
         ? event.target.closest<HTMLElement>(".pdf-viewer__page[data-page-number]") : null;
@@ -42699,6 +42821,7 @@ export default function PDFViewer({
     snapshotMode ||
     measureMode ||
     eraseTool.armed;
+  pageToolTakesPressesRef.current = panToolArmed;
   useEffect(() => {
     panStateRef.current = {
       panMode,

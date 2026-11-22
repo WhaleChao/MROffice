@@ -10,6 +10,9 @@ export interface SpreadsheetHyperlinkArea {
   hyperlink: string;
   hyperlinkTooltip?: string;
   hyperlinkDisplay?: string;
+  /** Its place in the file as the cells' `hyperlinkRank` counts it: the
+   *  cells' elements the file lists before it (reading 981). */
+  hyperlinkRank?: number;
 }
 
 /** The link fields a place's cell may state. */

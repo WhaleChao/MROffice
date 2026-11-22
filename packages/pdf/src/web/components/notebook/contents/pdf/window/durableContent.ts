@@ -623,6 +623,11 @@ export interface PdfRefusedNativeWriteRestore {
   readonly key: string;
 }
 
+/** How many journals a put-back onto an export names at most, each one
+ * record shorter than the one before (one request each until the server
+ * takes one). */
+const PDF_REFUSED_RESTORE_RECORDS_BACK = 4;
+
 export function reconstructRefusedNativeWriteRestore(
   savedPage: PageItem,
 ): PdfRefusedNativeWriteRestore | null {
@@ -679,7 +684,17 @@ export function reconstructRefusedNativeWriteRestore(
     marker,
     refusedTransactionId,
     candidates: Object.freeze(
-      exportSource ? [withJournal(remaining)] : [withJournal(null), withJournal([])],
+      exportSource
+        // The file may be more than one record behind: a second writer's
+        // record stored while the write of the one before it was still lost
+        // to the server. The journal its export carries is then shorter by
+        // each of them. The server knows which it is (its stamp of the
+        // journal the file carries) and refuses every other body, so each
+        // is named in turn, the nearest first. Only the last record off was
+        // named, and such a page could not be put back by its window.
+        ? Array.from({ length: Math.min(remaining.length, PDF_REFUSED_RESTORE_RECORDS_BACK) },
+            (_, back) => withJournal(remaining.slice(0, remaining.length - back)))
+        : [withJournal(null), withJournal([])],
     ),
     source: Object.freeze(source),
     key: `${savedPage.id}:${contentVersion}:${auth.current_content_sha256}`,
@@ -755,6 +770,15 @@ export function readPdfNativeServerRefusal(options: {
     : reason ? PDF_NATIVE_SERVER_REFUSAL_REASON.exec(reason)?.[1] ?? null : null;
   if (!code || !pdfNativeTransactionCollectionMatches(collection, savedPage.content_json)) return null;
   return code;
+}
+
+/** Whether the page answered by a put-back is one put back from a record
+ * whose file write was never made, with what was saved since written into
+ * the file (the server says so on the receipt: `put_back`). The notice after
+ * it is not the one of a refused record -- nothing failed a check. */
+export function pdfPutBackWroteWhatWasSavedSince(page: PageItem | null | undefined): boolean {
+  const receipt = page?.editable_page_patchback;
+  return receipt?.status === "succeeded" && receipt.put_back === "saved_since";
 }
 
 export type PdfRefusedNativeWriteRestoreOutcome =

@@ -667,6 +667,12 @@ export function mountDocumentDisplayFonts(editor: Editor, pageId: string, notebo
 export interface DocumentDisplayFontSource {
   read: (version: number, signal: AbortSignal) => Promise<unknown>;
   parse: (response: unknown, version: number) => DocumentDisplayFontPlan;
+  /** The caller waits for the faces of every character the page draws before
+   * it uses the page (the server's print: printFontsReady, ahead of its ready
+   * cue). The plan's own character warm-up is then a head start, not a gate:
+   * past the deadline, or when the text it reads keeps moving under a layout
+   * still under way, the verified plan stands as the page's settled plan. */
+  charactersAwaitedByCaller?: boolean;
 }
 
 /** Word families a DOCX commonly declares without embedding, and whose local
@@ -753,6 +759,7 @@ export function mountDocumentDisplayFontSource(editor: Editor, source: DocumentD
       };
       let phase: DocumentDisplayFontFailure = "request";
       let deadlineExpired=false;
+      let charactersDeadline: (() => void) | null = null;
       controller.signal.addEventListener("abort", () => {
         const reason=phase==="font-characters" ? "font-characters-timeout" : "timeout";
         // Only our explicit deadline can retain validated paint. A caller's
@@ -760,7 +767,11 @@ export function mountDocumentDisplayFontSource(editor: Editor, source: DocumentD
         if(deadlineExpired && phase==="font-characters" && preparedCurrent()) retainPreparedForRetry(reason);
         else { releasePending(); fail(reason); }
       }, {once: true});
-      const timeout = setTimeout(() => {deadlineExpired=true;controller.abort();}, DISPLAY_FONT_PLAN_DEADLINE_MS);
+      const timeout = setTimeout(() => {
+        // A warm-up the caller does not wait on is let go, not aborted.
+        if (charactersDeadline) { charactersDeadline(); return; }
+        deadlineExpired=true;controller.abort();
+      }, DISPLAY_FONT_PLAN_DEADLINE_MS);
       const now = Date.now();
       gateOpenedAt ??= now;
       const gateLeftMs = gateOpenedAt + DISPLAY_FONT_PLAN_DEADLINE_MS - now;
@@ -810,8 +821,22 @@ export function mountDocumentDisplayFontSource(editor: Editor, source: DocumentD
         apply(plan);
         preparedPlan=plan;
         phase="font-characters";
-        await warmDocumentFontCharacters(root,{signal:controller.signal,current:()=>
+        const warming=warmDocumentFontCharacters(root,{signal:controller.signal,current:()=>
           current() && documentDisplayFontPluginKey.getState(editor.state)?.plan===plan});
+        if (source.charactersAwaitedByCaller) {
+          // A 480-page print (R480-D21) read its characters for longer than
+          // the deadline while its layout ran: the plan said "unavailable"
+          // for good (this source is never asked again) and the print copy,
+          // which refuses a page whose plan is unavailable, was never made.
+          // Only a changed source still fails the plan.
+          await Promise.race([
+            warming.catch((error: unknown) => {
+              if (error instanceof Error && error.message === "document_font_character_source_changed") throw error;
+            }),
+            new Promise<void>(resolve => { charactersDeadline = resolve; }),
+          ]);
+          charactersDeadline = null;
+        } else await warming;
         if (!current()) return;
         // Word's measured bold advances are served (lib/office-data/store.ts):
         // a plan with the reference face waits for them here, behind the

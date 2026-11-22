@@ -20,6 +20,13 @@ export interface DesktopSettings {
    * file once its edits settle, not only on ⌘S (Settings › General);
    * absent: on. */
   autoSaveToOriginal?: boolean;
+  /** "Send usage statistics" (Settings › General): the app's daily counts
+   * for the operators' dashboard, never names or content (./usage-report.ts);
+   * absent: on. */
+  usageReports?: boolean;
+  /** AI apps on this computer may use the app as their screen through its
+   * local MCP endpoint (./ai-screen, Settings › General); absent: on. */
+  aiScreen?: boolean;
 }
 
 const settingsFile = () => path.join(app.getPath("userData"), "desktop-settings.json");
@@ -42,4 +49,9 @@ export function writeSettings(change: DesktopSettings): void {
 /** Autosave to the original file (on unless the person turned it off). */
 export function autoSaveToOriginalEnabled(): boolean {
   return readSettings().autoSaveToOriginal !== false;
+}
+
+/** The AI screen's local MCP endpoint (on unless the person turned it off). */
+export function aiScreenEnabled(): boolean {
+  return readSettings().aiScreen !== false;
 }

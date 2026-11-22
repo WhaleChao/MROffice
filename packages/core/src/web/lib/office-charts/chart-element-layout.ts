@@ -59,6 +59,11 @@ function normalizePlace(value: unknown): ChartElementPlace | undefined {
   return { x: round6(record.x), y: round6(record.y) };
 }
 
+/** `value` as an element box (x, y, w, h fractions inside the chart), or undefined. */
+export function normalizeChartElementBox(value: unknown): ChartElementBox | undefined {
+  return normalizeBox(value);
+}
+
 function normalizeBox(value: unknown): ChartElementBox | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;

@@ -740,10 +740,23 @@ function sourceTextDOM(view: EditorView, dom: HTMLElement, position: number, blo
     const formula = element.closest(INLINE_MATH_VIEW);
     return formula !== null && dom.contains(formula) && !formula.hasAttribute("data-math-display");
   };
+  // This plugin's own strut (emptyLineStrut: a widget of the line height it
+  // publishes, its one word joiner no source text): the line a break opens
+  // at the paragraph's end, an empty line between two breaks. Rejected, every
+  // paragraph that holds one kept its own strut on every line once it was
+  // laid out again -- 87 of 87 in a table of Tw Cen MT 9 cells under a
+  // Calibri 11 style (probes/tbl17/h5), each line 10.55 pt where Word's is
+  // 9.8, a row 3 pt taller. Read before the widget was drawn, the same
+  // paragraph passed: whether it held its strut depended on the pass.
+  const ownStrut = (element: Element) => {
+    if (strutProofOff()) return false;
+    const strut = element.closest(AUTO_LINE_STRUT_SELECTOR);
+    return strut !== null && dom.contains(strut);
+  };
   for (const element of dom.querySelectorAll(nonTextLayout)) {
     if (!zeroLayoutMark(element) && !listMarker(element) && !inlinePicture(element) &&
       !controlAnchor(element) && !pageBreakMark(element) && !textOnlyFieldView(element) && !noteRef(element) &&
-      !inlineFormula(element)) return false;
+      !inlineFormula(element) && !ownStrut(element)) return false;
   }
   // Never neutralize an authored inline line-height, or an unmapped label
   // supplied by a NodeView. This is a paragraph-source proof, not text matching
@@ -759,7 +772,8 @@ function sourceTextDOM(view: EditorView, dom: HTMLElement, position: number, blo
     const text = walker.currentNode as Text;
     if (!text.length) continue;
     if (text.parentElement && (listMarker(text.parentElement) || inlinePicture(text.parentElement) ||
-      controlAnchor(text.parentElement) || noteRef(text.parentElement) || inlineFormula(text.parentElement))) continue;
+      controlAnchor(text.parentElement) || noteRef(text.parentElement) || inlineFormula(text.parentElement) ||
+      ownStrut(text.parentElement))) continue;
     // A field's result text is its view's, not the paragraph's: the field
     // carries its own leaf (`fieldLeaf`).
     if (text.parentElement && textOnlyFieldView(text.parentElement)) continue;
@@ -916,6 +930,20 @@ const HAN_TEXT = /[\u2e80-\u2fdf\u3000-\u303f\u3040-\u30ff\u3100-\u312f\u31f0-\u
 function hanSimSunLineOff(): boolean {
   return typeof window !== "undefined" && (window as Window & {__docsHanSimSunLineOff?: boolean}).__docsHanSimSunLineOff === true;
 }
+/** The East Asian characters of those blocks SimSun has no glyph for and
+ * Microsoft YaHei has (the cmaps of the two files Word ships): under an
+ * all-Latin run Word draws them in Microsoft YaHei, and the line takes
+ * YaHei's East Asian box -- 20.6 pt at 12 pt single where the SimSun line
+ * is 15.6 pt (docx-look/cjk16/probes fb: 〜 ・ ｱｲｳ ｰ 〘 ゔ ㉐ 〻 ﹅ ￦ 〳 under
+ * Cambria, every one in Microsoft YaHei). Corpus R398-D14: 69 of Word's 404
+ * lines hold a wave dash (U+301C, "0.12〜0.18kg") and stand 20.64 pt apart. */
+const HAN_SIMSUN_MISSING_TEXT = /[\u2e80\u2e82\u2e83\u2e85-\u2e87\u2e89\u2e8a\u2e8d-\u2e96\u2e98\u2e99\u2e9b-\u2ea6\u2ea8\u2ea9\u2eab-\u2ead\u2eaf-\u2eb2\u2eb4\u2eb5\u2eb8-\u2eba\u2ebc-\u2ec9\u2ecb-\u2ef3\u2f00-\u2fd5\u3004\u3018-\u301c\u301f\u3020\u302a-\u303d\u303f\u3094-\u3096\u3099\u309a\u309f\u30a0\u30f7-\u30fb\u30ff\u312a-\u312d\u31f0-\u31ff\u322a-\u3230\u3233-\u3238\u323a-\u3243\u3250-\u325f\u3280-\u3296\u3298\u329a-\u32a2\u32a9-\u32cf\u3385-\u3387\u33cb\u33cc\u33d4\u33d7\u33d9\u33da\u33de\u33df\ufe32\ufe45-\ufe48\uff5f-\uff9f\uffa1-\uffbe\uffc2-\uffc7\uffca-\uffcf\uffd2-\uffd7\uffda-\uffdc\uffe6\uffe8-\uffee]/;
+const HAN_SIMSUN_MISSING_FACE = "Microsoft YaHei";
+/** `window.__docsHanYaHeiLineOff = true` asks the older reading (those
+ * characters measured as SimSun), for an A/B of one build. */
+function hanYaHeiLineOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsHanYaHeiLineOff?: boolean}).__docsHanYaHeiLineOff === true;
+}
 /** Hebrew and Arabic: Word sets them in its own face for the script when the
  * run's face has none (TextStyling `wordComplexScriptFallbackFace`: Times New
  * Roman, Arial or Courier New), and a line of them takes that face's box.
@@ -984,6 +1012,13 @@ interface BlockDecoration {
  * paragraph's small line height stands where the run's face centres it, not
  * on the mark's baseline (R279-D29: a 5 pt line for Word's 1.2 pt).
  */
+/** The view of `emptyLineStrut`. */
+const AUTO_LINE_STRUT_SELECTOR = "span.document-auto-line-strut";
+
+
+function strutProofOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsStrutProofOff?: boolean}).__docsStrutProofOff === true;
+}
 function emptyLineStrut(pos: number, pixels: number, top = false, bare = false): Decoration {
   return Decoration.widget(pos, (view) => {
     const element = view.dom.ownerDocument.createElement("span");
@@ -1601,7 +1636,7 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
       ?.getAttribute("data-document-word-east-asian") ?? "").toLowerCase().split(",").filter(Boolean));
     // The A/B switches of the Latin-run fallbacks are part of the key: a part
     // list read under one never answers the other.
-    const fallbackSwitches = `${hangulBatangLineOff() ? 1 : 0}${hanSimSunLineOff() ? 1 : 0}${complexText ? 1 : 0}`;
+    const fallbackSwitches = `${hangulBatangLineOff() ? 1 : 0}${hanSimSunLineOff() ? 1 : 0}${hanYaHeiLineOff() ? 1 : 0}${complexText ? 1 : 0}`;
     const cacheKey = `${eastAsianKey}\u0000${[...wordEastAsian].join(",")}\u0000${stackOfElement}\u0000${fallbackSwitches}\u0000${text}`;
     const cached = autoLinePartCache.get(cacheKey);
     if (cached) return cached.map((part) => ({...part, from: from + part.from, to: from + part.to}));
@@ -1642,7 +1677,10 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
       if (slice.slot === "eastAsia" && !eastAsianFace && (hangulFace || hanFace)) {
         let offset = slice.from;
         for (const char of text.slice(slice.from, slice.to)) {
-          const face = hangulFace && HANGUL_TEXT.test(char) ? hangulFace : hanFace && HAN_TEXT.test(char) ? hanFace : null;
+          const face = hangulFace && HANGUL_TEXT.test(char) ? hangulFace
+            : hanFace && HAN_TEXT.test(char)
+              ? HAN_SIMSUN_MISSING_TEXT.test(char) && !hanYaHeiLineOff() ? HAN_SIMSUN_MISSING_FACE : hanFace
+              : null;
           push(from + offset, from + offset + char.length, face ? `"${face}"` : undefined);
           offset += char.length;
         }

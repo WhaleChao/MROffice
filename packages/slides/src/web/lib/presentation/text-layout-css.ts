@@ -544,6 +544,19 @@ export const PRESENTATION_HOME_TEXT_SHADOW: OfficeShapeShadow = {
 
 
 export function presentationTextShadowCss(effect?: unknown): string {
+  return textShadowPartsCss(presentationTextShadowParts(effect));
+}
+
+/** One CSS text shadow's parts: offset and blur radius in px (CSS's blur radius: a Gaussian of half its deviation), colour. */
+export interface TextShadowParts {
+  readonly x: number;
+  readonly y: number;
+  readonly blur: number;
+  readonly color: string;
+}
+
+/** The parts of the shadow `presentationTextShadowCss` writes, from the same model. */
+export function presentationTextShadowParts(effect?: unknown): TextShadowParts {
   let stated: OfficeShapeShadow | undefined;
   try {
     stated = normalizeOfficeShapeShadow(effect);
@@ -555,7 +568,107 @@ export function presentationTextShadowCss(effect?: unknown): string {
   const round = (value: number) => Math.round(value * 100) / 100 + 0;
   const value = Number.parseInt(shadow.color.slice(1), 16);
   const alpha = Math.round(Math.min(1, Math.max(0, shadow.opacity)) * 10_000) / 10_000;
-  return `${round(Math.cos(radians) * shadow.distance)}px ${round(Math.sin(radians) * shadow.distance)}px ${round(shadow.blur)}px rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
+  return {
+    x: round(Math.cos(radians) * shadow.distance),
+    y: round(Math.sin(radians) * shadow.distance),
+    blur: round(shadow.blur),
+    color: `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`,
+  };
+}
+
+/** A CSS px size (a number or "<n>px") in points; undefined for anything else. */
+function cssPxToPoints(value: unknown): number | undefined {
+  const px = typeof value === "number" ? value : typeof value === "string" && /^-?\d*\.?\d+px$/.test(value.trim()) ? Number.parseFloat(value) : NaN;
+  return Number.isFinite(px) && px > 0 ? (px * 72) / 96 : undefined;
+}
+
+function textShadowPartsCss(parts: TextShadowParts): string {
+  return `${parts.x}px ${parts.y}px ${parts.blur}px ${parts.color}`;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function powerPointTextShadowScale(sizePt: number): number {
+  return Number.isFinite(sizePt) && sizePt > 0 ? 0.975 * (sizePt / 72) ** 0.702 : 1;
+}
+
+/**
+ * A text shadow as PowerPoint draws it from text whose line's largest drawn
+ * size is `sizePt`, from its parts as `presentationTextShadowParts` reads the
+ * model (offset `dist`, blur radius `blurRad` in CSS's reading): the offset
+ * times the scale, the CSS radius times the scale over sqrt 2 (deviation
+ * scale x blurRad / (2 sqrt 2)).
+ */
+export function powerPointTextShadowParts(parts: TextShadowParts, sizePt: number): TextShadowParts {
+  const scale = powerPointTextShadowScale(sizePt);
+  const round = (value: number) => Math.round(value * 100) / 100 + 0;
+  return { x: round(parts.x * scale), y: round(parts.y * scale), blur: round((parts.blur * scale) / Math.SQRT2), color: parts.color };
+}
+
+/**
+ * The CSS custom property a text shadow's model-read parts ride in beside its
+ * drawn `text-shadow` (`presentationTextShadowCss` scaled to the text the
+ * browser-flowed drawing knows): the engine scales them by each line's own
+ * largest size (`PresentationEngineLine`).
+ */
+export const TEXT_SHADOW_BASE_PROPERTY = "--office-text-shadow-base";
+
+/**
+ * A text shadow's drawn CSS and its unscaled parts: the drawn one scaled by
+ * `sizePt` (`powerPointTextShadowParts`), the size the browser-flowed drawing
+ * knows -- a run's own, a box's -- where the engine scales by each line's
+ * largest (the browser cannot see the lines a paragraph breaks into).
+ */
+export function presentationTextShadowStyles(effect: unknown, sizePt: number | undefined): Record<string, string> {
+  const parts = presentationTextShadowParts(effect);
+  return {
+    textShadow: textShadowPartsCss(sizePt === undefined ? parts : powerPointTextShadowParts(parts, sizePt)),
+    [TEXT_SHADOW_BASE_PROPERTY]: textShadowPartsCss(parts),
+  };
+}
+
+/**
+ * A CSS `text-shadow` value read back into its shadows (`presentationTextShadowCss`'s, or any
+ * `<x> <y> [<blur>] <color>` list in px); empty for `none` or anything else.
+ */
+export function cssTextShadowParts(value: unknown): TextShadowParts[] {
+  if (typeof value !== "string" || !value.trim() || value.trim() === "none") return [];
+  const shadows: TextShadowParts[] = [];
+  let depth = 0;
+  let start = 0;
+  const pieces: string[] = [];
+  for (let index = 0; index < value.length; index++) {
+    const char = value[index];
+    if (char === "(") depth++;
+    else if (char === ")") depth--;
+    else if (char === "," && depth === 0) {
+      pieces.push(value.slice(start, index));
+      start = index + 1;
+    }
+  }
+  pieces.push(value.slice(start));
+  for (const piece of pieces) {
+    const lengths: number[] = [];
+    const color = piece.replace(/(^|\s)(-?\d*\.?\d+)px(?=\s|$)/g, (_match, lead: string, number: string) => {
+      lengths.push(Number(number));
+      return lead;
+    }).trim();
+    if (lengths.length < 2 || lengths.length > 3 || !color || !lengths.every(Number.isFinite)) return [];
+    shadows.push({ x: lengths[0]!, y: lengths[1]!, blur: Math.max(0, lengths[2] ?? 0), color });
+  }
+  return shadows;
 }
 
 export function textBlockStyleCss(
@@ -639,11 +752,15 @@ export function textBlockStyleCss(
         }
       : {}),
     // The words' shadow: as they state it (`textShadowEffect`, PPTX readings
-    // row 805), else Home > Text Shadow's own.
-    textShadow:
-      (style as { textShadow?: unknown } | undefined)?.textShadow === true
-        ? presentationTextShadowCss((style as { textShadowEffect?: unknown } | undefined)?.textShadowEffect)
-        : undefined,
+    // row 805), else Home > Text Shadow's own -- scaled as PowerPoint scales
+    // it by the size of the text (`powerPointTextShadowScale`; the box's size
+    // here, each line's largest in the engine).
+    ...((style as { textShadow?: unknown } | undefined)?.textShadow === true
+      ? presentationTextShadowStyles(
+          (style as { textShadowEffect?: unknown } | undefined)?.textShadowEffect,
+          cssPxToPoints(presentationFontSizeCss(effectiveFontSize, fontSizeUnit)),
+        )
+      : {}),
     ...spacingCss,
   };
 }
@@ -1257,7 +1374,8 @@ export function runStyleCss(
   }
   // A shadow on these characters only (readings row 808), drawn as a box's.
   if (style.textShadow === true && !presentationTextPaintOwnsShadow((style as { textPaint?: unknown }).textPaint)) {
-    css.textShadow = presentationTextShadowCss(style.textShadowEffect);
+    // Scaled by the run's own drawn size (the engine: its line's largest).
+    Object.assign(css, presentationTextShadowStyles(style.textShadowEffect, cssPxToPoints(css.fontSize)));
   }
   // WordArt on these characters (their fill, outline and effects): the run's
   // own paint, over its colour and outline as PowerPoint draws `a:rPr`'s fill

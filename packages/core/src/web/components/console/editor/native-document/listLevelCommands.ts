@@ -253,7 +253,9 @@ function levelIndentsOfOwnSubItems(
  * Word they keep their `w:ilvl` and are now the demoted item's siblings
  * (corpus R485-D87 E13: "NSIC 222" went from ilvl 1 to 2 under the demoted
  * "RICE-PRE"). Sub-items of a list that is not the one the item joined (an
- * other numbering at that level) stay where they are. The demoted items take
+ * other numbering at that level) keep their depth as well when the last
+ * demoted item holds them: they go on after the list it joined (corpus
+ * R492-D19 E13); under an earlier one they stay where they are. The demoted items take
  * the new level's indents (`levelIndentsOfSink`).
  */
 function keepWordLevels(
@@ -296,6 +298,7 @@ function keepWordLevels(
     tr.setNodeMarkup(listPos, undefined, { ...first.attrs, block_id: list.attrs.block_id });
     listAttrs = first;
   }
+  const listEnd = range.$from.end(range.depth);
   for (const { pos: itemPos, node } of items.reverse()) {
     const inner = node.lastChild;
     if (node.childCount > 1 && inner && LIST_NODE_NAMES.has(inner.type.name) && sameListAttrs(inner, listAttrs)) {
@@ -305,6 +308,23 @@ function keepWordLevels(
       const children = new NodeRange($start, $end, $start.depth);
       const target = liftTarget(children);
       if (target != null) tr.lift(children, target);
+    } else if (
+      node.childCount > 1 &&
+      inner &&
+      LIST_NODE_NAMES.has(inner.type.name) &&
+      itemPos + node.nodeSize === listEnd
+    ) {
+      // A list of another numbering the LAST demoted item held (corpus
+      // R492-D19 E13: a heading numbering's "Batasan Masalah" read under the
+      // item before it) keeps its level too: it goes on after the list the
+      // item joined, in the same parent item, where it is as deep as it was.
+      // In Word its paragraphs' w:ilvl did not change.
+      const innerPos = itemPos + node.nodeSize - 1 - inner.nodeSize;
+      const $after = tr.doc.resolve(listEnd + 1);
+      if ($after.parent.canReplaceWith($after.index(), $after.index(), inner.type)) {
+        tr.insert(listEnd + 1, inner);
+        tr.delete(innerPos, innerPos + inner.nodeSize);
+      }
     }
     const paragraph = node.firstChild;
     if (indents && paragraph?.isTextblock && sameIndents(itemIndents(node), indents.from)) {
@@ -479,6 +499,31 @@ function decreaseSkippedLevel(tr: Transaction, range: NodeRange): boolean {
   const parent = definedListLevelAt(range.$from, range.depth - 2);
   if (!parent || level - 1 <= parent.level) return false;
   const listPos = range.$from.before(range.depth);
+  // An imported item states the indents its w:lvl resolved to; one still
+  // stating its old level's takes the new level's, as Word draws a paragraph
+  // whose w:ilvl changed (its own direct indent stays). Attributes only, so
+  // the positions the splits below use do not move.
+  const levelIndents = (at: number): ItemIndents | null => {
+    const definition = parent.definition.levels[at];
+    return definition ? { left: definition.indentPt, firstLine: definition.alignAtPt - definition.indentPt } : null;
+  };
+  const from = levelIndents(level);
+  const to = levelIndents(level - 1);
+  if (from && to && !sameIndents(from, to)) {
+    let itemPos = range.start;
+    for (let index = range.startIndex; index < range.endIndex; index += 1) {
+      const node = list.child(index);
+      const paragraph = node.firstChild;
+      if (paragraph?.isTextblock && sameIndents(itemIndents(node), from)) {
+        tr.setNodeMarkup(itemPos + 1, undefined, {
+          ...paragraph.attrs,
+          indentLeftPt: to.left,
+          firstLineIndentPt: to.firstLine,
+        });
+      }
+      itemPos += node.nodeSize;
+    }
+  }
   // Split the selected items off the list (after them first, so the
   // positions before them stay put); a list split off is a new block.
   if (range.endIndex < list.childCount) {

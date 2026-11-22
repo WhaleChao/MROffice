@@ -8,7 +8,8 @@
 import { querySheetsAll } from "./paged/sheetMeasureMemo";
 import { SheetFact } from "../../../../lib/editor/sheet-facts";
 import { Mark, Node, Extension, mergeAttributes } from "@tiptap/core";
-import { Plugin, PluginKey, TextSelection, type Transaction } from "@tiptap/pm/state";
+import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state";
+import { DELETION_MARK_NAME } from "./trackChanges";
 import { findWrapping } from "@tiptap/pm/transform";
 import { effectiveDocumentProtection, isDocumentFormsProtected, unprotectedFormSections } from "./documentProtection";
 import { legacyFormFieldEnabled, legacyFormFieldFillOnly } from "./legacyFormFields";
@@ -659,6 +660,102 @@ function insideFreeSection(
 /** Whether every step of `tr` stays inside one content control that may be
  *  filled (an inline control's run, or a block control's contents), or
  *  inside a section the restriction leaves free. */
+
+
+
+
+
+
+
+
+
+function sliceStaysInControl(slice: Slice | undefined, control: ContentControlRange): boolean {
+  if (!slice || slice.size === 0) return true;
+  const key = sanitizeControlKey(control.mark.attrs.controlKey);
+  let inside = true;
+  slice.content.descendants((node) => {
+    if (!inside) return false;
+    if (!node.isInline) return true;
+    inside = node.marks.some(
+      (mark) => mark.type.name === CONTENT_CONTROL_MARK_NAME && (!key || sanitizeControlKey(mark.attrs.controlKey) === key),
+    );
+    return false;
+  });
+  return inside;
+}
+
+/**
+ * The marks the next typed character takes when the caret was left at the
+ * END of a plain or rich text control by typing into it (or by typing over
+ * its placeholder): the control's own, so the words go on inside it, as in
+ * Word, where the insertion point stays in the field it is filling. The
+ * control's mark is not inclusive -- typing at the edge of a control the
+ * caret was put beside does not grow it -- so without these every character
+ * after the first went after the control (a form's field took "G" of
+ * "Grace", the paragraph "race"). A tracked deletion is not carried. Null
+ * when the caret is not so placed.
+ */
+function controlEdgeTypingMarks(
+  transactions: readonly Transaction[],
+  state: EditorState,
+): readonly ProseMirrorMark[] | null {
+  const { selection } = state;
+  if (!selection.empty || state.storedMarks) return null;
+  let last: Transaction | null = null;
+  for (let index = transactions.length - 1; index >= 0; index -= 1) {
+    if (transactions[index].docChanged) {
+      last = transactions[index];
+      break;
+    }
+  }
+  if (!last || last.doc !== state.doc) return null;
+  const step = last.steps[last.steps.length - 1];
+  if (!(step instanceof ReplaceStep) || step.slice.size === 0) return null;
+  const end = step.from + step.slice.size;
+  if (selection.from !== end || end > state.doc.content.size) return null;
+  const $end = state.doc.resolve(end);
+  const before = $end.nodeBefore;
+  const control = before?.isText
+    ? before.marks.find((mark) => mark.type.name === CONTENT_CONTROL_MARK_NAME)
+    : undefined;
+  if (!before || !control) return null;
+  const key = sanitizeControlKey(control.attrs.controlKey);
+  const continues = $end.nodeAfter?.marks.some(
+    (mark) => mark.type.name === CONTENT_CONTROL_MARK_NAME && sanitizeControlKey(mark.attrs.controlKey) === key,
+  );
+  if (continues) return null;
+  const meta = normalizeControlMeta(control.attrs);
+  if ((meta.controlType !== "text" && meta.controlType !== "richText") || isContentControlFillLocked(meta.lock)) {
+    return null;
+  }
+  return before.marks.filter((mark) => mark.type.name !== DELETION_MARK_NAME);
+}
+
+/**
+ * Filling in forms: text typed with the caret at the edge of a text field
+ * (a plain or rich text control) is the field's -- nothing outside a field
+ * takes words -- so it goes in with the field's marks. Elsewhere typing at a
+ * control's edge stays outside it (its mark is not inclusive).
+ */
+function typedAtFormFieldEdge(view: EditorView, at: number, text: string): boolean {
+  const { state } = view;
+  if (!isDocumentFormsProtected(effectiveDocumentProtection(state.doc.attrs?.documentProtection))) return false;
+  const field = collectContentControlRanges(state.doc).find(
+    (range) =>
+      (range.from === at || range.to === at) &&
+      (range.meta.controlType === "text" || range.meta.controlType === "richText") &&
+      !isContentControlFillLocked(range.meta.lock),
+  );
+  const first = field ? state.doc.nodeAt(field.from) : null;
+  if (!field || !first) return false;
+  const marks = first.marks.filter((mark) => mark.type.name !== DELETION_MARK_NAME);
+  const tr = state.tr.insert(at, state.schema.text(text, marks));
+  tr.setSelection(TextSelection.create(tr.doc, at + text.length));
+  tr.setStoredMarks(marks);
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
 function editsOnlyInsideControls(tr: Transaction): boolean {
   const free = unprotectedFormSections(tr.docs[0]?.attrs?.documentProtection ?? tr.doc.attrs?.documentProtection);
   return tr.steps.every((step, index) => {
@@ -687,7 +784,11 @@ function editsOnlyInsideControls(tr: Transaction): boolean {
       return true;
     }
     const inline = collectContentControlRanges(doc).some(
-      (control) => control.from <= from && to <= control.to && !isContentControlFillLocked(control.meta.lock),
+      (control) =>
+        control.from <= from &&
+        to <= control.to &&
+        !isContentControlFillLocked(control.meta.lock) &&
+        sliceStaysInControl(slice, control),
     );
     if (inline) return true;
     const $from = doc.resolve(Math.min(from, doc.content.size));
@@ -2302,7 +2403,10 @@ export const DocumentContentControls = Extension.create<ContentControlOptions>({
           const bound = controlMarkType
             ? syncBoundControls(controlMarkType, oldState.doc, tr)
             : false;
-          return widened || typed || bound ? tr : null;
+          if (widened || typed || bound) return tr;
+          // Typing at the end of a text control goes on inside it.
+          const edge = controlEdgeTypingMarks(transactions, newState);
+          return edge ? tr.setStoredMarks(edge) : null;
         }),
         props: {
           // Word: text typed over a control's whole contents (its prompt,
@@ -2320,6 +2424,7 @@ export const DocumentContentControls = Extension.create<ContentControlOptions>({
             return from !== to && typingIgnoredOver(view.state.doc, from, to);
           },
           handleTextInput(view, from, to, text) {
+            if (from === to && text && view.editable && typedAtFormFieldEdge(view, from, text)) return true;
             if (from === to || !text || !view.editable) return false;
             const markType = view.state.schema.marks[CONTENT_CONTROL_MARK_NAME];
             if (!markType) return false;
@@ -2329,6 +2434,10 @@ export const DocumentContentControls = Extension.create<ContentControlOptions>({
             const tr = view.state.tr;
             replaceControlText(tr, markType, range, text, {});
             tr.setSelection(TextSelection.create(tr.doc, from + text.length));
+            // The caret is at the control's end: what is typed next goes on
+            // inside it (controlEdgeTypingMarks).
+            const typedNode = tr.doc.nodeAt(from);
+            if (typedNode) tr.setStoredMarks(typedNode.marks.filter((mark) => mark.type.name !== DELETION_MARK_NAME));
             view.dispatch(tr.scrollIntoView());
             return true;
           },

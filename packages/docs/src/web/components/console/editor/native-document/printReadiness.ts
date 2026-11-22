@@ -371,7 +371,7 @@ function normalizeReadinessError(error: unknown): PrintReadinessError {
   if (error instanceof PrintReadinessError) return error;
   return new PrintReadinessError(
     "print-failed",
-    "The browser failed while preparing the print dialog.",
+    "Preparing the print dialog failed.",
     error,
   );
 }

@@ -524,6 +524,9 @@ const PAGE_EXPORT_JOB_MAX_NOT_FOUND = 4;
  * wait: the export is asked again, the transfer line still preparing, never
  * written from the page with losses to confirm. */
 const PAGE_EXPORT_PACKAGE_STILL_WRITING = "docx_package_still_writing";
+/** No worker takes the Word file's background writer at all: the server's
+ * clear refusal, shown at once (a 503, but never asked again as transient). */
+const PAGE_EXPORT_PACKAGE_WRITER_UNAVAILABLE = "docx_package_writer_unavailable";
 const PAGE_EXPORT_PACKAGE_RETRY_MS = 10_000;
 const PAGE_EXPORT_PACKAGE_MAX_RETRIES = 30;
 
@@ -635,6 +638,7 @@ async function collectPageExportJob(
         if (
           code !== "page_export_interrupted" &&
           code !== PAGE_EXPORT_PACKAGE_STILL_WRITING &&
+          code !== PAGE_EXPORT_PACKAGE_WRITER_UNAVAILABLE &&
           PAGE_EXPORT_JOB_TRANSIENT_STATUSES.has(status) &&
           transient < PAGE_EXPORT_JOB_MAX_TRANSIENT
         ) {

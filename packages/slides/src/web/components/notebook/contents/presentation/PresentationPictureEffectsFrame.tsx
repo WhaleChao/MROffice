@@ -8,6 +8,7 @@
 import type { ReactNode } from "react";
 
 import { OfficePictureEffectsFrame } from "@mrnote/core/web/components/office-ribbon/OfficePictureEffectsFrame.tsx";
+import { POWERPOINT_SHADOW_BLUR_DEVIATION } from "@mrnote/core/web/lib/office-shadow-effects.ts";
 
 const EMU_PER_PX = 9525;
 
@@ -38,6 +39,7 @@ export function PresentationPictureEffectsFrame({
       fillParent={fillParent}
       testId="presentation-picture-effects"
       shadowTestIds={{ under: "presentation-picture-shadow-under", over: "presentation-picture-shadow-over" }}
+      shadowBlurDeviation={POWERPOINT_SHADOW_BLUR_DEVIATION}
     >
       {children}
     </OfficePictureEffectsFrame>

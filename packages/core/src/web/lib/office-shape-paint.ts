@@ -553,9 +553,15 @@ export function officeGradientCss(
   }
   return `linear-gradient(${officeGradientAngleForBox(g, width, height)}deg,${stops})`;
 }
-export const officeShadowCss = (s: OfficeShapeShadow) => {
+/**
+ * A shape's shadow as one CSS shadow. `blurDeviation`: the Gaussian deviation
+ * its blur radius draws, per unit of it (default 1/2: CSS's own reading;
+ * PowerPoint's is `POWERPOINT_SHADOW_BLUR_DEVIATION`).
+ */
+export const officeShadowCss = (s: OfficeShapeShadow, options: { readonly blurDeviation?: number } = {}) => {
   const { dx, dy } = officeShadowOffset(s);
-  return `${dx}px ${dy}px ${s.blur}px ${s.color}${Math.round(s.opacity * 255)
+  const blur = options.blurDeviation === undefined ? s.blur : Math.round(s.blur * 2 * options.blurDeviation * 100) / 100;
+  return `${dx}px ${dy}px ${blur}px ${s.color}${Math.round(s.opacity * 255)
     .toString(16)
     .padStart(2, "0")}`;
 };

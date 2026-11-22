@@ -159,8 +159,15 @@ function stateMarks(schema: Schema, style: InlineAtomRunStyle): Mark[] {
     const type = schema.marks[name];
     if (type) out.push(type.create(attrs));
   };
-  if (style.bold !== undefined) add("bold", { value: style.bold });
-  if (style.italic !== undefined) add("italic", { value: style.italic });
+  // A runStyle's "on" is the atom's look -- its own w:b / w:i or its style's
+  // (the reading states both, corpus R93-D24) -- so the mark is the plain one
+  // a text run of that look carries, not a stated override: text typed right
+  // after the atom takes these marks, and an override "on" is written as the
+  // run's own w:i even where the paragraph's style gives it (corpus R492-D79
+  // E60: words typed after a caption's SEQ number gained a direct italic in the
+  // italic Caption style). `false` stays Word's explicit off.
+  if (style.bold !== undefined) add("bold", style.bold ? undefined : { value: false });
+  if (style.italic !== undefined) add("italic", style.italic ? undefined : { value: false });
   if (style.underline === true) add("underline");
   if (style.strike === true) add("strike");
   if (style.fontSize !== undefined) {

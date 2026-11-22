@@ -21,13 +21,16 @@
  * measures it at the width it is being cut for.
  */
 import type { Transaction } from "@tiptap/pm/state";
+import type { Node as PmNode } from "@tiptap/pm/model";
 import type { EditorView } from "@tiptap/pm/view";
 import { normalizeWordCompatibilityMode } from "../../documentOverflowPunctuation";
 import {
   NOTE_LIST_NODE,
+  isContinuationTail,
   isSplittableBlock,
   isTextSplittableBlock,
   measureCodeLineMetrics,
+  measureTextLineBoxes,
   minimumTextSplitLines,
   planHeadLines,
   planNoteHeadCursor,
@@ -45,6 +48,7 @@ import {
 } from "../pageRebalanceExtension";
 import { measureUnequalColumnBlockAtWidth, unequalColumnProjectionForSheet } from "../unequalColumnProjection";
 import { sheetBlockElements } from "./ledgerAtoms";
+import { engineBlockLineCount } from "./ledgerEngineLines";
 import { measureOutsideEditorObservation } from "../../documentLayoutStatus";
 import type { LedgerMeasureCache } from "./ledgerMeasureCache";
 import { MRNOTE_BLOCK_ID_ATTR } from "../../blockIds";
@@ -181,8 +185,21 @@ export function planUnequalColumnSplit(view: EditorView, cache?: LedgerMeasureCa
           // page-bottom credit at a foot on the bottom margin, and no
           // widow/orphan floor for a block opening its column.
           const minLines = candidate.opensColumn ? 1 : minimumTextSplitLines(block.attrs?.widowControl);
+          // Word's widow and orphan floors count the paragraph's lines, as
+          // the oracle counts them: rows of its fragments before this one on
+          // the sheet go with the head, rows of the ones after it with the
+          // tail. Counted on the fragment alone, a middle fragment of three
+          // rows under the paragraph's head in the same column (R486-D01
+          // p4: 31 px left, two rows fit) saw a one-row widow, then a
+          // one-row orphan, and was refused, while the plan cut it after two
+          // rows: the second column was planned two rows longer than drawn
+          // and every key's pass moved the page back.
+          const floors = minLines > 1 && !columnCutFloorsAloneOn(view)
+            ? paragraphRowsAround(pages, sheets, sheetIndex, candidate.blockIndex, minLines)
+            : { rowsBefore: 0, rowsAfter: 0 };
           const cut = planTextCutByChars(dom, candidate.availablePx, minLines, true, null, {
             footCreditPx: candidate.footCreditPx ?? 0,
+            ...floors,
           });
           if (!cut) return false;
           let cutPos: number;
@@ -228,4 +245,53 @@ export function planUnequalColumnSplit(view: EditorView, cache?: LedgerMeasureCa
     }
   }
   return null;
+}
+
+/** `window.__dqc2ColumnCutFloorsAlone = true`: a projector column cut counts
+ * the widow and orphan floors on the fragment alone, as before (A/B). */
+function columnCutFloorsAloneOn(view: EditorView): boolean {
+  return (view.dom.ownerDocument.defaultView as (Window & { __dqc2ColumnCutFloorsAlone?: boolean }) | null)?.__dqc2ColumnCutFloorsAlone === true;
+}
+
+/**
+ * The rows of the paragraph that block `blockIndex` of sheet `sheetIndex` is
+ * a fragment of, in its other fragments: before it on the same sheet (the
+ * oracle's rows of the fragments already walked on the page) and after it,
+ * on this sheet or the next ones. Each side is read only as far as the floor.
+ */
+function paragraphRowsAround(
+  pages: NonNullable<ReturnType<typeof collectPages>>,
+  sheets: readonly HTMLElement[],
+  sheetIndex: number,
+  blockIndex: number,
+  minLines: number,
+): { rowsBefore: number; rowsAfter: number } {
+  const rowsOf = (node: PmNode, dom: HTMLElement | undefined): number =>
+    engineBlockLineCount(node) ?? (dom ? measureTextLineBoxes(dom).length : 0);
+  const page = pages[sheetIndex].node;
+  let rowsBefore = 0;
+  const own = sheetBlockElements(sheets[sheetIndex]);
+  for (let index = blockIndex; index > 0 && rowsBefore < minLines && isContinuationTail(page.child(index)); index -= 1) {
+    const before = page.child(index - 1);
+    if (before.type.name !== page.child(index).type.name) break;
+    const dom = own[index - 1];
+    if (dom) rowsBefore += measureTextLineBoxes(dom).length;
+  }
+  let rowsAfter = 0;
+  let sheet = sheetIndex;
+  let index = blockIndex;
+  let current = page.child(blockIndex);
+  while (rowsAfter < minLines) {
+    index += 1;
+    if (index >= pages[sheet].node.childCount) {
+      sheet += 1;
+      index = 0;
+      if (sheet >= pages.length || pages[sheet].node.childCount === 0) break;
+    }
+    const next = pages[sheet].node.child(index);
+    if (next.type.name !== current.type.name || !isContinuationTail(next)) break;
+    rowsAfter += rowsOf(next, sheetBlockElements(sheets[sheet])[index]);
+    current = next;
+  }
+  return { rowsBefore, rowsAfter };
 }

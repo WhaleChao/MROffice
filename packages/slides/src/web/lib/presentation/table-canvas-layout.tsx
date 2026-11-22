@@ -1602,6 +1602,14 @@ export function tableOuterLineHalvesCss(block: PresentationTableBlock): CSSPrope
   };
 }
 
+/** The table style look a table is drawn with: its own, else its built-in style's. */
+export function tableDrawnStyleLook(block: PresentationTableBlock): unknown {
+  return normalizeTableStyleLook(block.tableStyleLook, block.tableStyleId) ??
+    (nativeTableThemeColorAuthority(block.source)
+      ? null
+      : nativeWebTableStyleById(block.tableStyleId)?.look);
+}
+
 export function tableLayoutStyle(
   block: PresentationTableBlock,
 ): CSSProperties | undefined {
@@ -1626,12 +1634,11 @@ export function tableLayoutStyle(
     // are reset to LTR by `tableRtl` so only their placement mirrors.
     ...(block.rightToLeft === true ? { direction: "rtl" as const } : {}),
     ...tableStyleLookTableCss(
-      normalizeTableStyleLook(block.tableStyleLook, block.tableStyleId) ??
-        (nativeTableThemeColorAuthority(block.source)
-          ? null
-          : nativeWebTableStyleById(block.tableStyleId)?.look),
+      tableDrawnStyleLook(block),
       // The frame in EMU (`presentationTableFrameCss` reads the same).
       frameSize(block as unknown as { readonly width?: unknown; readonly height?: unknown }),
+      // Its background shadow is cast by the cells' paint (`PresentationTableShadowFrame`).
+      { shadow: false },
     ),
     // Table Background (`a:tblPr` fill), imported or picked in Table Design >
     // Shading, under every cell's own fill; the table's Shadow and

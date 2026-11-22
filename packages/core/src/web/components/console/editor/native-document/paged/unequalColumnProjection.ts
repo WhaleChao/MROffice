@@ -139,6 +139,9 @@ export interface ColumnRegionCharge {
    * the page planner lays the section out in these columns itself. */
   columns?: number;
   linePitchPx?: number;
+  /** A list balanced by its lines (`ColumnRegionBlockMetric.listRows`): the
+   * lines either side of a cut in it (1), for the planner's own balance. */
+  minSplitLines?: number;
 }
 
 export interface UnequalColumnSplitCandidate {
@@ -183,6 +186,9 @@ export interface UnequalColumnFlowOptions {
 export interface UnequalColumnSheetOptions {
   /** Word compatibility mode 15 or later (`keepNextCutsLastLines`). */
   keepNextCutsLastLines?: boolean;
+  /** Word compatibility mode 14 or earlier, or none: a section's columns
+   * are balanced as that Word does (`ColumnBalanceOptions.wordLegacy`). */
+  wordLegacyBalance?: boolean;
 }
 
 /** A page-placed top-and-bottom box drawn out of the flow on a page of
@@ -913,6 +919,9 @@ export interface ColumnRegionSpec {
    * paragraph's last lines go on with a follower that cannot start below it
    * (`UnequalColumnFlowOptions.keepNextCutsLastLines`). */
   keepNextCutsLastLines?: boolean;
+  /** Compatibility mode 14 or earlier, or none: balanced as that Word
+   * balances (`ColumnBalanceOptions.wordLegacy`). */
+  wordLegacyBalance?: boolean;
 }
 
 export interface ColumnRegionBlockMetric extends UnequalColumnBlockMetric {
@@ -932,6 +941,9 @@ export interface ColumnRegionBlockMetric extends UnequalColumnBlockMetric {
   /** Word's widow/orphan floor for a break inside it, in rows (2 with widow
    * control, 1 without; blockSplitting's minimumTextSplitLines). */
   minSplitLines?: number;
+  /** A list of even lines, balanced by them (`listRowPitchPx`): `splittable`
+   * with the list's pitch, cut between any two lines. */
+  listRows?: boolean;
   /** A float of a single-column region the text wraps beside (wrap square,
    * tight or through, floated left or right): the side it stands at and its
    * drawn width, its margins (Word's distL/distR) not included. */
@@ -1040,6 +1052,48 @@ function balancePieces(columns: number, blocks: readonly ColumnRegionBlockMetric
   return pieces;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export interface ColumnBalanceOptions {
+  wordLegacy?: boolean;
+}
+
+/** What the last column may run over the height Word tries: a twip and a
+ * half (40 lines, the 8th two twips short: 20 | 20, the second column a
+ * twip over). The other columns take no line over it (ten 10 pt lines and
+ * one of 37 after the thin ones: the 13th thin line, a twip over 236.5 +
+ * 436/80, stays out). */
+const WORD_LEGACY_BALANCE_SLACK_PX = 0.1;
+
+/** Harness switch (`window.__docsWordLegacyBalanceOff = true`): a section's
+ * columns are balanced to their lowest common height in every compatibility
+ * mode (as before; an A/B of one build). */
+function wordLegacyBalanceOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsWordLegacyBalanceOff?: boolean }).__docsWordLegacyBalanceOff === true;
+}
+
 /**
  * The lowest column height that holds a region's blocks in its columns,
  * text broken between its lines (Word balances a continuous section's
@@ -1063,12 +1117,20 @@ function balancePieces(columns: number, blocks: readonly ColumnRegionBlockMetric
 export function balancedColumnHeightPx(
   columns: number,
   blocks: readonly ColumnRegionBlockMetric[],
+  options: ColumnBalanceOptions = {},
 ): number {
   if (blocks.length === 0) return 0;
   const pieces = balancePieces(columns, blocks);
   const last = Math.max(0, columns - 1);
   const heightIn = (piece: BalancePiece, column: number): number =>
     piece.heightsPx[Math.min(column, last, piece.heightsPx.length - 1)] ?? 0;
+  // What the columns hold when a flow ends (it fitted, or the last column
+  // ran over): the height placed, its lines, and the tallest column.
+  let placedPx = 0;
+  let placedRows = 0;
+  let tallestPx = 0;
+  const rowsOf = (piece: BalancePiece, column: number): number =>
+    piece.splittable && piece.lineHeightPx > 0 ? Math.max(1, Math.round(heightIn(piece, column) / piece.lineHeightPx)) : 1;
   // A keep-with-next piece whose follower's first line (its whole box when
   // it cannot be cut) would not stand in the same column opens the next one.
   const keepsOffColumn = (piece: BalancePiece, next: BalancePiece | undefined, column: number, end: number, limit: number): boolean => {
@@ -1077,10 +1139,15 @@ export function balancedColumnHeightPx(
     const first = next.splittable && next.lineHeightPx > 0 ? Math.min(nextHeight, next.lineHeightPx) : nextHeight;
     return end + collapseUnequalColumnMargins(piece.marginBottomPx, next.marginTopPx) + first > limit + 1e-6;
   };
-  const fits = (limit: number): boolean => {
+  const fits = (limit: number, lastSlackPx = 0): boolean => {
+    // The height a column holds: the last one may run `lastSlackPx` over.
+    const cap = (at: number): number => (at >= columns - 1 ? limit + lastSlackPx : limit);
     let column = 0;
     let cursor = 0;
     let previousBottom = 0;
+    placedPx = 0;
+    placedRows = 0;
+    tallestPx = 0;
     for (let pieceIndex = 0; pieceIndex < pieces.length; pieceIndex += 1) {
       const piece = pieces[pieceIndex];
       const height = heightIn(piece, column);
@@ -1093,12 +1160,17 @@ export function balancedColumnHeightPx(
         keepsOffColumn(piece, pieces[pieceIndex + 1], column, cursor + gap + height, limit);
       if (keptOff) {
         // It goes on with its follower: whole, into the next column.
+        tallestPx = Math.max(tallestPx, cursor);
         column += 1;
         const moved = heightIn(piece, column);
-        if (moved > limit + 1e-6) return false;
+        if (moved > cap(column) + 1e-6) return false;
         cursor = moved;
-      } else if (cursor + gap + height <= limit + 1e-6) {
+        placedPx += moved;
+        placedRows += rowsOf(piece, column);
+      } else if (cursor + gap + height <= cap(column) + 1e-6) {
         cursor += gap + height;
+        placedPx += gap + height;
+        placedRows += rowsOf(piece, column);
       } else if (piece.splittable && piece.lineHeightPx > 0) {
         // A column holds whole lines (Word balances line by line: 41 lines
         // in three columns read 14, 14, 13), under the paragraph's floors.
@@ -1117,19 +1189,28 @@ export function balancedColumnHeightPx(
         let base = cursor + gap;
         let atTop = cursor <= 0;
         for (;;) {
-          let take = Math.min(left, rowsIn(limit - base));
+          let take = Math.min(left, rowsIn(cap(column) - base));
           if (take >= left) {
             cursor = base + left * line;
+            placedPx += cursor - (atTop ? 0 : base - gap);
+            placedRows += left;
             break;
           }
           if (left - take < piece.tailFloor) take = left - piece.tailFloor;
           if (take < (first ? piece.headFloor : 1)) take = 0;
           if (take <= 0 && atTop) {
             // A column too short for the floors still takes what it holds.
-            take = Math.min(left - 1, rowsIn(limit - base));
+            take = Math.min(left - 1, rowsIn(cap(column) - base));
             if (take <= 0) return false;
           }
-          if (take > 0) first = false;
+          if (take > 0) {
+            first = false;
+            placedPx += (atTop ? 0 : gap) + take * line;
+            placedRows += take;
+            tallestPx = Math.max(tallestPx, base + take * line);
+          } else {
+            tallestPx = Math.max(tallestPx, cursor);
+          }
           left -= take;
           column += 1;
           if (column >= columns) return false;
@@ -1145,22 +1226,34 @@ export function balancedColumnHeightPx(
         }
       } else if (piece.splittable) {
         // What is left of the piece, as a share of its text.
-        let share = height > 0 ? 1 - Math.max(0, limit - (cursor + gap)) / height : 0;
+        let share = height > 0 ? 1 - Math.max(0, cap(column) - (cursor + gap)) / height : 0;
+        const headPx = Math.max(0, Math.min(height, cap(column) - (cursor + gap)));
+        if (headPx > 0) placedPx += gap + headPx;
+        tallestPx = Math.max(tallestPx, headPx > 0 ? cursor + gap + headPx : cursor);
         column += 1;
-        while (column < columns && share * heightIn(piece, column) > limit + 1e-6) {
-          share -= limit / heightIn(piece, column);
+        while (column < columns && share * heightIn(piece, column) > cap(column) + 1e-6) {
+          share -= cap(column) / heightIn(piece, column);
+          placedPx += cap(column);
+          tallestPx = Math.max(tallestPx, cap(column));
           column += 1;
         }
         cursor = column < columns ? Math.max(0, share) * heightIn(piece, column) : 0;
+        placedPx += cursor;
+        // A block with no lines of its own to count is one line of the
+        // step's average.
+        placedRows += 1;
       } else {
         // Opening its column and still too tall: the projector leaves it
         // there (it never skips an empty column).
-        if (cursor <= 0 && height > limit + 1e-6) return false;
+        if (cursor <= 0 && height > cap(column) + 1e-6) return false;
+        tallestPx = Math.max(tallestPx, cursor);
         column += 1;
         if (column >= columns) return false;
         const moved = heightIn(piece, column);
-        if (moved > limit + 1e-6) return false;
+        if (moved > cap(column) + 1e-6) return false;
         cursor = moved;
+        placedPx += moved;
+        placedRows += 1;
       }
       previousBottom = piece.marginBottomPx;
       if (column >= columns) return false;
@@ -1172,13 +1265,29 @@ export function balancedColumnHeightPx(
       // at the break) joined them back, and the page never settled
       // (R30-D07).
       if (piece.forceNextColumnAfter && pieceIndex < pieces.length - 1 && column < columns - 1) {
+        tallestPx = Math.max(tallestPx, cursor);
         column += 1;
         cursor = 0;
         previousBottom = 0;
       }
     }
+    tallestPx = Math.max(tallestPx, cursor);
     return true;
   };
+  if (options.wordLegacy && !wordLegacyBalanceOff()) {
+    // Word, compatibility mode 14 and earlier (see ColumnBalanceOptions).
+    let total = 0;
+    let bottom = 0;
+    pieces.forEach((piece, pieceIndex) => {
+      total += (pieceIndex > 0 ? collapseUnequalColumnMargins(bottom, piece.marginTopPx) : 0) + heightIn(piece, 0);
+      bottom = piece.marginBottomPx;
+    });
+    let limit = total / Math.max(1, columns);
+    for (let pass = 0; pass < 400 && limit <= total + 1; pass += 1) {
+      if (fits(limit, WORD_LEGACY_BALANCE_SLACK_PX)) return Math.ceil(tallestPx - 0.05);
+      limit += Math.max(0.5, placedRows > 0 ? placedPx / placedRows : 0);
+    }
+  }
   let low = 0;
   let high = pieces.reduce(
     (sum, piece) => sum + Math.max(...piece.heightsPx) + Math.max(0, piece.marginTopPx),
@@ -1511,7 +1620,7 @@ export function planColumnRegionFlow(
         : block)
       : regionBlocks;
     let height = region.balance
-      ? Math.min(room, Math.max(1, balancedColumnHeightPx(region.tracks.length, balanceBlocks)))
+      ? Math.min(room, Math.max(1, balancedColumnHeightPx(region.tracks.length, balanceBlocks, region.wordLegacyBalance ? { wordLegacy: true } : {})))
       : room;
     // Columns filled to the page's foot take Word's page-bottom credit; a
     // balanced section ends above the next one, not at the foot.
@@ -1613,6 +1722,7 @@ export function planColumnRegionFlow(
         trackHeightsPx: region.tracks.map((_track, column) => (block.flowless ? 0 : heightAt(block, column))),
         columns: region.tracks.length,
         linePitchPx: block.lineHeightPx && block.lineHeightPx > 0 ? block.lineHeightPx : 0,
+        ...(block.listRows ? { minSplitLines: 1 } : {}),
       };
     });
     pageCursor = regionBottom;
@@ -2085,6 +2195,41 @@ export function blockLinePitchPx(block: HTMLElement): number {
   return Number.isFinite(auto) && auto > 0 ? auto : 0;
 }
 
+/** Harness switch (`window.__docsListBalanceRowsOff = true`): a list of a
+ * balanced section moves whole between its columns' heights (as before; an
+ * A/B of one build). */
+function listBalanceRowsOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsListBalanceRowsOff?: boolean }).__docsListBalanceRowsOff === true;
+}
+
+/**
+ * The line pitch of a list whose every line is one pitch tall (its box, at
+ * each width it was measured at, a whole number of its first paragraph's
+ * lines: no space between its items), else 0.
+ *
+ * Word balances a section's columns line by line whatever the lines are in:
+ * a list is a run of paragraphs, cut between any two of its lines. The
+ * balance took a list as a box that moves whole (only `p` and headings
+ * were text), so a section that is mostly lists was "balanced" at its
+ * tallest list's height, while the page planner, which cuts a list where
+ * it likes, charged the section half its height (corpus R470-D37 page 1: a
+ * form's 40 lines, 23 of them one list of five questions; Word 21 | 19).
+ * Only a list of even lines is counted so: its rows are then exactly where
+ * the list can be cut.
+ */
+function listRowPitchPx(block: HTMLElement, heightsPx: readonly number[]): number {
+  if (!block.matches("ul, ol") || listBalanceRowsOff()) return 0;
+  const first = block.querySelector("p");
+  const pitch = first instanceof HTMLElement ? blockLinePitchPx(first) : 0;
+  if (!(pitch > 0)) return 0;
+  const even = heightsPx.every((height) => {
+    if (!(height > 0)) return false;
+    const rows = Math.round(height / pitch);
+    return rows >= 1 && Math.abs(height - rows * pitch) <= 0.5;
+  });
+  return even && heightsPx.length > 0 ? pitch : 0;
+}
+
 const EMU_PER_PX = 9525;
 
 /** A float the text wraps beside (`float: left|right`, not an overlay): its
@@ -2180,6 +2325,7 @@ function projectColumnRegionSheet(sheet: HTMLElement, sheetOptions: UnequalColum
     tracks,
     balance: index < regionTracks.length - 1 || endsHere,
     ...(sheetOptions.keepNextCutsLastLines ? { keepNextCutsLastLines: true } : {}),
+    ...(sheetOptions.wordLegacyBalance ? { wordLegacyBalance: true } : {}),
   }));
 
   sheet.setAttribute(UNEQUAL_COLUMN_FLOW_ATTR, "true");
@@ -2227,6 +2373,8 @@ function projectColumnRegionSheet(sheet: HTMLElement, sheetOptions: UnequalColum
   });
   const metrics = blocks.map<ColumnRegionBlockMetric>((block, blockIndex) => {
     const margins = blockMargins[blockIndex];
+    // A list of even lines is balanced by its lines, cut between any two.
+    const listPitchPx = regionTracks[regionOf[blockIndex]].length > 1 ? listRowPitchPx(block, heightsByBlock[blockIndex]) : 0;
     return {
       heightsPx: heightsByBlock[blockIndex],
       marginTopPx: margins.top,
@@ -2240,13 +2388,14 @@ function projectColumnRegionSheet(sheet: HTMLElement, sheetOptions: UnequalColum
       ...(block.matches('[data-type="section-break"]') && heightsByBlock[blockIndex].every((height) => !(height > 0.5))
         ? { sectionBreak: true }
         : {}),
-      splittable: block.matches(SPLITTABLE_TEXT_SELECTOR),
-      lineHeightPx: blockLinePitchPx(block),
+      splittable: block.matches(SPLITTABLE_TEXT_SELECTOR) || listPitchPx > 0,
+      lineHeightPx: listPitchPx > 0 ? listPitchPx : blockLinePitchPx(block),
       footCreditPx: trailingAutoLeadingCreditPx(block),
       ...(block.getAttribute("data-page-split-continues") === "true" ? { continuesNext: true } : {}),
       ...(block.hasAttribute("data-page-split-continuation") ? { continuesPrevious: true } : {}),
       // minimumTextSplitLines: widow control unless the paragraph turns it off.
-      minSplitLines: block.getAttribute("data-widow-control") === "false" ? 1 : 2,
+      minSplitLines: listPitchPx > 0 || block.getAttribute("data-widow-control") === "false" ? 1 : 2,
+      ...(listPitchPx > 0 ? { listRows: true } : {}),
       ...(domKeepFlag(block, "keepLines") ? { keepLines: true } : {}),
       ...(domKeepFlag(block, "keepNext") ? { keepNext: true } : {}),
       ...(sideFloats[blockIndex] ? { sideFloat: sideFloats[blockIndex] } : {}),

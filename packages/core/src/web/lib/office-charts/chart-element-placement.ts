@@ -16,8 +16,23 @@
 import { ptToPx } from "../office-units";
 import { chartSupportsDraggedLabelLeaderLines, type ChartBlockAttrsV2 } from "../../components/console/editor/extensions/chartBlockShared";
 
-import { normalizeChartElementLayout, chartDataLabelOffsetSigns, chartElementPlaceIsBox, chartPercent, type ChartElementBox } from "./chart-element-layout";
+import {
+  normalizeChartElementBox,
+  normalizeChartElementLayout,
+  chartDataLabelOffsetSigns,
+  chartElementPlaceIsBox,
+  chartPercent,
+  type ChartElementBox,
+} from "./chart-element-layout";
 import { officeChartAxisRole, officeChartHitSeries, officeChartPieItemPoint, officeChartPieSliceNames } from "./chart-hit";
+import { officeChartTextEChartsStyle } from "./chart-text";
+import {
+  OFFICE_LEGEND_KEY_SIZED,
+  OFFICE_LEGEND_KEY_TO_TEXT_PX,
+  OFFICE_LEGEND_NAME_SHIFTED,
+  officeLegendKeyPx,
+  officeLegendKeyToNamePx,
+} from "./legend-spacing";
 
 type Option = Record<string, unknown>;
 
@@ -62,6 +77,112 @@ function legendNames(option: Option): string[] {
     }
   }
   return names;
+}
+
+/** Office's chart text where the chart states none (10 pt; the ink the
+ * plan's elements take, `withOfficeInk`). */
+const CHART_TEXT_DEFAULTS: Readonly<Record<string, unknown>> = {
+  fontSize: (10 * 4) / 3,
+  fontWeight: "normal",
+  fontStyle: "normal",
+  color: "#595959",
+};
+
+/**
+ * The legend with each entry formatted apart drawn in its own text
+ * (`format.legendEntryFonts`): the chart's text (`format.text`) with the
+ * entry's over it -- what the legend states for itself (`legendStyle.text`)
+ * does not reach such an entry, as Windows PowerPoint draws it (truth
+ * office-truth/probes/c30legentry: in a 14 pt 404040 legend of a 12 pt
+ * chart an entry stating bold alone drew 12 pt black bold, one stating red
+ * alone 12 pt red; one stating italic off in an italic legend stood upright
+ * and the others leaned). An entry is named by its place in the legend's
+ * whole list (`chartLegendEntryOfPosition`, as the deleted entries are).
+ */
+function legendWithEntryFonts(
+  option: Option,
+  attrs: Pick<ChartBlockAttrsV2, "chartType" | "format">,
+  entryOf: (position: number) => number,
+): unknown {
+  const rows = new Map((attrs.format?.legendEntryFonts ?? []).map((row) => [row.entry, row.font]));
+  const names = legendNames(option);
+  const listed = first(option.legend)?.data;
+  const chart = officeChartTextEChartsStyle(attrs.format?.text);
+  const chartFamily = record(option.textStyle) ? option.textStyle.fontFamily : undefined;
+  // What the legend states of its own, put back to the chart's.
+  const reset: Record<string, unknown> = {};
+  for (const key of Object.keys(officeChartTextEChartsStyle(attrs.format?.legendStyle?.text))) {
+    const value = key in chart ? chart[key] : key === "fontFamily" ? chartFamily : CHART_TEXT_DEFAULTS[key];
+    if (value !== undefined) reset[key] = value;
+  }
+  // A horizontal clustered bar chart's legend runs from its last series
+  // (`officeBarSeriesOrder`, drawn after this): Office counts its entries as
+  // they stand, from the top (c30legentry p8: idx 0 is the third series).
+  const fromLast = legendListedFromLastSeries(attrs, option);
+  let changed = false;
+  const data = names.map((name, position) => {
+    const own = Array.isArray(listed) ? listed[position] : undefined;
+    const font = rows.get(fromLast ? names.length - 1 - position : entryOf(position));
+    if (!font) return own !== undefined ? own : name;
+    changed = true;
+    const base = record(own) ? own : { name };
+    const style = record(base.textStyle) ? base.textStyle : {};
+    return { ...base, textStyle: { ...style, ...reset, ...officeChartTextEChartsStyle(font) } };
+  });
+  if (!changed) return option.legend;
+  return withFirst(option.legend, (legend) => ({ ...legend, data, ...legendKeysForEntries(legend, data, option) }));
+}
+
+
+
+
+
+
+
+
+
+
+function legendKeysForEntries(legend: Record<string, unknown>, data: unknown[], option: Option): Record<string, unknown> {
+  // Filled keys only: the probe measured squares; a legend of lines keeps its keys.
+  if (legend[OFFICE_LEGEND_KEY_SIZED] !== "filled" || typeof legend.itemHeight !== "number") return {};
+  const style = record(legend.textStyle) ? legend.textStyle : {};
+  const chartText = record(option.textStyle) ? option.textStyle : {};
+  const own = typeof style.fontSize === "number" ? style.fontSize : typeof chartText.fontSize === "number" ? chartText.fontSize : 12;
+  const sizes = data.map((entry) =>
+    record(entry) && record(entry.textStyle) && typeof entry.textStyle.fontSize === "number" ? entry.textStyle.fontSize : own,
+  );
+  const largest = Math.max(...sizes);
+  if (!(largest > 0) || largest === own) return {};
+  const family = typeof style.fontFamily === "string" && style.fontFamily ? style.fontFamily : chartText.fontFamily;
+  const key = officeLegendKeyPx(largest, family);
+  return {
+    itemHeight: key,
+    itemWidth: key,
+    ...(legend[OFFICE_LEGEND_NAME_SHIFTED] === true
+      ? { textStyle: { ...style, padding: [0, 0, 0, Math.round((officeLegendKeyToNamePx(key, false) - OFFICE_LEGEND_KEY_TO_TEXT_PX) * 100) / 100] } }
+      : {}),
+  };
+}
+
+/**
+ * Whether the drawing lists the legend from the last series up
+ * (`chart-render-server` `officeBarSeriesOrder`, its reversed legend: a
+ * horizontal clustered bar chart of two or more series, its categories in
+ * order, every series a bar on the primary axis, none stacked).
+ */
+export function legendListedFromLastSeries(
+  attrs: Pick<ChartBlockAttrsV2, "chartType" | "format">,
+  option: Option,
+): boolean {
+  if (attrs.chartType !== "bar") return false;
+  const reversed = (attrs.format?.axisOptions as { category?: { reverse?: boolean } } | undefined)?.category?.reverse === true;
+  if (reversed) return false;
+  const series = Array.isArray(option.series) ? option.series : [];
+  return (
+    series.length >= 2 &&
+    series.every((entry) => record(entry) && entry.type === "bar" && !entry.stack) &&
+    !series.some((entry) => record(entry) && entry.xAxisIndex === 1)
+  );
 }
 
 /** The first of a component that may be one or several. */
@@ -163,9 +284,17 @@ export function optionWithChartPlacement(
     (entry) => entry.offset && entry.pointIndex !== undefined,
   );
   const hidden = attrs.format?.legendHiddenEntries ?? [];
+  const entryFonts = attrs.format?.legendEntryFonts ?? [];
   const entryOf = chartLegendEntryOfPosition(attrs);
-  if (!layout && !offsets.length && !hidden.length) return { option, placedAxisTitles };
+  // A worksheet chart's plot area stated by its outer box (`plotAreaOuter`,
+  // read only off a workbook's part).
+  const outerPlot = normalizeChartElementBox(attrs.format?.plotAreaOuter);
+  if (!layout && !outerPlot && !offsets.length && !hidden.length && !entryFonts.length) return { option, placedAxisTitles };
   const next: Option = { ...option };
+  // The legend's entries formatted one at a time (`legendEntryFonts`, Office's
+  // `c:legendEntry/c:txPr`), before the deleted ones go: each by its place in
+  // the legend's whole list.
+  if (entryFonts.length && next.legend !== undefined) next.legend = legendWithEntryFonts(next, attrs, entryOf);
   // The legend's deleted entries (Office's `c:legendEntry/c:delete`): its
   // list without them; the series and points stay drawn.
   let legendEntries: number[] | undefined;
@@ -439,6 +568,21 @@ export function optionWithChartPlacement(
       };
       void half;
     }
+  }
+
+  // A worksheet chart's plot area stated by its OUTER box (Office's manual
+  // layout naming no `c:layoutTarget`, which is `outer`): the box holds the
+  // plot with its tick labels, as Windows Excel lays it out (reading
+  // xlsxChartOuterPlotArea, R456-X21: x 0.215, w 0.344 of an 885pt chart,
+  // the value axis to 1,400; laid out automatically, the plot took the whole
+  // chart and ran off the page). The grid holds its axis labels inside the
+  // box (ECharts 6 `outerBoundsMode: "same"`); a deck's or a document's
+  // chart never carries one.
+  if (outerPlot && size && !ofPie && !plot && next.grid !== undefined) {
+    next.grid = withFirst(next.grid, (grid: Record<string, unknown>) => {
+      const { outerBounds: _bounds, containLabel: _contain, ...rest } = grid;
+      return { ...placedBox(rest, outerPlot), outerBoundsMode: "same", outerBoundsContain: "axisLabel" };
+    });
   }
 
   // An axis title placed by hand: drawn where it was put (ECharts places an

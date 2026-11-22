@@ -433,7 +433,9 @@ import {
   sha256ExecutionSource,
   type LanguageExecutionArtifact,
   type LanguageExecutionAvailability,
+  LanguageExecutionProviderRegistry,
 } from "../../../lib/code-runner/language-execution-provider";
+import { useEmbedAccess } from "@mrnote/core/web/lib/embed/use-embed-access.ts";
 import { isRemoteExecutionRefusal } from "../../../lib/code-runner/remote-execution-provider";
 import {
   languageExecutionErrorMessageKey,
@@ -2327,11 +2329,23 @@ export default function CodeWindow({
   const [toolbarTab, setToolbarTab] = useState<CodeToolbarTab>("home");
   const [viewFontZoomOpen, setViewFontZoomOpen] = useState(false);
   const viewFontZoomAnchorRef = useRef<HTMLButtonElement>(null);
+  // An embedded editor runs code only when its session grants it (the
+  // token's features.run on a Pro app; lib/embed/session-access): otherwise
+  // it has no runtime, no Run or Debug tab, and nothing a key starts runs.
+  const embedAccess = useEmbedAccess();
+  const codeRunOffered = embedAccess === null || embedAccess.permissions.run;
+  const codeRunOfferedRef = useRef(codeRunOffered);
+  codeRunOfferedRef.current = codeRunOffered;
   const selectToolbarTab = useCallback((nextTab: CodeToolbarTab) => {
     if (nextTab === "debug" && !ENABLE_CODE_DEBUG_V1) return;
+    if ((nextTab === "run" || nextTab === "debug") && !codeRunOfferedRef.current) return;
     setViewFontZoomOpen(false);
     setToolbarTab(nextTab);
   }, []);
+  // A new session's grant without Run leaves its tabs.
+  useEffect(() => {
+    if (!codeRunOffered) setToolbarTab((tab) => (tab === "run" || tab === "debug" ? "home" : tab));
+  }, [codeRunOffered]);
   const [statusBarHost, setStatusBarHost] = useState<HTMLDivElement | null>(null);
   const [splitViewState, setSplitViewState] = useState(
     createCodeSplitViewState,
@@ -2652,7 +2666,9 @@ export default function CodeWindow({
   }, [guestMode, language]);
   const executionProviders = useMemo(
     () =>
-      createBuiltinExecutionProviderRegistry({
+      !codeRunOffered
+        ? Object.assign(new LanguageExecutionProviderRegistry(), { dispose() {} })
+        : createBuiltinExecutionProviderRegistry({
         javaScriptSandboxOwner,
         pageNamespace: pageId,
         // A draft's review runs remotely through the draft's own route.
@@ -2663,7 +2679,7 @@ export default function CodeWindow({
             ? null
             : { pageId, message: cloudGuiMessage },
       }),
-    [cloudGuiMessage, draftRemoteExecution, guestMode, javaScriptSandboxOwner, pageId],
+    [cloudGuiMessage, codeRunOffered, draftRemoteExecution, guestMode, javaScriptSandboxOwner, pageId],
   );
   const executionProviderLifecycleGenerationsRef = useRef(
     new WeakMap<object, number>(),
@@ -10495,6 +10511,7 @@ export default function CodeWindow({
         runningRef.current ||
         debugStateRef.current.running ||
         guestMode ||
+        !codeRunOfferedRef.current ||
         !workspaceNotebookId
       ) {
         return;
@@ -14707,8 +14724,8 @@ export default function CodeWindow({
           },
         ]
       : []),
-    { id: "run", label: t("code.run") },
-    ...(ENABLE_CODE_DEBUG_V1
+    ...(codeRunOffered ? [{ id: "run" as const, label: t("code.run") }] : []),
+    ...(ENABLE_CODE_DEBUG_V1 && codeRunOffered
       ? [{ id: "debug" as const, label: t("code.debugRun") }]
       : []),
     ...(USE_CODEMIRROR_EDITOR
@@ -15296,6 +15313,12 @@ export default function CodeWindow({
       // resolves (this root mounts only then); still under reduced motion.
       className={`code-window office-surface-enter ${styles.codeWindow}`}
       data-testid="code-window"
+      // Its page's content is in (an embedded editor's Automation API waits
+      // for it: lib/embed/code-window-wait).
+      data-code-hydrated={pageHydrated ? "" : undefined}
+      // ...and its editor takes typing (its shared buffer is bound): what
+      // an embedded edit session's ready and its Automation API writes wait for.
+      data-code-writable={pageHydrated && !codeEditorReadOnly ? "" : undefined}
       // Hand-built Cupertino menus inside take the Docs menu motion.
       data-office-menu-scope=""
       {...{ [OFFICE_PAGE_ID_ATTRIBUTE]: pageId }}
@@ -15692,7 +15715,8 @@ export default function CodeWindow({
                   expanded: copilotOpen,
                   testId: "code-copilot-toggle",
                 } : undefined,
-                primary: {
+                // No Run in an embed session that may not run code.
+                primary: !codeRunOffered ? undefined : {
                   kind: pageBusy ? "stop" : "run",
                   label: quickRunLabel,
                   onClick: toggleRun,

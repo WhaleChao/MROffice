@@ -50,8 +50,9 @@ const RELATIONSHIP_TYPES = new Set([
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/afChunk",
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/aFChunk",
 ]);
-// A plain-text chunk is Word's too: it imports the text as its lines (corpus R81-D29).
-const CONTENT_TYPES = new Set(["text/html", "application/xhtml+xml", "text/plain"]);
+// A plain-text chunk is Word's too: it imports the text as its lines (corpus R81-D29),
+// and a web archive (MHTML) as its HTML document (corpus R495-D04).
+const CONTENT_TYPES = new Set(["text/html", "application/xhtml+xml", "text/plain", "message/rfc822"]);
 const LOSS_REASONS = new Set([
   "altchunk_html_hidden_subtree_omitted",
   "altchunk_html_image_omitted",
@@ -155,7 +156,7 @@ export interface DocumentAltChunkReadOnlyAttrs {
   readonly relationshipId: string;
   readonly relationshipType: string;
   readonly partName: string;
-  readonly contentType: "text/html" | "application/xhtml+xml" | "text/plain";
+  readonly contentType: "text/html" | "application/xhtml+xml" | "text/plain" | "message/rfc822";
   readonly blocks: readonly DocumentAltChunkBlock[];
   readonly lossReasons: readonly string[];
   readonly nativePayload?: string;

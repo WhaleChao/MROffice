@@ -62,7 +62,7 @@ import {
   type WorkbookSheetInput,
 } from "./formula-engine";
 import { normalizeManualHidden } from "./manual-hidden";
-import { coveredCells, normalizeMerges } from "./merge-cells";
+import { coveredCells, mergeAnchorCells, normalizeMerges } from "./merge-cells";
 import { normalizeNamedRanges, resolveName as resolveNamedRange, type NamedRange } from "./named-ranges";
 import {
   applyCellNumberFormat,
@@ -1046,7 +1046,12 @@ export function withDisplayCache<S extends DisplayCacheSheet>(
   const undetermined = new Set<string>();
   const targets = options?.spillTargets;
   try {
-    overlay = buildSpillOverlay(cells, covered, evaluator, candidates?.formulaKeys, undefined, undefined,
+    // A merge's anchor and a table the anchor sits in block a spill as on the grid (useSpreadsheetSpillOverlay,
+    // B323) and in the server's cached values (formula_cached_values._covered_cells, _in_a_table): with the
+    // covered cells alone, =SEQUENCE(3) over a merge's blank anchor was stamped as spilling into it while both
+    
+    overlay = buildSpillOverlay(cells, covered, evaluator, candidates?.formulaKeys, mergeAnchorCells(merges),
+      normalizeDataTables(sheet.dataTables, { rowCount: sheet.rowCount, columnCount: sheet.columnCount }),
       targets ? { cells: targets.cells, rowsKnown: (first, last) => targets.rowsKnown(first, last), undetermined } : undefined);
   } catch (error) {
     if (!(error instanceof FormulaResultUnavailableError)) throw error;

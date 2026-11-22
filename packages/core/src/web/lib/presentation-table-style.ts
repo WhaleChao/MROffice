@@ -25,7 +25,7 @@
  */
 
 import type { CSSProperties } from "react";
-import { OFFICE_SHADOW_ALIGNMENTS, officeShadowCss, type OfficeShadowAlignment } from "./office-shadow-effects";
+import { OFFICE_SHADOW_ALIGNMENTS, officeShadowCss, POWERPOINT_SHADOW_BLUR_DEVIATION, type OfficeShadowAlignment } from "./office-shadow-effects";
 
 import {
   normalizeOfficeChartFillPattern,
@@ -1187,15 +1187,22 @@ export function tableStyleLookTableCss(
   value: unknown,
   /** The table's frame in px: a scaled shadow grows with it (`officeShadowCss`). */
   size: { readonly width: number; readonly height: number } = { width: 0, height: 0 },
+  /**
+   * `shadow: false`: the background shadow is not the frame's -- a slide's
+   * table casts it from its cells' paint (`presentationTableShadowSilhouette`);
+   * the style gallery's swatch keeps it on its frame.
+   */
+  options: { readonly shadow?: boolean } = {},
 ): CSSProperties {
-  const look = normalizeTableStyleLook(value);
-  if (!look) return {};
+  const normalized = normalizeTableStyleLook(value);
+  if (!normalized) return {};
+  const look = options.shadow === false && normalized.shadow ? { ...normalized, shadow: undefined } : normalized;
   // A scaled or skewed shadow is drawn as the shared model draws a shape's:
   // an even scale as the box shadow's spread, any other on its own layer
   // under the table (`presentationTableShadowLayers`).
   const scaled = look.shadow && (look.shadow.sx !== undefined || look.shadow.sy !== undefined ||
     look.shadow.kx !== undefined || look.shadow.ky !== undefined);
-  const modelled = scaled ? officeShadowCss(lookShadowEffect(look.shadow!), size) : null;
+  const modelled = scaled ? officeShadowCss(lookShadowEffect(look.shadow!), size, { blurDeviation: POWERPOINT_SHADOW_BLUR_DEVIATION }) : null;
   return {
     ...(look.background ? { backgroundColor: look.background } : {}),
     ...(look.backgroundGradient
@@ -1207,7 +1214,7 @@ export function tableStyleLookTableCss(
       ? modelled?.boxShadow ? { boxShadow: modelled.boxShadow } : {}
       : look.shadow
       ? {
-          boxShadow: `${Math.round(Math.cos((look.shadow.angle * Math.PI) / 180) * look.shadow.distance * 100) / 100}px ${Math.round(Math.sin((look.shadow.angle * Math.PI) / 180) * look.shadow.distance * 100) / 100}px ${look.shadow.blur}px rgba(${[1, 3, 5].map((i) => parseInt(look.shadow!.color.slice(i, i + 2), 16)).join(", ")}, ${look.shadow.opacity})`,
+          boxShadow: `${Math.round(Math.cos((look.shadow.angle * Math.PI) / 180) * look.shadow.distance * 100) / 100}px ${Math.round(Math.sin((look.shadow.angle * Math.PI) / 180) * look.shadow.distance * 100) / 100}px ${Math.round(look.shadow.blur * 2 * POWERPOINT_SHADOW_BLUR_DEVIATION * 100) / 100}px rgba(${[1, 3, 5].map((i) => parseInt(look.shadow!.color.slice(i, i + 2), 16)).join(", ")}, ${look.shadow.opacity})`,
         }
       : {}),
   };

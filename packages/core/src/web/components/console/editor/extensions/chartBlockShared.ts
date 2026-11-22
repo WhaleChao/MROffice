@@ -11,7 +11,12 @@
 // converted into a different chart family or subtype.
 
 import { fitChartTitleRuns, normalizeChartTitleRuns, type ChartTitleRun } from "../../../../lib/office-charts/chart-title-runs";
-import { normalizeChartElementLayout, type ChartElementLayout } from "../../../../lib/office-charts/chart-element-layout";
+import {
+  normalizeChartElementBox,
+  normalizeChartElementLayout,
+  type ChartElementBox,
+  type ChartElementLayout,
+} from "../../../../lib/office-charts/chart-element-layout";
 import {
   officeChartSampleCategory,
   officeChartSampleRegionName,
@@ -968,6 +973,14 @@ export interface ChartBlockFormat {
    * the chart it is placed. The plot starts below it; nothing is drawn. */
   blankTitleSizePt?: number;
   blankTitleY?: number;
+  /** The primary axes (physical X / Y) whose title has no words and still
+   * takes its line: the plot keeps a one-line title's room; nothing is drawn
+   * (a worksheet chart's empty `c:title`, as Google Sheets writes on every axis). */
+  blankAxisTitles?: ("X" | "Y")[];
+  /** A worksheet chart's plot area stated by its OUTER box (a manual layout
+   * naming no `c:layoutTarget`): the plot and its tick labels stand inside it,
+   * as Excel lays them out (read for the drawing; never written). */
+  plotAreaOuter?: ChartElementBox;
   /** The names come by a multi-level reference: one that clears its neighbours keeps its line. */
   categoryNamesWhole?: boolean;
   /** How a deck's trendline labels stand: typed words, their place by hand as
@@ -1041,6 +1054,16 @@ export interface ChartBlockFormat {
    * stay drawn (Office's `c:legend/c:legendEntry/c:delete`).
    */
   legendHiddenEntries?: readonly number[];
+  /**
+   * The legend's entries formatted one at a time (select the legend, click
+   * one entry, Home > Font: Office's `c:legend/c:legendEntry/c:txPr`): each
+   * entry's place in the legend's list, as `legendHiddenEntries` counts them,
+   * and its own text, drawn over the chart's text (`text`) -- not the
+   * legend's (`legendStyle.text`), as Windows PowerPoint draws it (truth
+   * office-truth/probes/c30legentry). The twin of
+   * `document_charts.ChartLegendEntryFont`.
+   */
+  legendEntryFonts?: readonly ChartLegendEntryFont[];
   /** Native DrawingML line paint for category and value axes. */
   axisStyles?: readonly PresentationChartAxisStyle[];
   /** The axis titles' own paint and text (each axis's `c:title`), by model axis. */
@@ -3110,6 +3133,25 @@ export function isChartStylePreset(
 }
 
 /** A legend's deleted entries: sorted, once each, indexes of its list. */
+/** One legend entry's own text (`ChartFormatV2.legendEntryFonts`). */
+export interface ChartLegendEntryFont {
+  readonly entry: number;
+  readonly font: OfficeChartText;
+}
+
+export function normalizeChartLegendEntryFonts(value: unknown): ChartLegendEntryFont[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const rows = new Map<number, ChartLegendEntryFont>();
+  for (const raw of value) {
+    if (!isRecord(raw)) continue;
+    const entry = raw.entry;
+    if (typeof entry !== "number" || !Number.isInteger(entry) || entry < 0 || entry >= MAX_CHART_POINTS_PER_SERIES) continue;
+    const font = normalizeOfficeChartText(raw.font);
+    if (font && !rows.has(entry)) rows.set(entry, { entry, font });
+  }
+  return rows.size ? [...rows.values()].sort((left, right) => left.entry - right.entry) : undefined;
+}
+
 export function normalizeChartLegendHiddenEntries(value: unknown): number[] | undefined {
   if (!Array.isArray(value) || value.length === 0) return undefined;
   if (value.some((entry) => typeof entry !== "number" || !Number.isInteger(entry) || entry < 0 || entry >= MAX_CHART_POINTS_PER_SERIES))
@@ -6105,6 +6147,10 @@ function safeV2Attrs(record: Record<string, unknown>): ChartBlockAttrsV2 {
           const hidden = normalizeChartLegendHiddenEntries(record.format.legendHiddenEntries);
           return hidden ? { legendHiddenEntries: hidden } : {};
         })(),
+        ...(() => {
+          const fonts = normalizeChartLegendEntryFonts(record.format.legendEntryFonts);
+          return fonts ? { legendEntryFonts: fonts } : {};
+        })(),
         ...(isChartColorPaletteId(record.format.colorPalette)
           ? { colorPalette: record.format.colorPalette }
           : {}),
@@ -6156,7 +6202,16 @@ function safeV2Attrs(record: Record<string, unknown>): ChartBlockAttrsV2 {
           ? { blankTitleSizePt: record.format.blankTitleSizePt } : {}),
         ...(typeof record.format.blankTitleY === "number" && record.format.blankTitleY >= 0 && record.format.blankTitleY < 1
           ? { blankTitleY: record.format.blankTitleY } : {}),
+        ...(Array.isArray(record.format.blankAxisTitles) &&
+        record.format.blankAxisTitles.length > 0 &&
+        record.format.blankAxisTitles.every((axis) => axis === "X" || axis === "Y")
+          ? { blankAxisTitles: [...(record.format.blankAxisTitles as ("X" | "Y")[])] }
+          : {}),
         ...(record.format.categoryNamesWhole === true ? { categoryNamesWhole: true } : {}),
+        ...((() => {
+          const outer = normalizeChartElementBox(record.format.plotAreaOuter);
+          return outer ? { plotAreaOuter: outer } : {};
+        })()),
         ...(Array.isArray(record.format.trendlineLabels)
           ? { trendlineLabels: normalizeChartTrendlineLabels(record.format.trendlineLabels) }
           : {}),

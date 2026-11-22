@@ -3120,6 +3120,31 @@ function cellListItemTextCut(
   return null;
 }
 
+/** Harness switch (`window.__docsSplitRowBorderPastFoot = true`): a row cut
+ * through its lines lets the border closing its head run past the page foot,
+ * as before (A/B; ledgerAtoms splitRowFootCreditPx reads it too). */
+export function splitRowBorderPastFoot(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsSplitRowBorderPastFoot?: boolean }).__docsSplitRowBorderPastFoot === true;
+}
+
+/**
+ * The border under the head half of a row cut across pages: the cell's own
+ * bottom border, or the table's bottom border, which closes every fragment
+ * (Word draws it at the cut: R484-D95, a table with no rule between rows,
+ * ends page 2 on its 0.5 pt bottom rule). Read from the cells of the table's
+ * last row, which draw it.
+ */
+function splitHeadClosingBorderPx(cellDom: HTMLElement, cellStyle: CSSStyleDeclaration): number {
+  if (splitRowBorderPastFoot()) return 0;
+  let border = cssPx(cellStyle.borderBottomWidth);
+  const table = cellDom.closest("table");
+  const last = table?.rows[table.rows.length - 1];
+  if (last && last !== cellDom.parentElement) {
+    for (const cell of Array.from(last.cells)) border = Math.max(border, cssPx(getComputedStyle(cell).borderBottomWidth));
+  }
+  return border;
+}
+
 /** Harness switch (`window.__docsCellSplitSpaceAfterOff = true`): a cell
  * paragraph cut through its lines keeps its space after on the head half (A/B). */
 export function cellSplitSpaceAfterOff(): boolean {
@@ -3194,12 +3219,16 @@ function planTableCellCuts(
     if (blockDoms.length !== cellNode.childCount) return null;
     const cellStyle = getComputedStyle(cellDom);
     // The lowest point the head half's content, trailing margin included, may
-    // reach in this cell. The cell's bottom border, which closes the head half,
-    // may run past the page foot: Word fits a row's lines to the foot and
-    // draws that border below it (corpus R103-D02: the sixth line of row A4
-    // ends at 539.9 pt on a 540 pt foot, the border under it). The ledger
-    // gives the head that overrun back (ledgerAtoms splitRowFootCreditPx).
-    const contentEdge = boundary - cssPx(cellStyle.paddingBottom);
+    // reach in this cell: above the cell's bottom margin AND the border that
+    // closes the head half at the foot. Word keeps a line on the page only
+    // when the line, the bottom margin and that border all end above the foot
+    // (Windows Word, probes tbl22/s1, modes 12 and 15: 14 pt lines, 2.15 pt
+    // margin, a 3 pt bottom border -- the fifth line stays up to 620.6 pt of
+    // filler and goes on at 621.1; with no border up to 623.6; with 0.5 pt
+    // up to 623.1. Corpus R484-D95: "with others (7)" opens page 3, Word 18
+    // pages). The border the head draws there is the table's bottom one even
+    // where the row has none between rows.
+    const contentEdge = boundary - cssPx(cellStyle.paddingBottom) - splitHeadClosingBorderPx(cellDom, cellStyle);
     const alignShift = cellAlignmentShiftPx(cellRect.top, cellStyle, blockDoms[0], scale);
     let cut: TableCellTextCut["cut"] | null = null;
     for (let blockIndex = 0; blockIndex < blockDoms.length; blockIndex += 1) {
@@ -3592,7 +3621,7 @@ export function planRenderedTableFragment(
   availablePx: number,
   fullPageCapacityPx: number,
   textSplitSlackPx = 0,
-  options: { overPageCantSplitStands?: boolean; cellWidowControl?: boolean } = {},
+  options: { overPageCantSplitStands?: boolean; cellWidowControl?: boolean; keepWithNextReleased?: boolean } = {},
 ): PlannedTableFragment | null {
   if (node.type.name !== "table") return null;
   const table = renderedTableElement(dom);
@@ -3616,7 +3645,8 @@ export function planRenderedTableFragment(
     measured.measurements,
     availablePx + raisedPx,
     fullPageCapacityPx,
-    { fragmentChromePx: chrome, overPageCantSplitStands: options.overPageCantSplitStands === true, allowOriginalHeaderOnly:
+    { fragmentChromePx: chrome, overPageCantSplitStands: options.overPageCantSplitStands === true,
+      ...(options.keepWithNextReleased === true ? { keepWithNextReleased: true } : {}), allowOriginalHeaderOnly:
       node.childCount>1 && node.firstChild?.attrs.headerRow===true &&
       node.attrs[TABLE_CONTINUATION_ATTR]!==true && originalTableHeaderMayStandAlone(node.attrs,node.firstChild.toJSON()) },
   );
@@ -3789,7 +3819,7 @@ export function planEngineTableFragment(
   chromePx: number,
   availablePx: number,
   fullPageCapacityPx: number,
-  options: { overPageCantSplitStands?: boolean } = {},
+  options: { overPageCantSplitStands?: boolean; keepWithNextReleased?: boolean } = {},
 ): PlannedTableFragment | null {
   if (node.type.name !== "table" || rowHeightsPx.length === 0 || rowHeightsPx.length !== node.childCount) return null;
   const measurements: TableRowMeasurement[] = [];
@@ -3812,6 +3842,7 @@ export function planEngineTableFragment(
   const plan = planTablePageCut(measurements, availablePx, fullPageCapacityPx, {
     fragmentChromePx: Math.max(0, chromePx),
     overPageCantSplitStands: options.overPageCantSplitStands === true,
+    ...(options.keepWithNextReleased === true ? { keepWithNextReleased: true } : {}),
     allowOriginalHeaderOnly: node.childCount > 1 && node.firstChild?.attrs.headerRow === true &&
       node.attrs[TABLE_CONTINUATION_ATTR] !== true && originalTableHeaderMayStandAlone(node.attrs, node.firstChild.toJSON()),
   });

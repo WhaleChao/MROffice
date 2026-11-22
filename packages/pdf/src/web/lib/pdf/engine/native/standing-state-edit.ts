@@ -50,7 +50,16 @@ export type StandingShow = Readonly<{
   state: StandingPaintState;
   ctm: Matrix;
   clip: StandingClip;
+  /** The passes a weight drew of it right after it (a Type3 show:
+   * mraiNativeStandingOverstrike): where they end, and their last token
+   * among the walk's. The passes are the show's own -- no show and no paint
+   * of the walk -- and what is written after the show is written after them. */
+  tail?: Readonly<{ end: number; operator: number }>;
 }>;
+
+/** Where what follows a show starts: after the show, or after its passes. */
+const showEnd = (show: StandingShow): number => show.tail?.end ?? show.end;
+const showLastToken = (show: StandingShow): number => show.tail?.operator ?? show.operator;
 
 export type StandingWalk = Readonly<{
   source: string;
@@ -126,8 +135,12 @@ export function walkStandingStream(input: Readonly<{
     const shows: StandingShow[] = [];
     const paints: { token: number; operator: string; state: StandingPaintState }[] = [];
     let operands: number[] = [];
+    // The tokens of a show's passes (mraiNativeStandingOverstrike): read
+    // past, as part of the show before them.
+    let passEnd = -1;
     for (const [index, token] of tokens.entries()) {
       if (record) states.push(state);
+      if (token.start < passEnd) continue;
       if (!token.operator) {
         operands.push(index);
         continue;
@@ -178,7 +191,19 @@ export function walkStandingStream(input: Readonly<{
       else if (operator === "W" || operator === "W*") pendingClip = true;
       if (SHOW_OPERATORS.has(operator) && record) {
         if (operands.length < 1) return refuse(MRAI_NATIVE_STANDING_STATE_UNREADABLE_MESSAGE);
-        shows.push(Object.freeze({ start: tokens[operands[0]].start, end: token.end, first: operands[0], operator: index, state, ctm, clip }));
+        const start = tokens[operands[0]].start;
+        // Its passes, where they stand right after it and draw its own bytes
+        // again: their tokens are the show's.
+        const pass = operator === "Tj" || operator === "TJ" ? mraiNativeStandingOverstrike(source, token.end) : null;
+        let tail: StandingShow["tail"];
+        if (pass && pass.show === source.slice(start, token.end)) {
+          let last = index;
+          while (last + 1 < tokens.length && tokens[last + 1].start < pass.end) last += 1;
+          if (tokens[last].end !== pass.end) return refuse(MRAI_NATIVE_STANDING_STATE_UNREADABLE_MESSAGE);
+          tail = Object.freeze({ end: pass.end, operator: last });
+          passEnd = pass.end;
+        }
+        shows.push(Object.freeze({ start, end: token.end, first: operands[0], operator: index, state, ctm, clip, ...(tail ? { tail } : {}) }));
       }
       if (record && (SHOW_OPERATORS.has(operator) || PAINT_OPERATORS.has(operator))) paints.push({ token: index, operator, state });
       if (PATH_END_OPERATORS.has(operator)) {
@@ -284,7 +309,7 @@ export function planStandingStateEdits(
   for (const show of owned) {
     const chain = chains.at(-1);
     const before = chain?.at(-1);
-    if (chain && before && stateOperators(before.operator + 1, show.first, true)) chain.push(show);
+    if (chain && before && stateOperators(showLastToken(before) + 1, show.first, true)) chain.push(show);
     else chains.push([show]);
   }
   for (const chain of chains) {
@@ -302,7 +327,7 @@ export function planStandingStateEdits(
     const written: Record<Kind, string | null> = { ...standing };
     for (const [order, show] of chain.entries()) {
       if (order > 0) {
-        region = stateOperators(chain[order - 1].operator + 1, show.first, true)!;
+        region = stateOperators(showLastToken(chain[order - 1]) + 1, show.first, true)!;
         standing = chain[order - 1].state;
       }
       const target = targets.get(show.end)!;
@@ -348,14 +373,14 @@ export function planStandingStateEdits(
     }
     // After the last show: what the page's other content read there.
     const last = chain.at(-1)!;
-    let trail = last.operator + 1;
+    let trail = showLastToken(last) + 1;
     for (;;) {
       let at = trail;
       while (at < tokens.length && !tokens[at].operator) at += 1;
       if (at >= tokens.length || !kindOf(text(tokens[at]))) break;
       trail = at + 1;
     }
-    const after = stateOperators(last.operator + 1, trail, false) ?? [];
+    const after = stateOperators(showLastToken(last) + 1, trail, false) ?? [];
     const following = states[trail];
     // Whether anything reads a kind of the state after them before it is set
     // again or given back: nothing does where a `Q` comes first (the state
@@ -382,7 +407,7 @@ export function planStandingStateEdits(
         puts.push(kind === "tr" ? `${following[kind]} Tr` : following[kind]!);
       }
     }
-    if (puts.length) edits.push({ start: last.end, end: last.end, text: ` ${puts.join(" ")}` });
+    if (puts.length) edits.push({ start: showEnd(last), end: showEnd(last), text: ` ${puts.join(" ")}` });
   }
   return normalizeStandingEdits(edits);
 }
@@ -501,6 +526,157 @@ export function mraiNativeStandingBytesAreStateOrRules(bytes: string): boolean {
     cursor = block.index + block[0].length;
   }
   return STATE_RUN.test(bytes.slice(cursor));
+}
+
+// ---------------------------------------------------------------------------
+// A weight written on a Type3 show where it stands.
+//
+// A Type3 glyph is a procedure of its own: the text rendering mode does not
+// reach it (ISO 32000-1 9.3.6), so the stroke a bold is drawn with elsewhere
+// draws nothing on it, and no other face holds its glyphs. Its weight is the
+// show drawn again a little along the line, written right after it -- an
+
+//
+//   \n[back] TJ /Span <</ActualText <FEFF>>> BDC <show> [again] TJ <show> EMC
+//
+// `[back] TJ` takes the pen back to where the show began, less the offset of
+// the pass; the first pass is the show's own operands and operator, drawn
+// under the text state the show left (a `Tj` or a `TJ` sets no spacing and
+// moves to no line, so every pass draws as the show did); `[again] TJ` takes
+// the pen back to where the show began, and the second pass draws the show
+// once more where it stands. A number alone in a `TJ` moves the pen and
+// nothing else -- not the line matrix -- so every `Td`, `TD` and `T*` after
+// it lands where it did, and the show itself is not touched: taken off, the
+// passes go and the stream is the bytes it was.
+//
+// The second pass adds no weight. It is there for the reader: pdf.js
+// measures what it reads next from where the last glyph it saw was drawn
+// (its `prevTransform`), not from the pen. After the first pass alone that is
+// the offset further along than the show left it, and the space it makes
+// before the next word is made from there (pdf-walk-1000 0945 p2: «आ)
+// कामांसाठी» read back as «आ)कामांसाठी», its space item moved by the offset
+// and no longer the word's). Drawn last where the show stands, the show
+// leaves the reader's measure exactly where it left it before, and the items
+// the two passes add are read back into the show's own where pdf.js is
+// loaded (show-passes' pdfTextItemsWithoutShowPasses). The empty
+// /ActualText says the passes are no text of their own.
+// (Mirror of the server's standing_overstrike,
+// native_paragraph_rewrite_contract.py.)
+// ---------------------------------------------------------------------------
+
+const OVERSTRIKE_OPEN = new RegExp(String.raw`\n\[(${STATE_NUMBER})\] TJ \/Span <<\/ActualText <FEFF>>> BDC `, "y");
+const OVERSTRIKE_AGAIN = new RegExp(String.raw` \[(${STATE_NUMBER})\] TJ `, "y");
+const OVERSTRIKE_CLOSE = " EMC";
+const ARRAY_NUMBER = new RegExp(STATE_NUMBER, "y");
+const HEX_STRING = /<[0-9A-Fa-f\x00\t\n\f\r ]*>/y;
+const isWhite = (character: string | undefined) => character !== undefined && "\x00\t\n\f\r ".includes(character);
+
+/** Where the string that starts at `start` ends (a literal one with its
+ * escapes and nested parentheses, or a hexadecimal one); null for anything else. */
+function standingStringEnd(text: string, start: number): number | null {
+  if (text[start] === "(") {
+    let depth = 1;
+    for (let at = start + 1; at < text.length; at += 1) {
+      const character = text[at];
+      if (character === "\\") at += 1;
+      else if (character === "(") depth += 1;
+      else if (character === ")") {
+        depth -= 1;
+        if (depth === 0) return at + 1;
+      }
+    }
+    return null;
+  }
+  HEX_STRING.lastIndex = start;
+  const found = HEX_STRING.exec(text);
+  return found ? start + found[0].length : null;
+}
+
+/** Where the one `Tj` or `TJ` show whose first operand starts at `start`
+ * ends: a string and `Tj`, or an array of strings and numbers and `TJ`. Null
+ * for anything else (a `'` or a `"`, which move to a line; any other operand
+ * or operator). */
+function standingShowEnd(text: string, start: number): number | null {
+  let at = start;
+  let operator = "Tj";
+  if (text[at] === "[") {
+    at += 1;
+    for (;;) {
+      while (isWhite(text[at])) at += 1;
+      if (text[at] === "]") { at += 1; break; }
+      let end: number | null;
+      if (text[at] === "(" || text[at] === "<") end = standingStringEnd(text, at);
+      else {
+        ARRAY_NUMBER.lastIndex = at;
+        const number = ARRAY_NUMBER.exec(text);
+        end = number ? at + number[0].length : null;
+      }
+      if (end === null || end === at) return null;
+      at = end;
+    }
+    operator = "TJ";
+  } else {
+    const end = standingStringEnd(text, at);
+    if (end === null) return null;
+    at = end;
+  }
+  while (isWhite(text[at])) at += 1;
+  return text.slice(at, at + 2) === operator ? at + 2 : null;
+}
+
+/** The passes of a Type3 show: what a weight writes right after it. */
+export type StandingOverstrike = Readonly<{
+  /** Where the passes end. */
+  end: number;
+  /** The show they draw again, and where each pass of it stands: the first a
+   * little along the line, the second where the show stands. */
+  show: string;
+  passes: readonly [Readonly<{ start: number; end: number }>, Readonly<{ start: number; end: number }>];
+  /** The pen moves before the first pass and between the two, in thousandths of the size. */
+  back: number;
+  again: number;
+}>;
+
+/** The passes that start at `start` of `text`, in exactly this writer's
+ * form; null where none stand there. */
+export function mraiNativeStandingOverstrike(text: string, start = 0): StandingOverstrike | null {
+  OVERSTRIKE_OPEN.lastIndex = start;
+  const opened = OVERSTRIKE_OPEN.exec(text);
+  if (!opened) return null;
+  const firstStart = start + opened[0].length;
+  const firstEnd = standingShowEnd(text, firstStart);
+  if (firstEnd === null) return null;
+  const show = text.slice(firstStart, firstEnd);
+  OVERSTRIKE_AGAIN.lastIndex = firstEnd;
+  const again = OVERSTRIKE_AGAIN.exec(text);
+  if (!again) return null;
+  const secondStart = firstEnd + again[0].length;
+  // (The second pass is the first's bytes, and one show as it is.)
+  if (text.slice(secondStart, secondStart + show.length) !== show ||
+    standingShowEnd(text, secondStart) !== secondStart + show.length) return null;
+  const secondEnd = secondStart + show.length;
+  if (text.slice(secondEnd, secondEnd + OVERSTRIKE_CLOSE.length) !== OVERSTRIKE_CLOSE) return null;
+  return Object.freeze({ end: secondEnd + OVERSTRIKE_CLOSE.length, show,
+    passes: Object.freeze([Object.freeze({ start: firstStart, end: firstEnd }), Object.freeze({ start: secondStart, end: secondEnd })]) as StandingOverstrike["passes"],
+    back: Number(opened[1]), again: Number(again[1]) });
+}
+
+/** The bytes of such passes: `show` (a `Tj` or `TJ` show, its first operand
+ * to its operator) drawn after the pen is taken `back`, and once more after
+ * it is taken back `again` (both as the `TJ` numbers they are written as).
+ * Null where `show` is not one show this form holds. */
+export function mraiNativeStandingOverstrikeBytes(show: string, back: string, again: string): string | null {
+  const text = `\n[${back}] TJ /Span <</ActualText <FEFF>>> BDC ${show} [${again}] TJ ${show} EMC`;
+  const read = mraiNativeStandingOverstrike(text);
+  return read && read.end === text.length && read.show === show ? text : null;
+}
+
+/** Whether `bytes` is the passes of one show and, after them, nothing but
+ * state operators and rules (the state a weight set before the show, put
+ * back after its passes). (Mirror of the server's standing_bytes_overstrike_a_show.) */
+export function mraiNativeStandingBytesOverstrikeAShow(bytes: string): boolean {
+  const passes = mraiNativeStandingOverstrike(bytes);
+  return passes !== null && mraiNativeStandingBytesAreStateOrRules(bytes.slice(passes.end));
 }
 
 /** Where a show is cut in two before the code byte `at` of its codes, and
@@ -982,9 +1158,10 @@ export function planStandingLeanEdits(input: Readonly<{
       const why = close(next, tokens[show.first].start, show.end);
       if (why) return why;
       before = next;
-      beforeEnd = tokens[show.operator].end;
+      // (What is set after a show is set after its passes, where a weight drew them.)
+      beforeEnd = showEnd(show);
       gap = [];
-      index = show.operator;
+      index = showLastToken(show);
       continue;
     }
     if (!tokens[index].operator) continue;

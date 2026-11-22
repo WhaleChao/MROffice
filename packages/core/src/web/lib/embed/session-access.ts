@@ -14,6 +14,9 @@ export interface EmbedPermissions {
   readonly acceptRejectChanges: boolean;
   readonly comment: boolean;
   readonly manageComments: boolean;
+  /** The Code editor may run its file (the token's features.run on an app
+   * that may run code; app/services/embed/access.code_run_granted). */
+  readonly run: boolean;
 }
 
 export interface EmbedWatermark {
@@ -32,6 +35,13 @@ export interface EmbedAccess {
   readonly effectiveMode: EmbedSessionMode;
   readonly permissions: EmbedPermissions;
   readonly watermark: EmbedWatermark | null;
+  /** The session's account only reads the page; what it may change goes
+   * through the session's own routes (a PDF's form: lib/embed/form-session;
+   * apps/api app/services/embed/forms.py). */
+  readonly mediated: boolean;
+  /** Who the person is on a form whose fields are assigned to roles (the
+   * first of the token's user.roles), or null. */
+  readonly role: string | null;
 }
 
 const MODES: readonly EmbedSessionMode[] = ["edit", "view", "comment", "review", "fillForms"];
@@ -67,6 +77,8 @@ export function readEmbedAccess(view: unknown): EmbedAccess {
     acceptRejectChanges: !readOnly && flag(given.acceptRejectChanges, effective === "edit"),
     comment: !readOnly && effective !== "fillForms" && flag(given.comment, true),
     manageComments: flag(given.manageComments, true),
+    // Off unless the session says so: running costs a sandbox.
+    run: given.run === true,
   };
   const mark = wire.watermark && typeof wire.watermark === "object" ? (wire.watermark as Record<string, unknown>) : null;
   const text = typeof mark?.text === "string" ? mark.text.trim().slice(0, 240) : "";
@@ -80,7 +92,16 @@ export function readEmbedAccess(view: unknown): EmbedAccess {
         inExports: mark.inExports === true,
       }
     : null;
-  return { mode: requested, effectiveMode: effective, permissions, watermark };
+  const user = wire.user && typeof wire.user === "object" ? (wire.user as Record<string, unknown>) : {};
+  const firstRole = Array.isArray(user.roles) && typeof user.roles[0] === "string" ? user.roles[0].trim() : "";
+  return {
+    mode: requested,
+    effectiveMode: effective,
+    permissions,
+    watermark,
+    mediated: wire.mediated === true,
+    role: firstRole || null,
+  };
 }
 
 let current: EmbedAccess | null = null;
@@ -117,6 +138,18 @@ export function embedImposedDocumentProtection(): { enabled: true; mode: "commen
 }
 
 /** Whether tracked changes may be accepted or rejected here (true outside an embed). */
+/** Whether this frame fills in a PDF's form and changes nothing else of
+ * the file: the PDF window then sends each fill and signature through the
+ * session's form routes instead of saving the page. */
+export function embedFillsPdfForm(): boolean {
+  return current !== null && current.mediated && current.effectiveMode === "fillForms";
+}
+
+/** The role this person fills a form's fields as, when the session names one. */
+export function embedFormRole(): string | null {
+  return current?.role ?? null;
+}
+
 export function embedAllowsRevisionResolution(): boolean {
   return current === null || current.permissions.acceptRejectChanges;
 }
@@ -141,6 +174,13 @@ export function embedAllowsExport(format: string): boolean {
   const clean = format.toLowerCase().replace(/^\./, "");
   if (current.watermark?.inExports && clean !== "pdf") return false;
   return current.permissions.export === null || current.permissions.export.includes(clean);
+}
+
+/** Whether the Code editor may run code here (its Run, Debug, tests and
+ * console): always outside an embed; in one, only when the session grants
+ * it (the server holds its runtime to the same grant: services/embed/scope). */
+export function embedAllowsCodeRun(): boolean {
+  return current === null || current.permissions.run;
 }
 
 export function embedAllowsPrint(): boolean {

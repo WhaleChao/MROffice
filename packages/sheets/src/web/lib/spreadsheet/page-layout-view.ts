@@ -371,6 +371,30 @@ export function printedTailUsedColumnEdge(sheet: object): number {
 }
 
 /**
+ * How far the sheet runs past a column wider than the page, for Save as PDF:
+ * one past the last column its own cells occupy (occupiedExtent, with values),
+ * or the furthest last column (0-based) its rows span (`rowSpans`, the file's
+ * spans). Past `source + 1`, the wide column's tail is not run on from its cut
+ * (lookwin p262b-lw: R466-X13's GUIDELINE, C wide under spans 2:12, prints its
+ * page 3 blank; spans 1:2 over a wide A print the tail, 1:3 do not). The
+ * server's writer: draw_spill_from_left, stated_span_edge.
+ */
+export function printedWideTailColumnEdge(sheet: object): number {
+  const { cells, occupiedExtent, rowSpans } = sheet as { cells?: unknown; occupiedExtent?: unknown; rowSpans?: unknown };
+  const cols = cells && typeof cells === "object"
+    ? occupiedExtentWithValues(cells as Record<string, unknown>, occupiedExtent)?.cols
+    : undefined;
+  let edge = typeof cols === "number" && Number.isInteger(cols) && cols > 0 && cols <= MAX_GRID_COLUMNS ? cols : 0;
+  if (Array.isArray(rowSpans)) {
+    for (const run of rowSpans) {
+      const last = Array.isArray(run) && run.length === 4 ? run[3] : undefined;
+      if (typeof last === "number" && Number.isInteger(last) && last >= 0 && last < MAX_GRID_COLUMNS) edge = Math.max(edge, last);
+    }
+  }
+  return edge;
+}
+
+/**
  * Whether a merged block whose value lies in its anchor covers the cell: a
  * carried tail counts its columns as holding a value in the rows it spans
  * (lookwin p222-lw n5: B10:C12 holding "merged", the note's tail prints on
@@ -799,6 +823,25 @@ function mapLocalAxisIndex(
     : null;
 }
 
+/** The body positions of an axis that hidden source lines stand right before,
+ * within the printed range (paginateAxis ``hiddenLed``; the API's
+ * hidden_led_cols). */
+function hiddenLedPositions(
+  projection: PageLayoutAxisProjection,
+  hidden: ReadonlySet<number> | undefined,
+  areaStart: number,
+): number[] {
+  if (!hidden?.size) return [];
+  const out: number[] = [];
+  for (let position = projection.repeatCount; position < projection.paginateCount; position += 1) {
+    const actual = mapLocalAxisIndex(projection, position);
+    if (actual === null || actual - 1 < areaStart || !hidden.has(actual - 1)) continue;
+    const previous = position === projection.repeatCount ? null : mapLocalAxisIndex(projection, position - 1);
+    if (previous === null || previous < actual - 1) out.push(position);
+  }
+  return out;
+}
+
 function mapActualAxisIndex(
   projection: PageLayoutAxisProjection,
   actualIndex: number,
@@ -1222,6 +1265,7 @@ export function resolveSpreadsheetPageLayoutGeometry(input: {
     colWidth: baseColWidth,
     rowSizes: projectSizes(rowProjection, sourceRowSizes, baseRowHeight),
     colSizes: projectSizes(colProjection, sourceColSizes, baseColWidth),
+    hiddenLedCols: hiddenLedPositions(colProjection, input.hiddenCols, printArea?.c1 ?? 0),
     settings: paginationSettings,
   };
   const contentScale = resolveContentScale(unscaledPaginateInput, input.contentScaleOverride, {
@@ -1675,9 +1719,21 @@ export function resolveSpreadsheetPageLayoutRenderPlan(
 export const PRINT_BATCH_CELLS = 20_000;
 export const PRINT_PAGE_CELLS = 50_000;
 
+
+
+
+
+
+
+
+
+
+export const PRINT_BATCH_TEXT = 40_000;
+
 /**
  * The pages a print mounts from `start` on (Page Layout's printMode): every
- * page, a batch of them at a time within PRINT_BATCH_CELLS, so a sheet of
+ * page, a batch of them at a time within PRINT_BATCH_CELLS (and, given
+ * `pageText`, the characters a page prints, PRINT_BATCH_TEXT), so a sheet of
  * any length prints whole; `nextStart` is where the next batch begins (null
  * after the last). A page past PRINT_PAGE_CELLS is truncated
  * (`cellLimitReached`: the print is refused rather than short).
@@ -1685,15 +1741,22 @@ export const PRINT_PAGE_CELLS = 50_000;
 export function resolveSpreadsheetPrintBatchPlan(
   geometry: SpreadsheetPageLayoutGeometry,
   start: number,
+  pageText?: (page: SpreadsheetPageLayoutPage) => number,
 ): SpreadsheetPageLayoutRenderPlan & { nextStart: number | null } {
   const pages: SpreadsheetPageLayoutPage[] = [];
   let renderedCellCount = 0;
+  let text = 0;
   let cellLimitReached = false;
   let index = Math.max(0, Math.floor(start));
   for (; index < geometry.totalPages; index += 1) {
     const page = resolveSpreadsheetPageLayoutPage(geometry, index, PRINT_PAGE_CELLS);
     if (!page) break;
     if (pages.length && renderedCellCount + page.renderedCellCount > PRINT_BATCH_CELLS) break;
+    // Within PRINT_BATCH_TEXT printed characters too (a page past it alone
+    // is a batch of its own).
+    const pageChars = pageText ? pageText(page) : 0;
+    if (pages.length && text + pageChars > PRINT_BATCH_TEXT) break;
+    text += pageChars;
     pages.push(page);
     renderedCellCount += page.renderedCellCount;
     if (page.cellsTruncated) cellLimitReached = true;

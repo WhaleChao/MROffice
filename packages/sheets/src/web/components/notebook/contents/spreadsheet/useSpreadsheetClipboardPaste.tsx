@@ -9,7 +9,7 @@ import { writeLineBlanksIn } from "@mrnote/core/web/lib/spreadsheet/line-styles.
 import { nativeOfficeOwnsFocus } from "@mrnote/core/web/lib/native-office-focus.ts";
 import { cssPixelsToEmu } from "../../../../lib/spreadsheet/drawing-buttons";
 import { type CellMap, hasCellMetadata, copyCellMap, type SpreadsheetCell, writeCellValueInto } from "@mrnote/core/web/lib/spreadsheet/cell-buttons.ts";
-import { sameSheetCutRulePlans, writePastedContentInto } from "../../../../lib/spreadsheet/paste-buttons";
+import { cutConditionalFormatFileCopy, sameSheetCutRulePlans, writePastedContentInto } from "../../../../lib/spreadsheet/paste-buttons";
 import { flashFillPlan, flashFillRequestFromResolved } from "../../../../lib/spreadsheet/fill-buttons";
 import { nativeColumnCssClamp, editNativeColumns } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
 import { useCallback, useEffect, useRef, type ClipboardEvent as ReactClipboardEvent, type RefObject, type KeyboardEvent as ReactKeyboardEvent } from "react";
@@ -497,6 +497,7 @@ export function useSpreadsheetClipboardPaste({
           moveConditionalFormatPlan = plans.conditionalFormatPlan;
           moveValidationPlan = plans.validationPlan;
         }
+
         // A move from another sheet carries them across: the source sheet
         // keeps its rules without the moved cells, this one gains the moved
         // cells' rules (written as the moved formulas are, a reference to a
@@ -572,6 +573,9 @@ export function useSpreadsheetClipboardPaste({
             sourceSheetRules = { conditionalFormats: sourceConditional, validations: sourceValidations };
           }
         }
+        const cutFileCopy = movedRange && moveConditionalFormatPlan
+          ? cutConditionalFormatFileCopy({ source: crossSheetSource, sheet, movedRange, row, col })
+          : undefined;
         setActiveCell({ row, col });
         const moved = pasteGridIntoCells(
           row,
@@ -584,6 +588,7 @@ export function useSpreadsheetClipboardPaste({
             selectPasted: true,
             ...(moveValidationPlan ? { validationPlan: moveValidationPlan } : {}),
             ...(moveConditionalFormatPlan ? { conditionalFormatPlan: moveConditionalFormatPlan } : {}),
+            ...(cutFileCopy ? { conditionalFormatFileCopy: cutFileCopy } : {}),
             ...(isMove && movedRange
               ? {
                   movedFrom: {

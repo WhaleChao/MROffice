@@ -85,5 +85,27 @@ export async function pdfNativeWrittenPageReadsBack(
   }
 }
 
+
+
+
+
+
+
+
+
+
+export function pdfNativeRecordDrawsShowsAgain(record: unknown): boolean {
+  const pieces = (record as { replacementPieces?: unknown } | null | undefined)?.replacementPieces;
+  if (!Array.isArray(pieces)) return false;
+  return pieces.some((piece) => {
+    const literal = (piece as { literal?: unknown } | null)?.literal;
+    if (!literal || typeof (literal as { length?: unknown }).length !== "number") return false;
+    // (What opens such passes, as that writer spells it -- the planner's own
+    // module is not loaded for a question the bytes answer.)
+    const text = Array.from(literal as ArrayLike<number>, (byte) => String.fromCharCode(byte & 0xff)).join("");
+    return /^\n\[[-+.\d]+\] TJ \/Span <<\/ActualText <FEFF>>> BDC /u.test(text);
+  });
+}
+
 /** (The name a lean's read-back asks it by.) */
 export const pdfNativeLeanReadsBack = pdfNativeWrittenPageReadsBack;

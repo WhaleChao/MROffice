@@ -101,6 +101,9 @@ export interface OfficeTextRunInput {
   readonly lineLanguage?: PowerPointLineLanguage | null;
 }
 
+/** A measurer's answer for a character no face of the stack has (`measure.ts`). */
+export const NO_FACE_COVERS = "no face covers the character";
+
 export interface OfficeMarkerInput {
   /** The marker's characters (a bullet, "1.", "(iv)"). */
   readonly text: string;
@@ -110,6 +113,15 @@ export interface OfficeMarkerInput {
   /** The bullet's own symbol-font character (`a:buFont` + `a:buChar`), which
    * `text` may stand in for: its width is the symbol glyph's. */
   readonly symbol?: { readonly family: string; readonly char: string };
+  /**
+   * A bullet drawn in the face PowerPoint for Windows falls back to when its
+   * own face lacks it (`powerPointBulletFace`): its advance in that face (em
+   * of `font.sizePt`), where recorded, else `text` is measured in `font`; and
+   * the bullet's own (embedded) face, whose characters only the page can
+   * read, to measure it in first (`ownStack`): it lays the bullet out where it
+   * has the character, the fallback's advance where it has not.
+   */
+  readonly fallback?: { readonly advanceEm?: number; readonly ownStack?: string };
   /** Where the marker stands on the first line, pt from the text area's left (marL + indent). */
   readonly leftPt: number;
   /** The marker's box: the words start past it, or past the marker when it is wider. */
@@ -825,14 +837,21 @@ function layoutBody(input: OfficeTextBodyInput, measurer: OfficeTextMeasurer): O
       // Wingdings arrows, 13.5 pt over a 7.2 pt hang, move the words past).
       else if (symbolEm !== undefined) markerWidth = roundOfficeAdvance(symbolEm * marker.font.sizePt);
       else {
-        const answer = measurer.graphemes(marker.text, marker.font);
+        const fallback = marker.fallback;
+        const own = fallback?.ownStack !== undefined ? measurer.graphemes(marker.text, { ...marker.font, stack: fallback.ownStack }) : undefined;
+        const answer = own?.status === "ok" || own?.status === "pending"
+          ? own
+          : fallback?.advanceEm !== undefined && (own === undefined || own.reason === NO_FACE_COVERS)
+            ? { status: "ok" as const, value: [{ text: marker.text, advance: fallback.advanceEm * marker.font.sizePt }] }
+            : measurer.graphemes(marker.text, marker.font);
         if (answer.status === "pending") pending = true;
         else if (answer.status === "unsupported") {
           // A hanging bullet in a face the page does not serve and no record
           // has: not 0, which would start the words at marL however wide the
           // bullet is, but an en dash of the text's own face, a bullet's
           // usual width, or else the hang itself.
-          if (!marker.hanging) throw new UnsupportedText(answer.reason);
+          // Said apart from the words' reasons (`window.__mraiSlidesEngine`).
+          if (!marker.hanging) throw new UnsupportedText(`marker: ${answer.reason}`);
           const textFont = paragraph.runs.find((run) => run.text.length > 0)?.font ?? paragraph.endFont;
           const dash = measurer.graphemes("\u2013", { ...textFont, sizePt: marker.font.sizePt, kerning: false });
           if (dash.status === "pending") pending = true;

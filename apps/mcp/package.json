@@ -1,9 +1,9 @@
 {
   "name": "mroffice-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "mcpName": "ai.mroffice/office",
   "type": "module",
-  "description": "MR Office's document, spreadsheet and PDF editors inside AI conversations: an MCP server whose tools create, open, read, picture and export files, with the real editor shown inline where the host renders MCP Apps.",
+  "description": "MR Office's document, spreadsheet and PDF editors for AI apps: an MCP server whose tools create, open, read, picture and export files, with the real editor shown inline where the host renders MCP Apps -- or, with the MR Office desktop app open, the app's window as the AI's live screen for your own files.",
   "keywords": [
     "mcp",
     "mcp-server",
@@ -15,7 +15,8 @@
     "markdown",
     "pdf",
     "docx",
-    "mroffice"
+    "mroffice",
+    "desktop"
   ],
   "homepage": "https://mroffice.ai/developers/mcp",
   "repository": {
@@ -37,6 +38,7 @@
     "tsconfig.json",
     "tsconfig.build.json",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {

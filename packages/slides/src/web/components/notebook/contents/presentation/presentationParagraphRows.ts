@@ -16,7 +16,7 @@
 import type { CSSProperties } from "react";
 import { CSS_PX_PER_POINT } from "@mrnote/core/web/lib/presentation/text-units.ts";
 import type { NativeListIndent, NativeParagraphMetrics } from "@mrnote/core/web/lib/native-drawing-geometry.ts";
-import { ensureOfficeFontFaces, officeFontMetricMatchesWidths, officeFontSubstitution } from "@mrnote/core/web/lib/office-fonts/substitutes.ts";
+import { ensureOfficeFontFaces, ensureOfficeScaledScriptFamily, officeFontMetricMatchesWidths, officeFontSubstitution } from "@mrnote/core/web/lib/office-fonts/substitutes.ts";
 import symbolShapeCoverage from "@mrnote/core/web/lib/office-fonts/symbol-shapes/coverage.json";
 import {
   type NativeBulletMarker,
@@ -32,6 +32,10 @@ import {
 import { normalizeRuns, type TextRun } from "@mrnote/core/web/lib/presentation-point-runs.ts";
 import type { SlideParagraphWithRuns } from "@mrnote/core/web/lib/presentation-text-buttons.ts";
 import type { PresentationFontAliases } from "@mrnote/core/web/lib/presentation-font-faces.ts";
+import { presentationFontFamilyWithAssets } from "@mrnote/core/web/lib/presentation-font-face-reads.ts";
+import { powerPointBulletFace } from "@mrnote/core/web/lib/office-fonts/powerpoint-script-fallbacks.ts";
+import { declaredFaces } from "@mrnote/core/web/lib/text-engine/face-index.ts";
+import { faceMetrics } from "@mrnote/core/web/lib/text-engine/face-metrics.ts";
 import {
   IMPORTED_PPTX_NORMAL_LINE_HEIGHT,
   AUTOFIT_EMU_PER_PX,
@@ -114,6 +118,42 @@ function markerSlotCss(indent: number, smartArt = false): CSSProperties {
     width: Math.abs(indent) / AUTOFIT_EMU_PER_PX,
     minWidth: "max-content",
   } as CSSProperties;
+}
+
+
+
+
+
+
+
+
+function embeddedPanoseSerifStyle(aliasStack: string): number | undefined {
+  const family = aliasStack.split(",")[0]?.trim().replace(/^["']|["']$/g, "").trim().toLowerCase();
+  if (!family) return undefined;
+  for (const face of declaredFaces(family)) {
+    if (!face.url || face.style !== "normal" || face.weightMin > 400 || face.weightMax < 400) continue;
+    const metrics = faceMetrics(face.url);
+    return typeof metrics === "object" && metrics.os2 ? metrics.os2.panose[1] : undefined;
+  }
+  return undefined;
+}
+
+/** What the families {@link presentationBulletDrawnFamily} names start with: not an Office family. */
+export const PRESENTATION_BULLET_DRAWN_PREFIX = "MRAI Bullet ";
+
+/**
+ * The family drawing `char`, a bullet fallen back to `face` (Cambria Math,
+ * Segoe UI Symbol), in `drawnBy`'s served face at Windows' ink box, declared
+ * on first use (`ensureOfficeScaledScriptFamily`: that face's slice for the
+ * character, the character's range alone, its size-adjust) unless the reader
+ * has `face` itself.
+ */
+function presentationBulletDrawnFamily(face: string, char: string, drawnBy: { readonly family: string; readonly sizeAdjustPercent: number }): string {
+  const code = char.codePointAt(0) as number;
+  const hex = code.toString(16).toUpperCase().padStart(4, "0");
+  const family = `${PRESENTATION_BULLET_DRAWN_PREFIX}${face} ${hex}`;
+  ensureOfficeScaledScriptFamily(family, drawnBy.family, code, `U+${hex}`, `${drawnBy.sizeAdjustPercent}%`, undefined, face);
+  return family;
 }
 
 export function symbolShapeFaceDraws(typeface: string, text: string): boolean | undefined {
@@ -207,6 +247,11 @@ export interface PresentationParagraphRowPlan {
   readonly markerText?: string;
   /** The marker's own symbol-font character (`a:buFont` + `a:buChar`), which `markerText` may stand in for. */
   readonly markerSymbol?: { readonly family: string; readonly char: string };
+  /**
+   * The bullet drawn in the face PowerPoint for Windows falls back to (`powerPointBulletFace`): its advance there
+   * (em of the marker's size), where recorded, and the bullet's own embedded face to try first (`ownStack`).
+   */
+  readonly markerFallback?: { readonly advanceEm?: number; readonly ownStack?: string };
   readonly markerPicture?: string;
   /** The marker's own style (face, size, colour; its line box left out). */
   readonly markerCss: CSSProperties;
@@ -332,6 +377,40 @@ export function planPresentationParagraphRows({
     // globals.css), not from the browser's own last resort.
     if (markerCss.fontFamily !== undefined) {
       markerCss.fontFamily = `${markerCss.fontFamily}, "MRAI Office Bullet"`;
+    }
+    // A bullet character its face lacks, or of a face Windows lacks, is drawn
+    // in the face PowerPoint for Windows draws it in, and laid out at that
+    // face's advance (`powerPointBulletFace`: Times New Roman behind a serif
+    // face, Arial behind a sans one, then Cambria Math, then Segoe UI Symbol;
+    
+    // embedded Bree Serif, which has none, is Times New Roman's 7.25 pt dot in
+    // PowerPoint's PDF; the stack after the face drew it in the script
+    // fallback's symbols face, twice that, ahead of "MRAI Office Bullet".
+    let markerFallback: PresentationParagraphRowPlan["markerFallback"];
+    const bulletChar = nativeMarker?.char !== undefined && !nativeMarker.picture && nativeGlyph ? nativeGlyph.text : undefined;
+    const bulletTypeface = nativeMarker?.typeface ?? firstRun?.style?.fontFamily;
+    if (bulletChar !== undefined && typeof bulletTypeface === "string" && bulletTypeface.trim()) {
+      const ownName = bulletTypeface.trim().replace(/^["']|["']$/g, "").trim();
+      const alias = Object.hasOwn(fontAliases, ownName.toLowerCase()) ? fontAliases[ownName.toLowerCase()] : undefined;
+      const panoseSerifStyle = alias !== undefined ? embeddedPanoseSerifStyle(alias) : undefined;
+      const fallback = powerPointBulletFace(ownName, bulletChar, alias !== undefined
+        ? { embedded: true, ...(panoseSerifStyle !== undefined ? { panoseSerifStyle } : {}) }
+        : {});
+      const faceStack = fallback ? presentationFontFamilyWithAssets(fallback.face, fontAliases) : undefined;
+      // Where the reader lacks the fallback face, its stand-in at Windows'
+      // ink box (TRIAGE 99): a family of its own, declared only once the page
+      // draws this character and only on a machine without the face, named
+      // ahead of the face -- rendering only, never in the page's data.
+      const drawn = fallback?.drawnBy ? presentationBulletDrawnFamily(fallback.face, bulletChar, fallback.drawnBy) : undefined;
+      const fallbackStack = faceStack && drawn ? `"${drawn}", ${faceStack}` : faceStack;
+      if (fallback && fallbackStack) {
+        const ownStack = fallback.ownFirst && alias ? (alias.startsWith('"') ? alias : `"${alias}"`) : undefined;
+        markerCss.fontFamily = ownStack ? `${ownStack}, ${fallbackStack}` : fallbackStack;
+        markerFallback = {
+          ...(fallback.advanceEm !== undefined ? { advanceEm: fallback.advanceEm } : {}),
+          ...(ownStack ? { ownStack } : {}),
+        };
+      }
     }
     if (nativeMarker?.color !== undefined && colorOverride === undefined) {
       markerCss.color = nativeMarker.color;
@@ -492,6 +571,7 @@ export function planPresentationParagraphRows({
         ? { markerSymbol: { family: nativeMarker.typeface, char: nativeMarker.char } }
         : {}),
       ...(nativeMarker?.picture ? { markerPicture: nativeMarker.picture } : {}),
+      ...(markerText !== undefined && markerFallback ? { markerFallback } : {}),
       markerCss,
       markerBoxCss,
       rowTextStyle,

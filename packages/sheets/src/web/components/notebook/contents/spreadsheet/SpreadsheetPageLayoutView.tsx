@@ -141,6 +141,10 @@ export interface SpreadsheetPageLayoutViewProps {
    * carried tail counts it as used unless its source column is wider than
    * the page (lookwin p86b-lw; R274-X13). */
   printedStyledColumns?: number;
+  /** Save as PDF, how far the sheet runs past a column wider than the page
+   * (printedWideTailColumnEdge): past the column's next one, its tail is not
+   * run on from the cut (lookwin p262b-lw; R466-X13). */
+  printedWideTailEdge?: number;
   /** Printed, the Center Across Selection run holding text that covers a
    * cell, as columns: the run prints only its perimeter, no line between its
    * cells (Windows Excel, lookwin p96-lw; the API's across_at). */
@@ -1360,6 +1364,7 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
   cellHoldsValue,
   printedUsedColumns,
   printedStyledColumns,
+  printedWideTailEdge,
   printedCenterAcrossRunAt,
   pagePrints,
   defaultRowHeight,
@@ -1630,7 +1635,23 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
   // A host without ResizeObserver never measures its viewport (test documents
   // in particular), so it keeps the full budgeted plan of every page, exactly
   // as before the viewport plan served every mode.
-  const printBatch = printMode ? resolveSpreadsheetPrintBatchPlan(geometry, printPageStart) : null;
+  // A batch prints within a budget of characters too (PRINT_BATCH_TEXT): a
+  // cell counts its displayed text, at most what its box can show (a
+  // character of 40 square points at the print's scale: a 4 pt glyph on a
+  // 10 pt line; the boxes' sizes are printed sizes).
+  const printBatch = printMode ? resolveSpreadsheetPrintBatchPlan(geometry, printPageStart, (page) => {
+    const glyphArea = 40 * Math.max(0.05, geometry.contentScale) ** 2;
+    let chars = 0;
+    for (const visual of page.rows) {
+      const row = sourceRowAt(visual);
+      const height = geometry.rowSizes[visual] ?? geometry.rowHeight;
+      for (const col of page.cols) {
+        const display = getCellDisplay(row, col);
+        if (display) chars += Math.min(display.length, Math.max(1, Math.ceil(height * (geometry.colSizes[col] ?? geometry.colWidth) / glyphArea)));
+      }
+    }
+    return chars;
+  }) : null;
   const renderPlan = printBatch ?? (typeof ResizeObserver === "undefined" || viewportUnmeasurable
     ? resolveSpreadsheetPageLayoutRenderPlan(geometry)
     : resolvePageLayoutViewportPlan(geometry, {
@@ -2577,6 +2598,11 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                 // (the API's draw_center_across_from_left; R453-X83's title
                 // on its third page, 430.9 pt left of the page's columns).
                 const acrossRun = spill.across === true;
+                // Save as PDF runs a wide column's text on from its cut only
+                // while the sheet holds no column past it (a value, or a
+                // row's spans two columns on: lookwin p262b-lw, R466-X13).
+                if (!acrossRun && printRoute !== "print" && (geometry.colSizes[source] ?? geometry.colWidth) > geometry.dataAreaWidth
+                  && (printedWideTailEdge ?? 0) > source + 1) return [];
                 const span = (from: number, to: number) => Array.from({ length: Math.max(0, to - from) }, (_, index) => from + index);
                 // A column wider than the page printed cut at the page's
                 // width: its text runs on from the cut (lookwin p61-lw).

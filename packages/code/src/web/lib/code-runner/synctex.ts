@@ -85,7 +85,7 @@ export interface SynctexInverseResult {
 /** Inflate gzip bytes with the browser's own DecompressionStream. */
 export async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
   if (typeof DecompressionStream === "undefined") {
-    throw new Error("This browser cannot read the SyncTeX file.");
+    throw new Error("The SyncTeX file can't be read here.");
   }
   const input = new Uint8Array(bytes.byteLength);
   input.set(bytes);

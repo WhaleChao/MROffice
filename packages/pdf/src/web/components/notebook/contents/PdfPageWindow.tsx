@@ -229,6 +229,8 @@ import { importPortableSourceTextBoxes } from "../../../lib/pdf/portable-source-
 import { readPortableManagedObjects } from "../../../lib/pdf/portable-managed-objects";
 import { isPdfNativeBytesUnavailable, reholdPdfNativeCandidate } from "../../../lib/pdf/native-candidate-rehold";
 import { toast, toastsShown } from "@mrnote/core/web/hooks/use-toast.ts";
+import { fillEmbedFormFields, readEmbedForm, signEmbedFormField } from "@mrnote/core/web/lib/embed/form-session.ts";
+import { useEmbedAccess } from "@mrnote/core/web/lib/embed/use-embed-access.ts";
 import { pdfFormulaBoxRect, pdfFormulaPreviewWidthPx } from "@mrnote/core/web/lib/pdf/formula-render.ts";
 import { useChangedState } from "@mrnote/core/web/hooks/useChangedState.ts";
 import { ToastAction } from "@mrnote/core/web/components/ui/toast.tsx";
@@ -326,7 +328,7 @@ import { readPdfNativeTextRowStarts } from "../../../lib/pdf/native-text-row-sta
 import { isMraiNativeListTextMissingGlyphError, isMraiNativeListTextMissingGlyphRefusal, pdfNativeListTextSourceRunSpan } from "../../../lib/pdf/engine/native/list-text-model";
 import { MRAI_NATIVE_BOLD_FACE_KEPT_REFUSAL, MRAI_NATIVE_LIST_TEXT_MISSING_GLYPH_MESSAGE, MRAI_NATIVE_PARAGRAPH_READ_BACK_REFUSAL } from "../../../lib/pdf/engine/native/vocabulary";
 import { pdfNativeFormatWithLeanReadByReader, pdfNativeFormatWithWordsReadByReader, pdfNativeLeanReadsBack,
-  pdfNativeWrittenPageReadsBack } from "../../../lib/pdf/lean-read-back";
+  pdfNativeRecordDrawsShowsAgain, pdfNativeWrittenPageReadsBack } from "../../../lib/pdf/lean-read-back";
 import { isPdfNativeRestoreEvidence, mraiNativeRestoreOriginIsUsable } from "../../../lib/pdf/engine/native/byte-restore-model";
 import { MRAI_NATIVE_TEXT_MOVE_KIND, MRAI_NATIVE_TEXT_MOVE_REFUSALS } from "../../../lib/pdf/engine/native/vocabulary";
 import {
@@ -430,6 +432,7 @@ import { pdfNativeEmbeddedFontKeyForInstalledFace } from "../../../lib/pdf/nativ
 import { listPdfPageFonts, loadPdfPageFontProgram } from "../../../lib/pdf/page-fonts-browser";
 import {
   PDF_TRANSIENT_COMMIT_REFUSALS,
+  PDF_FIRST_OPEN_WRITE_REFUSALS,
   PDF_TRANSIENT_WRITE_REFUSALS,
 } from "./pdf/window/transientWriteRefusals";
 import { PdfPageFontsProvider } from "./pdf/window/usePdfPageFonts";
@@ -738,6 +741,7 @@ import {
   type PdfNativeListTextEditDialogProps,
   type PdfNativeListTextDraftState,
   type PdfNativeRowFormat,
+  type PdfNativeDetachedFormatAsk,
   type PdfNativeRowFormatFields,
   type PdfNativeRowFormatSegment,
   type PdfNativeListTextEditorController,
@@ -1309,6 +1313,7 @@ import {
   readPdfPatchbackRepairSourceIdentity,
   reconstructNativeTextMixedWriterRepair,
   reconstructNativeTextRepeatedSpaceRepair,
+  pdfPutBackWroteWhatWasSavedSince,
   reconstructRefusedNativeWriteRestore,
   readRefusedNativeTextDraft,
   type PdfRefusedNativeWriteRestore,
@@ -2958,10 +2963,33 @@ export default function PdfPageWindow({
   // (its receipt is the failed marker), as the window last saw the server:
   // how often it looked, and how often it asked for the write again.
   const nativeUnwrittenOnServerRef = useRef<{ id: string; looks: number; asks: number } | null>(null);
+  
+
+
+
+
+
+
+
+
+  const nativeRefusedUnwrittenAskRef = useRef<string | null>(null);
+  const unwrittenAskKey = (contentVersion: unknown, marker: { reason?: unknown; repair_auth?: unknown } | null) => {
+    const auth = marker?.repair_auth as { previous_content_sha256?: unknown; current_content_sha256?: unknown } | undefined;
+    return `${String(contentVersion)}:${String(marker?.reason)}:${String(auth?.previous_content_sha256)}:${String(auth?.current_content_sha256)}`;
+  };
+  const noteRefusedUnwrittenAskRef = useRef<(key: string) => void>(() => undefined);
   /** A Save is running (the reader's, or the window's own at the limit). */
   const nativeSaveAskedRef = useRef(false);
   /** When a Save last said why it left the page unsaved. */
   const saveFailureToldAtRef = useRef(0);
+  noteRefusedUnwrittenAskRef.current = (key) => {
+    if (nativeRefusedUnwrittenAskRef.current === key) return;
+    nativeRefusedUnwrittenAskRef.current = key;
+    markPdfTextLatency("working.unwritten-ask-refused", {});
+    saveFailureToldAtRef.current = Date.now();
+    toast({ title: t("pdf.pageWindow.saveNotWrittenOnServer"), variant: "destructive",
+      duration: Number.POSITIVE_INFINITY });
+  };
   const [nativeAuthorRecoveredDisplay, setNativeAuthorRecoveredDisplay] = useState<PdfWorkingDisplaySource | null>(null);
   const nativeAuthorRecoveredBytesRef = useRef<Uint8Array | null>(null);
   type WorkingDocument = Awaited<ReturnType<typeof createPdfWorkingDocument>>;
@@ -9946,6 +9974,14 @@ export default function PdfPageWindow({
             lists.previousRows, lists.rows, lists.companions, lists.previousCompanions,
             headStructure ?? readNativeRowHeadStructure(), head ?? undefined);
         } catch (error) {
+          // The head holds these rows as the edit leaves them (the plan has
+          // nothing to write: 422 rows_unchanged) -- the page took them
+          // without this edit's record: a put-back wrote the page as it
+          // stood, its room had folded them in. The edit's work is done; it
+          // goes without a word, as a picture another window moved the same way.
+          if (isApiRequestError(error) && error.status === 422 && error.details?.reason === "rows_unchanged") {
+            throw new PdfWorkingUnplannableError("The saved version already holds these rows as the edit leaves them.", true);
+          }
           if (index + 1 >= plans.length || !isApiRequestError(error) || error.status !== 422) throw error;
         }
       }
@@ -10611,6 +10647,26 @@ export default function PdfPageWindow({
           : await planOnce(planOptions);
       }
     }
+    // A weight written on a Type3 letter by its show drawn again after it
+    // (the planner's type3ShowPasses). The reader lists those passes as items
+    // of their own, which the editor's boxes read back into the show; the
+    // planner writes them only where it forecasts that reading, and the
+    // reader itself now reads the page it wrote. Read otherwise, the write is
+    // let go and said as one that reads otherwise; not read, the planner's
+    // forecast answers.
+    if (!leanReadHere && writtenPage !== null && planned.status === "planned" && planned.candidateBytes &&
+      pdfNativeRecordDrawsShowsAgain(planned.record)) {
+      const readStartedAt = performance.now();
+      const same = await pdfNativeWrittenPageReadsBack((bytes) => readPdfPageBoxTexts(bytes, writtenPage),
+        input.sourceBytes, planned.candidateBytes);
+      markPdfTextLatency("type3-weight.read-back", { ms: Math.round(performance.now() - readStartedAt),
+        same: same === null ? "unread" : same, label: input.recipe.label ?? "" });
+      if (same === false) {
+        planned.candidateBytes.fill(0);
+        planned = { status: "refused", result: { status: "refused", transactionId: input.id, reason: "unsupported-document",
+          detail: MRAI_NATIVE_PARAGRAPH_READ_BACK_REFUSAL } } as unknown as PdfNativeEnginePlan;
+      }
+    }
     // A bold taken off a box the page draws in a bold face, written by
     // setting its words again in the family's regular face (a block: its
     // glyphs stand elsewhere than they stood). The engine held every word to
@@ -11182,6 +11238,11 @@ export default function PdfPageWindow({
             });
             if (!pending) return null;
             if (!pending.incompleteMarker) return null;
+            // Refused for the page as it stands: said once, not sent again
+            // (nativeRefusedUnwrittenAskRef; the look that follows this
+            // save reads the same memory).
+            const askKey = unwrittenAskKey(pending.contentVersion, pending.incompleteMarker);
+            if (nativeRefusedUnwrittenAskRef.current === askKey) return null;
             const repairedPage = await notebookSDK
               .updatePage(boundPageId, {
                 content_json: pending.content,
@@ -11192,7 +11253,10 @@ export default function PdfPageWindow({
                   expected_incomplete_marker: pending.incompleteMarker,
                 },
               })
-              .catch(() => null);
+              .catch((error: unknown) => {
+                if ((error as { status?: unknown } | null)?.status === 409) noteRefusedUnwrittenAskRef.current(askKey);
+                return null;
+              });
             if (
               !repairedPage ||
               !authenticatePdfPatchbackRepairReceipt({
@@ -11760,10 +11824,72 @@ export default function PdfPageWindow({
     : nativeFormWriteNeedsRefresh
       ? t("pdf.pageWindow.anotherWindowFinishedEditingPdf")
       : null;
-  const nativeFormWriteEnabled =
+  // An embedded session that fills in the PDF's form and changes nothing
+  // else (the token's fillForms): this account only reads the page, and each
+  // fill and signature goes through the session's own routes, which the
+  // server holds to field values (lib/embed/form-session).
+  const embedAccess = useEmbedAccess();
+  const embedFormFill =
+    embedAccess !== null && embedAccess.mediated && embedAccess.effectiveMode === "fillForms";
+  const nativeFormWriteEnabled = embedFormFill || (
     workspaceWritable &&
     !autosave.readOnly &&
-    nativeFormWriteBlockedReason === null;
+    nativeFormWriteBlockedReason === null);
+  const handleEmbedFormFieldChange = useCallback(
+    async (mutation: NativePdfFormFieldMutation): Promise<boolean> => {
+      const current = clonePdfFormFields(formFieldsRef.current);
+      const next = upsertPdfFormFields(current, mutation.fields);
+      if (pdfFormFieldsEqual(current, next)) return true;
+      const changed = next.filter((field) => {
+        const held = current.find((item) => item.id === field.id);
+        return !held || !pdfFormFieldsEqual([held], [field]);
+      });
+      const written = await fillEmbedFormFields(
+        changed.map((field) => ({ name: field.id, value: field.value })),
+      );
+      if (!written.ok) {
+        // The server's own words: a read-only field, another role's field,
+        // a value the field does not take.
+        toast({ variant: "destructive", description: written.message || t("pages.saveFailed") });
+        return false;
+      }
+      formFieldsRef.current = next;
+      durableFormFieldsRef.current = clonePdfFormFields(next);
+      setFormFields(next);
+      return true;
+    },
+    [t],
+  );
+  const upsertEmbedFormSignature = useCallback(
+    async (signature: ManagedNativeSignatureAnnotation) => {
+      // The signature goes on the signature field it was composed for, and
+      // nowhere else on the page.
+      const refuse = (description: string): never => {
+        toast({ variant: "destructive", description });
+        throw new Error(description);
+      };
+      const form = await readEmbedForm().catch(() => null);
+      const field = form?.fields.find(
+        (candidate) =>
+          candidate.kind === "signature" &&
+          candidate.page === signature.page &&
+          Array.isArray(candidate.rect) &&
+          Math.abs(candidate.rect[0] * 100 - signature.x) < 1 &&
+          Math.abs(candidate.rect[1] * 100 - signature.y) < 1,
+      );
+      if (!field) return refuse(t("pdf.embedForm.signatureFieldsOnly"));
+      const written = await signEmbedFormField(
+        field.name,
+        signature.nativeAppearanceImage,
+        signature.kind,
+      );
+      if (!written.ok) return refuse(written.message || t("pages.saveFailed"));
+      // The reader keeps the placed signature on the field; the page's own
+      // signature records are the file's (written by the server), not this
+      // session's to rewrite.
+    },
+    [t],
+  );
   useLayoutEffect(() => {
     if (!nativeFormWriteOwnerScope) return;
     return () => {
@@ -16324,9 +16450,12 @@ export default function PdfPageWindow({
         sourceSha256: outputSha256, text: refusedDraft.text,
         ...(refusedDraft.lineText !== undefined ? { lineText: refusedDraft.lineText } : {}),
       }));
-      toast({ title: t(draftKept
-        ? "pdf.pageWindow.restoredLastVerifiedVersionDraftKept"
-        : "pdf.pageWindow.restoredLastVerifiedVersion") });
+      // (Said as what it was: a record whose write the server never made,
+      // put back with what was saved since, did not "fail the PDF's check".)
+      const savedSince = pdfPutBackWroteWhatWasSavedSince(restored);
+      toast({ title: t(savedSince
+        ? draftKept ? "pdf.pageWindow.putBackWithWhatWasSavedSinceDraftKept" : "pdf.pageWindow.putBackWithWhatWasSavedSince"
+        : draftKept ? "pdf.pageWindow.restoredLastVerifiedVersionDraftKept" : "pdf.pageWindow.restoredLastVerifiedVersion") });
     } catch {
       status = "failed";
     } finally {
@@ -24970,8 +25099,28 @@ export default function PdfPageWindow({
       // the write is asked for again below.
       const unwritten: { marker: ReturnType<typeof readPdfPatchbackIncompleteMarker>; page: PageItem | null;
         before: PageItem | null } = { marker: null, page: null, before: null };
+      // The record is the page's and its file took it, and the file was
+      // written again since: a save stored while this record's write was
+      // lost (a note folded from the page's room) had the server make that
+      // write first and then its own. The page's receipt is the later
+      // write's, so its hash is not this record's output -- and compared
+      // with that hash alone the record read as never confirmed: 保存结果仍待
+      // 核验 for good, across reloads, with everything in the file. It is
+      // confirmed by where its output stands: a version of this page's
+      // file on the published chain. The hold is retired on the page the
+      // server keeps, and the queue's copy of the edit goes with it (sent
+      // again, it would be made twice).
+      const writtenBeneath = { onServer: false };
+      const recordOutputIsPublished = async () => {
+        const listed = await apiGet<{ items: Array<{ version_kind?: string; metadata_json?: Record<string, unknown> | null }> }>(
+          `/api/v1/resources/${recovery.source.resourceId}/versions`).catch(() => null);
+        return Boolean(listed?.items?.some(version => version.version_kind === "export" &&
+          version.metadata_json?.output_sha256 === recovery.outputSha256 &&
+          version.metadata_json?.editable_page_id === pageId));
+      };
       const prepare: Parameters<typeof handle.reconcile>[0] = async (server, claimed, source) => {
         unwritten.marker = null; unwritten.page = null; unwritten.before = null; superseded.onServer = false;
+        writtenBeneath.onServer = false;
         if (!nativeReceiptMutationLeaseIsCurrent(lease) || !pageDocumentJsonEquals(claimed,input)) return null;
         if (readPdfNativeServerRefusal({ savedPage: server, collection: recovery.journal })) {
           refusal.onServer = true;
@@ -25041,6 +25190,14 @@ export default function PdfPageWindow({
             return published;
           }};
         }
+        const written = readPdfPatchbackReceiptSnapshot(server);
+        if (pdfNativeTransactionCollectionMatches(recovery.journal,server.content_json) &&
+          written?.status === "succeeded" && written.resourceId === recovery.source.resourceId &&
+          typeof written.outputSha256 === "string" && written.outputSha256 !== recovery.outputSha256 &&
+          await recordOutputIsPublished()) {
+          writtenBeneath.onServer = true;
+          return {status:"refused"};
+        }
         if (pdfNativeTransactionCollectionMatches(recovery.journal,server.content_json)) {
           unwritten.marker = readPdfPatchbackIncompleteMarker(server);
           unwritten.page = unwritten.marker ? server : null;
@@ -25092,7 +25249,11 @@ export default function PdfPageWindow({
         nativeReceiptMutationLeaseIsCurrent(lease)) {
         const seen = nativeUnwrittenOnServerRef.current?.id === input.id
           ? nativeUnwrittenOnServerRef.current : { id: input.id, looks: 0, asks: 0 };
-        const ask = nativeSaveAskedRef.current || (seen.looks >= 1 && seen.asks < PDF_UNWRITTEN_SAVE_OWN_ASKS);
+        // An ask the server refused for this very page state is not sent
+        // again (nativeRefusedUnwrittenAskRef).
+        const askKey = unwrittenAskKey(unwritten.page.content_version, unwritten.marker);
+        const ask = nativeRefusedUnwrittenAskRef.current !== askKey &&
+          (nativeSaveAskedRef.current || (seen.looks >= 1 && seen.asks < PDF_UNWRITTEN_SAVE_OWN_ASKS));
         nativeUnwrittenOnServerRef.current = { id: input.id, looks: seen.looks + 1, asks: seen.asks + (ask ? 1 : 0) };
         if (ask) {
           const landed = unwritten.page, marker = unwritten.marker, before = unwritten.before;
@@ -25114,10 +25275,13 @@ export default function PdfPageWindow({
             else previous.pdfNativeTransactions = Array.isArray(stored) ? stored.slice(0, -1) : recovery.previousJournal;
           }
           markPdfTextLatency("working.unwritten-ask", { asks: seen.asks + 1, reader: nativeSaveAskedRef.current });
-          await notebookSDK.updatePage(pageId, { content_json: landed.content_json ?? {},
+          const refusedAsk = await notebookSDK.updatePage(pageId, { content_json: landed.content_json ?? {},
             base_content_version: landed.content_version,
             editable_page_patchback_repair: { adapter: "pdf", previous_content_json: previous, expected_incomplete_marker: marker },
-          }).catch(() => null);
+          }).then(() => false, (error: unknown) => (error as { status?: unknown } | null)?.status === 409);
+          // A refusal the server left on the page instead (a record no one
+          // holds any more) is read below and offers the put-back.
+          if (refusedAsk) noteRefusedUnwrittenAskRef.current(askKey);
           // Written now (by this, or by the server's own run): the page is
           // read again and the record confirmed as any late answer is.
           result = await handle.reconcile(prepare);
@@ -25130,7 +25294,12 @@ export default function PdfPageWindow({
       } else if (!unwritten.marker && result.status === "retryable" && nativeUnwrittenOnServerRef.current?.id === input.id) {
         nativeUnwrittenOnServerRef.current = null;
       }
-      if (result.status === "accepted" && (refusal.onServer || superseded.onServer)) {
+      if (result.status === "accepted" && writtenBeneath.onServer) {
+        const queue = nativeWorkingDocumentRef.current;
+        if (queue?.getSnapshot().pendingOperationIds[0] === input.id) queue.letGoLeading([input.id]);
+        markPdfTextLatency("working.written-beneath", { edits: 1 });
+      }
+      if (result.status === "accepted" && (refusal.onServer || superseded.onServer || writtenBeneath.onServer)) {
         pdfNativeTransactionsRef.current = readPdfNativeTransactionCollection(result.savedPage.content_json);
         nativeListPageSnapshotRef.current = result.savedPage;
         nativeTextAuthorAttemptRef.current = null;
@@ -35254,9 +35423,18 @@ export default function PdfPageWindow({
           // The commands rebinding after a save that landed just before this
           // write is waited for too: refused at the first look, a highlight
           
+          // The page still opening for the first time is waited for too: the
+          // write goes on once its source is shown. Refused at once, a blank
+          // page inserted 3 s before the page's source was first shown was
+          
+          // source shown at 88 s, the insert pressed at 85 s). Not a page
+          // whose last receipt failed (it loads nothing more); the minute's
+          // deadline bounds a page that never opens.
+          const opening = !receiptFailed && !sourceShown && PDF_FIRST_OPEN_WRITE_REFUSALS.has(decision?.reasonKey ?? "");
           const waits = inFlight || Boolean(decision && !decision.enabled &&
             (decision.reasonKey === "pdf.capability.mutationInFlight" ||
               (sourceShown && PDF_TRANSIENT_WRITE_REFUSALS.has(decision.reasonKey ?? "")) ||
+              opening ||
               decision.reasonKey === "pdf.capability.registryStale"));
           if (!waits || Date.now() >= deadline || !mountedRef.current) break;
           waited = true;
@@ -36614,6 +36792,9 @@ export default function PdfPageWindow({
    * takes the edit back), null when it cannot be settled now. */
   const settleFailedNativeWorkingQueueRef = useRef<(document: WorkingDocument) => Promise<"landed" | "cleared" | null>>(
     async () => null);
+  /** The page states (`<queued edit>:<page version>`) this window put back
+   * for its queue (settleFailedNativeWorkingQueueNow): once each. */
+  const nativeQueuePutBacksRef = useRef(new Set<string>());
   // One settling at a time per copy: an Undo pressed while the restore's own
   // settling is on its way waits for that one instead of reading again.
   const settlingNativeWorkingQueueRef = useRef(new WeakMap<object, Promise<"landed" | "cleared" | null>>());
@@ -36752,6 +36933,52 @@ export default function PdfPageWindow({
     const journal = readPdfNativeTransactionCollection(server.content_json);
     const landed = Array.isArray(journal) ? journal.find((entry) => entry && typeof entry === "object" &&
       !Array.isArray(entry) && (entry as { id?: unknown }).id === snapshot.pendingOperationIds[0]) : undefined;
+    // The queue's oldest edit is the page's last record, stored and in no
+    // file, and the page was saved on since: its receipt is that save's
+    // (source_identity_stale), which nothing confirms and no ask answers.
+    // A window that opens such a page idle puts it back by itself; this one
+    // holds a copy with a queue, so that never ran, and the retry compared
+    // the unwritten record with a written receipt for good -- 未保存 for as
+    // long as the window stayed open. Put back here the same way (the
+    // journal its file carries, everything else as the page stands), once
+    // per page state, and the queue stood on the version that leaves: the
+    // edit is made again there, its record having reached no file.
+    const head = snapshot.pendingOperationIds[0];
+    const putBackKey = `${head}:${String(server.content_version)}`;
+    if (landed && head && Array.isArray(journal) && journal.at(-1) === landed &&
+      readPdfNativeServerRefusal({ savedPage: server, collection: journal }) === "source-identity-stale" &&
+      !nativeQueuePutBacksRef.current.has(putBackKey)) {
+      // (Under a mutation lease of its own, as the look after a save holds
+      // one: the put-back adopts the version it leaves.)
+      const ownerLease = nativeReceiptJournal.beginMutation();
+      let restored: PageItem | null = null;
+      if (ownerLease) {
+        nativeQueuePutBacksRef.current.add(putBackKey);
+        bindNativeReceiptMutationLease(ownerLease);
+        let why: string | null = null;
+        try {
+          restored = await restoreNativeServerRefusalRef.current({ refusedPage: server, transactionId: head,
+            previousSource: snapshot.savedSource, ownerLease }).catch((error: unknown) => {
+            why = error instanceof Error ? error.message.slice(0, 120) : "unknown";
+            return null;
+          });
+        } finally {
+          releaseNativeReceiptMutationLease(ownerLease);
+          nativeReceiptJournal.endMutation(ownerLease);
+        }
+        if (process.env.NODE_ENV !== "production") {
+          console.debug("[pdf-working] put back for the queue " + JSON.stringify({ restored: Boolean(restored), why,
+            version: restored?.content_version ?? null, same: nativeWorkingDocumentRef.current === document }));
+        }
+      }
+      if (restored && nativeWorkingDocumentRef.current === document && mountedRef.current) {
+        markPdfTextLatency("working.put-back", { pending: snapshot.pendingOperationIds.length });
+        if (pdfPutBackWroteWhatWasSavedSince(restored)) toast({ title: t("pdf.pageWindow.putBackWithWhatWasSavedSince") });
+        // (Named as a version this queue did not make: the retry stands it there.)
+        document.namePeerVersion();
+        return null;
+      }
+    }
     if (landed && isMraiNativeBytesPublishRecord(landed)) {
       if (!reconcileLandedNativeWorkingChain(document, server)) {
         document.reconcile({ record: landed, page: server } as unknown as PdfWorkingSaveAcknowledgement);
@@ -37056,7 +37283,19 @@ export default function PdfPageWindow({
         if (queueLanded) {
           const store = createPdfWorkingRecoveryStore({ pageId, dataItemId });
           const current = store.read();
-          const advanced = current ? advancePdfWorkingRecovery(current, authority.source) : null;
+          // The page's journal as its file was written with it: the
+          // receipt is a written one and names the very file the queue
+          // comes back on.
+          const stands = autosave.page && autosave.page.id === pageId ? autosave.page : null;
+          const receipt = stands ? readPdfPatchbackReceiptSnapshot(stands) : null;
+          const journal = stands ? readPdfNativeTransactionCollection(stands.content_json) : null;
+          const writtenRecordIds = receipt?.status === "succeeded" &&
+            receipt.resourceVersionId === authority.source.resourceVersionId &&
+            receipt.outputSha256 === authority.source.sourceSha256 && Array.isArray(journal)
+            ? new Set(journal.flatMap(entry => entry && typeof entry === "object" && !Array.isArray(entry) &&
+              typeof (entry as { id?: unknown }).id === "string" ? [(entry as { id: string }).id] : []))
+            : null;
+          const advanced = current ? advancePdfWorkingRecovery(current, authority.source, writtenRecordIds) : null;
           if (advanced) {
             store.write(advanced);
             markPdfTextLatency("working.restore-advanced", { left: advanced.operations.length });
@@ -42157,8 +42396,14 @@ export default function PdfPageWindow({
     // (Nor the rows of a paragraph that opens as a block for its formats
     // alone: a hundred rows proved and written one by one where one write
     // sets the format on all of it.)
+    // (Nor the rows of a box bold by a Type3 show drawn again: a row of it
+    // without such a show proves as a run and the row with it does not, so
+    // its rows would take a colour or a rule one by one and leave that row
+    // as it was. Its formats are written where the text stands on all of it,
+    // or not written.)
     const rows = typed === undefined && !(sized && lineCount > 1) && !paragraphSetting &&
-      ownProof?.wordsFixed !== "glyphs-read-as-blanks" && !pdfNativeTextOpensAsBlockOnly(ownProof)
+      ownProof?.wordsFixed !== "glyphs-read-as-blanks" && ownProof?.wordsFixed !== "weight-drawn-again" &&
+      !pdfNativeTextOpensAsBlockOnly(ownProof)
       ? await applyNativeRowFormatRows(asked, target) : null;
     markPdfTextLatency("finish.row-format", { rows });
     
@@ -42278,7 +42523,12 @@ export default function PdfPageWindow({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [awaitNativeWorkingAuthorSession, ensureNativeWorkingDocument, handNativeWorkingStagedPage, t]);
   const detachNativeRowFormat = useCallback((format: PdfNativeRowFormat, typedText: string | undefined,
-    ghost: () => (() => void) | null): boolean => {
+    ghost: () => (() => void) | null,
+    /** `retypeOnly`: the reader typed and chose no format; `format` is only
+     * how the editor sets those words again (a line kept centred, or flush
+     * right). What is said below is then said of the words alone. */
+    asked?: PdfNativeDetachedFormatAsk): boolean => {
+    const retypeOnly = asked?.retypeOnly === true && typedText !== undefined;
     // Another line's write still being staged: this one is left now and
     
     // refused, the editor stayed open until that write was done).
@@ -42464,12 +42714,24 @@ export default function PdfPageWindow({
             variant: "destructive" });
           return;
         }
-        if (applied === null) toast({ description: nativeFormatNotAppliedNotice() });
+        
+        // again aligned refused, and the words went on their own, above.
+        // Written, nothing is said of a format -- none was asked; 「这次格式
+        // 未能应用到所选文字」 was said to a reader who had typed and pressed
+        
+        // either (stageDetachedTypedText says the kept one, with why): that
+        // the page did not take the change, as any refused words are said.
+        if (applied === null && retypeOnly) {
+          nativeBoxFormatRefusalRef.current = null;
+          if (rowWritten) announceNativeEditNotices();
+          else toast({ variant: "destructive", description: t("pdf.editRefusedGeneric") });
+        } else if (applied === null) toast({ description: nativeFormatNotAppliedNotice() });
         else if (applied === false) toast({ variant: "destructive", description: t("pages.saveFailed") });
         else announceNativeEditNotices();
       } catch (error) {
         if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] detached row format not staged", pdfDevErrorText(error));
-        toast({ description: t("pdf.nativeTextEdit.formatNotApplied") });
+        toast(retypeOnly ? { variant: "destructive", description: t("pdf.editRefusedGeneric") }
+          : { description: t("pdf.nativeTextEdit.formatNotApplied") });
       } finally {
         target.previews?.release();
         target.retained.bytes.fill(0);
@@ -65836,10 +66098,13 @@ export default function PdfPageWindow({
             nativeFormFields={formFields}
             onCopilotFormInventory={handleCopilotFormInventory}
             onNativeFormFieldChange={
-              nativeFormWriteEnabled ? handleNativeFormFieldChange : undefined
+              embedFormFill
+                ? handleEmbedFormFieldChange
+                : nativeFormWriteEnabled ? handleNativeFormFieldChange : undefined
             }
             onNativeFormAuthoringChange={
               nativeFormWriteEnabled &&
+              !embedFormFill &&
               nativeFormAuthoringPolicyDisabledReason === undefined
                 ? handleNativeFormAuthoringChange
                 : undefined
@@ -65847,7 +66112,12 @@ export default function PdfPageWindow({
             nativeFormAuthoringDisabledReason={
               nativeFormAuthoringPolicyDisabledReason
             }
-            onNativeFormPendingChange={handleNativeFormPendingChange}
+            // A session that only fills in the form has no page save for the
+            // host to take custody of: the reader hands each finished gesture
+            // to the session's route itself (handleEmbedFormFieldChange).
+            onNativeFormPendingChange={
+              embedFormFill ? undefined : handleNativeFormPendingChange
+            }
             onNativeFormFlushReady={handleNativeFormFlushReady}
             downloadWithAnnotationsRequestId={annotatedDownloadRequestId}
             onDownloadWithAnnotationsSettled={handleAnnotatedDownloadSettled}
@@ -65934,9 +66204,11 @@ export default function PdfPageWindow({
             }
             nativeMeasurements={managedNativeMeasurements}
             onManagedSignatureUpsert={
-              nativeAnnotationWriteAuthority
-                ? upsertManagedNativeSignature
-                : undefined
+              embedFormFill
+                ? upsertEmbedFormSignature
+                : nativeAnnotationWriteAuthority
+                  ? upsertManagedNativeSignature
+                  : undefined
             }
             onManagedSignatureDelete={
               nativeAnnotationWriteAuthority

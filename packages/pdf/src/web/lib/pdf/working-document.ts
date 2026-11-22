@@ -139,8 +139,14 @@ export async function createPdfWorkingDocument(options: Omit<PdfWorkingSessionOp
         console.warn("[pdf-working] recovered on another version; let go " + JSON.stringify({ lost: lost.length,
           back: session.snapshot().pendingOperationIds.length, why: lost[0]!.reason.slice(0, 100) }));
       }
+      // An edit the version already holds as the edit leaves it (a row the
+      // page took with a put-back, a move another window made) is not one
+      // that "could not be brought back": it is there. Only the others are said.
+      const missing = lost.filter((edit) => edit.alreadyThere !== true);
       try {
-        options.onRecoveryLetGo?.(Object.freeze({ operations: lost.length, reason: lost[0]!.reason, edits: Object.freeze([...lost]) }));
+        if (missing.length) {
+          options.onRecoveryLetGo?.(Object.freeze({ operations: missing.length, reason: missing[0]!.reason, edits: Object.freeze([...missing]) }));
+        }
       } catch { /* the notice is the window's; the copy is open either way */ }
     }
   } else session = await createPdfNativeWorkingSession(input);

@@ -6,7 +6,7 @@
  */
 import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import { layoutNativeText, layoutNativeTextBatch, nativeTextLayoutIsKnown, nativeTextTouchedBy, resolveRelativePartFontSizes, type NativeTextLayoutRequest, nativeTextFontLead, nativeParagraphLineStyle, nativeParagraphLinePitch, measureNativeLineAdvance, nativeTextAlignmentOffset, nativeStrutBaselinePx, nativeLinesWithoutHangingSpaces, type NativeTextAlignmentBox, type NativeTextPart, type NativeTextLine } from "../../../../lib/spreadsheet/native-text-layout";
+import { layoutNativeText, layoutNativeTextBatch, nativeTextLayoutIsKnown, nativeTextTouchedBy, resolveRelativePartFontSizes, type NativeTextLayoutRequest, nativeTextFontLead, nativeParagraphLineStyle, nativeParagraphLinePitch, measureNativeLineAdvance, nativeTextAlignmentOffset, nativeStrutBaselinePx, nativeStrutLineHeightPx, nativeLinesWithoutHangingSpaces, type NativeTextAlignmentBox, type NativeTextPart, type NativeTextLine } from "../../../../lib/spreadsheet/native-text-layout";
 import { nativeTextLayoutQuantum, nativeTypographyGeneration, resolveSpreadsheetTextStyle, subscribeNativeTypography } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
 import { fontLoadReach } from "@mrnote/core/web/lib/spreadsheet/font-load-reach.ts";
 import { cellWrappedBottomJustifyContent, cellWrappedMiddleJustifyContent, distributedLineUnits } from "@mrnote/core/web/lib/spreadsheet/cell-format.ts";
@@ -15,6 +15,8 @@ import { SpreadsheetNativeTextParts, spreadsheetNativeTextPaint } from "./Spread
 
 /** A paragraph whose lines the commit's batch has yet to lay out. */
 const PENDING_LAYOUT={lines:[] as readonly NativeTextLine[],offsets:[] as readonly (number|undefined)[]};
+/** The same, waiting for the layout of the text's beginning (clipRoom). */
+const PENDING_PREFIX_LAYOUT={lines:[] as readonly NativeTextLine[],offsets:[] as readonly (number|undefined)[]};
 
 // The paragraphs that mounted in one commit and are not laid out yet: their
 // probes go into the document together, once the commit's layout effects are
@@ -38,12 +40,40 @@ function requestNativeTextLayout(request:NativeTextLayoutRequest,done:()=>void):
   return()=>{batchListeners.delete(done)};
 }
 
+/** How many of a printed paragraph's lines start above its clipping box's
+ * end (`room`, px), each line at least `least` px (an empty one nothing). */
+function clipCount(lines:readonly NativeTextLine[],least:number,room:number):number{
+  let top=0,count=0;
+  for(const line of lines){
+    if(top>=room)break;
+    top+=line.parts.length?least:0;
+    count+=1;
+  }
+  return count;
+}
+
+/** The first `budget` UTF-16 units of a paragraph's runs (a surrogate pair
+ * kept whole), or undefined when the text is no longer. */
+function textPrefix(parts:readonly NativeTextPart[],budget:number):NativeTextPart[]|undefined{
+  const prefix:NativeTextPart[]=[];
+  let left=budget;
+  for(const part of parts){
+    if(part.text.length<=left){prefix.push(part);left-=part.text.length;continue;}
+    let cut=left;
+    const unit=part.text.charCodeAt(cut-1);
+    if(unit>=0xd800&&unit<=0xdbff)cut-=1;
+    if(cut>0)prefix.push({...part,text:part.text.slice(0,cut)});
+    return prefix.length?prefix:undefined;
+  }
+  return undefined;
+}
+
 /** A printed link's anchor: the text's own colour and no line of its own
  * (the cell's underline, where it has one, is its cell's). */
 export const PRINTED_LINK_STYLE:CSSProperties={color:"inherit",textDecoration:"none",cursor:"inherit"};
 const noTypographySubscription=()=>()=>{};
 const noTypographyGeneration=()=>0;
-export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,layoutWidth,alignmentBox,boxStyle,drawSingleRun=false,spread,distributed=false,officeBaseline,officePrintedPage,officeWrap,linkHref}: {
+export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,layoutWidth,alignmentBox,boxStyle,drawSingleRun=false,spread,distributed=false,officeBaseline,officePrintedPage,officeWrap,linkHref,clipRoom}: {
   parts:readonly NativeTextPart[];style:CSSProperties;dpi:number;scale?:number;wrap?:boolean;layoutWidth?:number;alignmentBox?:NativeTextAlignmentBox;
   /** Printed, the address the cell's link goes to: each line's text is an
    * anchor in its own line, which the printed PDF carries as a link over
@@ -80,6 +110,14 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
    * `linePx` a line, `rowPx` the row), the first line `ascent` below the top,
    * a block of whole lines in the middle, or the last `rise` above the bottom. */
   officeWrap?:{align:"top"|"middle"|"bottom";height:number;rise:number;ascent:number;linePx:number;rowPx:number};
+  
+
+
+
+
+
+
+  clipRoom?:number;
 }) {
   const ref=useRef<HTMLSpanElement>(null);
   // A paragraph standing at Excel's baseline reads the browser's again when
@@ -98,6 +136,29 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
   // a width it already had, and a ResizeObserver; a sheet of wrapped cells
   // took seconds to show. Fonts still loading keep the effect's path.
   const [fontEpoch,setFontEpoch]=useState(0);
+  const lineHeight=nativeParagraphLinePitch(stable[0],style,dpi);
+  const base=resolveSpreadsheetTextStyle(style,stable[0][0]?nativeTextFontLead(stable[0][0]):"",dpi);
+  // Printed and clipped (clipRoom), lines at the normal line height are each
+  // at least the strut's line (nativeStrutLineHeightPx, a tenth less to
+  // spare; an empty line counts nothing): the lines built are those whose
+  // tops are above the box's end.
+  const clipLeast=(()=>{
+    if(clipRoom===undefined||!(clipRoom>0)||spread||distributed||officeBaseline!==undefined||officeWrap!==undefined||lineHeight!==undefined)return undefined;
+    const strutLine=nativeStrutLineHeightPx({fontFamily:base.fontFamily,fontSize:typeof base.fontSize==="number"?base.fontSize*scale:base.fontSize,fontWeight:base.fontWeight,fontStyle:base.fontStyle},nativeTypographyGeneration());
+    return strutLine!==undefined&&strutLine>0?strutLine*0.9:undefined;
+  })();
+  // Laid out only as far as it can show: a printed note of 2,910 characters
+  // in a two-line row measured every character to break lines it never
+  
+  // beginning, enough for the lines that can show and three more at 0.4 em a
+  // character (a line of prose holds fewer), is laid out; its lines stand for
+  // the whole text's where at least three follow the last line built (lines
+  // are filled greedily: a cut moves only the lines at its end). Else the
+  // whole text is laid out, as before.
+  const fontPx=typeof base.fontSize==="number"?base.fontSize:Number.parseFloat(String(base.fontSize));
+  const clipBudget=clipLeast!==undefined&&clipRoom!==undefined&&stable[4]&&stable[5]!=null&&fontPx>0
+    ?(Math.floor(clipRoom/clipLeast)+4)*Math.ceil(stable[5]/(fontPx*0.4)):undefined;
+  const clipPrefix=useMemo(()=>clipBudget===undefined?undefined:textPrefix(stable[0],clipBudget),[stable,clipBudget]);
   const renderLayout=useMemo(()=>{
     void fontEpoch;
     if(typeof document==="undefined")return undefined;
@@ -107,24 +168,31 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
     // While a font is loading nothing measured would last: the paragraph
     // waits for the font, then for the batch.
     if(document.fonts?.status==="loading")return PENDING_LAYOUT;
+    const offsetsOf=(lines:readonly NativeTextLine[])=>lines.map(line=>nativeAlignment?nativeTextAlignmentOffset(measureNativeLineAdvance(line.parts,stable[1],stable[2]),stable[1].textAlign,stable[6]??undefined,stable[2],stable[3]):undefined);
+    if(clipPrefix&&clipLeast!==undefined&&clipRoom!==undefined){
+      if(!nativeTextLayoutIsKnown(clipPrefix,stable[1],stable[5]!,stable[2]))return PENDING_PREFIX_LAYOUT;
+      const laid=layoutNativeText(clipPrefix,stable[1],stable[5]!,stable[2]);
+      const lines=laid&&nativeLinesWithoutHangingSpaces(laid);
+      if(lines&&clipCount(lines,clipLeast,clipRoom)<=lines.length-3)return {lines,offsets:offsetsOf(lines)};
+    }
     // A text not laid out before waits for the commit's batch (below): one
     // layout of the page serves every paragraph that mounted with it.
     if(stable[4]&&!nativeTextLayoutIsKnown(stable[0],stable[1],stable[5]!,stable[2]))return PENDING_LAYOUT;
     const laid=stable[4]?layoutNativeText(stable[0],stable[1],stable[5]!,stable[2]):undefined;
     const lines:readonly NativeTextLine[]|undefined=stable[4]?laid&&nativeLinesWithoutHangingSpaces(laid):[{parts:stable[0],hardBreak:""}];
     if(!lines)return null;
-    const offsets=lines.map(line=>nativeAlignment?nativeTextAlignmentOffset(measureNativeLineAdvance(line.parts,stable[1],stable[2]),stable[1].textAlign,stable[6]??undefined,stable[2],stable[3]):undefined);
-    return {lines,offsets};
-  },[stable,fontEpoch]);
+    return {lines,offsets:offsetsOf(lines)};
+  },[stable,fontEpoch,clipPrefix,clipLeast,clipRoom]);
   const laidOutInRender=renderLayout!==undefined;
-  const awaitingBatch=renderLayout===PENDING_LAYOUT;
+  const awaitingBatch=renderLayout===PENDING_LAYOUT||renderLayout===PENDING_PREFIX_LAYOUT;
+  const awaitingParts=renderLayout===PENDING_PREFIX_LAYOUT&&clipPrefix?clipPrefix:stable[0];
   useLayoutEffect(()=>{
     if(!awaitingBatch||document.fonts?.status==="loading")return;
     // Unwrapped alignment needs no line layout: the font's arrival alone
     // (the listener below) repaints it.
     if(!stable[4])return;
-    return requestNativeTextLayout({parts:stable[0],style:stable[1],width:stable[5]!,dpi:stable[2]},()=>setFontEpoch(epoch=>epoch+1));
-  },[awaitingBatch,stable,fontEpoch]);
+    return requestNativeTextLayout({parts:awaitingParts,style:stable[1],width:stable[5]!,dpi:stable[2]},()=>setFontEpoch(epoch=>epoch+1));
+  },[awaitingBatch,awaitingParts,stable,fontEpoch]);
   useLayoutEffect(()=>{
     if(!laidOutInRender)return;
     // Laid out again only for a load that reaches this paragraph's text
@@ -172,7 +240,6 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
     document.fonts?.addEventListener("loadingdone",fontsLoaded);
     return()=>{cancelled=true;observer.disconnect();document.fonts?.removeEventListener("loadingdone",fontsLoaded)};
   },[signature,stable,laidOutInRender]);
-  const lineHeight=nativeParagraphLinePitch(stable[0],style,dpi);
   // Only a fixed line height needs the wrapper (its zero line height keeps
   // the runs from stretching the line box); otherwise the runs sit in the
   // line directly, one element less for every cell on screen.
@@ -186,9 +253,32 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
   const keptLines=officeWrap&&wrapLinePx!==undefined&&laidLines&&lineHeight!==undefined&&!(Boolean(spread)&&laidLines.length>1)
     ?Math.max(1,officeKeptWrappedLines(laidLines.map(()=>wrapLinePx),officeWrap.rowPx)):undefined;
   const lines=keptLines!==undefined&&laidLines?laidLines.slice(0,keptLines):laidLines;
-  const base=resolveSpreadsheetTextStyle(style,stable[0][0]?nativeTextFontLead(stable[0][0]):"",dpi);
   const spreading=Boolean(spread)&&lines!==undefined&&lines.length>1;
   const fixedLines=lineHeight!==undefined&&lines!==undefined&&!spreading;
+  // The lines that can show in the clipping box (clipRoom): a line whose top
+  // is at or below its end is not built. Fixed lines stand a pitch apart and
+  // the paragraph keeps their whole height. Lines at the normal line height
+  // are each at least the strut's line (nativeStrutLineHeightPx, a tenth
+  // less to spare; an empty line counts nothing), and what is not built is
+  // held by a block that keeps the paragraph taller than the box, so a
+  // safely aligned paragraph still stands at its top: the lines built stand
+  // exactly where they stood among all of them.
+  const built=(()=>{
+    if(clipRoom===undefined||!(clipRoom>0)||!lines||lines.length<2||spread||distributed||officeBaseline!==undefined||officeWrap!==undefined)return undefined;
+    if(fixedLines&&lineHeight!==undefined){
+      const count=Math.floor(clipRoom/(lineHeight*scale))+1;
+      return count<lines.length?{count,rest:0}:undefined;
+    }
+    const least=clipLeast;
+    if(least===undefined)return undefined;
+    // Laid out from the text's beginning (clipPrefix), the lines not built
+    // are those of the beginning: the block still keeps the paragraph taller
+    // than the box.
+    const count=clipCount(lines,least,clipRoom);
+    if(count>=lines.length)return undefined;
+    const rest=lines.slice(count).reduce((sum,line)=>sum+(line.parts.length?least:0),0);
+    return {count,rest:Math.max(1,rest)};
+  })();
   // One line stood at Excel's baseline: the browser's own, read for this
   // font and line height, and the difference taken up above the paragraph.
   // Where nothing lays out a probe, a line box's usual split stands in.
@@ -266,7 +356,7 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
     return units.map((unit,index)=><span key={index} style={index?{marginLeft:gap*scale}:undefined}>{paintParts([{text:unit}])}</span>);
   };
   return <span ref={ref} data-spreadsheet-native-paragraph="" style={paragraphStyle}>
-    {lines?lines.map((line,index)=>{
+    {lines?(built?lines.slice(0,built.count):lines).map((line,index)=>{
       const terminal=resolveSpreadsheetTextStyle({...style,...line.breakStyle},"",dpi);
       const offset=shown?.offsets[index];
       const shift=fixedLines?lineShift(index):undefined;
@@ -277,5 +367,6 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
         {line.hardBreak?<><span style={{fontFamily:terminal.fontFamily,fontWeight:terminal.fontWeight,fontStyle:terminal.fontStyle,fontSize:typeof terminal.fontSize==="number"?terminal.fontSize*scale:terminal.fontSize,lineHeight:lineHeight===undefined?undefined:0}}/><span style={{display:"none"}}>{line.hardBreak}</span></>:null}
       </span>;
     }):linked(paintParts(parts))}
+    {built&&!fixedLines?<span aria-hidden data-native-text-unbuilt-lines={lines!.length-built.count} style={{display:"block",height:built.rest}}/>:null}
   </span>;
 }

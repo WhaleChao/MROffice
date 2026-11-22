@@ -3218,7 +3218,11 @@ function adjustStructuralWholeRef(
   } else {
     const last = at - delta - 1; // the deleted lines are at..last
     nextLow = low < at ? low : low > last ? low + delta : at;
-    nextHigh = high < at ? high : high > last ? high + delta : at - 1;
+    // A side on the grid's last line stays there through a delete before it,
+    // as a cell range's end does (Windows Excel 16, xlsx-rounds
+    // night/n58/x41/probe: $5:$1048576 and ROWS($3:$1048576) kept after row 11
+    // was deleted; R468-X41 E6, a name over Overall!$1:$1048576).
+    nextHigh = high < at ? high : high === limit - 1 && high > last ? high : high > last ? high + delta : at - 1;
     if (nextHigh < nextLow) return ERRORS.REF.code;
   }
   if (nextLow === low && nextHigh === high) return tok.value;

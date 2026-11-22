@@ -886,6 +886,13 @@ export function ensureOfficeRangedAliasFamily(
  * widths of the face an Office application draws them in (the sheet's
  * complex-script scales, lib/spreadsheet/office-complex-scales.ts). No
  * local() source: the size-adjust is the stand-in's alone.
+ *
+ * `unlessInstalled`: an Office family the reader may have (a PowerPoint
+ * bullet's Cambria Math, TRIAGE 99): the scaled stand-in is declared only once
+ * the probe finds no installed face of that family (`localFaceInstalled`, as
+ * a Word-scaled stand-in waits for it), so a machine that has the real face
+ * draws it at its own size -- the stack names the scaled family ahead of the
+ * Office family, which draws wherever the scaled one is not declared.
  */
 export function ensureOfficeScaledScriptFamily(
   alias: string,
@@ -894,21 +901,46 @@ export function ensureOfficeScaledScriptFamily(
   range: string,
   sizeAdjust: string,
   doc: Document | undefined = typeof document === "undefined" ? undefined : document,
+  unlessInstalled?: string,
 ): void {
   if (!doc?.fonts || typeof FontFace === "undefined") return;
   let done = aliasFamilies.get(doc);
   if (!done) aliasFamilies.set(doc, (done = new Set()));
   if (done.has(alias)) return;
   done.add(alias);
-  void loadOfficeDataParts("font-registry", [normalize(face)])
-    .then((served) => {
+  const office = unlessInstalled ? normalize(unlessInstalled) : undefined;
+  void loadOfficeDataParts("font-registry", office ? [normalize(face), office] : [normalize(face)])
+    .then(async (served) => {
       const registry = served as Registry | undefined;
-      const name = registry ? registryIndexOf(registry).get(normalize(face)) : undefined;
-      if (!registry || !name) {
+      const indexed = registry ? registryIndexOf(registry).get(normalize(face)) : undefined;
+      // Only a served substitute's slices are the registry's to give: a face the static stylesheet declares
+      // (styles/office-fonts.css: Noto Sans Math, STIX Two Math, Cambria Math's own rules) -- and one the registry
+      // knows as an Office family only, its faces' local() names without a served file (DejaVu Sans, Noto Sans
+      // Symbols) -- is declared from its rules there.
+      const name = indexed && registry?.substitutes?.[indexed] ? indexed : undefined;
+      const statics = name ? [] : staticFaceRules(doc, face);
+      if (!name && !statics.length) {
         done.delete(alias);
         registrationGeneration += 1;
         return;
       }
+      if (office) {
+        const officeName = registry ? registryIndexOf(registry).get(office) : undefined;
+        const locals = (registry && officeName ? registry.families[officeName] ?? [] : [])
+          .flatMap(({ faces }) => faces.filter(([weight, italic]) => weight === 400 && !italic).flatMap(([, , , , names]) => names))
+          .map((local) => `local("${local.replace(/["\\]/g, "\\$&")}")`);
+        const sources = locals.length ? locals : staticFaceRules(doc, unlessInstalled as string).flatMap((rule) => rule.locals);
+        if (sources.length && (await localFaceInstalled([...new Set(sources)]))) return;
+      }
+      if (!name) {
+        for (const rule of statics) {
+          if (rule.weight !== 400 && rule.weight !== 700) continue;
+          if (rule.ranges && !rule.ranges.some(([start, end]) => letter >= start && letter <= end)) continue;
+          if (rule.urls.length) addFace(doc, alias, rule.weight, rule.italic, rule.urls, range, sizeAdjust);
+        }
+        return;
+      }
+      if (!registry) return;
       for (const [weight, italic, out, sliceRange] of registry.substitutes[name] ?? []) {
         if (weight !== 400 && weight !== 700) continue;
         const ranges = parseUnicodeRange(sliceRange === null ? undefined : registry.ranges[sliceRange]);
@@ -920,6 +952,38 @@ export function ensureOfficeScaledScriptFamily(
       done.delete(alias);
       registrationGeneration += 1;
     });
+}
+
+/** A family's @font-face rules in the document's own stylesheets: weight, slant, unicode-range, url() and local() sources apart. */
+function staticFaceRules(
+  doc: Document,
+  family: string,
+): { weight: number; italic: 0 | 1; ranges: readonly (readonly [number, number])[] | null; urls: string[]; locals: string[] }[] {
+  const wanted = normalize(family);
+  const out: { weight: number; italic: 0 | 1; ranges: readonly (readonly [number, number])[] | null; urls: string[]; locals: string[] }[] = [];
+  for (const sheet of Array.from(doc.styleSheets ?? [])) {
+    let list: CSSRuleList;
+    try {
+      list = sheet.cssRules;
+    } catch {
+      continue; // another origin's sheet
+    }
+    for (const rule of Array.from(list)) {
+      if (!(typeof CSSFontFaceRule !== "undefined" && rule instanceof CSSFontFaceRule)) continue;
+      if (normalize(rule.style.getPropertyValue("font-family")) !== wanted) continue;
+      const src = rule.style.getPropertyValue("src");
+      const parts = src.match(/(?:local|url)\([^)]*\)(?:\s*format\([^)]*\))?/g) ?? [];
+      const weight = rule.style.getPropertyValue("font-weight").trim() === "bold" ? 700 : Number.parseInt(rule.style.getPropertyValue("font-weight"), 10) || 400;
+      out.push({
+        weight,
+        italic: /italic|oblique/.test(rule.style.getPropertyValue("font-style")) ? 1 : 0,
+        ranges: parseUnicodeRange(rule.style.getPropertyValue("unicode-range")),
+        urls: parts.filter((part) => part.startsWith("url(")),
+        locals: parts.filter((part) => part.startsWith("local(")),
+      });
+    }
+  }
+  return out;
 }
 
 /**

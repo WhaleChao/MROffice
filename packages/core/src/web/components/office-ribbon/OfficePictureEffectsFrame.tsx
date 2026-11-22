@@ -49,6 +49,7 @@ export function OfficePictureEffectsFrame({
   fillParent,
   testId,
   shadowTestIds,
+  shadowBlurDeviation,
   children,
 }: {
   effects: unknown;
@@ -58,10 +59,12 @@ export function OfficePictureEffectsFrame({
   testId: string;
   /** The perspective / inner shadow layers' test ids (absent: `<testId>-shadow-under` / `-over`). */
   shadowTestIds?: { readonly under: string; readonly over: string };
+  /** The Gaussian deviation an outer shadow's blur radius draws, per unit of it (a slide's picture: `POWERPOINT_SHADOW_BLUR_DEVIATION`). */
+  shadowBlurDeviation?: number;
   children: ReactNode;
 }) {
   const filterId = `office-picture-3d-${useId().replace(/:/g, "")}`;
-  const css = officePictureEffectsCss(effects, size);
+  const css = officePictureEffectsCss(effects, size, shadowBlurDeviation === undefined ? {} : { shadowBlurDeviation });
   const threeD = officePictureThreeDPaint(effects, size);
   if (!css && !threeD) return <>{children}</>;
   const block: CSSProperties = fillParent ? { display: "block", width: "100%", height: "100%" } : { display: "inline-block" };

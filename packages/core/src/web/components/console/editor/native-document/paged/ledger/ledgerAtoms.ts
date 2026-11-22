@@ -43,7 +43,7 @@ import {
   SPLIT_CONTINUATION_ATTR,
   SPLIT_CONTINUES_ATTR,
 } from "../blockSplitting";
-import { joinedTextRebreak, renderedTextTailHeightPx } from "../renderedTextHead";
+import { joinedTextRebreak, joinedTextRebreakWhy, renderedTextTailHeightPx } from "../renderedTextHead";
 import { isClosedBoxRowSlicedAtomType, isRowSliceTail, isRowSlicedAtomType, rowSliceRange } from "../atomRowSlices";
 import { isOverTallTextNode } from "../pageSpanExtension";
 import { HEAD_PIECE_OVERRUN_PX, PAGE_EDGE_FIRST_ATTR, PAGE_EDGE_LAST_ATTR } from "../paginationProjectionKeys";
@@ -120,6 +120,7 @@ import {
   columnFlowGeometry,
   readCapacity,
   sheetColumnCount,
+  splitRowBorderPastFoot,
 } from "../pageRebalanceExtension";
 import {
   sheetedDocHasFootnoteRefs,
@@ -456,6 +457,49 @@ function regionHeightsOf(measures: readonly LedgerFragmentMeasure[]): number[] |
   return heights;
 }
 
+/** `window.__docsListKeepNextOff = true` (A/B): a list's paragraphs keep
+ * nothing with what follows the list, the older reading. */
+function listKeepNextOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsListKeepNextOff?: boolean }).__docsListKeepNextOff === true;
+}
+
+const KEPT_LIST_NODES = new Set(["bulletList", "orderedList"]);
+
+/** A list's paragraphs (its items', nested lists' too), in order. */
+function listParagraphs(node: PmNode): PmNode[] {
+  const out: PmNode[] = [];
+  node.descendants((child) => {
+    if (child.isTextblock) {
+      out.push(child);
+      return false;
+    }
+    return true;
+  });
+  return out;
+}
+
+/**
+ * Whether a list travels with what follows it: its last paragraph keeps with
+ * the next, as any paragraph of Word's does -- a list item is a paragraph to
+ * Word (Windows Word, docx-look/pc2/probes/kc and corpus R484-D98: a kept
+ * question, 94 kept answer items and an empty paragraph after ten lines move
+ * to page 2 together). Read as a block, the list kept nothing with the next
+ * one and a chain ended at it.
+ */
+function listKeepsFollowingBlock(node: PmNode | null): boolean {
+  if (!node || !KEPT_LIST_NODES.has(node.type.name) || listKeepNextOff()) return false;
+  const paragraphs = listParagraphs(node);
+  const last = paragraphs[paragraphs.length - 1];
+  return last !== undefined && keepsFollowingBlock(last);
+}
+
+/** Whether every paragraph of a list keeps with the next (`keptWithin`). */
+function listKeptWithin(node: PmNode | null): boolean {
+  if (!node || !KEPT_LIST_NODES.has(node.type.name) || listKeepNextOff()) return false;
+  const paragraphs = listParagraphs(node);
+  return paragraphs.length > 1 && paragraphs.every((paragraph) => paragraphKeepFlag(paragraph, "keepNext"));
+}
+
 function atomKind(node: PmNode): LedgerAtomKind {
   const name = node.type.name;
   if (name === "paragraph" || name === "heading") return "text";
@@ -493,6 +537,9 @@ function isTailOf(previous: PmNode | null, node: PmNode): boolean {
  * foot by it. A style read.
  */
 function splitRowFootCreditPx(part: LedgerPart): number {
+  // Word keeps the closing border above the foot too (pageRebalanceExtension
+  // splitHeadClosingBorderPx); the head is charged its full height.
+  if (!splitRowBorderPastFoot()) return 0;
   const node = part.node;
   if (node.type.name !== "table" || node.attrs.pageTableContinues !== true) return 0;
   if (node.lastChild?.attrs.pageTableRowContinues !== true) return 0;
@@ -613,6 +660,37 @@ function sourceParagraphIndex(node: PmNode | null | undefined, own: boolean): nu
   // A paragraph split at a hard break is `#p[N]` and `#p[N]/seg[k]`.
   const match = own ? /#p\[(\d+)\](?:\/seg\[\d+\])?$/.exec(anchor) : /#p\[(\d+)\]\/(?!seg\[)/.exec(anchor);
   return match ? Number(match[1]) : null;
+}
+
+/** `window.__docsLineUnderPageObjectsOff = true`: a paragraph's line goes on
+ * past the foot under its page-filling Top and Bottom picture, as before. */
+function lineUnderPageObjectsOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsLineUnderPageObjectsOff?: boolean }).__docsLineUnderPageObjectsOff === true;
+}
+
+/** A picture with Top and Bottom wrapping that stands in the flow as its own
+ * block (`data-float-mode="band"`), holding no text. */
+function bandPictureBlock(dom: HTMLElement): boolean {
+  if (lineUnderPageObjectsOff()) return false;
+  const band = '[data-float-mode="band"][data-float-anchor]';
+  return (dom.matches(band) || dom.querySelector(band) !== null) && !(dom.textContent ?? "").trim();
+}
+
+/** Whether the object `node` is drawn from the paragraph `next` (the block
+ * after it). */
+function drawnFromNextBlock(node: PmNode, next: PmNode | undefined): boolean {
+  const host = sourceParagraphIndex(node, false);
+  return host !== null && sourceParagraphIndex(next, true) === host;
+}
+
+/** A text block of one line: no taller than half a line more than its own
+ * line height. */
+function oneLineBlock(dom: HTMLElement, heightPx: number): boolean {
+  const style = getComputedStyle(dom);
+  const line = Number.parseFloat(style.lineHeight);
+  const pitch = Number.isFinite(line) && line > 0 ? line : (Number.parseFloat(style.fontSize) || 16) * 1.3;
+  return heightPx > 0 && heightPx <= pitch * 1.5;
 }
 
 /** Whether an anchored object was placed after the paragraph it is anchored
@@ -1557,7 +1635,7 @@ export function buildLedger(
       marginBeforePx: margins.before,
       marginAfterPx: margins.after,
       ...(region?.columns
-        ? { regionColumns: region.columns, linePitchPx: region.linePitchPx ?? 0 }
+        ? { regionColumns: region.columns, linePitchPx: region.linePitchPx ?? 0, ...(region.minSplitLines ? { regionMinSplitLines: region.minSplitLines } : {}) }
         : placement?.regionColumns ? { regionColumns: placement.regionColumns } : {}),
       // Text in a section of several columns is balanced by whole lines
       // (the projector's balancedColumnHeightPx), on a page projected as
@@ -2128,6 +2206,14 @@ export function buildLedger(
     // 16.86, corpus R76-D15: a kept paragraph too tall for the 1.04" and
     // 1.74" columns stands at the top of the 2.8" one on the same page;
     // read at the first column's height, it went on to a page of its own).
+    // A Top and Bottom picture before the paragraph it is drawn from, and
+    // that paragraph's one line (`objectOfNext` / `lineUnderObjects`): when
+    // the picture opens the page, Word keeps the line under it there.
+    const objectOfNext = !hidden && !anchored && !hostBefore && !pastHorizon &&
+      bandPictureBlock(first.dom) && drawnFromNextBlock(first.node, logical[blockOrdinal + 1]?.parts[0]?.node);
+    const previousAtom = atoms[atoms.length - 1];
+    const lineUnderObjects = !hidden && !pastHorizon && block.kind === "text" && block.parts.length === 1 &&
+      previousAtom?.objectOfNext === true && oneLineBlock(first.dom, heightPx);
     const wholeTrackHeights = block.parts.length === 1 ? regionHeightsOf(measures) : null;
     const wholeFitHeightPx = wholeTrackHeights ? Math.min(heightPx, ...wholeTrackHeights) : heightPx;
     atoms.push({
@@ -2156,9 +2242,16 @@ export function buildLedger(
       // to the next, it took that paragraph to a page of its own (corpus
       // R04-D09: six behind-text pictures each opened an extra page, 11
       // pages where Word has 6).
-      keepNext: keepsFollowingBlock(last.node) || (anchored && !hostBefore) ||
-        (block.kind === "table" && block.parts.every((part) => tableKeepsFollowingBlock(part.node))),
+      // A Top and Bottom picture keeps with the paragraph it is drawn from:
+      // where its line does not fit under it, Word opens the next page with
+      // both (pc6/probes/fp-d, fp-f).
+      keepNext: keepsFollowingBlock(last.node) || (anchored && !hostBefore) || objectOfNext ||
+        (block.kind === "table" && block.parts.every((part) => tableKeepsFollowingBlock(part.node))) ||
+        (block.kind === "container" && listKeepsFollowingBlock(last.node)),
+      ...(block.kind === "container" && block.parts.every((part) => listKeptWithin(part.node)) ? { keptWithin: true } : {}),
       ...(hostBefore ? { hostBefore } : {}),
+      ...(objectOfNext ? { objectOfNext } : {}),
+      ...(lineUnderObjects ? { lineUnderObjects } : {}),
       // The section's columns: its region's on a page of several sections,
       // else the sheet's.
       sectionColumns: measures[0].regionColumns ?? columns[first.sheet] ?? 1,
@@ -2188,7 +2281,10 @@ export function buildLedger(
       wholeFitHeightPx > Math.max(0, ...capacities) + 0.5
         ? { keepLinesOverlong: true }
         : {}),
-      ...(block.kind === "text" ? { minSplitLines: minimumTextSplitLines(first.node.attrs?.widowControl) } : {}),
+      ...(block.kind === "text"
+        ? { minSplitLines: minimumTextSplitLines(first.node.attrs?.widowControl) }
+        // A list its region balances by its lines is cut between any two.
+        : measures[0].regionMinSplitLines ? { minSplitLines: measures[0].regionMinSplitLines } : {}),
       creditPx: hidden ? 0 : lastMeasure.creditPx,
       hidden,
       breakTail: block.parts.length === 1 && first.dom.getAttribute("data-mrnote-source-break-tail") === "true",
@@ -2718,8 +2814,9 @@ function planTextHeadOnce(
         // off-screen, and the cut is made there in this pass: nothing is drawn
         // on the way (seamRebreakCut).
         const rebreak = fromTop <= 0 && !gridRows && (rows.length >= minLines || partIndex > startPart)
-          ? seamRebreakCut(view, block, partIndex, rows, headHeight + partRemaining, minLines)
+          ? seamRebreakCut(view, block, partIndex, rows, headHeight + partRemaining, minLines, tailBoundPx(request))
           : null;
+        if (tracing) traceOracle({ atom: block.index, editedSeam: partIndex + 1, fromTop, grid: Boolean(gridRows), rows: rows.length, minLines, rebreak: rebreak === "stands" ? "stands" : rebreak?.key ?? null });
         if (rebreak === "stands") {
           // The joined text breaks where the seam is: nothing to cut again.
           remaining -= partRemaining;
@@ -2910,7 +3007,10 @@ function planTextHeadOnce(
       // the next page planned a row short, the pass after a row back, on
       // every key in the head's last row). `window.__docsGridTailArithmetic
       // = true` keeps the slots' arithmetic on a grid (A/B).
-      tailHeightPx: ((gridRows && gridTailArithmetic(view)) || partIndex + 1 >= block.parts.length ? null : measuredTailHeightPx(view, block, partIndex, cutPos)) ?? Math.max(0, totalHeight - headAbsolute),
+      tailHeightPx: ((gridRows && gridTailArithmetic(view)) || partIndex + 1 >= block.parts.length
+        ? null
+        : measuredTailHeightPx(view, block, partIndex, cutPos, tailBoundPx(request), Math.max(0, totalHeight - headAbsolute))) ??
+        Math.max(0, totalHeight - headAbsolute),
     };
     trace(partIndex, result, `cut:${Math.round(cut.rowTop * 100) / 100}`);
     return result;
@@ -2931,16 +3031,99 @@ function gridTailArithmetic(view: EditorView): boolean {
  * page cannot place, columns): the caller's arithmetic stands.
  * `window.__docsRenderedTailOff = true` is the arithmetic throughout (A/B).
  */
-function measuredTailHeightPx(view: EditorView, block: LogicalBlock, partIndex: number, cutPos: number): number | null {
-  const win = view.dom.ownerDocument.defaultView as (Window & { __docsRenderedTailOff?: boolean }) | null;
+function measuredTailHeightPx(
+  view: EditorView,
+  block: LogicalBlock,
+  partIndex: number,
+  cutPos: number,
+  boundPx?: number,
+  /** The tail as its fragments stand (the caller's arithmetic). */
+  standingPx?: number,
+): number | null {
+  const win = view.dom.ownerDocument.defaultView as (Window & {
+    __docsRenderedTailOff?: boolean;
+    __docsRenderedTailBoundOff?: boolean;
+    __docsRenderedTailStandingOff?: boolean;
+  }) | null;
   if (win?.__docsRenderedTailOff === true) return null;
-  if (block.parts.some((part, index) => index >= partIndex && part.hollow)) return null;
+  const bound = win?.__docsRenderedTailBoundOff === true ? undefined : boundPx;
+  // A tail standing twice the page's room or more is past the room however
+  // its rows flow joined: it is charged as it stands, and the next page cuts
+  // it from its own fragments (tailStandsPastRoom).
+  if (win?.__docsRenderedTailStandingOff !== true && tailStandsPastRoom(standingPx, bound)) return null;
+  const { through, beyondPx } = boundedTailParts(block, partIndex, bound);
+  if (block.parts.some((part, index) => index >= partIndex && index <= through && part.hollow)) return null;
   try {
     const at = view.domAtPos(cutPos, 1);
-    return renderedTextTailHeightPx(block.parts.map((part) => part.dom), partIndex, at.node, at.offset);
+    const laidOut = renderedTextTailHeightPx(
+      block.parts.slice(0, through + 1).map((part) => part.dom), partIndex, at.node, at.offset, cutPos - block.parts[partIndex]!.pos,
+    );
+    return laidOut === null ? null : laidOut + beyondPx;
   } catch {
     return null;
   }
+}
+
+/**
+ * Whether a tail is charged as its fragments stand, never laid out: they stand
+ * at least `boundPx` (twice the page's room) after the cut.
+ *
+ * What the next page is charged decides only whether the tail fits there, and
+ * the cut it then makes is planned from the tail's own fragments. Joined, the
+ * rows of a tail move at its seams by a row or so each, never by a page: one
+ * standing twice the room is past it either way. Laid out through twice the
+ * room (boundedTailParts), each such tail still cloned two pages of runs and
+ * forced their layout -- every cut of a code listing over 20 sheets, every pass
+ * (R461-D71's print: 1,580 tails at 23 ms, 36 s of its first 250 s; tails
+ * asked again of the same fragments, 1.4%). Only a tail within twice the room
+ * is laid out now, as before.
+ * `window.__docsRenderedTailStandingOff = true`: laid out as before (A/B).
+ */
+export function tailStandsPastRoom(standingPx: number | undefined, boundPx: number | undefined): boolean {
+  return standingPx !== undefined && boundPx !== undefined && boundPx > 0 && Number.isFinite(standingPx) && standingPx >= boundPx;
+}
+
+/**
+ * The fragments of a tail cut in part `partIndex` that are laid out: through
+ * the first one after it where those after the cut stand at least `boundPx`
+ * tall as they are (all of them without a bound), and what the fragments past
+ * that one are charged as they stand (their heights and the spacing their
+ * seams drop).
+ */
+export function boundedTailParts(
+  block: Pick<LogicalBlock, "parts">,
+  partIndex: number,
+  boundPx: number | undefined,
+): { through: number; beyondPx: number } {
+  const last = block.parts.length - 1;
+  if (boundPx === undefined || !(boundPx > 0)) return { through: last, beyondPx: 0 };
+  let through = partIndex;
+  for (let laidOutPx = 0; through < last && laidOutPx < boundPx;) {
+    through += 1;
+    laidOutPx += block.parts[through]!.heightPx + block.parts[through]!.joinBeforePx;
+  }
+  let beyondPx = 0;
+  for (let index = through + 1; index <= last; index += 1) beyondPx += block.parts[index]!.heightPx + block.parts[index]!.joinBeforePx;
+  return { through, beyondPx };
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function tailBoundPx(request: { fullCapacityPx: number }): number | undefined {
+  return Number.isFinite(request.fullCapacityPx) && request.fullCapacityPx > 0 ? request.fullCapacityPx * 2 : undefined;
 }
 
 /** `window.__docsSeamRebreakOnePassOff = true`: a stale seam is cut before
@@ -2973,11 +3156,16 @@ function seamRebreakCut(
   rows: readonly { top: number }[],
   headHeightPx: number,
   minLines: number,
+  tailBound?: number,
 ): LedgerCut | "stands" | null {
-  if (seamRebreakOff(view)) return null;
+  const why = (reason: string): null => {
+    if (oracleTraceEnabled()) traceOracle({ atom: block.index, seamRebreak: reason });
+    return null;
+  };
+  if (seamRebreakOff(view)) return why("off");
   const part = block.parts[partIndex];
   const next = block.parts[partIndex + 1];
-  if (!next || part.hollow || next.hollow) return null;
+  if (!next || part.hollow || next.hollow) return why("hollow");
   // The widow floor counts the paragraph's rows: those of the pieces after
   // the tail are the next pages' already.
   let later = 0;
@@ -2989,33 +3177,35 @@ function seamRebreakCut(
   try {
     read = joinedTextRebreak(part.dom, next.dom, need, (copy) => engineJoinedRows(view, part, next, copy));
   } catch {
-    return null;
+    return why("threw");
   }
-  if (!read || read.rowsAfter < need) return null;
+  if (!read) return why(`read: ${joinedTextRebreakWhy ?? "copy"}`);
+  if (read.rowsAfter < need) return why(`rows-after ${read.rowsAfter} < ${need}`);
   let cutPos: number;
   try {
     cutPos = view.posAtDOM(read.node, read.offset);
   } catch {
-    return null;
+    return why("pos");
   }
   const own = read.side === "head" ? part : next;
   const ownIndex = read.side === "head" ? partIndex : partIndex + 1;
   const from = own.pos + 1;
   const to = own.pos + own.node.nodeSize - 1;
   if (read.side === "tail" && cutPos <= from) return "stands";
-  if (cutPos <= from || cutPos >= to) return null;
+  if (cutPos <= from || cutPos >= to) return why(`outside ${read.side} ${cutPos} ${from}..${to}`);
   const logicalOffset = contentOffsetBefore(block, ownIndex) + (cutPos - from);
-  if (ledgerCutRefused(view, `${block.index}+text:${logicalOffset}`)) return null;
+  if (ledgerCutRefused(view, `${block.index}+text:${logicalOffset}`)) return why(`refused ${logicalOffset}`);
+  if (oracleTraceEnabled()) traceOracle({ atom: block.index, seamRebreak: `cut ${read.side} text:${logicalOffset}` });
   // (A cut in the head leaves its last row's start where it is: the word a
   // join made too long for the row goes on, the rows above stay.)
   const lastRowTop = rows.length > 0 ? rows[rows.length - 1].top : 0;
+  const standingTailPx = (read.side === "head" ? Math.max(0, part.heightPx - lastRowTop) : 0) + partHeightsAfter(block, partIndex);
   return {
     kind: "text",
     key: `text:${logicalOffset}`,
     payload: { logicalOffset, partIndex: ownIndex, rowTop: read.side === "head" ? lastRowTop : 0 } satisfies TextCutPayload,
     headHeightPx,
-    tailHeightPx: measuredTailHeightPx(view, block, ownIndex, cutPos) ??
-      (read.side === "head" ? Math.max(0, part.heightPx - lastRowTop) : 0) + partHeightsAfter(block, partIndex),
+    tailHeightPx: measuredTailHeightPx(view, block, ownIndex, cutPos, tailBound, standingTailPx) ?? standingTailPx,
   };
 }
 
@@ -3422,7 +3612,7 @@ function planContainerHeadCut(view: EditorView, block: LogicalBlock, request: Le
     freshPage: request.pageEmpty === true && partIndex === startPart,
     // A table in a list item flows its rows over pages as a top-level one does.
     splitTable: (dom, table, tableAvailablePx) => {
-      const planned = planRenderedTableFragment(dom, table, tableAvailablePx, request.fullCapacityPx, 0, wordTableRowOptions(view));
+      const planned = planRenderedTableFragment(dom, table, tableAvailablePx, request.fullCapacityPx, 0, { ...wordTableRowOptions(view), keepWithNextReleased: request.keepReleased === true });
       return planned ? tableFragmentPair(view.state.doc, table, planned.plan, planned.cuts) : null;
     },
     posAtDOM: (node, offset) => {
@@ -3653,8 +3843,8 @@ function planTableHeadCut(view: EditorView, block: LogicalBlock, request: Ledger
   const joinedHeaderPx = partIndex > startPart ? part.repeatedHeaderPx : 0;
   const engineRows = engineTableParts.has(part) ? unlaidEngineTableRows(part.node) : null;
   const plannedAsDrawn = engineRows
-    ? planEngineTableFragment(part.node, engineRows.rowHeightsPx, engineRows.chromePx, availablePx + joinedHeaderPx, request.fullCapacityPx, wordTableRowOptions(view))
-    : planRenderedTableFragment(part.dom, part.node, availablePx + joinedHeaderPx, request.fullCapacityPx, 0, wordTableRowOptions(view));
+    ? planEngineTableFragment(part.node, engineRows.rowHeightsPx, engineRows.chromePx, availablePx + joinedHeaderPx, request.fullCapacityPx, { ...wordTableRowOptions(view), keepWithNextReleased: request.keepReleased === true })
+    : planRenderedTableFragment(part.dom, part.node, availablePx + joinedHeaderPx, request.fullCapacityPx, 0, { ...wordTableRowOptions(view), keepWithNextReleased: request.keepReleased === true });
   if (!plannedAsDrawn) return null;
   const planned = recutWhole && partIndex === startPart ? splitRowRecutFromWhole(view, block, partIndex, part.node, plannedAsDrawn) : plannedAsDrawn;
   if (!planned) return null;

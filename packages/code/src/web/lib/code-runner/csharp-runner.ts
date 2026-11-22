@@ -26,7 +26,7 @@ export {
 };
 
 export const CSHARP_RUNTIME_UNAVAILABLE_MESSAGE =
-  "The trusted .NET 10 C# Worker is unavailable in this browser.";
+  "The trusted .NET 10 C# Worker is unavailable here.";
 
 const READY_TIMEOUT_MS = 60_000;
 const MAX_DIAGNOSTICS = 100;

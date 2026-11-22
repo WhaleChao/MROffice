@@ -166,6 +166,10 @@ export interface ChartNativeLookBuiltInStyle {
   /** ... and its axis lines that state none: that first line style's width
    * (px), black. */
   axisLine?: { width: number; color: string };
+  /** Windows Excel prints those axis lines so (a part that names no Office
+   * 2010 c14:style; lookwin p268-lw, API readings row 983); without it the
+   * workbook's built-in look keeps the legacy #868686. */
+  classicAxisLine?: true;
 }
 
 export interface ChartNativeLook {
@@ -443,6 +447,7 @@ export function normalizeChartNativeLookBuiltInStyle(raw: unknown): ChartNativeL
   if (isRecord(raw.axisLine) && finite(raw.axisLine.width, 0.1, 30) && isHex(raw.axisLine.color)) {
     result.axisLine = { width: raw.axisLine.width, color: raw.axisLine.color.toLowerCase() };
   }
+  if (result.axisLine && raw.classicAxisLine === true) result.classicAxisLine = true;
   // Styles 1-8 paint nothing past the series' colours: only their line
   // series' first-line-style transforms are stated (X-257).
   const gallery = (raw.style as number) >= 9;

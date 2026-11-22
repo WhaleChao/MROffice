@@ -83,6 +83,7 @@ import {
   proveMraiNativeParagraphRewriteOwnership,
   readMraiNativeParagraphTextRules,
   readMraiNativeParagraphType3PicturesOnly,
+  readMraiNativeParagraphType3LettersTakeWeight,
   readMraiNativeParagraphStandingLook,
   readMraiNativeParagraphStateFormatLook,
   readMraiNativeStandingTextLook,
@@ -100,6 +101,7 @@ import {
   MRAI_NATIVE_GLYPHS_READ_AS_BLANKS_MESSAGE,
   MRAI_NATIVE_TYPE3_FORMAT_MESSAGE,
 } from "./paragraph-rewrite";
+import { mraiNativeStandingOverstrike } from "./standing-state-edit";
 import {
   enclosingTextObject,
   mraiNativeContentTokens,
@@ -700,7 +702,7 @@ export type PdfNativeListTextSourceRun = Readonly<{
 
 /** Why a box's words are fixed (PdfNativeListTextSelectionProof.wordsFixed). */
 export type PdfNativeTextWordsFixedReason = "glyphs-read-as-blanks" | "glyphs-read-as-blanks-near" |
-  "letters-read-reordered" | "too-large-to-set-again";
+  "letters-read-reordered" | "too-large-to-set-again" | "weight-drawn-again";
 
 export interface PdfNativeListTextSelectionProof {
   readonly sourceGeometry?: import("../../source-text-appearance").PdfTextSourceAppearance;
@@ -741,6 +743,24 @@ export interface PdfNativeListTextSelectionProof {
 
   readonly type3Pictures?: true;
   
+
+
+
+
+
+  readonly type3Weight?: true;
+  /** It holds a show of Type3 letters among words of other faces, and opened
+   * as a box whose words can be set (no `type3Text`): the weight of the box
+   * is no stroke on every show -- its group states none -- and is written
+   * only where `type3Weight` says the letters take it. */
+  readonly type3Letters?: true;
+  
+
+
+
+
+
+
 
 
 
@@ -1311,6 +1331,13 @@ export interface PdfNativeListTextReplacementPlan {
   readonly type3Text?: true;
   /** Its Type3 glyphs are pictures all (plan-level only; the proof carries it). */
   readonly type3Pictures?: true;
+  /** Its Type3 letters take a weight where they stand (plan-level only; the proof carries it). */
+  readonly type3Weight?: true;
+  /** It holds a show of Type3 letters (a Type3 face that is no face of
+   * pictures): plan-level only, read where the box's group proof is made --
+   * the group's weight is a stroke on every show, which draws nothing on such
+   * a letter. */
+  readonly type3Letters?: true;
   /** The selection is one chunk of a show the reader cut at wide gaps, and
    * this is the item of the whole show (readerChunksWholeRunItem). Plan-level
    * only; no record carries it. */
@@ -1472,6 +1499,11 @@ interface TextEvent {
    * item: 1, except for a Type3 font the reader measures by its glyph box
    * (see `withType3ReaderBox`). */
   readonly readerVerticalScale?: number;
+  /** A weight drew the show again right after it (a Type3 show's passes;
+   * set only where the paragraph rewrite reads the stream --
+   * showsWithType3PassesFolded): where the passes end, and how far along the
+   * line the first stands. */
+  readonly overstruck?: Readonly<{ end: number; offset: number }>;
   /** The clip box the show is drawn under, when one was read. */
   readonly clipBox?: PdfClipBox | null;
   readonly deviceColor: PdfNativeDeviceColor;
@@ -5251,6 +5283,87 @@ async function type3FontPaintsPicturesOnly(
     pictures += 1;
   }
   return pictures > 0;
+}
+
+/** What a Type3 glyph procedure may draw with besides an inline stencil
+ * mask and stay a shape filled in the text's colour: paths it builds, clips
+ * to and fills, under matrices of its own. No stroke (it would take the line
+ * width a stroked weight sets beside it), no colour, no graphics state, no
+ * XObject, no text. */
+const TYPE3_SHAPE_OPERATORS = `(?:q|Q|h|n|f\\*?|F|W\\*?|(?:${NUMBER}\\s+){6}(?:cm|c)|(?:${NUMBER}\\s+){4}(?:re|v|y)|(?:${NUMBER}\\s+){2}(?:m|l))`;
+const TYPE3_SHAPE_RUN = new RegExp(`^(?:[\\s\\0]+${TYPE3_SHAPE_OPERATORS}(?=[\\s\\0]|$))*[\\s\\0]*$`);
+const TYPE3_SHAPE_HEAD = new RegExp(`^[\\s\\0]*(?:${NUMBER}\\s+){6}d1(?=[\\s\\0]|$)`);
+
+/** What a glyph procedure draws, where it is such a shape: `wx wy llx lly
+ * urx ury d1`, then paths it fills, or one inline image that is a stencil
+ * mask (`/IM true`: painted in the text's colour through its bits) --
+ * "shape"; the same with nothing filled (a space a plotting library writes
+ * as a matrix alone) -- "nothing"; null for anything else. */
+function type3ProcedureShape(source: string): "shape" | "nothing" | null {
+  const head = TYPE3_SHAPE_HEAD.exec(source);
+  if (!head) return null;
+  const body = source.slice(head[0].length);
+  const image = /[\s\0]BI(?=[\s\0\/])/.exec(body);
+  if (!image) {
+    if (!TYPE3_SHAPE_RUN.test(body)) return null;
+    return /(?:^|[\s\0])(?:f\*?|F)(?=[\s\0]|$)/.test(body) ? "shape" : "nothing";
+  }
+  if (!TYPE3_SHAPE_RUN.test(body.slice(0, image.index))) return null;
+  const data = /[\s\0]ID[\s\0]/.exec(body.slice(image.index + image[0].length));
+  if (!data) return null;
+  const dictionary = body.slice(image.index + image[0].length, image.index + image[0].length + data.index);
+  if (!/\/(?:IM|ImageMask)[\s\0]+true(?=[\s\0\/]|$)/.test(dictionary) || /\/(?:IM|ImageMask)[\s\0]+false/.test(dictionary)) return null;
+  // (The mask's bytes are whatever they are: what ends them is the last `EI`
+  // of the procedure, and after it only what a shape may hold.)
+  const ends = [...body.matchAll(/[\s\0]EI(?=[\s\0]|$)/g)];
+  const end = ends.at(-1);
+  if (!end || end.index! < image.index + image[0].length + data.index + data[0].length - 1) return null;
+  return TYPE3_SHAPE_RUN.test(body.slice(end.index! + end[0].length)) ? "shape" : null;
+}
+
+/**
+ * Whether every glyph a Type3 font paints is a shape filled in the text's
+ * colour (type3ProcedureShape), with at least one that is: the
+ * letters of a bitmap face (TeX's, a printer driver's), the outlines a
+ * plotting library writes. Nothing of what a stroked weight sets beside such
+ * a show -- the rendering mode, the line width, the stroke colour -- reaches
+ * what it draws, and drawn again a little along the line it is that much
+ * heavier: the weight this writer gives it (paragraph-rewrite's
+ * planFormatByStateWhereTextStands). False where a procedure cannot be read
+ * or draws anything else.
+ */
+async function type3FontPaintsFilledShapesOnly(
+  fontObject: string,
+  inspectObject: NativeObjectInspector,
+): Promise<boolean> {
+  if (!/\/Subtype\s*\/Type3\b/.test(fontObject)) return false;
+  const inlined = (await inlineIndirectFontEntries(fontObject, inspectObject, ["CharProcs"])).source;
+  const charProcs = inlineDictionaryValue(inlined, "CharProcs", false);
+  if (charProcs === null) return false;
+  let shapes = 0;
+  for (const entry of readMraiNativeTopLevelDictionaryEntries(charProcs)) {
+    const reference = /^\s*(\d+)\s+(\d+)\s+R\s*$/.exec(charProcs.slice(entry.valueStart, entry.valueEnd));
+    if (!reference) return false;
+    const procedure = await inspectObject({ objectNumber: Number(reference[1]), generation: Number(reference[2]) });
+    if (!procedure.streamBytes) return false;
+    const source = LATIN1.decode(procedure.streamBytes);
+    if (BLANK_TYPE3_PROCEDURE.test(source)) continue;
+    const drawn = type3ProcedureShape(source);
+    if (drawn === null) return false;
+    if (drawn === "shape") shapes += 1;
+  }
+  return shapes > 0;
+}
+
+/** What a Type3 face's glyphs are, for a weight asked of its shows: pictures
+ * all (type3FontPaintsPicturesOnly), filled shapes all
+ * (type3FontPaintsFilledShapesOnly), or neither known. */
+async function type3GlyphKind(
+  fontObject: string,
+  inspectObject: NativeObjectInspector,
+): Promise<{ type3Pictures?: true; type3Shapes?: true }> {
+  if (await type3FontPaintsPicturesOnly(fontObject, inspectObject)) return { type3Pictures: true as const };
+  return await type3FontPaintsFilledShapesOnly(fontObject, inspectObject) ? { type3Shapes: true as const } : {};
 }
 
 /**
@@ -30875,7 +30988,9 @@ function standingLookOf(read: Awaited<ReturnType<typeof readMraiNativeParagraphS
 export async function mraiNativeTextTakesFormatsWhereItStands(
   input: Omit<PdfNativeListTextSelectionReplacementInput, "replacementText">,
 ): Promise<Readonly<{ look: PdfNativeTextStandingLook; /** How many shows of the page are the box's. */ shows: number;
-  /** The Type3 glyphs of the box are pictures all (the proof's `type3Pictures`). */ type3Pictures: boolean }> | null> {
+  /** The Type3 glyphs of the box are pictures all (the proof's `type3Pictures`). */ type3Pictures: boolean;
+  /** Its Type3 letters take a weight where they stand (the proof's `type3Weight`). */ type3Weight: boolean;
+  /** A weight drew a Type3 show of it again after it (the proof's wordsFixed, "weight-drawn-again"). */ type3Passes: boolean }> | null> {
   const sourceSha256 = await sha256PdfBytes(input.sourceBytes);
   exactSelection(input.selection, sourceSha256);
   const shared = await createNativeListTextSharedInspection(input.sourceBytes, sourceSha256);
@@ -30883,7 +30998,8 @@ export async function mraiNativeTextTakesFormatsWhereItStands(
     const read = await readMraiNativeParagraphStateFormatLook(paragraphRewriteKernel(input.sourceBytes, shared), input.selection);
     if (!read) return null;
     const { underline, strikethrough, syntheticBold, slanted, drawnBold, boldFaces } = read.look;
-    return Object.freeze({ shows: read.shows, type3Pictures: read.type3Pictures, look: Object.freeze({
+    return Object.freeze({ shows: read.shows, type3Pictures: read.type3Pictures, type3Weight: read.type3Weight,
+      type3Passes: read.type3Passes, look: Object.freeze({
       ...(underline || strikethrough ? { textRules: Object.freeze({ ...(underline ? { underline } : {}), ...(strikethrough ? { strikethrough } : {}) }) } : {}),
       ...(syntheticBold || slanted || drawnBold || boldFaces ? { drawnStyle: Object.freeze({
         ...(syntheticBold || drawnBold ? { bold: true as const } : {}), ...(slanted ? { italic: true as const } : {}),
@@ -31019,9 +31135,14 @@ async function prepareNativeTextFromReadInspection(
     // Its items proved alone own the paragraph's shows: the box moves and
     // resizes whole by them (text-group-move.ts).
     const readProof = proofFromNativeListTextPlan(surgical.plan);
+    // (Not its weight where it holds a Type3 letter: the group's weight is a
+    // stroke set on every show of the box, and a stroke draws nothing on a
+    // Type3 glyph -- the box read bold with the letter as light as it was.
+    // Its weight is then its paragraph's to write, which draws the letter's
+    // show again or says why not: the proof's `type3Weight`.)
     const groupMove = await proveMraiNativeTextGroupMove(input.sourceBytes, {
       evidence: readProof.evidence, target: readProof.target, sourceAppearance: readProof.sourceAppearance,
-      consolidated: Boolean(readProof.sourceRun) }, { bold: !readProof.properties });
+      consolidated: Boolean(readProof.sourceRun) }, { bold: !readProof.properties && !surgical.plan.type3Letters });
     return Object.freeze({ proof: groupMove ? Object.freeze({ ...readProof, groupMove }) : readProof,
       blankingRequest: surgical.blankingRequest });
   }
@@ -31074,9 +31195,16 @@ async function prepareNativeTextFromReadInspection(
   
   const type3Pictures = surgicalProof.type3Text && !surgicalProof.properties &&
     await readMraiNativeParagraphType3PicturesOnly(paragraphRewriteKernel(input.sourceBytes, shared), input.selection);
-  const proof = move || groupMove || textRules || type3Pictures
+  // ... and where they are letters that take the weight where they stand,
+  
+  // that states its own format too: its weight is no property write's -- a
+  
+  const type3Weight = surgicalProof.type3Text && !type3Pictures &&
+    await readMraiNativeParagraphType3LettersTakeWeight(paragraphRewriteKernel(input.sourceBytes, shared), input.selection);
+  const proof = move || groupMove || textRules || type3Pictures || type3Weight
     ? Object.freeze({ ...surgicalProof, ...(move ? { move } : {}), ...(groupMove ? { groupMove } : {}),
-      ...(textRules ? { textRules } : {}), ...(type3Pictures ? { type3Pictures: true as const } : {}) })
+      ...(textRules ? { textRules } : {}), ...(type3Pictures ? { type3Pictures: true as const } : {}),
+      ...(type3Weight ? { type3Weight: true as const } : {}) })
     : surgicalProof;
   // Same-length spaces keep every route's line geometry; a paragraph that is
   // one text object (its lines are shows inside one BT…ET) refuses an
@@ -31210,6 +31338,87 @@ const RECORD_RESOURCE_NAME = /^[A-Za-z][A-Za-z0-9_.+\-]{0,63}$/;
 
 
 
+/** How far along its line a pass of a Type3 show may stand from the show
+ * and be its weight, as a share of the size the reader gives the show. */
+const TYPE3_PASS_MAX_EM = 0.1;
+
+/**
+ * The shows of a stream as the paragraph rewrite reads them, a weight drawn
+ * on a Type3 show by passes of it (standing-state-edit.ts
+ * mraiNativeStandingOverstrike) read as that show's weight: the passes are
+ * no shows of the list, and the show they stand after says it is drawn again
+ * (`overstruck`: where the passes end in the stream, and how far along the
+ * line the first stands). Only what is such passes by their bytes AND by
+ * where they stand: right after a show in a Type3 font, that show's own
+ * bytes twice under the same text state, on its baseline, the first moved
+ * along the line by what the pen moves say and by no more than a pass over a
+ * drawing is, the second where the show stands -- so the pen after it is the
+ * pen the show left. Anything else stays the shows under a replacement text
+ * it was read as.
+ */
+function showsWithType3PassesFolded(
+  streamBytes: Uint8Array,
+  events: readonly TextEvent[],
+  metrics: ReadonlyMap<string, FontMetrics>,
+): readonly TextEvent[] {
+  if (!events.some((event, index) => index > 0 && event.underActualText &&
+    metrics.get(event.fontName)?.simpleSubtype === "Type3")) return events;
+  const source = LATIN1.decode(streamBytes);
+  const out: TextEvent[] = [];
+  for (let index = 0; index < events.length; index += 1) {
+    const show = events[index], along = events[index + 1], over = events[index + 2];
+    const read = along && over && along.underActualText && over.underActualText &&
+      !show.underActualText && !show.underActualTextCluster && along.blockId === show.blockId && over.blockId === show.blockId &&
+      metrics.get(show.fontName)?.simpleSubtype === "Type3" && !show.vertical && /^T[jJ]/u.test(show.operatorKind)
+      ? mraiNativeStandingOverstrike(source, show.end) : null;
+    const offset = read && read.show === source.slice(show.start, show.end) &&
+      along.start === read.passes[0].start && along.end === read.passes[0].end &&
+      over.start === read.passes[1].start && over.end === read.passes[1].end
+      ? type3PassOffset(show, along, over, read.back, read.again) : null;
+    if (read && offset !== null) {
+      out.push(Object.freeze({ ...show, overstruck: Object.freeze({ end: read.end, offset }) }));
+      index += 2;
+    } else out.push(show);
+  }
+  return Object.freeze(out);
+}
+
+/** How far along its line (text space, before the horizontal scale) the
+ * first pass of a show stands from it, where the two passes are the show
+ * drawn again as showsWithType3PassesFolded asks; null where they are not.
+ * `back`, `again`: the numbers of the pen moves before the first pass and
+ * between the two. */
+function type3PassOffset(show: TextEvent, along: TextEvent, over: TextEvent, back: number, again: number): number | null {
+  const scale = show.horizontalScale / 100;
+  if (!(scale > 0) || !(show.fontSize > 0) || show.codes.length === 0) return null;
+  const [a, b, c, d, e, f] = show.textMatrix;
+  const length = a * a + b * b;
+  if (!(length > 0)) return null;
+  const same = (left: number, right: number) => Math.abs(left - right) <= 1e-9 * Math.max(1, Math.abs(left));
+  const tolerance = 1e-6 * Math.max(1, show.fontSize * scale);
+  /** How far along the show's line a pass stands from it (scaled text space); null where it is not the show again. */
+  const moved = (pass: TextEvent): number | null => {
+    if (pass.fontName !== show.fontName || pass.fontSize !== show.fontSize || pass.horizontalScale !== show.horizontalScale ||
+      pass.characterSpacing !== show.characterSpacing || pass.wordSpacing !== show.wordSpacing || pass.textRise !== show.textRise ||
+      pass.codes.length !== show.codes.length || pass.codes.some((byte, at) => byte !== show.codes[at])) return null;
+    const [pa, pb, pc, pd, pe, pf] = pass.textMatrix;
+    if (![[a, pa], [b, pb], [c, pc], [d, pd]].every(([left, right]) => same(left, right)) ||
+      show.graphicsMatrix.some((value, at) => !same(value, pass.graphicsMatrix[at]))) return null;
+    const [dx, dy] = [pe - e, pf - f];
+    const by = (dx * a + dy * b) / length;
+    return Math.hypot(dx - by * a, dy - by * b) <= tolerance * Math.sqrt(length) ? by : null;
+  };
+  const [first, second] = [moved(along), moved(over)];
+  // The second pass stands on the show: the pen after it is where the show left it.
+  if (first === null || second === null || Math.abs(second) > tolerance) return null;
+  const offset = first / scale;
+  // (The pen moves say the same: `back` takes off the show's advance less
+  // the offset, `again` that advance and the offset.)
+  if (Math.abs(offset - ((again - back) * show.fontSize) / 2_000) > tolerance) return null;
+  const size = show.fontSize * Math.max(1, show.readerVerticalScale ?? 1);
+  return offset > 0 && offset <= TYPE3_PASS_MAX_EM * size ? offset : null;
+}
+
 async function standingPageStreams(
   sourceBytes: Uint8Array,
   shared: NativeListTextSharedInspection,
@@ -31235,10 +31444,10 @@ async function standingPageStreams(
         [resource.inlineDictionary === undefined ? {} : { inlineDictionary: resource.inlineDictionary }]);
       faces.set(resource.resourceName, Object.freeze({
         authority,
-        // (A Type3 face of pictures says so, as the kernel's resolveFont does.)
-        metrics: read.additionalMetrics.simpleSubtype === "Type3" &&
-          await type3FontPaintsPicturesOnly(read.additionalFontSource, shared.inspectObject)
-          ? Object.freeze({ ...read.additionalMetrics, type3Pictures: true as const }) : read.additionalMetrics,
+        // (A Type3 face of pictures, or of filled shapes, says so, as the kernel's resolveFont does.)
+        metrics: read.additionalMetrics.simpleSubtype === "Type3"
+          ? Object.freeze({ ...read.additionalMetrics, ...(await type3GlyphKind(read.additionalFontSource, shared.inspectObject)) })
+          : read.additionalMetrics,
         faceName: fontSubsetIndependentName(read.additionalFontSource),
         inline: resource.inlineDictionary !== undefined,
         objects: Object.freeze([
@@ -31406,18 +31615,17 @@ function paragraphRewriteKernel(
       if (!context) refuse("The paragraph's stream context is unknown.");
       const metrics = fonts as ReadonlyMap<string, FontMetrics>;
       const [name, primary] = [...metrics.entries()][0];
-      return parseTextEvents(streamBytes, primary, name, context.initialGraphicsMatrix, context.provenExtGStates,
-        context.initialTextState, context.initialStateKnown, context.initialGraphicsStack,
-        context.requireBalancedGraphicsStack, metrics, [], true, context.provenDeviceColorSpaces ?? new Map());
+      return showsWithType3PassesFolded(streamBytes, parseTextEvents(streamBytes, primary, name, context.initialGraphicsMatrix,
+        context.provenExtGStates, context.initialTextState, context.initialStateKnown, context.initialGraphicsStack,
+        context.requireBalancedGraphicsStack, metrics, [], true, context.provenDeviceColorSpaces ?? new Map()), metrics);
     },
     async resolveFont(resources, encoding, witness) {
-      // (A Type3 face of pictures says so: paragraph-rewrite's Type3 refusal.)
+      // (A Type3 face of pictures, or of filled shapes, says so: paragraph-rewrite's Type3 refusal.)
       const pictures = async (metrics: FontMetrics) => {
         if (metrics.simpleSubtype !== "Type3") return {};
         try {
           const object = LATIN1.decode((await inspectEvidenceFontObject(sourceBytes, resources)).objectBytes);
-          return await type3FontPaintsPicturesOnly(object, (target) => inspectMraiNativeObject(sourceBytes, target))
-            ? { type3Pictures: true as const } : {};
+          return await type3GlyphKind(object, (target) => inspectMraiNativeObject(sourceBytes, target));
         } catch (error) {
           if (!(error instanceof PdfNativeTransactionError)) throw error;
           return {};
@@ -31987,6 +32195,8 @@ export function proofFromNativeListTextPlan(
       ? { propertyRuns: proved.propertyRuns } : {}),
     ...(proved.type3Text ? { type3Text: true as const } : {}),
     ...(proved.type3Pictures && !proved.properties ? { type3Pictures: true as const } : {}),
+    ...(proved.type3Weight && !proved.properties ? { type3Weight: true as const } : {}),
+    ...(proved.type3Letters && !proved.properties ? { type3Letters: true as const } : {}),
   });
 }
 

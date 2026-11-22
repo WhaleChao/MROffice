@@ -3,7 +3,7 @@
   "name": "ai.mroffice/office",
   "title": "MR Office",
   "description": "Create, open and edit documents, spreadsheets and PDFs in MR Office's editor, inline in chat.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "websiteUrl": "https://mroffice.ai/developers/mcp",
   "repository": {
     "url": "https://github.com/XinaTian/MROffice",
@@ -24,7 +24,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "mroffice-mcp",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "runtimeHint": "npx",
       "transport": { "type": "stdio" },
       "environmentVariables": [

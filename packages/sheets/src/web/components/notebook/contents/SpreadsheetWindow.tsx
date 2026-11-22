@@ -91,7 +91,7 @@ import {
   withSpreadsheetEquationBoxBody,
 } from "../../../lib/spreadsheet/equation-box";
 import { DEFAULT_CELL_FONT_SIZE_PT, SpreadsheetCellIndexes, borderLineWidthPx, cellFontTallerThanDefault, cellTextScripted, cellTextTurned, cellTextWraps } from "../../../lib/spreadsheet/cell-indexes";
-import { advancesOf, OFFICE_COMPLEX_WRAP_TEXT, officeDigitPx } from "@mrnote/core/web/lib/spreadsheet/office-hinted-wrap.ts";
+import { advancesOf, OFFICE_COMPLEX_WRAP_TEXT, OFFICE_SMALL_EM_DIGIT_MAX_ZOOM, officeDigitPx, officeSmallEmDigitPx } from "@mrnote/core/web/lib/spreadsheet/office-hinted-wrap.ts";
 import { officeArabicWrapAdvances } from "@mrnote/core/web/lib/spreadsheet/office-arabic.ts";
 import { officeSymbolText } from "../../../lib/spreadsheet/office-symbol-fonts";
 import { OFFICE_PRINTED_GDI_MIDDLE_RISE_DOTS, OFFICE_PRINTED_GDI_TOP_DOTS, OFFICE_PRINTED_MERGED_MIDDLE_RISE_DOTS, OFFICE_PRINTED_TEXT_DROP_DOTS, officeBottomPitch, officeBottomRiseDots, officePrintedBoxDots, officePrintedGdiLineDots, officePrintedDescentDots, officePrintedTopDots, officeMergedRowsRiseDots, officeMergedWrappedExtraDots, officePrintedBaselineShiftPx, officePrintedBaselineSnapPx, officeThickBottomRiseDots } from "../../../lib/spreadsheet/office-wrapped-bottom";
@@ -457,7 +457,7 @@ import { pageLayoutListCaretBackground } from "./spreadsheet/pageLayoutListCaret
 import { SpreadsheetPhoneticLayer } from "./spreadsheet/SpreadsheetPhoneticLayer";
 import { ConditionalIconGlyph } from "./spreadsheet/ConditionalIconGlyph";
 import { SpreadsheetCellTextEffects } from "./spreadsheet/SpreadsheetCellTextEffects";
-import { normalizeNativeGrid, resolveNativeRowHeights, nativeDefaultHoldsRows, nativeDefaultViewRows, editNativeRowSizes, clampNativeRowHeight, nativeRowCssClamp, nativeCellPaddingPx, nativeColumnCssClamp, resolveSpreadsheetFontStyle, spreadsheetFontStack, spreadsheetShapeFontStack, setNativeTextDesignedLines, setNativeTextLandscapePrint, nativeTypographyGeneration, officePrintedIndentStepPx, nativeTextPrinterDpi } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
+import { normalizeNativeGrid, resolveNativeRowHeights, nativeDefaultHoldsRows, nativeDefaultViewRows, nativeOpenViewRowsByStated, editNativeRowSizes, clampNativeRowHeight, nativeRowCssClamp, nativeCellPaddingPx, nativeColumnCssClamp, resolveSpreadsheetFontStyle, spreadsheetFontStack, spreadsheetShapeFontStack, setNativeTextDesignedLines, setNativeTextLandscapePrint, nativeTypographyGeneration, officePrintedIndentStepPx, nativeTextPrinterDpi } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
 import { SpreadsheetFontRepair } from "./spreadsheet/SpreadsheetFontRepair";
 import { cachedSpreadsheetFontNeeds, inheritSpreadsheetFontNeeds, normalizeSpreadsheetFontFaces, spreadsheetFontFamilyWithAssets, useSpreadsheetFontFaces } from "./spreadsheet/useSpreadsheetFontFaces";
 import type { OfficeFontFace } from "@mrnote/core/web/components/office-ribbon/officeFontFace.ts";
@@ -2271,7 +2271,7 @@ import {
   pageLayoutEdgeScrollStep,
   pageLayoutDataAreaWidth,
   pageLayoutWideColumnLimitPx,
-  printedCellWidensRange, printedFormatExtentKeys, printedMergeHoldsAt, printedOccupiedLineBlanks, printedTailUsedColumnEdge,
+  printedCellWidensRange, printedFormatExtentKeys, printedMergeHoldsAt, printedOccupiedLineBlanks, printedTailUsedColumnEdge, printedWideTailColumnEdge,
   pageLayoutSpansKeepPage,
 } from "../../../lib/spreadsheet/page-layout-view";
 import {
@@ -9624,8 +9624,9 @@ function SpreadsheetWindow({
   const workbookFontNeeds = useMemo(()=>cachedSpreadsheetFontNeeds(sheets),[sheets]);
   const workbookFontAssets = useSpreadsheetFontFaces(sheet.fontFaces,pageId,autosave.page?.notebook_id??"",fontOwnerKey,autosave.page?.content_version??0,
     !guestMode&&!embeddedWorkbook&&!autosave.loading&&!autosave.error&&autosave.page?.id===pageId);
-  // Cells decided while the text engine's faces loaded are decided again.
-  useSpreadsheetTextEngineEpoch();
+  // Cells decided while the text engine's faces loaded are decided again
+  // (and rows wrapped once the hinted wrap's extra table has landed).
+  const textEngineEpoch = useSpreadsheetTextEngineEpoch();
   const workbookNativeThemeFonts = useMemo(() => spreadsheetWorkbookThemeFontSet(workbookTheme), [workbookTheme]);
   // A worksheet that states no page setup, in a workbook that holds a chart
   // sheet, prints in the application's standard font's metrics (lookwin p192-lw).
@@ -20513,20 +20514,41 @@ function SpreadsheetWindow({
   // Calibri 11 at 40-95% steps its room by a 3-7 px digit; R462-X41's
   // zoom-70 sheet), until a wrapped cell in the Normal font itself is fitted
   // (officeNormalWrapFirst, p247-lw). Zoomed in, the room is not this: left
-  // at 100%. The API's writer: normal_digit_px.
+  // at 100%. A sheet at 100% in a workbook opened on a zoomed-out sheet
+  // fits at that sheet's zoom (lookwin p260-lw). Under the hinted table's
+  // ems, the small-em digits, only where measured (55% or less). The API's
+  // writer: normal_digit_px, zoom_room_scale.
+  const officeOpenedZoom: unknown = useMemo(() => {
+    const opened = embeddedWorkbook?.content["openActiveSheetId"];
+    if (typeof opened !== "string" || opened === sheet.id) return undefined;
+    return (sheets.find((other) => other.id === opened) as { zoomScale?: unknown } | undefined)?.zoomScale;
+  }, [embeddedWorkbook, sheets, sheet.id]);
   const officeZoomedDigit = useMemo(() => {
     if (nativeGrid?.dpi !== 96 || !nativeCellFont) return undefined;
-    if (typeof officeViewZoom !== "number" || !Number.isInteger(officeViewZoom) || officeViewZoom < 10 || officeViewZoom >= 100) return undefined;
-    const zoomedFace = officeWrapFace ? { family: officeWrapFace.family, sizePt: nativeCellFont.sizePt * officeViewZoom / 100 }
-      : { family: nativeCellFont.family, sizePt: nativeCellFont.sizePt * officeViewZoom / 100, record: nativeCellFont.record };
-    const digit = officeDigitPx(zoomedFace) ?? officeDigitWidth(zoomedFace);
+    const zoomedOut = (zoom: unknown): zoom is number =>
+      typeof zoom === "number" && Number.isInteger(zoom) && zoom >= 10 && zoom < 100;
+    const viewZoom = zoomedOut(officeViewZoom) ? officeViewZoom
+      : (officeViewZoom === undefined || officeViewZoom === null || officeViewZoom === 100) && zoomedOut(officeOpenedZoom)
+        ? officeOpenedZoom : undefined;
+    if (viewZoom === undefined) return undefined;
+    const zoomedFace = officeWrapFace ? { family: officeWrapFace.family, sizePt: nativeCellFont.sizePt * viewZoom / 100 }
+      : { family: nativeCellFont.family, sizePt: nativeCellFont.sizePt * viewZoom / 100, record: nativeCellFont.record };
+    const digit = officeDigitPx(zoomedFace)
+      ?? (viewZoom <= OFFICE_SMALL_EM_DIGIT_MAX_ZOOM ? officeSmallEmDigitPx(zoomedFace) : undefined)
+      ?? officeDigitWidth(zoomedFace);
     const before = officeNormalWrapFirst(sheet, { family: nativeCellFont.family, sizePt: nativeCellFont.sizePt });
+    // The opened sheet's zoom takes only the rows below this sheet's own
+    // opening view (nativeOpenViewRowsByStated).
+    const fromRow = viewZoom === officeViewZoom ? 0
+      : nativeOpenViewRowsByStated(sheet.nativeGrid?.rowMetrics, officeViewZoom, sheet.freezeRows, (sheet as { openingTopRow?: unknown }).openingTopRow);
     // A string, so an edit that moves nothing keeps it (the auto-row caches' deps).
-    return before ? `${digit}:${before[0]}:${before[1]}` : `${digit}`;
-  }, [nativeGrid, nativeCellFont, officeViewZoom, sheet, officeWrapFace]);
+    return before ? `${fromRow}@${digit}:${before[0]}:${before[1]}` : `${fromRow}@${digit}`;
+  }, [nativeGrid, nativeCellFont, officeViewZoom, officeOpenedZoom, sheet, officeWrapFace]);
   const cellNormalDigitPx = useCallback((row: number, col: number) => {
     if (officeZoomedDigit === undefined) return officeNormalDigitPx;
-    const [digit, firstRow, firstCol] = officeZoomedDigit.split(":").map(Number);
+    const [fromText, zoomed] = officeZoomedDigit.split("@");
+    if (row < Number(fromText) || zoomed === undefined) return officeNormalDigitPx;
+    const [digit, firstRow, firstCol] = zoomed.split(":").map(Number);
     if (digit === undefined) return officeNormalDigitPx;
     if (firstRow === undefined || firstCol === undefined) return digit;
     return row < firstRow || (row === firstRow && col < firstCol) ? digit : officeNormalDigitPx;
@@ -20561,16 +20583,24 @@ function SpreadsheetWindow({
     // opening view is set in a face whose one line is as tall as the default
     // or taller (lookwin p233-lw, R461-X32: a bold Arial 12 cell, 21 px under
     // a 15.75 pt default, in row 5 fits the rows below the view, in row 100
-    // nothing). The API's _custom_default_view_rows is the same.
+    // nothing). Only a cell on the row's baseline counts, bottom-aligned as
+    // a format stating nothing is, empty or merged alike; a top, centred,
+    // justified or distributed one does not (p271-lw / p272-lw, R467-X51:
+    // centred and top-aligned Times New Roman 11 cells, 20 px like the
+    // default, hold all 66 pages).
+    // The API's _custom_default_view_rows is the same.
     const defaultPx = Math.floor(heightPt / .75 + .5);
     for (const [key, cell] of Object.entries(sheet.cells)) {
       const [row, col] = key.split(":").map(Number);
       if (!cell || !Number.isInteger(row) || !Number.isInteger(col) || row >= held) continue;
+      const aligned = cell.style && Object.keys(cell.style).length ? cell.style
+        : sheet.defaultStyle as { verticalAlign?: unknown; verticalJustify?: unknown } | undefined;
+      if (standingAlign(aligned?.verticalAlign) || aligned?.verticalJustify !== undefined) continue;
       const face = officeKnownStyleFace(cellDisplayTextCss(pageLayoutCellStyle(row, col, cell)));
       if (face && officeRowHeight(face) >= defaultPx) return held;
     }
     return undefined;
-  }, [sheet.nativeGrid?.rowMetrics, sheet.nativeGrid?.font, sheet.cells, fileHidesRows, sheetZoomScale, sheet.freezeRows, sheetOpeningTopRow, pageLayoutCellStyle]);
+  }, [sheet.nativeGrid?.rowMetrics, sheet.nativeGrid?.font, sheet.cells, sheet.defaultStyle, fileHidesRows, sheetZoomScale, sheet.freezeRows, sheetOpeningTopRow, pageLayoutCellStyle]);
   const autoRowCellEntries = useCallback((cell: SpreadsheetCell, key: string) => {
     const entries: AutoRowMeasurement[] = [];
     let grows = false;
@@ -20709,6 +20739,10 @@ function SpreadsheetWindow({
       const runParts = normalizeCellRuns(cell.runs, cell.value ?? "")?.map(run => ({ text: run.text, style: scripted && (run.style?.superscript || run.style?.subscript)
         ? { ...fontRunStyle(run.style), ...officeScriptMarks(run.style, fontRunStyle({ ...run.style, superscript: false, subscript: false }).fontSize) }
         : fontRunStyle(run.style) }));
+      // Kept on one line (Wrap Text off), rich text's breaks are nothing too:
+      // its row fits one line (R467-X04's S411; the API's cell_text_lines).
+      const shownParts = singleLine && runParts && cellWrapTextSetting(cell) === false
+        ? runParts.map(part => ({ ...part, text: cellTextOnOneLine(part.text, false) })) : runParts;
       grows = true;
       // A row whose stored height Excel did not fix (no customHeight, still
       // as imported) is an automatic row: it is measured too, and grows to
@@ -20735,7 +20769,7 @@ function SpreadsheetWindow({
         ...(effectiveVerticalAlign(cell.style) !== "bottom" || cell.style?.verticalJustify ? { baseline: false as const } : {}),
         style: { ...measuredCss, fontSize: measuredCss.fontSize ?? SPREADSHEET_DEFAULT_FONT_SIZE, ...(scripted ? officeScriptMarks(cell.style) : {}) },
         ...(nativeParagraph ? { nativeParagraph: true, numericValue: nativeAutoRowIsNumeric(cell, formulaEvaluator.getComputed(row, col)),
-          parts: runParts } : runParts ? { parts: runParts } : {}),
+          parts: shownParts } : shownParts ? { parts: shownParts } : {}),
       });
     })();
     return { entries, grows };
@@ -20938,6 +20972,8 @@ function SpreadsheetWindow({
   // single-line floor, px: the tallest of its cells' own lines.
   const printPresentation = embeddedWorkbook?.presentation === "print";
   const statedRefitRows = useMemo(() => {
+    // Asked again when the hinted wrap's extra table lands (advancesOf below).
+    void textEngineEpoch;
     const metrics = sheet.nativeGrid?.rowMetrics;
     // Below Excel's opening view the rows of a held custom default are fitted
     // as under a fitted one (nativeDefaultViewRows); the view's keep it.
@@ -21022,7 +21058,7 @@ function SpreadsheetWindow({
     }
     return floors.size ? floors : undefined;
   }, [printPresentation, sheet.nativeGrid?.rowMetrics, nativeGrid, sheet.rowHeights, sheet.cells, sheet.columnStyles, pageLayoutCellStyle, fontRunStyle,
-    cellDisplayValue, mergeSpans, fileHidesRows, viewHeldRows]);
+    cellDisplayValue, mergeSpans, fileHidesRows, viewHeldRows, textEngineEpoch]);
   const rowHeights = useMemo(() => {
     const stored = nativeRows?.heights ?? sheet.rowHeights;
     if (!automaticRowHeights && !statedRefitRows?.size) return stored;
@@ -52362,6 +52398,20 @@ function SpreadsheetWindow({
         cells: candidate.cells as Record<string, { value?: string; formula?: string }>,
       })),
     activeSheetId: () => sheet.id ?? null,
+    // The Name Box's range: the active cell and the anchor the selection runs from.
+    selection: () => {
+      const active = activeCellLiveRef.current;
+      const anchor = selectionAnchorLiveRef.current ?? active;
+      return {
+        sheetId: sheet.id,
+        row: active.row,
+        col: active.col,
+        r1: Math.min(active.row, anchor.row),
+        c1: Math.min(active.col, anchor.col),
+        r2: Math.max(active.row, anchor.row),
+        c2: Math.max(active.col, anchor.col),
+      };
+    },
     // The window has rendered what was last committed (commitSheets writes
     // the live array at once; this render's ``sheets`` are the next one's).
     settled: () => sheets === liveSheetsRef.current,
@@ -52419,6 +52469,7 @@ function SpreadsheetWindow({
       computed: (sheetId, row, col) => liveAutomationRef.current.computed(sheetId, row, col),
       writeCells: (sheetId, writes, asTyped) => liveAutomationRef.current.writeCells(sheetId, writes, asTyped),
       addSheet: (name) => liveAutomationRef.current.addSheet(name),
+      selection: () => liveAutomationRef.current.selection?.() ?? null,
     });
   }, [embeddedWorkbook, guestMode, liveWorkbookIn, pageId]);
 
@@ -68854,6 +68905,23 @@ function SpreadsheetWindow({
           : printedTop !== undefined ? printedTop * scaledDot + drop : own.ascent * unit,
         linePx: own.ascent + own.descent + 1, rowPx: frame.height / unit };
     })();
+    // Wrapped lines taller than the row print their first lines, cut
+    // below, at any vertical alignment (lookwin probe p22; the grid's
+    // safe centre / end, X-061, X-261).
+    const pageTextAlignItems = officeBaseline !== undefined || officeWrap !== undefined ? "flex-start" : pageSpread ? "stretch" : align==="top"?"flex-start":align==="middle"?(wrap ? cellWrappedMiddleJustifyContent() : "center"):(wrap ? cellWrappedBottomJustifyContent() : "flex-end");
+    // Printed, a wrapped paragraph set at its cell's top, or safely centred
+    // or at its end, builds only the lines that can show above the cell's
+    
+    // R468-X06's notes of up to 2,910 characters in two-line rows built
+    // every line, a span a printed character, and the printer's renderer
+    // ran out of memory). Its box is the cell's own (a merge's, a turned or
+    // spread text's are left as they are), its top the text box's padding
+    // below the cell's top.
+    const pageClipRoom = embeddedWorkbook?.presentation === "print" && frame && frame.height > 0 && pageParagraphAlone && nativeGrid && wrap
+      && !pageSpread && !pageDistributed && !pageQuarterTurn && !pageAngledCss && officeBaseline === undefined && officeWrap === undefined
+      && (pageTextAlignItems === "flex-start" || pageTextAlignItems.startsWith("safe "))
+      && !mergeSpans.some((merge) => row >= merge.row && row < merge.row + merge.rowSpan && col >= merge.col && col < merge.col + merge.colSpan)
+      ? frame.height - 2 * fontScale : undefined;
     return <>
       {pageBand && frame ? <SpreadsheetAngledBand band={pageBand} width={frame.width} edges={pageAngledEdges(row, col)} testId="spreadsheet-page-layout-angled-cell"/> : null}
       {cond.dataBar ?<span className="spreadsheet-window__data-bar" data-testid="spreadsheet-page-layout-data-bar" aria-hidden style={dataBarPaintCss(cond.dataBar, fontScale, DATA_BAR_PRINTED_BOX)}/> : null}
@@ -68864,10 +68932,7 @@ function SpreadsheetWindow({
       {picture ? <span aria-hidden data-testid="spreadsheet-page-layout-cell-picture" style={{position:"absolute",...printedPictureBox,pointerEvents:"none",overflow:"hidden"}}><img src={pictureObjectDisplaySrc(picture.src)} alt="" draggable={false} style={cellPictureImageStyle(picture, cell?.style, fontScale)}/></span> : null}
       {!picture && (showFormula || !isCheckboxCell(cell?.style)) ? <span data-testid={pivot ? "spreadsheet-page-layout-pivot-value" : "spreadsheet-page-layout-cell-text"} aria-hidden
         style={{position:"absolute",inset:0,display:"flex",
-          // Wrapped lines taller than the row print their first lines, cut
-          // below, at any vertical alignment (lookwin probe p22; the grid's
-          // safe centre / end, X-061, X-261).
-          alignItems:officeBaseline !== undefined || officeWrap !== undefined ? "flex-start" : pageSpread ? "stretch" : align==="top"?"flex-start":align==="middle"?(wrap ? cellWrappedMiddleJustifyContent() : "center"):(wrap ? cellWrappedBottomJustifyContent() : "flex-end"),padding:`${officeBaseline !== undefined || officeWrap !== undefined ? 0 : 2*fontScale}px ${(nativeGrid ? displayCellPadding : 4)*fontScale}px`,...(officeInset ? {paddingLeft:officeInset.left,paddingRight:officeInset.right} : {}),...(indentPx > 0 || pageIconRoom > 0 ? {paddingLeft:(officeInset ? officeInset.left : (nativeGrid ? displayCellPadding : 4)*fontScale) + indentPx + pageIconRoom * fontScale} : {}),...(shrunkPx !== undefined ? {fontSize:shrunkPx*fontScale} : {}),whiteSpace:wrap?pageUnhungSpaces?"pre-line":"pre-wrap":"pre",overflow:"hidden",pointerEvents:"none",
+          alignItems:pageTextAlignItems,padding:`${officeBaseline !== undefined || officeWrap !== undefined ? 0 : 2*fontScale}px ${(nativeGrid ? displayCellPadding : 4)*fontScale}px`,...(officeInset ? {paddingLeft:officeInset.left,paddingRight:officeInset.right} : {}),...(indentPx > 0 || pageIconRoom > 0 ? {paddingLeft:(officeInset ? officeInset.left : (nativeGrid ? displayCellPadding : 4)*fontScale) + indentPx + pageIconRoom * fontScale} : {}),...(shrunkPx !== undefined ? {fontSize:shrunkPx*fontScale} : {}),whiteSpace:wrap?pageUnhungSpaces?"pre-line":"pre-wrap":"pre",overflow:"hidden",pointerEvents:"none",
           // The cell's own lines over its text (the grid's display layer);
           // runs carry their own.
           ...(!runs?.length && !pivot ? {textDecorationLine:accounting ? withoutUnderlineDecoration(pageStyle.textDecorationLine) : pageStyle.textDecorationLine,textDecorationStyle:accounting ? undefined : pageStyle.textDecorationStyle,textDecorationThickness:accounting ? undefined : pageStyle.textDecorationThickness} : {}),
@@ -68877,7 +68942,7 @@ function SpreadsheetWindow({
           ...(pageAngledCss?.layer ?? {})}}>
         {pageParagraphAlone && nativeGrid ? <SpreadsheetNativeParagraph parts={pageParagraphParts()} style={pageParagraphStyle} dpi={nativeGrid.dpi} scale={fontScale} wrap={Boolean(wrap)}
           layoutWidth={printedLineWidth} alignmentBox={alignmentBox} boxStyle={wrap ? {overflowWrap:"anywhere"} : undefined} drawSingleRun
-          spread={pageSpread ?? undefined} distributed={pageDistributed} officeBaseline={officeBaseline} officeWrap={officeWrap}
+          spread={pageSpread ?? undefined} distributed={pageDistributed} officeBaseline={officeBaseline} officeWrap={officeWrap} clipRoom={pageClipRoom}
           officePrintedPage={frame?.pageTop !== undefined && frame.dotPx !== undefined ? { top: frame.pageTop, dotPx: frame.dotPx } : undefined}
           linkHref={pageLinkHref}/> :
         <span dir={textDir} style={{width:"100%",minWidth:0,lineHeight:"normal",overflowWrap:wrap?"anywhere":undefined,
@@ -87385,6 +87450,7 @@ function SpreadsheetWindow({
             cellHoldsValue={(row, col) => spillTargetOccupied(sheet.cells, EMPTY_CELL_KEYS, row, col) || printedMergeHoldsAt(mergeSpans, sheet.cells, row, col)}
             printedUsedColumns={printedExtent?.cols}
             printedStyledColumns={printedExtent ? printedTailUsedColumnEdge(sheet) : undefined}
+            printedWideTailEdge={printedExtent ? printedWideTailColumnEdge(sheet) : undefined}
             printedCenterAcrossRunAt={printedCenterAcrossRunAt}
             pagePrints={printedExtent ? pageLayoutPagePrints : undefined}
             renderCellContent={(row, col, fontScale, nativeTextWidth, frame) =>

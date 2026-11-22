@@ -798,6 +798,13 @@ function hangulHangOff(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsHangulHangOff?: boolean }).__docsHangulHangOff === true;
 }
 
+/** Harness switch (`window.__docsHanTrailingSpaceHangOff = true`): a body
+ * paragraph holding Han or Kana keeps break-spaces, its line-end space
+ * charged to the line (A/B). */
+function hanTrailingSpaceHangOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsHanTrailingSpaceHangOff?: boolean }).__docsHanTrailingSpaceHangOff === true;
+}
+
 /** East Asian text other than Hangul: the text whose spaced boundaries
  * belong to the terminal punctuation and kinsoku rules. */
 function holdsNonHangulEastAsianText(text: string): boolean {
@@ -1149,15 +1156,21 @@ function documentOverflowPunctuationDecorations(
       const nativeParagraphFlow = !inTable && paragraphSource?.adapter === "docx" &&
         paragraphSource.typographyFlow === 1 && paragraphSource.fontScriptFlow === 1 &&
         /^word\/document\.xml#p\[\d+\](?:\/seg\[\d+\])?$/.test(paragraphSource.sourceAnchor ?? "");
-      if (nativeParagraphFlow && !holdsNonHangulEastAsianText(block.textContent)) {
+      // A paragraph of Han or Kana text hangs its line-end space too: Word
+      // charges no line-end U+0020 to a Chinese line either (docx-look
+      // pc3/probes/hz, modes 14 and 15: SimSun 12, nineteen ideographs, "ab"
+      // and a space fill line 1 with the space past the margin; break-spaces
+      // sent "ab" down). Under pre-wrap U+0020 hangs; an ideographic space
+      // (U+3000), which Word hangs as well, still takes its width here.
+      if (nativeParagraphFlow && (!holdsNonHangulEastAsianText(block.textContent) || !hanTrailingSpaceHangOff())) {
         // The same rule in the body for a paragraph with no East Asian text:
         // Word charges no line-end space to its line, so a word that fits
         // without the space after it stays (mrline/line.docx: Arial 11pt
         // "...tempor incididunt " ends line 1 in Word 16 for Mac, 572px of
         // a 576px column; break-spaces moved "incididunt" down). A paragraph
-        // with Han/Kana text keeps break-spaces: its spaced boundaries
-        // belong to the terminal punctuation and kinsoku rules. Hangul does
-        // not keep it: Korean is set in spaced words, and Word hangs the
+        // with Han/Kana text kept break-spaces before (its spaced boundaries
+        // left to the terminal punctuation and kinsoku rules); it hangs the
+        // space too now (below). Hangul did not keep it: Korean is set in spaced words, and Word hangs the
         // line-end space in Korean text as in Latin (Windows Word, docx-look
         // pc1/probes/ko: Malgun Gothic 10 pt, eight 30 pt words and seven
         // spaces in a column 1.5 pt wider than them stand on one line, left

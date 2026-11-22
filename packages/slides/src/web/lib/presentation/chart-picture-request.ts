@@ -19,6 +19,7 @@ import { officeChartTextEChartsStyle } from "@mrnote/core/web/lib/office-charts/
 import {
   officeChartDataTable,
   officeChartDataTableBand,
+  officeChartDataTableFontPx,
   officeChartDataTableValue,
   type OfficeChartDataTable,
 } from "@mrnote/core/web/lib/office-charts/data-table.ts";
@@ -118,6 +119,8 @@ export function presentationChartDataTableBasis(block: PresentationChartBlock): 
   table: OfficeChartDataTable;
   style: unknown;
   inherited: PresentationChartTableText;
+  /** The size (px) its rows are as tall as (`officeChartDataTableFontPx`). */
+  fontPx: number | undefined;
 } | null {
   let table: OfficeChartDataTable | null;
   let style: unknown;
@@ -145,7 +148,8 @@ export function presentationChartDataTableBasis(block: PresentationChartBlock): 
     table = resolveChartDataTable(block) ? legacyDataTable(block) : null;
     style = block.dataTableStyle;
   }
-  return table ? { table, style, inherited } : null;
+  const fontPx = officeChartDataTableFontPx(style, attrs?.format?.text);
+  return table ? { table, style, inherited, fontPx } : null;
 }
 
 /** The band a deck chart's data table takes under its plot, design px. */
@@ -153,11 +157,8 @@ export function presentationChartDataTableBand(
   basis: NonNullable<ReturnType<typeof presentationChartDataTableBasis>>,
   frameHeightPx: number,
 ): ReturnType<typeof officeChartDataTableBand> {
-  return officeChartDataTableBand(
-    basis.table.series.length + 1,
-    frameHeightPx,
-    typeof basis.inherited.fontSize === "number" ? basis.inherited.fontSize : undefined,
-  );
+  // Rows as tall as the table's own text (else the chart's): every series a row under the categories' row.
+  return officeChartDataTableBand(basis.table.series.length + 1, frameHeightPx, basis.fontPx);
 }
 
 /**

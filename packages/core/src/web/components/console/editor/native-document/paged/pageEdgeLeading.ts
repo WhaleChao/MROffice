@@ -220,11 +220,37 @@ export function sheetTrailingAutoLeadingCreditPx(sheet: HTMLElement | null | und
   const columns = Number.parseInt(getComputedStyle(sheet).columnCount, 10);
   if (Number.isFinite(columns) && columns > 1) return 0;
   let last: Element | null = null;
+  const shown: Element[] = [];
   for (const child of Array.from(sheet.children)) {
     if (child.matches(".ProseMirror-widget")) continue;
     if (child instanceof (sheet.ownerDocument.defaultView?.HTMLElement ?? HTMLElement) &&
         child.offsetHeight === 0 && getComputedStyle(child).display === "none") continue;
     last = child;
+    shown.push(child);
   }
-  return trailingAutoLeadingCreditPx(last);
+  const under = lineUnderOpeningPicturesPx(shown);
+  return under > 0 ? under : trailingAutoLeadingCreditPx(last);
+}
+
+/**
+ * A sheet that opens with Top and Bottom pictures and holds nothing after
+ * them but one line of a paragraph: Word keeps that line on the page under
+ * the pictures it is drawn from, past the bottom margin (pc6/probes/fp,
+ * the ledger's `lineUnderObjects`). The whole line is no spill.
+ */
+function lineUnderOpeningPicturesPx(shown: readonly Element[]): number {
+  if (shown.length < 2 || typeof window === "undefined") return 0;
+  if ((window as Window & { __docsLineUnderPageObjectsOff?: boolean }).__docsLineUnderPageObjectsOff === true) return 0;
+  const band = '[data-float-mode="band"][data-float-anchor]';
+  const line = shown[shown.length - 1];
+  if (!(line instanceof HTMLElement) || !line.matches(TEXT_BLOCK)) return 0;
+  for (const child of shown.slice(0, -1)) {
+    if (!(child.matches(band) || child.querySelector(band)) || (child.textContent ?? "").trim()) return 0;
+  }
+  const style = getComputedStyle(line);
+  const height = line.offsetHeight;
+  const pitch = Number.parseFloat(style.lineHeight);
+  const linePx = Number.isFinite(pitch) && pitch > 0 ? pitch : (Number.parseFloat(style.fontSize) || 16) * 1.3;
+  if (!(height > 0) || height > linePx * 1.5) return 0;
+  return height + Math.max(0, Number.parseFloat(style.marginBottom) || 0);
 }

@@ -28,7 +28,7 @@ import type {
 import type {
   PdfNativeListTextEditLease,
 } from "../../../../../lib/pdf/engine/native/list-text-command-lifecycle";
-import type { PdfNativeRowFormat, PdfNativeTextLayoutDraft } from "../PdfNativeListTextEditDialog";
+import type { PdfNativeDetachedFormatAsk, PdfNativeRowFormat, PdfNativeTextLayoutDraft } from "../PdfNativeListTextEditDialog";
 import type {
   PdfNativeTextEditSessionHandle,
 } from "../PdfNativeTextEditSessionHost";
@@ -169,7 +169,7 @@ export interface PdfPageWindowTextEditSessionModel {
   /** The same format written by the window after the box's editor has
    * closed, the reader going on at once; false when not taken. */
   detachNativeRowFormat: (format: PdfNativeRowFormat, typedText: string | undefined,
-    ghost: () => (() => void) | null) => boolean;
+    ghost: () => (() => void) | null, asked?: PdfNativeDetachedFormatAsk) => boolean;
 }
 
 
@@ -335,6 +335,8 @@ export function PdfPageWindowTextEditSession({ session }: { session: PdfPageWind
       sourceAppearance={nativeListTextDialogProofRef.current?.sourceAppearance}
       boxDrawnStyle={nativeListTextDialogProofRef.current?.drawnStyle}
       type3PicturesOnly={nativeListTextDialogProofRef.current?.type3Pictures === true}
+      type3TakesWeight={nativeListTextDialogProofRef.current?.type3Weight === true}
+      type3LettersHeld={nativeListTextDialogProofRef.current?.type3Letters === true}
       // Until the proof lands, the glyphs read from the loaded page: the
       // caret is drawn on them from the first moment, not the textarea's.
       sourceGeometry={(() => {

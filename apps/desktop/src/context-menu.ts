@@ -29,7 +29,9 @@ export function showContextMenu(contents: WebContents, params: ContextMenuParams
 
   if (params.linkURL && /^(https?|mailto):/.test(params.linkURL)) {
     items.push(
-      { label: label("在浏览器中打开链接", "Open Link in Browser"), click: () => void shell.openExternal(params.linkURL) },
+      // It truly opens the system's default browser (shell.openExternal), the
+      // one place outside the app this menu sends a person.
+      { label: label("在默认浏览器中打开链接", "Open Link in Default Browser"), click: () => void shell.openExternal(params.linkURL) },
       { label: label("拷贝链接", "Copy Link"), click: () => clipboard.writeText(params.linkURL) },
       { type: "separator" },
     );

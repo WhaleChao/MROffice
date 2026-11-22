@@ -187,13 +187,31 @@ function dropTextCacheTouched<V>(cache: Map<string, V>, event: Event, touched: (
  * A Windows grid's printed line stands its baseline where Excel's does by it
  * (SpreadsheetNativeParagraph officeBaseline).
  */
-export function nativeStrutBaselinePx(font: { fontFamily?: unknown; fontSize?: unknown; fontWeight?: unknown; fontStyle?: unknown }, lineHeightPx: number | "normal", generation = 0): number | undefined {
+export function nativeStrutBaselinePx(font: NativeStrutFont, lineHeightPx: number | "normal", generation = 0): number | undefined {
+  return nativeStrutProbe(font, lineHeightPx, generation)?.baseline;
+}
+
+
+
+
+
+
+
+
+
+
+export function nativeStrutLineHeightPx(font: NativeStrutFont, generation = 0): number | undefined {
+  return nativeStrutProbe(font, "normal", generation)?.height;
+}
+
+type NativeStrutFont = { fontFamily?: unknown; fontSize?: unknown; fontWeight?: unknown; fontStyle?: unknown };
+function nativeStrutProbe(font: NativeStrutFont, lineHeightPx: number | "normal", generation: number): { baseline: number; height: number } | undefined {
   if (typeof document === "undefined" || !document.body || (lineHeightPx !== "normal" && !(lineHeightPx > 0))) return undefined;
   const size = typeof font.fontSize === "number" ? `${font.fontSize}px` : typeof font.fontSize === "string" ? font.fontSize : "";
   const family = typeof font.fontFamily === "string" ? font.fontFamily : "";
   if (!size || !family) return undefined;
   const key = `${String(font.fontStyle ?? "normal")}\u0000${String(font.fontWeight ?? "normal")}\u0000${size}\u0000${family}\u0000${lineHeightPx}\u0000${generation}`;
-  if (strutBaselines.has(key)) return strutBaselines.get(key) ?? undefined;
+  if (strutProbes.has(key)) return strutProbes.get(key) ?? undefined;
   const block = document.createElement("div");
   block.style.cssText = "position:absolute;visibility:hidden;left:-10000px;top:0;white-space:pre;margin:0;padding:0;border:0;";
   block.style.fontFamily = family;
@@ -207,14 +225,14 @@ export function nativeStrutBaselinePx(font: { fontFamily?: unknown; fontSize?: u
   block.append(mark);
   document.body.append(block);
   const baseline = mark.getBoundingClientRect().top - block.getBoundingClientRect().top;
-  const laidOut = block.getBoundingClientRect().height > 0;
+  const height = block.getBoundingClientRect().height;
   block.remove();
-  const answer = laidOut && Number.isFinite(baseline) && baseline > 0 ? baseline : null;
-  if (strutBaselines.size > 2000) strutBaselines.clear();
-  strutBaselines.set(key, answer);
+  const answer = height > 0 && Number.isFinite(height) && Number.isFinite(baseline) && baseline > 0 ? { baseline, height } : null;
+  if (strutProbes.size > 2000) strutProbes.clear();
+  strutProbes.set(key, answer);
   return answer ?? undefined;
 }
-const strutBaselines = new Map<string, number | null>();
+const strutProbes = new Map<string, { baseline: number; height: number } | null>();
 
 /** AutoFit allocates one device pixel of clearance per line. This is distinct
  * from both the default row and a single-line font's base height. */

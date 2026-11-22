@@ -41,6 +41,7 @@ import {
   docsParagraphBesideFloat,
   type DocsFloatCache,
   docsDrawnWidths,
+  docsStretchDrawnWidth,
   docsEngineLineStarts,
   docsLastLineOverhangs,
   engineBreakStrutOff,
@@ -379,12 +380,18 @@ function editAtPageSeam(view: EditorView): boolean {
   return false;
 }
 
-/** Pieces' natural drawn widths; a justified paragraph is read left-aligned
- * for the moment (its justification stretches CJK glyph boxes), with the
- * editor's DOM observer paused so the style flip is not taken for an edit. */
-function naturalWidths(view: EditorView, element: HTMLElement, paragraph: DocsParagraph): number[] {
+/** `plan` given the pieces' natural drawn widths, and a reading of a stretch
+ * of them as ranges (docsStretchDrawnWidth); a justified paragraph is read
+ * left-aligned for the moment (its justification stretches CJK glyph boxes),
+ * with the editor's DOM observer paused so the style flip is not taken for
+ * an edit. */
+function withNaturalWidths<T>(
+  view: EditorView, element: HTMLElement, paragraph: DocsParagraph,
+  plan: (drawn: number[], measure: ((from: number, to: number) => number | null) | undefined) => T,
+): T {
+  const read = () => plan(docsDrawnWidths(paragraph), rangeWidthsOff(view) ? undefined : (from, to) => docsStretchDrawnWidth(paragraph, from, to));
   const align = paragraph.align;
-  if (align !== "justify" && align !== "distribute" && !align.startsWith("-")) return docsDrawnWidths(paragraph);
+  if (align !== "justify" && align !== "distribute" && !align.startsWith("-")) return read();
   const observer = (view as EditorView & { domObserver?: { stop(): void; start(): void } }).domObserver;
   const before = element.style.getPropertyValue("text-align");
   const beforePriority = element.style.getPropertyPriority("text-align");
@@ -394,7 +401,7 @@ function naturalWidths(view: EditorView, element: HTMLElement, paragraph: DocsPa
   try {
     element.style.setProperty("text-align", "left", "important");
     element.style.setProperty("text-align-last", "auto", "important");
-    return docsDrawnWidths(paragraph);
+    return read();
   } finally {
     if (before) element.style.setProperty("text-align", before, beforePriority);
     else element.style.removeProperty("text-align");
@@ -402,6 +409,12 @@ function naturalWidths(view: EditorView, element: HTMLElement, paragraph: DocsPa
     else element.style.removeProperty("text-align-last");
     observer?.start();
   }
+}
+
+/** `window.__docsPullUpRangeWidthsOff = true`: whether the browser pulls the
+ * next word up is read from the letters' boxes summed, as before. */
+function rangeWidthsOff(view: EditorView): boolean {
+  return (view.dom.ownerDocument.defaultView as (Window & { __docsPullUpRangeWidthsOff?: boolean }) | null)?.__docsPullUpRangeWidthsOff === true;
 }
 
 /** Same lines? Starts compared on the drawn sequence. */
@@ -688,7 +701,8 @@ function readBlockLines(
   // `window.__docsCorrectionRoundingOff = true`: a correction leaves 0.02 px
   // whatever the line's items (before R342-D30).
   const roundingOff = (view.dom.ownerDocument.defaultView as (Window & { __docsCorrectionRoundingOff?: boolean }) | null)?.__docsCorrectionRoundingOff === true;
-  const plan = planDocsLineCorrections(paragraph, raw, naturalWidths(view, element, paragraph), force, { roundingSlack: !roundingOff });
+  const plan = withNaturalWidths(view, element, paragraph, (drawn, measure) =>
+    planDocsLineCorrections(paragraph, raw, drawn, force, { roundingSlack: !roundingOff, ...(measure ? { measure } : {}) }));
   const spans: Span[] = [];
   for (const line of plan) {
     // One span per text node stretch of the line.
@@ -938,6 +952,10 @@ export const DocumentEngineLineBreaks = Extension.create({
           let widthTimer: number | null = null;
           const widthWatchOff = () =>
             (win as Window & { __docsEngineWidthWatchOff?: boolean }).__docsEngineWidthWatchOff === true;
+          const flushWidthsOff = () =>
+            (win as Window & { __docsEngineFlushWidthsOff?: boolean }).__docsEngineFlushWidthsOff === true;
+          const flushWidthsWiden = () =>
+            (win as Window & { __docsEngineFlushWidthsWiden?: boolean }).__docsEngineFlushWidthsWiden === true;
           /** What a pass read a frame at a time took to read (every paragraph,
            * the sheets of an arrived face): given back if it is cut short. */
           let inFlight: (() => void) | null = null;
@@ -1310,7 +1328,7 @@ export const DocumentEngineLineBreaks = Extension.create({
           };
           /** The paragraphs (within the measure horizon) drawn at a width other
            * than the one they were read at. */
-          const movedWidths = (): Array<[number, number]> => {
+          const movedWidths = (narrowedOnly = false): Array<[number, number]> => {
             const doc = view.state.doc;
             const horizon = sheetsWithinMeasureHorizon(view.dom);
             const moved: Array<[number, number]> = [];
@@ -1329,7 +1347,8 @@ export const DocumentEngineLineBreaks = Extension.create({
                 budget -= 1;
                 const element = view.nodeDOM(pos);
                 if (!(element instanceof HTMLElement) || !element.isConnected) return false;
-                if (Math.abs(element.getBoundingClientRect().width - width) > 0.5) {
+                const drawnWidth = element.getBoundingClientRect().width;
+                if (narrowedOnly ? width - drawnWidth > 0.5 : Math.abs(drawnWidth - width) > 0.5) {
                   readWidth.delete(node);
                   moved.push([pos, pos + node.nodeSize]);
                 }
@@ -1356,6 +1375,28 @@ export const DocumentEngineLineBreaks = Extension.create({
           const onFlush = () => {
             const state = documentEngineLineBreaksKey.getState(view.state);
             const dirty = Boolean(state && (state.dirty === "all" || state.dirty.length || state.retry.length));
+            // The ledger is about to measure: a paragraph drawn now at another
+            // width than it was read at carries the lines of that width, and is
+            // read again first. Left to the width watch (300 ms after a pass,
+            // and only once no pass is under way), its wrong lines were what
+            // the ledger measured for every pass of an opening in between
+            // (R372-D01: a two-column section's paragraphs read at the page's
+            // width on a sheet not yet in columns, one line taller once in
+            // their 325 px column; four passes planned on that, and the pages
+            // went back when they were read again: 3 openings of 8).
+            // Only one drawn narrower than it was read: its lines overflow the
+            // measure and add rows. One drawn wider is most often a block the
+            // ledger has just placed whose column is not laid out yet (R372-D01:
+            // a joined paragraph drawn page-wide for a moment); read there, its
+            // corrections set it a line taller in its column and the cut that
+            // followed was joined and made again every pass (24 passes, one
+            // opening of 6). The watch reads those once the passes rest.
+            // `window.__docsEngineFlushWidthsOff = true`: the watch alone;
+            // `window.__docsEngineFlushWidthsWiden = true`: wider ones too.
+            if (!flushWidthsOff() && !widthWatchOff() && !isImeCompositionActive(view) && !typingHolds()) {
+              const moved = movedWidths(!flushWidthsWiden());
+              if (moved.length) widthMoved.push(...moved);
+            }
             if (!view.dom.hasAttribute(DOCUMENT_ENGINE_LINES_PENDING) && !dirty && !widthMoved.length) {
               watchWidths();
               return;

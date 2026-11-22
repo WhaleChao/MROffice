@@ -143,6 +143,50 @@ function isPdfAnnotationReadItem(
   );
 }
 
+/** The waits before a read the server could not answer is asked again. */
+const MOMENTARY_READ_FAILURE_WAITS_MS = [700, 2_000, 5_000] as const;
+
+/**
+ * Whether a read failed because the server could not answer just then (it
+ * was not reached, or said so itself: 408, 429, 5xx; `status` 0 is this
+ * app's "unreachable"), not because it refused the read.
+ */
+export function pdfAnnotationReadFailedForAMoment(error: unknown): boolean {
+  if (error instanceof TypeError) return true;
+  const status = (error as { status?: unknown } | null)?.status;
+  return (
+    typeof status === "number" &&
+    (status === 0 || status === 408 || status === 429 || status >= 500)
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+async function getPdfAnnotationsThroughAMoment(
+  dataItemId: string,
+): Promise<PdfAnnotationReadResponse> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await apiGet<PdfAnnotationReadResponse>(
+        `/api/v1/data-items/${dataItemId}/annotations`,
+      );
+    } catch (error) {
+      const wait = MOMENTARY_READ_FAILURE_WAITS_MS[attempt];
+      if (wait === undefined || !pdfAnnotationReadFailedForAMoment(error)) throw error;
+      await new Promise<void>((resolve) => setTimeout(resolve, wait));
+    }
+  }
+}
+
 function readAllPdfAnnotations(
   dataItemId: string,
   options: {
@@ -166,9 +210,7 @@ function readAllPdfAnnotations(
     return current.promise;
   }
 
-  const pending = apiGet<PdfAnnotationReadResponse>(
-    `/api/v1/data-items/${dataItemId}/annotations`,
-  ).then((response) => {
+  const pending = getPdfAnnotationsThroughAMoment(dataItemId).then((response) => {
     if (!Array.isArray(response.items)) {
       throw new Error("Invalid PDF annotation response");
     }

@@ -2282,7 +2282,30 @@ function withStatedLayoutRefs<T extends { type?: unknown; chartType?: unknown; r
   return { ...chart, seriesRefs: refs ?? null };
 }
 
+/**
+ * The value axis' Linked to source format: the one format every value cell
+ * carries (`linkedValueAxisFormatOfCells`). A chart whose cells the record
+ * cannot name -- one past the sheet's series limit keeps no `seriesRefs`
+ * (R466-X71's 35 series) -- shows its first series' source format, the
+ * `c:formatCode` its part caches (`chartV2.data.series[0].numberFormat`), as
+ * Excel labels the axis by it: R466-X71's values in 0.00000 read 30.00000
+ * on Windows Excel's axis where the sheet read 30.
+ */
 export function resolveLinkedValueAxisNumberFormat(
+  chart: Parameters<typeof linkedValueAxisFormatOfCells>[0] & { chartV2?: unknown },
+  currentSheetName: string,
+  lookup: SpreadsheetChartNumberFormatCellLookup,
+): SpreadsheetChartLinkedFormatResolution {
+  const resolution = linkedValueAxisFormatOfCells(chart, currentSheetName, lookup);
+  if (resolution.state === "resolved" || resolution.reason === "unsupported") return resolution;
+  if (chart.seriesRefs !== undefined && normalizeChartSeriesRefs(chart.seriesRefs)) return resolution;
+  const model = chart.chartV2 as { data?: { kind?: unknown; series?: Array<{ numberFormat?: unknown }> } } | undefined;
+  const series = model?.data?.kind === "category" && Array.isArray(model.data.series) ? model.data.series[0] : undefined;
+  const cached = series ? normalizeNumberFormatCode(series.numberFormat) : null;
+  return cached ? { state: "resolved", formatCode: cached } : resolution;
+}
+
+function linkedValueAxisFormatOfCells(
   chart: {
     type?: unknown;
     chartType?: unknown;

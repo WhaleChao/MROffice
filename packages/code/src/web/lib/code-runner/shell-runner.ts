@@ -35,7 +35,7 @@ import {
 export { SHELL_EXECUTION_PROTOCOL, SHELL_EXECUTION_RUNTIME };
 
 export const SHELL_RUNTIME_UNAVAILABLE_MESSAGE =
-  "The isolated Shell WebAssembly runtime is unavailable in this browser.";
+  "The isolated Shell WebAssembly runtime is unavailable here.";
 
 const READY_TIMEOUT_MS = 20_000;
 const DEFAULT_TIMEOUT_MS = 5_000;

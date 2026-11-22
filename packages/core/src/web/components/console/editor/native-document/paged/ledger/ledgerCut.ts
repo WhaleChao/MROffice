@@ -58,6 +58,7 @@ function balancedSegmentHeightPx(
   columns: number,
   pieces: readonly SegmentPiece[],
   atoms: readonly LedgerAtom[],
+  wordLegacy: boolean,
 ): number {
   if (!pieces.length) return 0;
   return balancedColumnHeightPx(columns, pieces.map((piece) => ({
@@ -79,7 +80,7 @@ function balancedSegmentHeightPx(
     // Keep with next holds at a column seam as the projector applies it
     // (an anchored object's keepNext is no paragraph's: it costs no flow).
     ...(piece.complete && atoms[piece.atom]?.keepNext && !atoms[piece.atom]?.anchored ? { keepNext: true } : {}),
-  })));
+  })), wordLegacy ? { wordLegacy: true } : {});
 }
 
 function wholeAtomHeightsPx(
@@ -180,6 +181,12 @@ function columnIndexOf(page: OpenPage, pos: number): number {
  * not fit whole. */
 function keepChainSplitOff(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsKeepChainSplitOff?: boolean }).__docsKeepChainSplitOff === true;
+}
+
+/** `window.__docsKeptTableRowsCutOff = true` (A/B): a table of kept rows in a
+ * keep-with-next chain may be cut where it stands, the older reading. */
+function keptTableRowsCutOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsKeptTableRowsCutOff?: boolean }).__docsKeptTableRowsCutOff === true;
 }
 
 /** `window.__docsKeepChainBackUpOff = true` (A/B): in a compatibility mode
@@ -366,7 +373,7 @@ export function planLedgerPages(
     if (!next) return;
     const nextColumns = Number.isInteger(next.sectionColumns) && next.sectionColumns! > 1 ? next.sectionColumns! : 1;
     const heightPx = page.columns > 1
-      ? Math.min(page.columnPx, balancedSegmentHeightPx(page.columns, page.segment, atoms))
+      ? Math.min(page.columnPx, balancedSegmentHeightPx(page.columns, page.segment, atoms, options.wordLegacyBalance === true))
       : page.usedPx;
     const gap = page.previous ? options.gapPx(page.previous, next) : 0;
     const top = page.segmentTopPx + heightPx + (heightPx > EPSILON_PX ? gap : 0);
@@ -515,7 +522,17 @@ export function planLedgerPages(
     // below its top (R484-D04: a tab-only paragraph fitted page 10 by 7 px of
     // credit over the footer's top, was drawn past the foot, put back, and
     // planned there again on every key).
-    const credit = page.notesBelow || atom.hasNotes || carryInPx > EPSILON_PX || page.footBand ? 0 : atom.creditPx;
+    const footCredit = page.notesBelow || atom.hasNotes || carryInPx > EPSILON_PX || page.footBand ? 0 : atom.creditPx;
+    // A paragraph whose Top and Bottom pictures opened its page keeps its
+    // line there under them, however far past the foot: they cannot go on
+    // without it and are already at a page top (Windows Word 16, mode 15,
+    // docx-look/pc6/probes/fp: a picture filling the body from the top, its
+    // paragraph's 18 pt line 10, 17 and 20 pt past the bottom margin -- the
+    // picture 2 pt past it too -- stays on page 1, text or none; corpus
+    // R472-D78's appendix of four full-page pictures, Word 4 pages, 7 here).
+    const credit = !continuing && atom.lineUnderObjects === true && !page.notesBelow && pageOpenedByItsObjects(page, atoms, index)
+      ? page.usedPx + gap + height
+      : footCredit;
 
     // 1b. a boundary the painted page refused stays where the verifier put it.
     if (!pageEmpty && !continuing && options.breakBefore?.has(index)) {
@@ -607,7 +624,18 @@ export function planLedgerPages(
               continue;
             }
             const cut = atoms[member];
-            headFits = cut.splittable && !cut.hidden && columnEnd - at > EPSILON_PX &&
+            // A table every row of which keeps with the next (the chain runs
+            // on through it: `keepNext` on a table atom) has no break Word
+            // allows between its rows: the chain moves on as one (Windows
+            // Word, docx-look/pc2/probes/kt: a kept paragraph, then 20 rows
+            // whose cells all keep with next, after ten body lines -- all go
+            // to page 2; 44 rows, taller than a page, start page 2 and break
+            // there; corpus R484-D90/D95/D98, Qualtrics exports, every
+            // question and its answer table kept). Cut where it stood, the
+            // seam a first estimate left was taken for one.
+            // So is a list every paragraph of which keeps with the next.
+            const keptRows = ((cut.kind === "table" && cut.keepNext === true) || cut.keptWithin === true) && !keptTableRowsCutOff();
+            headFits = cut.splittable && !cut.hidden && !keptRows && columnEnd - at > EPSILON_PX &&
               options.oracle.planHead({
                 atom: cut,
                 from: null,
@@ -632,6 +660,7 @@ export function planLedgerPages(
                 const candidate = atoms[back];
                 const candidateHeight = back === index ? height : candidate.heightPx;
                 if (!candidate.splittable || candidate.hidden || candidate.anchored) continue;
+                if (!keptTableRowsCutOff() && (candidate.keptWithin === true || (candidate.kind === "table" && candidate.keepNext))) continue;
                 // Room that leaves its last line out, however the oracle
                 // judges "whole": its height less a line where its pitch is
                 // known, else less its last line's Auto leading credit. A
@@ -778,6 +807,12 @@ export function planLedgerPages(
               pageEmpty: columnEmpty && !belowAnotherSection,
               ...(page.notesBelow && atom.noteChromePx ? { pageNoteChromePx: atom.noteChromePx } : {}),
               ...(credit <= EPSILON_PX && atom.creditPx > EPSILON_PX ? { noFootCredit: true } : {}),
+              // A chain that opened the page breaks where the page fills:
+              // its table of kept rows too (Windows Word, pc2/probes/kt: a
+              // kept question and 44 kept rows open page 2 and part at its
+              // foot, row 24 on page 3). Asked as kept, the rows found no
+              // break and the seam an earlier page had cut stood.
+              ...(index <= keepReleasedThrough && !keptTableRowsCutOff() ? { keepReleased: true } : {}),
             })
           : null);
       if (cut) {
@@ -957,6 +992,20 @@ export function carryAnchoredObjectsToTheirParagraph(
     if (opener.atom !== page.placements[page.placements.length - 1].atom + 1) continue;
     next.placements.unshift(...page.placements.splice(runStart));
   }
+}
+
+/** Whether the page holds only the Top and Bottom pictures drawn from
+ * `atoms[index]`, placed right before it (and nothing of the flow above them):
+ * they opened it. */
+function pageOpenedByItsObjects(page: OpenPage, atoms: readonly LedgerAtom[], index: number): boolean {
+  if (page.columns > 1 || page.segmentTopPx > EPSILON_PX || page.placements.length === 0) return false;
+  const last = page.placements[page.placements.length - 1];
+  if (last.atom !== index - 1 || !atoms[index - 1]?.objectOfNext || last.from !== null || last.to !== null) return false;
+  return page.placements.every((placement) => {
+    const placed = atoms[placement.atom];
+    return placed.breakTail || placed.anchored === true || placed.objectOfNext === true ||
+      (placed.hidden && !(placed.heightPx > EPSILON_PX));
+  });
 }
 
 /** A page or section break marker: no height, nothing drawn. */

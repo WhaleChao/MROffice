@@ -32,6 +32,7 @@ import { normalizeCellRuns, textFromRuns } from "@mrnote/core/web/lib/spreadshee
 import { withRecordFontIfPlain } from "@mrnote/core/web/lib/spreadsheet/cell-record-font.ts";
 import { cloneCellCommentForPaste } from "@mrnote/core/web/lib/spreadsheet/comments.ts";
 import {
+  MAX_CONDITIONAL_FORMATS,
   normalizeRule as normalizeConditionalRule,
   planRulesForCellMove,
   ruleOverlaps as conditionalRuleOverlaps,
@@ -553,6 +554,38 @@ export function sameSheetCutRulePlans(args: {
     };
   }
   return out;
+}
+
+
+
+
+
+
+
+
+
+
+export function cutConditionalFormatFileCopy(args: {
+  source: { id: string; conditionalFormats?: unknown } | null;
+  sheet: { id: string; conditionalFormats?: unknown };
+  movedRange: Rect;
+  row: number;
+  col: number;
+}): {
+  source: object | null;
+  rect: [number, number, number, number];
+  at: [number, number];
+  page: true;
+  cut: true;
+} | undefined {
+  const listed = (candidate: { conditionalFormats?: unknown } | null) =>
+    candidate && Array.isArray(candidate.conditionalFormats) ? candidate.conditionalFormats.length : 0;
+  const source = args.source && args.source.id !== args.sheet.id ? args.source : null;
+  if (listed(source ?? args.sheet) < MAX_CONDITIONAL_FORMATS && listed(args.sheet) < MAX_CONDITIONAL_FORMATS) {
+    return undefined;
+  }
+  const { r1, c1, r2, c2 } = args.movedRange;
+  return { source, rect: [r1, c1, r2, c2], at: [args.row, args.col], page: true, cut: true };
 }
 
 /** One bulk write: values from a top-left cell, and what travels with them. */

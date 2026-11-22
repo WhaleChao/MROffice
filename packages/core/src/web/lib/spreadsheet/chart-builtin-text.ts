@@ -116,7 +116,17 @@ export function excelBuiltInChartTextLook(
       bold: strong,
       color: ink,
     },
-    axis: { ...plain, line: { outline: EXCEL_BUILT_IN_LINE, outlineWidthPt: 0.75 } },
+    // A style-2 part that names no Office 2010 style prints the axis lines
+    // it leaves unpainted black at the theme's first line width on Windows
+    // Excel (`builtInStyle.axisLine` with `classicAxisLine`, p268-lw:
+    // R466-X71's Google Sheets axes 0.5pt black where this drew the legacy
+    // grey); an Excel 2010 part (c14:style) keeps #7b838e (R249-X01).
+    axis: {
+      ...plain,
+      line: builtInStyle?.axisLine && builtInStyle.classicAxisLine
+        ? { outline: builtInStyle.axisLine.color, outlineWidthPt: (builtInStyle.axisLine.width * 3) / 4 }
+        : { outline: EXCEL_BUILT_IN_LINE, outlineWidthPt: 0.75 },
+    },
     gridline: { outline: EXCEL_BUILT_IN_LINE, outlineWidthPt: 0.75 },
     // Minor gridlines that state no paint: #bcc1c8 (Excel for Mac's print
     // of H26_32readwriteLineChart4, its category axis' unpainted minors).

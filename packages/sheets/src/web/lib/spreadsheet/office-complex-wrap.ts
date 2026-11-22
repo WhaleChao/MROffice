@@ -107,7 +107,7 @@ interface NormalFontCell {
   readonly style?: object;
 }
 
-const NORMAL_FONT_DIFFERS = ["bold", "italic", "underline", "strikethrough", "superscript", "subscript", "color", "themeFontRole", "fontRecord"] as const;
+const NORMAL_FONT_DIFFERS = ["bold", "italic", "underline", "strikethrough", "superscript", "subscript", "color", "themeFontRole", "fontRecord", "fontNotNormal"] as const;
 
 const normalWrapFirsts = new WeakMap<object, { rows: unknown; key: string; first: readonly [number, number] | undefined }>();
 
@@ -118,7 +118,9 @@ const normalWrapFirsts = new WeakMap<object, { rows: unknown; key: string; first
  * only before that cell: it and every cell after it wrap in 100%'s room
  * (lookwin p243/p245/p247-lw: a wrapped Normal cell -- a word, a number, in
  * any column -- takes the zoomed room from the rows after it; an unwrapped
- * one, a bold or coloured one, does not; R379-X18's survey headers). The
+ * one, a bold or coloured one, does not, nor one whose record only looks the
+ * same -- `fontNotNormal`, automatic ink under Normal's theme 1, p252-lw,
+ * R462-X41; R379-X18's survey headers). The
  * API's normal_wrap_first (notebooks.py) is the same rule.
  */
 export function officeNormalWrapFirst(sheet: { readonly cells: Readonly<Record<string, NormalFontCell | undefined>>; readonly nativeGrid?: TriggerSheet["nativeGrid"] },

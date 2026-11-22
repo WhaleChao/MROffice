@@ -55,7 +55,7 @@ const LOSS_LABELS_EN: Record<string, string> = {
     "Text box line breaks, alignment, or colors will be simplified",
   xlsx_drawing_shape_not_projected: "A drawing shape could not be recognized",
   xlsx_drawing_picture_metafile_not_drawn:
-    "A picture is a vector metafile (EMF/WMF) the browser cannot draw (the original is kept)",
+    "A picture is a vector metafile (EMF/WMF) that can't be drawn here (the original is kept)",
   xlsx_drawing_object_link_not_projected:
     "Drawing object links are not projected yet",
   worksheets_omitted: "The workbook exceeds the worksheet import limit",

@@ -3,6 +3,10 @@
 //                       itself; --stdio says the same), with the editor pages
 //                       on the HTTP side
 // mroffice-mcp --http   the MCP endpoint at <public url>/mcp, with the editor pages
+// mroffice-mcp --desktop  MCP over stdin/stdout, handed to MR Office's desktop app
+//                       (its window is the AI's screen; started when not running).
+//                       Without --desktop or --no-desktop, stdio uses the app when it
+//                       runs (or is installed and starts), else this server's own.
 //
 // Settings come from the environment (src/config.ts): MROFFICE_MCP_PORT,
 // MROFFICE_MCP_PUBLIC_URL, MROFFICE_MCP_EDITOR_DIST, MROFFICE_MCP_EDITOR_ORIGIN,
@@ -12,6 +16,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
 import { Account } from "./auth.ts";
 import { loadConfig } from "./config.ts";
+import { findDesktop, launchDesktop, runDesktopProxy } from "./desktop.ts";
 import { createEngine } from "./engine.ts";
 import { startHttp } from "./http.ts";
 import { HeadlessEditor } from "./render.ts";
@@ -28,10 +33,16 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
   mroffice-mcp           MCP over stdin/stdout, for an AI app that starts the server itself
                          (the default; --stdio says the same)
   mroffice-mcp --http    MCP over Streamable HTTP at http://127.0.0.1:<port>/mcp
+  mroffice-mcp --desktop MCP over stdin/stdout, with MR Office's desktop app as the screen:
+                         files open in its window and every edit shows there live
+                         (starts the app when it is not running)
+  mroffice-mcp --no-desktop  stdio, never the desktop app (documents kept by this server)
   mroffice-mcp login     sign in to your MR Office account (for Word, Excel and PowerPoint files)
   mroffice-mcp logout    sign out and revoke this computer's access
   mroffice-mcp whoami    who is signed in
 
+With neither flag, stdio uses the MR Office desktop app when it runs on this computer
+(or is installed: it is started in the background), and this server's own documents otherwise.
 Both also serve the editor page that links open, on http://127.0.0.1:<port> (default 3410).
 Nothing needs setting up: the first Word, Excel or PowerPoint file opens
 MR Office's sign-in in your browser.
@@ -48,6 +59,9 @@ Environment:
   MROFFICE_MCP_PUBLIC_URL  the address people and apps reach the HTTP side at
   MROFFICE_MCP_MAX_FILE_BYTES  largest file a tool takes (20 MB)
   MROFFICE_MCP_API_URL     the MR Office to sign in to (https://mroffice.ai)
+  MROFFICE_MCP_DESKTOP     1 = --desktop, 0 = --no-desktop
+  MROFFICE_DESKTOP_DISCOVERY  the desktop app's ai-screen.json (default: its data folder)
+  MROFFICE_MCP_DESKTOP_LAUNCH  0 = never start the desktop app
 
 https://mroffice.ai
 `);
@@ -87,10 +101,41 @@ if (command) {
   process.exit(2);
 }
 
-const services: Services = { config, store: new DocumentStore(config.dataDir), engine: createEngine(config, account), renderer: new HeadlessEditor(config), account: config.auth === "oauth" ? undefined : account };
 const log = (line: string) => process.stderr.write(`[mroffice-mcp] ${line}\n`);
 
+// The desktop app as the screen (src/desktop.ts), over stdio only.
+let proxied = false;
 if (!process.argv.includes("--http")) {
+  const desktopFlag = process.argv.includes("--desktop") || process.env.MROFFICE_MCP_DESKTOP === "1";
+  const ownFlag = process.argv.includes("--no-desktop") || process.env.MROFFICE_MCP_DESKTOP === "0";
+  if (desktopFlag && ownFlag) {
+    process.stderr.write("--desktop and --no-desktop together: choose one.\n");
+    process.exit(2);
+  }
+  if (!ownFlag) {
+    const found = (await findDesktop()) ?? (await launchDesktop(desktopFlag ? 90_000 : 30_000, log));
+    if (found) {
+      await runDesktopProxy(found, log);
+      proxied = true;
+    } else if (desktopFlag) {
+      process.stderr.write(
+        "MR Office's desktop app is not running and could not be started. Install it from https://mroffice.ai/download, open it, " +
+          'and check that Settings > General > "Let AI apps use this app as their screen" is on; then start this again ' +
+          "(--no-desktop uses MR Office without the app).\n",
+      );
+      process.exit(1);
+    }
+  }
+}
+
+// The app's endpoint answers every tool when proxied: nothing of this server's own runs then.
+const services: Services | null = proxied
+  ? null
+  : { config, store: new DocumentStore(config.dataDir), engine: createEngine(config, account), renderer: new HeadlessEditor(config), account: config.auth === "oauth" ? undefined : account };
+
+if (!services) {
+  // proxied (src/desktop.ts)
+} else if (!process.argv.includes("--http")) {
   if (process.stdin.isTTY && !process.argv.includes("--stdio")) {
     // started by hand in a terminal: say what this is instead of waiting silently
     log("this is an MCP server: an AI app starts it itself (its MCP settings take the command `npx -y mroffice-mcp`; https://mroffice.ai/developers/mcp).");
@@ -112,7 +157,7 @@ if (!process.argv.includes("--http")) {
 }
 
 const stop = async () => {
-  await services.renderer.close();
+  await services?.renderer.close();
   process.exit(0);
 };
 process.on("SIGINT", stop);

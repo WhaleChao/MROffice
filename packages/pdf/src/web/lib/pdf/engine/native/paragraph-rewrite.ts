@@ -43,7 +43,7 @@ import { summarizePdfNativeSelectionItems } from "./list-text-model";
 import { MRAI_NATIVE_PARAGRAPH_REWRITE_SCHEMA_VERSION, readMraiNativeParagraphRewriteEvidence } from "./paragraph-rewrite-evidence";
 import { MRAI_NATIVE_REORDERED_TEXT_MESSAGE, pdfTextHasRightToLeftRun } from "./reader-order";
 import { PDF_SOURCE_NAME } from "./pdf-source-name";
-import { pdfNativeSyntheticBoldStrokeWidth } from "../../native-synthetic-style";
+import { PDF_NATIVE_TYPE3_BOLD_PASS_EM, pdfNativeSyntheticBoldStrokeWidth } from "../../native-synthetic-style";
 import {
   MRAI_NATIVE_STANDING_STATE_UNKNOWN_MESSAGE,
   applyStandingEdits,
@@ -51,6 +51,8 @@ import {
   mraiNativeStandingBytesAreStateOrRules,
   mraiNativeStandingBytesAreANumber,
   mraiNativeStandingBytesCutAShow,
+  mraiNativeStandingBytesOverstrikeAShow,
+  mraiNativeStandingOverstrikeBytes,
   planStandingLeanEdits,
   normalizeStandingEdits,
   planStandingStateEdits,
@@ -265,6 +267,13 @@ export interface MraiNativeParagraphRewriteFont {
    * glyph has no weight to take: a weight asked of the text around it is
    * written on that text, and the picture is drawn again as it stands. */
   readonly type3Pictures?: true;
+  /** A Type3 face every painted glyph of which is a shape filled in the
+   * text's colour (`d1`: the paths it fills, a stencil mask) -- a bitmap
+   * face's letters, a plotting library's outlines. Nothing a stroked weight
+   * sets reaches what it draws; its weight is a second pass of the show
+   * (planFormatByStateWhereTextStands). Absent, the weight of a Type3 show
+   * that is no picture is refused as it was. */
+  readonly type3Shapes?: true;
 }
 
 /** How a face is set, as its name says: bold (any heavier weight) and
@@ -364,6 +373,15 @@ export interface MraiNativeParagraphRewriteCharacterFormat {
 export const MRAI_NATIVE_TYPE3_FORMAT_MESSAGE =
   "This text is drawn in a Type3 font: its colour, size, slant, script and rules can be changed, but not its weight or font.";
 
+/** The refusal of an edit of a Type3 show whose weight is the show drawn
+ * again after it (planFormatByStateWhereTextStands) that those passes do not
+ * go with: one that would draw the show again or empty it (they would be
+ * left standing where the show was), and a lean (the reader reads the
+ * passes of a leaned show as lines of their own). The weight is taken off
+ * first, which gives the page's own bytes back. */
+export const MRAI_NATIVE_TYPE3_BOLD_STANDS_MESSAGE =
+  "This Type3 text is bold by a second drawing of its glyphs, which this change cannot be made with; take the bold off first.";
+
 export interface MraiNativeParagraphRewriteFormats {
   readonly characters: readonly (MraiNativeParagraphRewriteCharacterFormat | null)[];
   readonly alignment?: PdfNativeParagraphRewriteAlignment;
@@ -430,6 +448,17 @@ export interface MraiNativeParagraphRewriteShow {
   readonly segmentCodeCounts: readonly number[];
   readonly segmentAdjustments: readonly number[];
   readonly leadingKerningAdvance: number;
+  /** The pen move after its last glyph (a `TJ`'s last number), as `leadingKerningAdvance` is the one before its first. */
+  readonly trailingKerningAdvance?: number;
+  /** How much taller than its size the reader reports the show's item (a
+   * Type3 face the reader measures by its glyph box); 1 where absent. */
+  readonly readerVerticalScale?: number;
+  /** A weight drew the show again right after it -- a Type3 show's passes
+   * (standing-state-edit.ts mraiNativeStandingOverstrike), which `readShows`
+   * reads as the show's weight and lists as no shows: where the passes end
+   * in the stream, and how far along the line the first stands (text space,
+   * before the horizontal scale). */
+  readonly overstruck?: Readonly<{ end: number; offset: number }>;
   /** The show stands under an /ActualText: the reader shows that text in
    * place of its glyphs (naming a cluster of characters, or all of it). */
   readonly underActualText?: true;
@@ -6842,6 +6871,10 @@ async function paragraphEvidence(
   frameRequested = false,
 ): Promise<Readonly<{ request: PdfNativeContentStreamTransactionRequest; evidence: PdfNativeListTextFidelityEvidence }>> {
   const { streamBytes, source, spanStart, insertion, firstPlan, layout } = paragraph;
+  // (A write empties the shows it draws again. The passes a weight drew of a
+  // Type3 show stand after the show, placed from where its pen ended:
+  // emptied, the show would leave them drawn alone, somewhere else.)
+  if (set && paragraph.shows.some((show) => show.show.overstruck)) refuse(MRAI_NATIVE_TYPE3_BOLD_STANDS_MESSAGE);
   const originalBytes = streamBytes.slice(spanStart, insertion);
   // The owned shows and their fake-bold passes, emptied in stream order.
   const emptied = [...paragraph.shows.map((show) => ({ start: show.start, end: show.end })), ...paragraph.twins]
@@ -8690,7 +8723,10 @@ async function readParagraphForStateFormat(
     if (!pdfTextHasRightToLeftRun(selection.item.str)) {
       try {
         const proved = await readParagraph(kernel, selection, true);
-        if (proved.twins.length === 0) return proved;
+        if (proved.twins.length === 0) {
+          READ_BY_ITEM_PROOFS.add(proved);
+          return proved;
+        }
       } catch (again) {
         if (!(again instanceof PdfNativeTransactionError)) throw again;
       }
@@ -8699,6 +8735,100 @@ async function readParagraphForStateFormat(
     return null;
   }
 }
+
+/** The boxes readParagraphForStateFormat read by their items' own proofs
+ * alone (its last way). An item proof reads a show under a replacement text
+ * as no text of the item's: passes written on a show of such a box
+ * (type3ShowPasses) would leave it a box no way of that read reads, and the
+ * weight could not be taken off again. */
+const READ_BY_ITEM_PROOFS = new WeakSet<object>();
+
+/**
+ * The passes that draw a weight on a Type3 show of filled shapes where it
+ * stands (standing-state-edit.ts mraiNativeStandingOverstrike): the bytes
+ * written right after the show, and how far along its line the first pass
+ * stands (text space, before the horizontal scale) --
+ * PDF_NATIVE_TYPE3_BOLD_PASS_EM of the size the reader gives the show.
+ *
+ * Null where the show takes none: its face is not known to draw filled
+ * shapes only (`type3Shapes`), the box holds a stretch of it, it moves to its
+ * line as it is drawn or runs down the page, or its advance cannot be read.
+ * And where the reader would not read the passes back into the show
+ * (show-passes' pdfTextItemsWithoutShowPasses, pdfReaderShowAndPasses): it reads a
+ * pass as an item of its own only where the pass starts far enough back from
+ * the glyph drawn before it -- past its negative-space bound, a fifth of the
+ * size -- and reads each pass as the show's own item reads only where the
+ * show is one run to it, no two glyphs of it further apart than it goes on
+ * in one item (0.6 of the size) nor drawn back past that bound. A show of
+ * one narrow glyph, or one set with a wide gap in it, keeps the refusal.
+ */
+function type3ShowPasses(
+  kernel: MraiNativeParagraphRewriteKernel,
+  source: string,
+  owned: OwnedShow,
+): Readonly<{ text: string; offset: number }> | null {
+  const show = owned.show;
+  if (owned.font.simpleSubtype !== "Type3" || !owned.font.type3Shapes || owned.partial || show.vertical ||
+    !/^T[jJ]/u.test(show.operatorKind) || show.trailingKerningAdvance === undefined ||
+    !(show.fontSize > 0) || !(show.horizontalScale > 0)) return null;
+  // (Drawn along the page's x axis, upright: where the reader measures a
+  // glyph against the one before it on the page itself. Turned or leaned, it
+  // measures in the glyph's own frame and reads a pass that starts back from
+  // the show as a line of its own -- pdf-walk-1000 0945 p2, a bold box
+  // leaned: 33 boxes read as 35.)
+  const placed = composeMatrix(show.textMatrix, show.graphicsMatrix);
+  const along = Math.hypot(placed[0], placed[1]);
+  if (owned.slant !== 0 || !(placed[0] > 0) || Math.abs(placed[1]) > 1e-6 * along || Math.abs(placed[2]) > 1e-6 * along) return null;
+  let glyphs: ReturnType<typeof showGlyphs>;
+  try {
+    glyphs = showGlyphs(kernel, show, owned.font);
+  } catch (error) {
+    if (!(error instanceof PdfNativeTransactionError)) throw error;
+    return null;
+  }
+  if (!glyphs.length) return null;
+  // Where the pen stands after the show, from where it began: its glyphs,
+  // their spacing, and every number of its array.
+  const advance = glyphs.at(-1)!.end + show.trailingKerningAdvance;
+  const offset = PDF_NATIVE_TYPE3_BOLD_PASS_EM * show.fontSize * Math.max(1, show.readerVerticalScale ?? 1);
+  if (!Number.isFinite(advance) || !(offset > 0)) return null;
+  // The glyphs the reader sees drawn (it passes over the ones it reads as
+  // blanks, and one of no width leaves it where it was), each from its origin
+  // to where the glyph alone ends.
+  const scale = show.horizontalScale / 100;
+  const unit = owned.font.codeUnitBytes;
+  const drawn = glyphs.flatMap((glyph) => {
+    if (/^\s*$/u.test(glyph.text ?? "x")) return [];
+    const width = glyph.end - glyph.start - show.characterSpacing - (unit === 1 && glyph.code === 0x20 ? show.wordSpacing : 0);
+    return width !== 0 ? [{ start: glyph.start * scale, end: (glyph.start + width) * scale }] : [];
+  });
+  if (!drawn.length) return null;
+  const size = show.fontSize;
+  for (let at = 1; at < drawn.length; at += 1) {
+    const gap = drawn[at].start - drawn[at - 1].end;
+    if (!(gap > TYPE3_PASS_READER_BACK * size) || !(gap < TYPE3_PASS_READER_ON * size)) return null;
+  }
+  // (The first pass starts the offset short of the show's whole run back from
+  // its last glyph; the second, that run and the offset.)
+  if (!(drawn[0].start + offset * scale - drawn.at(-1)!.end < PDFJS_NEGATIVE_SPACE_FACTOR * 1.1 * size)) return null;
+  // (The numbers of a `TJ` are thousandths of the size, taken off the pen.)
+  let back: string, again: string;
+  try {
+    back = formatNumber((1_000 * (advance - offset)) / show.fontSize);
+    again = formatNumber((1_000 * (advance + offset)) / show.fontSize);
+  } catch (error) {
+    if (!(error instanceof PdfNativeTransactionError)) throw error;
+    return null;
+  }
+  const text = mraiNativeStandingOverstrikeBytes(source.slice(owned.start, owned.end), back, again);
+  return text ? Object.freeze({ text, offset }) : null;
+}
+
+/** Between two glyphs of a show the reader reads as one run (pdf.js
+ * NEGATIVE_SPACE_FACTOR and SPACE_IN_FLOW_MAX_FACTOR, a tenth inside each):
+ * past either, it ends the item it is building. */
+const TYPE3_PASS_READER_BACK = -0.18;
+const TYPE3_PASS_READER_ON = 0.54;
 
 
 
@@ -8709,10 +8839,15 @@ export async function readMraiNativeParagraphStateFormatLook(
   selection: PdfNativeListTextSelectionEvidence,
 ): Promise<Readonly<{ look: MraiNativeStandingTextLook; /** How many shows of the page are the box's. */ shows: number;
   /** Its Type3 glyphs are pictures all (paragraphHoldsType3PicturesOnly): a weight asked of it is written on its words. */
-  type3Pictures: boolean }> | null> {
+  type3Pictures: boolean;
+  /** Its Type3 letters take a weight where they stand (paragraphType3LettersTakeWeight). */
+  type3Weight: boolean;
+  /** A weight drew a Type3 show of it again after it (the show's `overstruck`): what draws the box again is refused it. */
+  type3Passes: boolean }> | null> {
   const paragraph = await readParagraphForStateFormat(kernel, selection);
   return paragraph ? Object.freeze({ look: standingLookOfParagraph(paragraph), shows: paragraph.shows.length,
-    type3Pictures: paragraphHoldsType3PicturesOnly(paragraph) }) : null;
+    type3Pictures: paragraphHoldsType3PicturesOnly(paragraph), type3Weight: paragraphType3LettersTakeWeight(kernel, paragraph),
+    type3Passes: paragraph.shows.some((show) => Boolean(show.show.overstruck)) }) : null;
 }
 
 async function readStandingStateLook(
@@ -8795,6 +8930,10 @@ async function planFormatByStateWhereTextStands(
     Object.entries(askedOfAll).some(([field, value]) => value !== undefined && !STANDING_FORMAT_FIELDS.has(field)) ||
     formats.alignment !== undefined || formats.leftIndent || formats.lineStep !== undefined ||
     formats.firstLineIndent !== undefined) {
+    
+    // no longer read because a weight drew a Type3 show of it again: said as
+    // that, with what takes it off.)
+    if (paragraph.shows.some((show) => show.show.overstruck)) refuse(MRAI_NATIVE_TYPE3_BOLD_STANDS_MESSAGE);
     throw refusal;
   }
   // The colour asked, as the stream will state it (colorAsWritten): it is
@@ -8872,8 +9011,31 @@ async function planFormatByStateWhereTextStands(
       signs.set(end, sign);
     }
   }
-  if (asked.syntheticBold === true && inked.some((show) => show.font.simpleSubtype === "Type3" &&
-    !show.font.type3Pictures && !show.stroked)) refuse(MRAI_NATIVE_TYPE3_FORMAT_MESSAGE);
+  // A weight asked of a Type3 show that is no picture. The stroke the other
+  // shows take draws nothing on it (`Tr` does not reach its procedure): its
+  // weight is the show drawn again a little along the line, right after it
+  // (type3ShowPasses), and it is set under the stroke with the others so
+  // that it reads as bold wherever a weight is read. Where the show takes
+  // no such passes, said as it was, nothing written. Taken off, the passes
+  // go whole and the stream is the bytes it was.
+  const passEdits: StandingEdit[] = [];
+  /** By the end of each show's span: the passes that stand after it once this is written (null: taken off). */
+  const passAfter = new Map<number, Readonly<{ offset: number }> | null>();
+  if (asked.syntheticBold === true) {
+    for (const show of inked) {
+      if (show.font.simpleSubtype !== "Type3" || show.font.type3Pictures || show.stroked || show.show.overstruck) continue;
+      const pass = READ_BY_ITEM_PROOFS.has(paragraph) ? null : type3ShowPasses(kernel, source, show);
+      if (!pass) refuse(MRAI_NATIVE_TYPE3_FORMAT_MESSAGE);
+      passEdits.push({ start: show.end, end: show.end, text: pass!.text });
+      passAfter.set(show.end, Object.freeze({ offset: pass!.offset }));
+    }
+  } else if (asked.syntheticBold === false) {
+    for (const show of paragraph.shows) {
+      if (!show.show.overstruck) continue;
+      passEdits.push({ start: show.end, end: show.show.overstruck.end, text: "" });
+      passAfter.set(show.end, null);
+    }
+  }
   // The stream's paint state, as the page's content before it leaves it.
   const names = new Set<string>();
   for (const stream of [...context.prefix, source]) {
@@ -8923,6 +9085,8 @@ async function planFormatByStateWhereTextStands(
       // (A stroke in the fill's colour is this writer's weight: it keeps the text's colour.)
       target.stroke = standingStrokeSpelling(fill!);
     }
+    // (A show with passes after it is one the box holds whole: cut, they would be the passes of neither piece.)
+    if (owned.partial && owned.show.overstruck) throw refusal;
     if (owned.partial && Object.keys(target).length) {
       const length = owned.show.codes.length;
       const { codeStart, codeEnd } = owned.partial;
@@ -9139,11 +9303,26 @@ async function planFormatByStateWhereTextStands(
       refuseLeanAmongOtherTextOnItsLines({ allShows: leanedShows }, leanOf, leanedSigns);
     }
   }
-  const edits = normalizeStandingEdits([...stateEdits, ...leanEdits, ...ruleEdits]);
+  // A lean and the passes of a show do not go together (type3ShowPasses): a
+  // box that would stand leaned with passes after a show of it is refused,
+  // and said as that -- the bold is taken off first.
+  if (leans.size && paragraph.shows.some((show) =>
+    passAfter.has(show.end) ? passAfter.get(show.end) !== null : Boolean(show.show.overstruck))) {
+    const kept = new PdfNativeTransactionError("unsupported-document", MRAI_NATIVE_TYPE3_BOLD_STANDS_MESSAGE);
+    FINAL_STANDING_REFUSALS.add(kept);
+    throw kept;
+  }
+  // (The passes of a show are written right after it, before the state put back there.)
+  if (passEdits.length && leanCuts.length) throw refusal;
+  const edits = normalizeStandingEdits([...passEdits, ...stateEdits, ...leanEdits, ...ruleEdits]);
   if (!edits.length) refuse(MRAI_NATIVE_STANDING_FORMAT_UNCHANGED_REFUSAL);
   // (The span keeps a byte of its own: one that only took a rule away, or
   // only wrote one, is written as a piece of the stream beside it.)
   let spanStart = edits[0].start, spanEnd = edits.at(-1)!.end;
+  // (And the show its passes are written after, or taken away from: the
+  // record's contract reads them against the show they stand after.)
+  const passShow = paragraph.shows.find((show) => passAfter.has(show.end) && show.end === edits[0].start);
+  if (passShow) spanStart = passShow.start;
   if (!standingEditPieces(edits, spanStart, spanEnd).some((piece) => "spanStart" in piece)) {
     if (spanEnd < source.length) spanEnd += 1;
     else if (spanStart > 0) spanStart -= 1;
@@ -9167,8 +9346,10 @@ async function planFormatByStateWhereTextStands(
     }
     // (A show cut in two for a lean is one show again with the lean off: the cut, and nothing in its place.)
     if (edit.text === "" && mraiNativeStandingBytesCutAShow(taken)) return false;
-    return !(mraiNativeStandingBytesAreStateOrRules(edit.text) || mraiNativeStandingBytesCutAShow(edit.text)) ||
-      !mraiNativeStandingBytesAreStateOrRules(taken);
+    // (The passes of a Type3 show: written whole after it, taken away whole.)
+    if (edit.text === "" && mraiNativeStandingBytesOverstrikeAShow(taken)) return false;
+    return !(mraiNativeStandingBytesAreStateOrRules(edit.text) || mraiNativeStandingBytesCutAShow(edit.text) ||
+      mraiNativeStandingBytesOverstrikeAShow(edit.text)) || !mraiNativeStandingBytesAreStateOrRules(taken);
   })) refuse(MRAI_NATIVE_PARAGRAPH_FORMAT_IN_PLACE_REFUSAL);
   const pieces = standingEditPieces(edits, spanStart, spanEnd);
   const written = edits.reduce((sum, edit) => sum + edit.text.length, 0);
@@ -9191,13 +9372,32 @@ async function planFormatByStateWhereTextStands(
     const count = unit ? Math.floor(show.codes.length / unit) : 1;
     const want = expected ? drawnAs.get(show.end) : undefined;
     const stretch = expected ? stretchOf.get(show.end) : undefined;
+    // (Drawn again: a show with passes after it -- the ones this wrote them
+    // after, less the ones it took theirs from, and every other as it was.)
+    const twice = expected && passAfter.has(show.end) ? passAfter.get(show.end) !== null : Boolean(show.overstruck);
     return Array.from({ length: count }, (_, glyph) => {
       const own = want && (!stretch || !unit || (glyph * unit >= stretch.codeStart && glyph * unit < stretch.codeEnd)) ? want : undefined;
-      return `${own?.mode ?? show.renderingMode}|${show.deviceColorKnown ? JSON.stringify(own?.color ?? show.deviceColor) : "?"}`;
+      return `${own?.mode ?? show.renderingMode}|${show.deviceColorKnown ? JSON.stringify(own?.color ?? show.deviceColor) : "?"}|${twice ? 2 : 1}`;
     });
   });
   const [wanted, got] = [drawnOf(paragraph.allShows, true), drawnOf(after, false)];
   if (wanted.length !== got.length || wanted.some((value, glyph) => value !== got[glyph])) cannot();
+  // The passes written stand as far along the line as they were set (read
+  // from the bytes, the second on the show and the pen after it where the
+  // show left it: `readShows` reads no others as passes), after the show
+  // they were written for.
+  // (The shows drawn twice, in the order the stream draws them: a show cut in two for its state is none of them.)
+  if (passEdits.length) {
+    const twice = paragraph.allShows.filter((show) => passAfter.has(show.end) ? passAfter.get(show.end) !== null : Boolean(show.overstruck));
+    const read = after.filter((show) => show.overstruck);
+    if (read.length !== twice.length) cannot();
+    for (const [order, show] of twice.entries()) {
+      const offset = passAfter.get(show.end)?.offset ?? show.overstruck!.offset;
+      const now = read[order];
+      if (now.fontName !== show.fontName || now.codes.length !== show.codes.length ||
+        Math.abs(now.overstruck!.offset - offset) > 1e-6 * Math.max(1, Math.abs(show.fontSize))) cannot();
+    }
+  }
   // Every show under the matrix it had, but the box's under theirs leaned as
   // asked: its up axis moved along its own line by the shear, nothing else of
   // it. (Where each glyph stands was read above; a lean moves none.)
@@ -9956,6 +10156,31 @@ function paragraphHoldsType3PicturesOnly(paragraph: ReadParagraph): boolean {
 
 
 
+
+
+
+function paragraphType3LettersTakeWeight(kernel: MraiNativeParagraphRewriteKernel, paragraph: ReadParagraph): boolean {
+  const letters = paragraph.shows.filter((show) => show.font.simpleSubtype === "Type3" && !show.font.type3Pictures);
+  return letters.length > 0 && !READ_BY_ITEM_PROOFS.has(paragraph) && letters.every((show) =>
+    !show.inked || show.stroked || Boolean(show.show.overstruck) || type3ShowPasses(kernel, paragraph.source, show) !== null);
+}
+
+
+
+export async function readMraiNativeParagraphType3LettersTakeWeight(
+  kernel: MraiNativeParagraphRewriteKernel,
+  selection: PdfNativeListTextSelectionEvidence,
+): Promise<boolean> {
+  const standing = await readParagraphForStateFormat(kernel, selection);
+  return standing !== null && paragraphType3LettersTakeWeight(kernel, standing);
+}
+
+
+
+
+
+
+
 export async function readMraiNativeParagraphType3PicturesOnly(
   kernel: MraiNativeParagraphRewriteKernel,
   selection: PdfNativeListTextSelectionEvidence,
@@ -9983,6 +10208,11 @@ export async function proveMraiNativeParagraphRewriteOwnership(
   const sourceAppearance: PdfNativeSourceTextAppearanceRun[] =
     paragraph.plans.flatMap((plan) => plan?.sourceAppearance ?? []);
   const textRules = paragraphTextRules(paragraph);
+  
+  
+  // read of the box, by where its shows stand.)
+  const type3Letters = paragraph.shows.some((show) => show.font.simpleSubtype === "Type3" && !show.font.type3Pictures);
+  const type3Weight = type3Letters && await readMraiNativeParagraphType3LettersTakeWeight(kernel, selection);
   return Object.freeze({
     plan: Object.freeze({
       request,
@@ -9991,6 +10221,8 @@ export async function proveMraiNativeParagraphRewriteOwnership(
       ...(sourceAppearance.length ? { sourceAppearance: Object.freeze(sourceAppearance) } : {}),
       ...(textRules ? { textRules } : {}),
       ...(paragraphHoldsType3PicturesOnly(paragraph) ? { type3Pictures: true as const } : {}),
+      ...(type3Weight ? { type3Weight: true as const } : {}),
+      ...(type3Letters ? { type3Letters: true as const } : {}),
     }),
     blankingRequest: request,
   });
@@ -10193,7 +10425,11 @@ export async function planMraiNativeParagraphRewrite(
     // because the box cannot be drawn again whole: written by state alone
     // (which refuses with this refusal whatever is not that). Every other
     // edit keeps its refusal.
-    if (!(error instanceof PdfNativeTransactionError) || !standing || !refusalOfRedrawOnly(error.message)) throw error;
+    // (Or because a show of it is a Type3 show a weight was asked of: the
+    
+    // one writes a second pass of it where it stands.)
+    if (!(error instanceof PdfNativeTransactionError) || !standing ||
+      !(refusalOfRedrawOnly(error.message) || error.message === MRAI_NATIVE_TYPE3_FORMAT_MESSAGE)) throw error;
     try {
       return await planFormatByStateWhereTextStands(kernel, selection, resolveFormats!, error);
     } catch (kept) {

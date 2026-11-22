@@ -21,6 +21,8 @@ export function useHandedDocumentDisplayFonts(editor: Editor | null, plan: unkno
     const mounted = mountDocumentDisplayFontSource(editor, {
       read: async () => plan,
       parse: (response) => readDocumentDisplayFontPlan(response, expected),
+      // The print waits for every drawn character's faces itself (printFontsReady).
+      charactersAwaitedByCaller: true,
     }, undefined, lineMetricsTarget);
     void mounted.refresh(expected.version);
     return () => mounted.destroy();

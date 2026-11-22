@@ -193,6 +193,8 @@ export interface OriginalLinks {
   /** The file is as it was when it was linked or last saved. */
   unchangedSinceLinked(pageId: string): boolean;
   pageOfUnchangedFile(filePath: string, stat: { size: number; mtimeMs: number }): { pageId: string; notebookId: string } | null;
+  /** Every page linked to ``filePath`` (however it is on disk now), the file's newest record first. */
+  pagesOfFile(filePath: string): string[];
   /**
    * Write a page's file over ``target`` (the file it is linked to, or the one
    * the person picked) and link the page to it as written. The file on disk
@@ -338,6 +340,13 @@ export function originalLinks(storeFile: () => string, backupRoot?: () => string
         }
       }
       return found ? { pageId: found.pageId, notebookId: found.notebookId } : null;
+    },
+
+    pagesOfFile(filePath) {
+      return Object.entries(read())
+        .filter(([pageId, link]) => PAGE_ID.test(pageId) && link && typeof link.path === "string" && samePath(link.path, filePath))
+        .sort(([, a], [, b]) => (b.mtimeMs ?? 0) - (a.mtimeMs ?? 0))
+        .map(([pageId]) => pageId);
     },
 
     async writeOriginal(pageId, target, bytes, options = {}) {

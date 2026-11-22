@@ -2748,6 +2748,35 @@ function cachedCustomPath(value: unknown): ReturnType<typeof normalizePresentati
  */
 const memberLeafAttrsCache = new WeakMap<object, DocumentShapeAttrs>();
 
+/**
+ * A group member's leaf attrs at the size it is DRAWN: its box is stated in
+ * its group's child space (`a:chExt`), which is the group's own extent only
+ * until the group is resized; the painter evaluates a preset, a connector's
+ * route and its arrowheads at the shape's pixel size, so a member of a group
+ * whose child space is 72 times smaller than its box (corpus R477-D53's
+ * membrane figure: chExt 82,344 x 34,433 in a 468 x 184 pt group) was
+ * evaluated in a one-pixel box and its arrowheads drawn ten pixels to the
+ * unit -- four dashed arrows as long black wedges. The member's box is
+ * scaled to the group's (`window.__docsGroupMemberChildScaleOff` keeps the
+ * child-space size, A/B).
+ */
+export function documentShapeMemberDrawnLeafAttrs(
+  leaf: DocumentShapeAttrs,
+  group: Pick<DocumentShapeAttrs, "widthEmu" | "heightEmu" | "groupCoordinateWidthEmu" | "groupCoordinateHeightEmu">,
+): DocumentShapeAttrs {
+  if (typeof window !== "undefined" && (window as Window & { __docsGroupMemberChildScaleOff?: boolean }).__docsGroupMemberChildScaleOff === true) {
+    return leaf;
+  }
+  const scale = (extent: number, coordinate: number | undefined) =>
+    typeof coordinate === "number" && Number.isFinite(coordinate) && coordinate > 0 && Number.isFinite(extent) && extent > 0
+      ? extent / coordinate
+      : 1;
+  const sx = scale(group.widthEmu, group.groupCoordinateWidthEmu);
+  const sy = scale(group.heightEmu, group.groupCoordinateHeightEmu);
+  if (Math.abs(sx - 1) < 1e-9 && Math.abs(sy - 1) < 1e-9) return leaf;
+  return { ...leaf, widthEmu: leaf.widthEmu * sx, heightEmu: leaf.heightEmu * sy };
+}
+
 export function documentShapeMemberLeafAttrs(member: DocumentShapeGroupMember): DocumentShapeAttrs {
   const cached = memberLeafAttrsCache.get(member);
   if (cached) return cached;

@@ -1,5 +1,5 @@
 {
- "probe": "xlsx-rounds/lookwin/faces (fx-a, fx-*, fy-*), Windows Excel 16.0.20527 en-US, 2026-11-14; fresh-name class pass fresh-co 2026-11-14; PostScript names p234-lw 2026-11-20",
+ "probe": "xlsx-rounds/lookwin/faces (fx-a, fx-*, fy-*), Windows Excel 16.0.20527 en-US, 2026-11-14; fresh-name class pass fresh-co 2026-11-14; PostScript names p234-lw 2026-11-20; Ariel Nova (R467-X40's own truth: every \"Ariel Nova\" cell printed in Arial) 2026-11-21",
  "drawn": {
   "&amp;quot": "Arial",
   "&quot;aptos narrow&quot;": "Arial",
@@ -79,6 +79,7 @@
   "arial1": "Arial",
   "arialmt": "Arial",
   "arialunicodems": "Arial",
+  "ariel nova": "Arial",
   "arimo": "Arial",
   "arimo bold": "Arial",
   "arvo": "Arial",
@@ -587,6 +588,7 @@
   "arial-boldmt",
   "arial-italicmt",
   "arialmt",
+  "ariel nova",
   "arimo",
   "arimo bold",
   "arvo",

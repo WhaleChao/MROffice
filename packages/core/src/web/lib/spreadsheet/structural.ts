@@ -681,6 +681,9 @@ export function withLineMoveRecorded<T extends StructuralSheet>(
 
 
 
+
+
+
 export interface ConditionalFormatFileCopy {
   after: string;
   src: string;
@@ -692,6 +695,7 @@ export interface ConditionalFormatFileCopy {
   tiles?: [number, number];
   transpose?: true;
   fill?: [number, number, number, number];
+  cut?: true;
 }
 
 /** How a Copy laid its block: copies of it, transposed, or filled over.
@@ -703,6 +707,7 @@ export interface ConditionalFormatFileCopyLayout {
   transpose?: true;
   fill?: [number, number, number, number];
   rows?: readonly number[];
+  cut?: true;
 }
 
 export const CF_FILE_COPY_KEY_PREFIX = "cfCopy:";
@@ -736,7 +741,7 @@ export function withConditionalFormatFileCopyRecorded<T extends object>(
       else runs.push({ from: row, to: row, offset: index });
     });
     if (
-      copy.tiles || copy.transpose || copy.fill ||
+      copy.tiles || copy.transpose || copy.fill || copy.cut ||
       rows.length !== copy.rect[2] - copy.rect[0] + 1 ||
       held + runs.length > MAX_CF_FILE_COPIES
     ) {
@@ -763,6 +768,7 @@ export function withConditionalFormatFileCopyRecorded<T extends object>(
     ...(copy.tiles && (copy.tiles[0] !== 1 || copy.tiles[1] !== 1) ? { tiles: copy.tiles } : {}),
     ...(copy.transpose ? { transpose: true as const } : {}),
     ...(copy.fill ? { fill: copy.fill } : {}),
+    ...(copy.cut ? { cut: true as const } : {}),
   };
   return { ...dest, [`${CF_FILE_COPY_KEY_PREFIX}${lineMoveId()}`]: record };
 }

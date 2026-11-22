@@ -145,6 +145,22 @@ export function officeChartDataTableCellEdges(
   };
 }
 
+
+
+
+
+
+
+
+
+
+export function officeChartDataTableFontPx(dataTableStyle: unknown, chartText: unknown): number | undefined {
+  const own = presentationChartAreaStyleCss(dataTableStyle as Parameters<typeof presentationChartAreaStyleCss>[0]).fontSize;
+  if (typeof own === "number" && own > 0) return own;
+  const chart = officeChartTextEChartsStyle(chartText as Parameters<typeof officeChartTextEChartsStyle>[0]).fontSize;
+  return typeof chart === "number" && chart > 0 ? chart : undefined;
+}
+
 /** A workbook chart's table text size when the chart states none (px). */
 export const OFFICE_SHEET_CHART_DATA_TABLE_FONT_PX = 12;
 
@@ -175,7 +191,7 @@ export function officeSheetChartDataTableLook(
     ...(typeof text.color === "string" ? { color: text.color } : {}),
     ...(typeof text.fontFamily === "string" ? { fontFamily: text.fontFamily } : {}),
   };
-  const fontSize = typeof own.fontSize === "number" ? own.fontSize : inherited.fontSize;
+  const fontSize = officeChartDataTableFontPx(attrs.format?.dataTableStyle, attrs.format?.text);
   const band = officeChartDataTableBand(
     table.series.length + 1,
     heightPx,

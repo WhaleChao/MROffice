@@ -39,7 +39,13 @@ function downloadFolder(): string {
   return folder;
 }
 
-const WINDOW_TITLE = `${PRODUCT.id === "office" ? "MR Office" : "MR Note"} · AI 浏览器`;
+// The AI's own window for the web: named for what it is, never "browser"
+
+// Read when the window is made: the locale is known only once the app is ready.
+function windowTitle(): string {
+  const name = app.getLocale().toLowerCase().startsWith("zh") ? "AI 联网窗口" : "AI Web Window";
+  return `${PRODUCT.id === "office" ? "MR Office" : "MR Note"} · ${name}`;
+}
 
 function ensureWindow(): BrowserWindow {
   if (window && !window.isDestroyed()) return window;
@@ -60,7 +66,7 @@ function ensureWindow(): BrowserWindow {
   window = new BrowserWindow({
     width: WIDTH,
     height: HEIGHT,
-    title: WINDOW_TITLE,
+    title: windowTitle(),
     // Shown once it has a page to show (open), without taking the person's
     // keyboard: a reply that is not a page is read without a window at all.
     show: false,
@@ -89,7 +95,7 @@ function ensureWindow(): BrowserWindow {
     // Always named as the app's: titled by the page alone, a window of raw
     
     event.preventDefault();
-    window?.setTitle(title ? `${WINDOW_TITLE} — ${title}` : WINDOW_TITLE);
+    window?.setTitle(title ? `${windowTitle()} — ${title}` : windowTitle());
   });
   window.on("closed", () => {
     window = null;

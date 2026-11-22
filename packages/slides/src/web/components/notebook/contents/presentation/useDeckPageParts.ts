@@ -126,6 +126,28 @@ function isDeckWriteBusy(error: unknown): boolean {
 
 
 
+/** A refused or failed SmartArt command's answer (`smartArtStructure`). */
+function deckSmartArtFailure(error: unknown): Extract<DeckSmartArtStructureResult, { ok: false }> {
+  if (isDeckRoomConflict(error)) return { ok: false, code: "room_busy", message: "" };
+  return {
+    ok: false,
+    code: (isApiRequestError(error) && error.code) || "unavailable",
+    message: error instanceof Error ? error.message : "",
+    details: isApiRequestError(error) ? error.details : undefined,
+  };
+}
+
+/** What a refused Undo or Redo of a SmartArt node command says (a message
+ * key under `presentation.`): only a deck that moved on, or a snapshot no
+ * longer held, says the step cannot be undone -- a step kept to try again
+ * (the deck still saving) never does. */
+export function smartArtStructureUndoRefusalKey(code: string): string {
+  if (code === "deck_structure_undo_stale" || DECK_UNDO_CHANGED_ELSEWHERE_CODES.has(code)) return "smartartContext.structureUndoStale";
+  if (code === "deck_structure_undo_unavailable") return "smartartContext.structureUndoUnavailable";
+  if (code === "database_busy" || code === "unsaved" || code === "room_busy") return "smartartContext.structureSaving";
+  return "editSaveFailed";
+}
+
 export async function untilRoomSaved<T>(send: () => Promise<T>, current: () => boolean): Promise<T> {
   for (let waited = 0; ; waited += DECK_ROOM_WAIT_MS) {
     try {
@@ -252,6 +274,9 @@ export interface UseDeckPagePartsOptions<S extends DeckSlideLike> {
   /** An Undo or Redo the server has to make has started; what is returned is
    * called when it is over. */
   readonly onUndoRunning?: () => () => void;
+  /** A SmartArt node command's Undo or Redo the server refused (its code:
+   * `deck_structure_undo_stale` once the deck was written since). */
+  readonly onStructureUndoRefused?: (code: string) => void;
   /** Open a live room for each loaded later part (the page's own room is
    * live): its slides are edited there, as the body is in the page's room. */
   readonly partRooms?: boolean;
@@ -298,6 +323,12 @@ export type DeckDuplicateResult =
       readonly details?: Record<string, unknown>;
     };
 
+/** A node or level command on a file's SmartArt, written by the server
+ * (`POST .../deck-parts/smartart-structure`, TRIAGE S11o). */
+export type DeckSmartArtStructureResult =
+  | { readonly ok: true; readonly selectedBlockId: string; readonly focusPointId: string; readonly undoable: boolean }
+  | { readonly ok: false; readonly code: string; readonly message: string; readonly details?: Record<string, unknown> };
+
 export interface DeckPageParts {
   readonly snapshot: DeckPartsSnapshot;
   /** Read the part holding slide `id` now (a command about to need it). */
@@ -311,6 +342,15 @@ export interface DeckPageParts {
    * edit of the parts has been saved (the server copies what it holds).
    */
   readonly duplicateSlides: (ids: readonly string[]) => Promise<DeckDuplicateResult>;
+  /**
+   * A node or level command on a file's SmartArt on slide `slideId`, the
+   * server's way: planned on the whole deck and written in one step, each
+   * slide back to its part (a plan committed as the deck was saved as a body
+   * and parts apart). Its Undo is the server's too
+   * (`.../smartart-structure-restore`), refused once the deck was written
+   * since (`onStructureUndoRefused`); its Redo the command again.
+   */
+  readonly smartArtStructure: (slideId: string, request: unknown) => Promise<DeckSmartArtStructureResult>;
   /** Read part `index` again from the file over the member's edits (they
    * agreed): `POST .../retry {replace_edited: true, expected_revision}`. */
   readonly reimportPart: (index: number) => Promise<DeckPartReimportResult>;
@@ -1150,6 +1190,129 @@ export function useDeckPageParts<S extends DeckSlideLike>(options: UseDeckPagePa
     }
   }, [adoptOwnWrite, ownWriteBase, read, runInverse, session, takeRoomUpdate, withRoomState]);
 
+  /** A server write of a SmartArt command landed: the body's base moved on,
+   * its room operations applied (not as a step of the member's room history:
+   * its Undo is the server's, `smartArtStructureNow`), the parts it wrote read
+   * again, the body read again. */
+  const smartArtLanded = useCallback(async (base: number | undefined, receipt: DeckSlidesReceipt | null): Promise<void> => {
+    adoptOwnWrite(base, receipt);
+    const update = receipt?.roomUpdate?.updateBase64;
+    if (typeof update === "string" && update) optionsRef.current.applyRoomUpdate?.(update);
+    if (base === undefined) await optionsRef.current.settleOwnServerWrite?.().catch(() => undefined);
+    if (receipt?.partRevisions) {
+      for (const index of session.applyPartRevisions(receipt.partRevisions)) void read(index);
+    }
+    await optionsRef.current.refreshBody().catch(() => undefined);
+    optionsRef.current.onStructureChanged();
+  }, [adoptOwnWrite, read, session]);
+  const smartArtWriteBase = useCallback(async (): Promise<number | null | undefined> => {
+    let base = ownWriteBase();
+    for (let waited = 0; base === null && waited < 50; waited += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 100));
+      base = ownWriteBase();
+    }
+    return base;
+  }, [ownWriteBase]);
+  const smartArtStructureNow = useCallback(async (
+    slideId: string, request: unknown, askedFor: string,
+  ): Promise<DeckSmartArtStructureResult & { planId?: string }> => {
+    const base = await smartArtWriteBase();
+    if (base === null) return { ok: false, code: "unsaved", message: "" };
+    try {
+      const causalBody = base === undefined && Boolean(optionsRef.current.ownServerWriteBase);
+      const body = { model_slide_id: slideId, request };
+      const send = () => apiPost<DeckSlidesReceipt & { planId?: unknown; selectedBlockId?: unknown; focusPointId?: unknown; undoable?: unknown }>(
+        `/api/v1/pages/${encodeURIComponent(askedFor)}/deck-parts/smartart-structure`,
+        causalBody ? body : withRoomState(base === undefined ? body : { ...body, expected: { content_version: base } }),
+      );
+      const receipt = await untilRoomSaved(send, () => session.page === askedFor);
+      if (session.page !== askedFor) return { ok: false, code: "unavailable", message: "" };
+      await smartArtLanded(base, receipt);
+      if (typeof receipt?.selectedBlockId !== "string" || typeof receipt?.focusPointId !== "string") {
+        return { ok: false, code: "unavailable", message: "" };
+      }
+      return {
+        ok: true, selectedBlockId: receipt.selectedBlockId, focusPointId: receipt.focusPointId,
+        undoable: receipt.undoable === true, ...(typeof receipt.planId === "string" ? { planId: receipt.planId } : {}),
+      };
+    } catch (error) {
+      return deckSmartArtFailure(error);
+    }
+  }, [session, smartArtLanded, smartArtWriteBase, withRoomState]);
+  /** A SmartArt step's Undo or Redo refused: said, and the step forgotten
+   * when the deck moved on (it cannot come back), else kept to try again. */
+  const smartArtStepRefused = useCallback((code: string, step?: () => ExternalHistoryStep) => {
+    optionsRef.current.onStructureUndoRefused?.(code);
+    const gone = code === "deck_structure_undo_stale" || code === "deck_structure_undo_unavailable" ||
+      DECK_UNDO_CHANGED_ELSEWHERE_CODES.has(code);
+    if (step) optionsRef.current.settleExternalStep?.(step(), gone ? "forget" : "putBack");
+  }, []);
+  const smartArtRestoreNow = useCallback(async (planId: string, askedFor: string, step?: () => ExternalHistoryStep): Promise<boolean> => {
+    const base = await smartArtWriteBase();
+    if (base === null) {
+      smartArtStepRefused("unsaved", step);
+      return false;
+    }
+    try {
+      const causalBody = base === undefined && Boolean(optionsRef.current.ownServerWriteBase);
+      const body = { plan_id: planId };
+      const receipt = await untilRoomSaved(() => apiPost<DeckSlidesReceipt>(
+        `/api/v1/pages/${encodeURIComponent(askedFor)}/deck-parts/smartart-structure-restore`,
+        causalBody ? body : withRoomState(body),
+      ), () => session.page === askedFor);
+      if (session.page !== askedFor) return false;
+      await smartArtLanded(base, receipt);
+      return true;
+    } catch (error) {
+      smartArtStepRefused(deckSmartArtFailure(error).code, step);
+      return false;
+    }
+  }, [session, smartArtLanded, smartArtStepRefused, smartArtWriteBase, withRoomState]);
+  const smartArtStructure = useCallback(async (slideId: string, request: unknown): Promise<DeckSmartArtStructureResult> => {
+    if (!active) return { ok: false, code: "unavailable", message: "" };
+    const askedFor = pageId;
+    // Every change of the parts first: the command is planned on what the server holds.
+    for (let waited = 0; waited < 100; waited += 1) {
+      if (!flushing.current) {
+        await flushRef.current();
+        if (!session.hasDrafts() && !session.structuralChange()) break;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 100));
+    }
+    if (session.hasDrafts() || session.structuralChange()) return { ok: false, code: "unsaved", message: "" };
+    const begin = optionsRef.current.beginOwnServerWrite;
+    const release = begin ? await begin() : undefined;
+    if (begin && !release) return { ok: false, code: "unsaved", message: "" };
+    try {
+      const result = await whileStructureWrites(smartArtStructureNow(slideId, request, askedFor));
+      if (result.ok && result.planId && optionsRef.current.ownExternalStep) {
+        // Undo: the server writes the deck back as the command found it;
+        // Redo: the command again (a new plan, whose Undo is its own).
+        let planId = result.planId;
+        const step: ExternalHistoryStep = {
+          // Said while it runs (`onUndoRunning`): the server may wait for an
+          // earlier save's package first, up to a minute on a large deck.
+          undo: () => {
+            const stopSaying = optionsRef.current.onUndoRunning?.();
+            void whileStructureWrites(smartArtRestoreNow(planId, askedFor, () => step).finally(() => stopSaying?.()));
+          },
+          redo: () => {
+            const stopSaying = optionsRef.current.onUndoRunning?.();
+            void whileStructureWrites(smartArtStructureNow(slideId, request, askedFor).then((again) => {
+              if (again.ok && again.planId) planId = again.planId;
+              else smartArtStepRefused(again.ok ? "unavailable" : again.code, () => step);
+            }).finally(() => stopSaying?.()));
+          },
+        };
+        optionsRef.current.ownExternalStep(step);
+      }
+      if (!result.ok) return result;
+      return { ok: true, selectedBlockId: result.selectedBlockId, focusPointId: result.focusPointId, undoable: result.undoable };
+    } finally {
+      release?.();
+    }
+  }, [active, pageId, session, smartArtRestoreNow, smartArtStepRefused, smartArtStructureNow, whileStructureWrites]);
+
   const duplicateSlides = useCallback(async (ids: readonly string[]): Promise<DeckDuplicateResult> => {
     if (!active) return { ok: false, code: "unavailable", message: "" };
     const askedFor = pageId;
@@ -1325,6 +1488,6 @@ export function useDeckPageParts<S extends DeckSlideLike>(options: UseDeckPagePa
     () => structureWrite.current !== null || session.structuralChange() !== null, [session]);
   const structureRefused = useCallback(() => refusedStructure.current !== null, []);
 
-  return { snapshot, loadSlide, retryPart, duplicateSlides, reimportPart, rooms, whenStructureSettled,
+  return { snapshot, loadSlide, retryPart, duplicateSlides, smartArtStructure, reimportPart, rooms, whenStructureSettled,
     structureUnsaved, structureRefused };
 }

@@ -111,6 +111,10 @@ export interface TablePageCutOptions {
    * what follows opens the next page (Word 16.86, g-l5row-cantsplit-tall,
    * mode 14: 60 lines, 53 on the paper, the paragraph after on page 3). */
   overPageCantSplitStands?: boolean;
+  /** The rows belong to a keep-with-next chain that opened the page: Word
+   * breaks it where the page fills, so rows kept with the next do not carry
+   * the cut up to the table's top (ledger `keepReleased`). */
+  keepWithNextReleased?: boolean;
 }
 
 /** Independent Word control: an original header can occupy remaining space
@@ -324,7 +328,7 @@ export function planTablePageCut(
     // Word moves all four); on a fresh page there is nowhere better to go.
     if (bodyRowsBefore > 0) {
       let cutBefore = rowIndex;
-      if (available < fullCapacity - 1) {
+      if (available < fullCapacity - 1 && options.keepWithNextReleased !== true) {
         while (cutBefore > headerCount && rows[cutBefore - 1]?.keepWithNext === true) cutBefore -= 1;
       }
       if (cutBefore <= headerCount) return { kind: "moveToFreshPage", rowIndex: headerCount, repeatHeaderRows };

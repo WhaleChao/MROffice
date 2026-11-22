@@ -331,6 +331,11 @@ export type PdfReaderLineAnnotationPlace = Readonly<{
   rect: Readonly<{ x: number; y: number; width: number; height: number }>;
 }>;
 
+/** What a box's format handed to the window on Leave was asked as
+ * (onDetachRowFormat, onDetachParagraphFormat). `retypeOnly`: no format was
+ * chosen; the format is only how the words typed are set again. */
+export type PdfNativeDetachedFormatAsk = Readonly<{ retypeOnly?: boolean }>;
+
 export interface PdfNativeListTextEditDialogProps {
   readonly open: boolean;
   readonly originalText: string;
@@ -386,14 +391,18 @@ export interface PdfNativeListTextEditDialogProps {
    * (the reader goes on at once, the box keeps the look it was left with);
    * false when the window does not take it now. */
   readonly onDetachRowFormat?: (format: PdfNativeRowFormat, replacementText: string | undefined,
-    ghost: () => (() => void) | null) => boolean;
+    ghost: () => (() => void) | null,
+    /** `retypeOnly`: the reader chose no format -- `format` is only how the
+     * words typed are set again (a line kept centred, or flush right). What
+     * is said of that write is said of the words, never of a format. */
+    asked?: PdfNativeDetachedFormatAsk) => boolean;
   /** The box's paragraph set again with a format (the same writes), for a
    * box whose run's proof states it too: a centred line typed longer or
    * shorter (centredRetype) is set as a centred paragraph whatever its
    * runs. Its formats pressed still go to its run. */
   readonly onApplyParagraphFormat?: (format: PdfNativeRowFormat, replacementText?: string) => Promise<boolean | null>;
   readonly onDetachParagraphFormat?: (format: PdfNativeRowFormat, replacementText: string | undefined,
-    ghost: () => (() => void) | null) => boolean;
+    ghost: () => (() => void) | null, asked?: PdfNativeDetachedFormatAsk) => boolean;
   readonly paragraphColors?: readonly PdfNativeDeviceColor[];
   /**
    * Justify this paragraph into the page. Offered only when the host proved a
@@ -419,6 +428,14 @@ export interface PdfNativeListTextEditDialogProps {
    * asked of the box is written on its words. Absent, a line that holds a
    * Type3 glyph takes no weight. */
   readonly type3PicturesOnly?: boolean;
+  
+
+
+  readonly type3TakesWeight?: boolean;
+  /** The box holds a show of Type3 letters among words it can set again (its
+   * proof's `type3Letters`): its group states no weight, and one is offered
+   * only where `type3TakesWeight`. */
+  readonly type3LettersHeld?: boolean;
   readonly sourceGeometry?: PdfTextSourceAppearance;
   readonly labels: PdfNativeListTextEditDialogLabels;
   readonly ribbonLabels?: PdfTextEditingContextRibbonLabels;
@@ -977,6 +994,7 @@ function withHeldCommandsOffered<T extends Readonly<Record<string, Readonly<{ en
  * its button showed after the click: the run's real state is not known yet,
  * so the replay sets that state rather than flipping whatever it finds. */
 const NO_PART_FORMATS: PdfTextPartFormats = Object.freeze([]);
+const RETYPE_ONLY_ASK: PdfNativeDetachedFormatAsk = Object.freeze({ retypeOnly: true });
 
 /** What a format press changes in the line's editor, before or after it. */
 type PartFormatSnapshot = Readonly<{
@@ -2066,6 +2084,12 @@ const HOVER_DRAFT_HELD_MS = 450;
  * where its text stands, and the commands that are not of the line's words. */
 const WORDS_UNREAD_KEPT_CONTROLS: ReadonlySet<string> = new Set(["hand", "select", "insertText", "bold", "italic",
   "underline", "strikethrough", "fontColor", "highlight", "keyboardInput", "save", "exit"]);
+/** What it offers on a box bold by a Type3 show drawn again after the show
+ * (initialLayout.wordsFixed, "weight-drawn-again"): the weight itself -- to
+ * take it off -- and what is written where the text stands with the passes
+ * left as they are. Not a lean: the reader reads the passes of a leaned show
+ * as lines of their own, and the page refuses it. */
+const TYPE3_BOLD_KEPT_CONTROLS: ReadonlySet<string> = new Set([...WORDS_UNREAD_KEPT_CONTROLS].filter((control) => control !== "italic"));
 /** A plan slower than this ends drawing ahead for the moment. */
 const HOVER_EXACT_AHEAD_SLOW_MS = 1500;
 /** Page pixels of hovered drawings kept for a return to the same format. */
@@ -2096,6 +2120,8 @@ function PdfNativeListTextInlineEditor({
   sourceAppearance,
   boxDrawnStyle,
   type3PicturesOnly,
+  type3TakesWeight,
+  type3LettersHeld,
   sourceGeometry,
   labels,
   ribbonLabels: ribbonLabelsInput,
@@ -2820,6 +2846,16 @@ function PdfNativeListTextInlineEditor({
   [centredRetype, rightRetype, rowFormat]);
   
 
+
+
+
+
+
+  const boxFormatIsRetypeOnly = alignedRetype && rowFormat === null;
+  const boxFormatIsRetypeOnlyRef = useRef(boxFormatIsRetypeOnly);
+  boxFormatIsRetypeOnlyRef.current = boxFormatIsRetypeOnly;
+  
+
   // A paragraph of several rows one run draws (its proof states the run):
   // its paragraph settings are the paragraph's to set again, line by line.
   // (Several rows by its frame: the reader often reads such a paragraph as
@@ -2835,10 +2871,17 @@ function PdfNativeListTextInlineEditor({
   // press records it as the box's format (boldFaceRunPress, below).
   const boldFaceRun = Boolean(propertyProof) && boxDrawnStyle?.boldFaces === "only" && pdfTextHasRightToLeftRun(originalText);
   const boldFaceRunSetRegular = boldFaceRun && boxDrawnStyle?.regularFace === true && rowFormat?.bold === false;
+  // A run of Type3 letters that take a weight by their show drawn again
+  // (type3TakesWeight), its proof the run's: the weight is no property of
+  // the run -- a Type3 glyph takes no stroke -- and is written by its
+  // paragraph's writer, where the text stands. The press records it as the
+  // box's format (below), and Leave asks it of that writer.
+  const type3WeightRun = Boolean(propertyProof) && Boolean(initialLayout?.type3Text) && type3TakesWeight === true;
+  const type3WeightRunAsked = type3WeightRun && rowFormat?.bold !== undefined;
   const applyBoxFormat = onApplyRowFormat ??
-    (alignedRetype || propertyParagraph || boldFaceRunSetRegular ? onApplyParagraphFormat : undefined);
+    (alignedRetype || propertyParagraph || boldFaceRunSetRegular || type3WeightRunAsked ? onApplyParagraphFormat : undefined);
   const detachBoxFormat = onDetachRowFormat ??
-    (alignedRetype || propertyParagraph || boldFaceRunSetRegular ? onDetachParagraphFormat : undefined);
+    (alignedRetype || propertyParagraph || boldFaceRunSetRegular || type3WeightRunAsked ? onDetachParagraphFormat : undefined);
   const boxFormatPreview = useMemo(() => {
     if ((properties !== null && !alignedRetype && !propertyParagraph) || !boxRowFormat || !applyBoxFormat) return null;
     // A scanned line's own rules are drawn beside its words as they stand:
@@ -5644,6 +5687,20 @@ function PdfNativeListTextInlineEditor({
         // again in a served face, its runs' faces and sizes lost; owner
         
         if (applied === null) {
+          // Words typed and no format chosen (the "format" was the line's
+          // own alignment kept, boxFormatIsRetypeOnly): they are written as
+          // any line's words are, and that write speaks for itself -- taken,
+          // nothing is said of a format; refused, the words' own refusal.
+          if (wordsTyped && boxFormatIsRetypeOnly && partFormatsRef.current.length === 0) {
+            const words = await Promise.resolve(onApply(replacementText, properties)).catch(() => false as const);
+            markPdfTextLatency("finish.row-format-words-alone", { accepted: words !== false });
+            if (words !== false) {
+              changeAppliedRef.current = true;
+              return true;
+            }
+            setCommitError(saveFailedMessage);
+            return false;
+          }
           setRowFormat(null);
           toast({ description: translate("pdf.nativeTextEdit.formatNotApplied") });
           return true;
@@ -5814,7 +5871,7 @@ function PdfNativeListTextInlineEditor({
       setSubmitting(false);
     }
   }, [
-    rowFormat, boxRowFormat, applyBoxFormat,
+    rowFormat, boxRowFormat, applyBoxFormat, boxFormatIsRetypeOnly,
     propertyDraftChanged,
     onApplyRowFormat,
     paragraphFrameRequest,
@@ -7889,7 +7946,8 @@ function PdfNativeListTextInlineEditor({
       paragraphFrameRequestRef.current === null && !busy && !propertyDraftChangedRef.current) {
       const typed = contentDraftDirtyRef.current;
       const asked = typed ? rowFormatWithParts(pendingRowFormat, partFormatsRef.current) : pendingRowFormat;
-      if (onDetachRowFormatRef.current(asked, typed ? replacementText : undefined, makeFinishGhost)) {
+      if (onDetachRowFormatRef.current(asked, typed ? replacementText : undefined, makeFinishGhost,
+        typed && boxFormatIsRetypeOnlyRef.current && partFormatsRef.current.length === 0 ? RETYPE_ONLY_ASK : undefined)) {
         markPdfTextLatency("finish.detached-row-format");
         markFinishHandedOver();
         finishPendingRef.current = false;
@@ -8597,7 +8655,8 @@ function PdfNativeListTextInlineEditor({
           !manualLayoutDirtyRef.current && paragraphFrameRequestRef.current === null && !propertyDraftChangedRef.current) {
           const typed = contentDraftDirtyRef.current;
           const asked = typed ? rowFormatWithParts(rowFormat, partFormatsRef.current) : rowFormat;
-          if (onDetachRowFormatRef.current(asked, typed ? replacementText : undefined, makeFinishGhost)) {
+          if (onDetachRowFormatRef.current(asked, typed ? replacementText : undefined, makeFinishGhost,
+            typed && boxFormatIsRetypeOnlyRef.current && partFormatsRef.current.length === 0 ? RETYPE_ONLY_ASK : undefined)) {
             markPdfTextLatency("finish.detached-row-format-later");
             markFinishHandedOver();
             finishPendingRef.current = false;
@@ -10041,9 +10100,12 @@ function PdfNativeListTextInlineEditor({
   
   const wordsFixed = wordsByLine ? "unread" as const : initialLayoutType3 ? "type3" as const
     : wordsUnread ? "unread" as const : null;
+  // (A box bold by a Type3 show drawn again says what that weight keeps
+  // from it until it is taken off.)
+  const boldByType3Passes = initialLayout?.wordsFixed === "weight-drawn-again";
   const wordsFixedNotice = wordsFixed === "unread"
     ? translate(wordsByLine ? "pdf.nativeTextEdit.paragraphFormatsOnly" : "pdf.nativeTextEdit.unreadWordsNotEditable")
-    : translate("pdf.nativeTextEdit.type3WordsNotEditable");
+    : translate(boldByType3Passes ? "pdf.nativeTextEdit.type3BoldFormatsOnly" : "pdf.nativeTextEdit.type3WordsNotEditable");
   const wordsFixedNoticeId = wordsFixed === "unread"
     ? "pdf-native-list-text-edit-words-fixed" : "pdf-native-list-text-edit-type3";
   const type3NoticeAtRef = useRef(0);
@@ -11403,17 +11465,35 @@ function PdfNativeListTextInlineEditor({
   // (The block of a paragraph too large to set again is of the second kind,
   // whatever faces it holds; a weight is refused it only where a Type3 glyph
   // of it is a letter -- the same reading, type3PicturesOnly.)
-  const nativeCapabilities: typeof capabilitiesOfLine = initialLayoutType3 && !wordsByLine ? Object.freeze({ ...capabilitiesOfLine,
-    ...(type3PicturesOnly && !propertyProof ? {} : { bold: Object.freeze({ enabled: false, reason: type3Unavailable }) }),
+  // (And where its letters are filled shapes that take the weight by their
+  
+  // weight is asked of the page too. A box bold that way is open for the
+  // weight, to take it off, and for what is written beside the passes; what
+  // would draw it again, lean it or carry it says the weight comes off first.)
+  const nativeCapabilities: typeof capabilitiesOfLine = boldByType3Passes ? Object.freeze(Object.fromEntries(
+    (Object.keys(capabilitiesOfLine) as (keyof typeof capabilitiesOfLine)[]).map((control) => [control,
+      TYPE3_BOLD_KEPT_CONTROLS.has(control) ? capabilitiesOfLine[control]
+        : Object.freeze({ enabled: false, reason: wordsFixedNotice })]),
+  ) as typeof capabilitiesOfLine) : initialLayoutType3 && !wordsByLine ? Object.freeze({ ...capabilitiesOfLine,
+    // (Of a run that states its own format too, where its letters take the
+    // weight: asked as its box's, type3WeightRun.)
+    ...((type3PicturesOnly && !propertyProof) || type3TakesWeight ? {} : { bold: Object.freeze({ enabled: false, reason: type3Unavailable }) }),
     fontFamily: Object.freeze({ enabled: false, reason: type3Unavailable }),
     delete: Object.freeze({ enabled: false, reason: translate("pdf.nativeTextEdit.type3WordsNotEditable") }),
   }) : wordsFixed === "unread" ? Object.freeze(Object.fromEntries(
     (Object.keys(capabilitiesOfLine) as (keyof typeof capabilitiesOfLine)[]).map((control) => [control,
-      control === "bold" && wordsByLine && initialLayoutType3 && !type3PicturesOnly
+      control === "bold" && wordsByLine && initialLayoutType3 && !type3PicturesOnly && !type3TakesWeight
         ? Object.freeze({ enabled: false, reason: type3Unavailable })
         : WORDS_UNREAD_KEPT_CONTROLS.has(control) ? capabilitiesOfLine[control]
         : Object.freeze({ enabled: false, reason: wordsFixedNotice })]),
-  ) as typeof capabilitiesOfLine) : capabilitiesOfLine;
+  // (A box of words that can be set again, one show of them a Type3 letter
+  // that takes no weight: a stroke draws nothing on the letter and a second
+  // drawing of it is not provable here, so the weight is not offered -- the
+  // press was taken by the group, which stroked every show, and the box read
+  // bold with the letter as light as it was.)
+  ) as typeof capabilitiesOfLine) : type3LettersHeld && !type3TakesWeight && !propertyProof ? Object.freeze({ ...capabilitiesOfLine,
+    bold: Object.freeze({ enabled: false, reason: type3Unavailable }),
+  }) : capabilitiesOfLine;
   // The selection's part of the run, when the run has formats of its own
   // parts (else the run's own format is the part's).
   const partialFields = partialRange && properties?.segments?.length ? partialFormatOf(partialRange) : null;
@@ -12385,6 +12465,21 @@ function PdfNativeListTextInlineEditor({
         });
         return;
       }
+    }
+    // 加粗 on a run of Type3 letters that take it (type3WeightRun): the box's
+    // format, asked of its paragraph's writer when the line is left; pressed
+    // again in the same draft, that press is taken back.
+    if (action.type === "toggle" && action.control === "bold" && type3WeightRun && !managedLayoutTypography && !partialTextRange()) {
+      const on = want("bold");
+      setRowFormat((current) => {
+        if (current?.bold !== undefined) {
+          const { bold: _bold, ...rest } = current;
+          void _bold;
+          return Object.keys(rest).length ? rest : null;
+        }
+        return { ...(current ?? {}), bold: on };
+      });
+      return;
     }
     // (A bold that is the face's own, pressed off: boldFaceKeptReason.)
     if (action.type === "toggle" && action.control === "bold" && boldFaceKeptReason && !want("bold")) {

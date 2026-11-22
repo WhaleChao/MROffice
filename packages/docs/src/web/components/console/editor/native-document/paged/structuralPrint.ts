@@ -1223,7 +1223,7 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
           ? rawError
           : new PrintReadinessError(
               "chart-render",
-              "The browser failed while preparing a chart for printing.",
+              "Preparing a chart for printing failed.",
               rawError,
             );
       renderPrintReadinessFailure(doc, options.readinessErrorMessage, error);

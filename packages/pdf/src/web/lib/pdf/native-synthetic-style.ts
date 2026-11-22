@@ -19,6 +19,16 @@ export const PDF_NATIVE_SYNTHETIC_ITALIC_SKEW = 0.21256;
  * of its bold. */
 export const PDF_NATIVE_SYNTHETIC_BOLD_STROKE_EM = 0.035;
 
+/** How far along its line the first pass of a Type3 show is drawn for a
+ * bold, as a fraction of the size the reader gives the show. A Type3 glyph is
+ * a procedure of its own and takes no stroke, so its weight is the show drawn
+ * again (paragraph-rewrite's type3ShowPasses): an upright stem grows by this
+ * much along the line, and nothing grows across it. The stem growth of the
+ * stroked bold, so that a Type3 letter among stroked words comes out the
+ * weight they do (pdf-walk-1000 0945 p2, «B.S.U.P.» in a Devanagari line:
+ * at 0.02 the letters stayed visibly lighter than the words beside them). */
+export const PDF_NATIVE_TYPE3_BOLD_PASS_EM = PDF_NATIVE_SYNTHETIC_BOLD_STROKE_EM;
+
 type Linear = readonly [number, number, number, number];
 
 const round6 = (value: number): number => {

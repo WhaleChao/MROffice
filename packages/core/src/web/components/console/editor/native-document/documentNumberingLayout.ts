@@ -90,10 +90,14 @@ export interface DocumentNumberingMarkerFact {
   version: 1;
   numId: number;
   level: number;
-  format: "bullet" | "decimal";
+  format: "bullet" | "decimal" | "lowerLetter" | "upperLetter" | "lowerRoman" | "upperRoman";
   text: string;
   markerRun: DocumentNumberingLayout["markerRun"];
 }
+
+/** Number formats whose numbers are Basic Latin letters, described like
+ * decimal ones since reading generation 329 (corpus R470-D37). */
+const LETTER_MARKER_FORMATS = new Set(["lowerLetter", "upperLetter", "lowerRoman", "upperRoman"]);
 
 export function readDocumentNumberingMarkerFact(
   attrs: Record<string, unknown>,
@@ -104,7 +108,7 @@ export function readDocumentNumberingMarkerFact(
       raw.version !== 1 || !integer(raw.numId, 1, 2147483647) || !integer(raw.level, 0, 8) ||
       typeof raw.text !== "string" || Array.from(raw.text).length > 16 || !markerRun(raw.markerRun)) return null;
   const text = raw.text;
-  if (raw.format === "decimal") {
+  if (raw.format === "decimal" || LETTER_MARKER_FORMATS.has(String(raw.format))) {
     if (!/^(?:%[1-9]|[\x20-\x24\x26-\x7e])+$/.test(text)) return null;
   } else if (raw.format !== "bullet" || !/^(?:[\x20-\x24\x26-\x7e]+|[\uf020-\uf0ff]+)$/u.test(text)) return null;
   return raw as unknown as DocumentNumberingMarkerFact;

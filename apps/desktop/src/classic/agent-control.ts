@@ -55,12 +55,18 @@ let noticeRun = "";
 const stoppedRuns = new Set<string>();
 let stoppedUnnamed = false;
 
+
+
+
+
+const NOTICE_STOP_TITLE = "mrai-agent-control:stop";
+
 const NOTICE_HTML = `<!doctype html><meta charset="utf-8"><style>
 html,body{margin:0;background:transparent;font:13px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;-webkit-user-select:none}
 div{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;background:rgba(20,20,20,.88);color:#fff}
 i{width:8px;height:8px;border-radius:50%;background:#f97316;box-shadow:0 0 0 3px rgba(249,115,22,.3)}
 button{margin-left:auto;border:0;border-radius:6px;padding:4px 10px;background:#fff;color:#111;cursor:pointer}
-</style><div><i></i><span>MR Note 的 AI 正在操作你的电脑</span><button onclick="location.hash='stop'">停止</button></div>`;
+</style><div><i></i><span>MR Note 的 AI 正在操作你的电脑</span><button onclick="document.title='${NOTICE_STOP_TITLE}'">停止</button></div>`;
 
 function showNotice(): void {
   if (noticeTimer) clearTimeout(noticeTimer);
@@ -81,8 +87,9 @@ function showNotice(): void {
   });
   notice.setAlwaysOnTop(true, "screen-saver");
   notice.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  notice.webContents.on("did-navigate-in-page", (_event, url) => {
-    if (url.endsWith("#stop")) {
+  notice.on("page-title-updated", (event, title) => {
+    event.preventDefault();
+    if (title === NOTICE_STOP_TITLE) {
       if (noticeRun) stoppedRuns.add(noticeRun);
       else stoppedUnnamed = true;
       if (notice && !notice.isDestroyed()) notice.destroy();

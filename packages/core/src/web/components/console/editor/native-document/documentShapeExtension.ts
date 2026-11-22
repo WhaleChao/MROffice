@@ -294,6 +294,7 @@ import {
   normalizeDocumentInkEffect,
   normalizeDocumentInkTool,
   normalizeDocumentShapeAttrs,
+  documentShapeMemberDrawnLeafAttrs,
   documentShapeMemberLeafAttrs,
   documentShapeMemberWithGroupPaint,
   normalizeDocumentShapeEffects,
@@ -3094,7 +3095,7 @@ export function paintDocumentShapeGroupMember(
   options?: DocumentShapePaintOptions,
 ): void {
   const drawn = documentShapeMemberWithGroupPaint(group, member);
-  paintShape(svg, documentShapeMemberLeafAttrs(drawn), drawn, options);
+  paintShape(svg, documentShapeMemberDrawnLeafAttrs(documentShapeMemberLeafAttrs(drawn), group), drawn, options);
 }
 
 export function paintShape(
