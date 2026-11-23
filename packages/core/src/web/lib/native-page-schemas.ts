@@ -296,6 +296,7 @@ import {
 import {
   isEditableAnimationDurationMs,
   mediaCallDurationMs,
+  normalizeChartElement,
   normalizeMotionPathNative,
   isEditableAnimationTimingMs,
   PRESENTATION_ANIMATION_EFFECT_OPTIONS,
@@ -2339,6 +2340,13 @@ const presentationAnimationStepSchema = z
     targetGroup: z.literal(true).optional(),
     // On the shape behind the text (row 1077).
     background: z.literal(true).optional(),
+    // On one shape of a SmartArt (row 1079): the data model's shape id.
+    diagramElement: z
+      .string()
+      .regex(/^\{[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\}$/)
+      .optional(),
+    // On one element of a chart (row 1080), checked below.
+    chartElement: z.unknown().optional(),
     // A motion path as PowerPoint wrote it (row 1078), checked below.
     motionPathNative: z.unknown().optional(),
     // Imported By Paragraph build (zero-based, inclusive). Read-only.
@@ -2353,6 +2361,13 @@ const presentationAnimationStepSchema = z
   })
   .passthrough()
   .superRefine((step, context) => {
+    if (step.chartElement !== undefined && normalizeChartElement(step.chartElement) === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["chartElement"],
+        message: "chartElement is one chart element as PowerPoint writes it",
+      });
+    }
     if (
       step.motionPathNative !== undefined &&
       (step.animation !== "none" ||

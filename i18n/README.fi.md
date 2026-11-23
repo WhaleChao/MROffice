@@ -65,7 +65,7 @@ Kaikki kehittäjille on osoitteessa **[MR Office Developers](https://mroffice.ai
 
 ### Upota editorit verkkosovellukseesi (suositus)
 
-MR Office hostaa editoreja; palvelimesi allekirjoittaa lyhytikäisen istuntotunnisteen ja sivusi avaa editorin. Se muokkaa oikeita Word-, Excel-, PowerPoint- ja PDF-tiedostoja (.docx, .xlsx, .pptx, .pdf), ja siinä on yhteismuokkaus, lataukset, kaikki vientimuodot, tulostus ja allekirjoitetulla takaisinkutsulla palvelimellesi lähetettävät tallennukset. Ilmainen suunnitelma: 1 000 istuntoa kuukaudessa localhostissa, 100 omilla verkkotunnuksillasi, enintään 2 sovellusta. Hostattuna palveluna se ei aseta AGPL-velvoitteita omalle sovelluksellesi.
+MR Office hostaa editorit; palvelimesi allekirjoittaa lyhytikäisen istuntotunnisteen ja sivusi avaa editorin. Se muokkaa aitoja Word-, Excel-, PowerPoint- ja PDF-tiedostoja (.docx, .xlsx, .pptx, .pdf), täydellä kaavamoottorilla, yhteismuokkauksella, latauksilla, kaikilla vientimuodoilla, tulostuksella, automaatio-API:lla (dokumentin oliomalli, makrot, liitännäiset) ja tallennuksilla, jotka lähetetään takaisin palvelimellesi allekirjoitetussa callbackissa. Kaikki tämä sisältyy Free-suunnitelmaan: 1 000 istuntoa kuukaudessa localhostissa, 100 omilla verkkotunnuksillasi, enintään 2 sovellusta, korttia ei tarvita. Hostattuna palveluna se ei aseta AGPL-velvoitteita omalle sovelluksellesi.
 
 1. Suorita projektin kansiossa `npx mroffice-embed init` (tai luo sovellus kehittäjäkonsolissa): yksi "Salli"-napsautus selaimessa, ja sovelluksen avaimet kirjoitetaan tiedostoon `.env.local` / `.env`.
 2. Palvelimesi luo istuntotunnuksen `mroffice-embed/server`-moduulin `createSessionToken`-funktiolla; salainen avain ei koskaan poistu palvelimelta.
@@ -99,7 +99,7 @@ MR Office on OAuth 2.1 -valtuutuspalvelin (PKCE, asiakastunnuksen metatietoasiak
 
 ### Ylläpidä avoimen lähdekoodin editoreja itse
 
-Tämän tietovaraston viisi editoria voidaan rakentaa omaan tuotteeseen AGPL-3.0-lisenssin alaisina: jos ihmiset käyttävät muokattua versiota verkon yli, sinun on tarjottava heille sen täydellinen lähdekoodi ja säilytettävä "MR Office" -nimeäminen (NOTICE.md). Ne avaavat omia formaattejaan, CSV-, HTML-, Markdown- ja PDF-tiedostoja; Word-, Excel- ja PowerPoint-tiedostoja varten käytä yllä olevaa isännöityä upotusta. Kaupallinen lisenssi on saatavilla osoitteesta support@mr-note.com. [Avoimen lähdekoodin opas →](https://mroffice.ai/fi/developers/open-source)
+Tämän tietovaraston viisi editoria voidaan rakentaa omaan tuotteeseesi AGPL-3.0:n alaisuudessa: jos ihmiset käyttävät muokattua versiota verkon yli, sinun on tarjottava heille sen täydellinen lähdekoodi ja säilytettävä "MR Office" -nimeäminen (NOTICE.md). Ne avaavat omat muotonsa, CSV-, HTML-, Markdown- ja PDF-tiedostot; Word-, Excel- ja PowerPoint-tiedostot tulevat yllä olevan hostatun upotuksen mukana, Free-suunnitelma mukaan lukien. Kaupallinen lisenssi on saatavilla osoitteesta support@mr-note.com. [Avoimen lähdekoodin opas →](https://mroffice.ai/fi/developers/open-source)
 
 Editorit ovat npm:ssä React-komponentteina: `npm i mroffice-docs mroffice-core` (sekä `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-code`); kunkin paketin README näyttää, miten se upotetaan.
 
@@ -108,12 +108,12 @@ Editorit ovat npm:ssä React-komponentteina: `npm i mroffice-docs mroffice-core`
 Mitä kukin editori tekee tässä tietovarastossa:
 
 - **Asiakirjat** — sivutettu tekstinkäsittelyohjelma: fontit, kappaleiden muotoilu, luettelot ja tyylit Aloitus-välilehdellä; kansi- ja tyhjät sivut, sivunvaihdot, taulukot, kuvat, muodot, SmartArt, kaaviot, linkit, kirjanmerkit, kommentit, ylä- ja alatunnisteet sekä sivunumerot, yhtälöt, symbolit, tekstiruudut ja WordArt Lisää-välilehdellä. Tallentaa oman formaattinsa (.mrdoc); avaa HTML-, Markdown- ja pelkän tekstin tiedostoja.
-- **Laskentataulukot** — solut ja kaavat fonteilla, tasauksella, lukumuodoilla, ehdollisella muotoilulla, solutyyleillä sekä solujen lisäämisellä ja poistamisella Aloitus-välilehdellä; taulukot, kuvat, muodot, kuvakkeet, valintaruudut, kaaviot ja sparklinet Lisää-välilehdellä; useita taulukoita, valinnan summat ja keskiarvot. Solujen välinen aritmetiikka (=A1*B1+10) lasketaan selaimessa kirjoittaessasi; funktioita sisältävät kaavat (SUM, IF, VLOOKUP …) säilytetään kirjoitetussa muodossa. Tallentaa oman formaattinsa (.mrsheet); avaa ja tallentaa CSV- ja TSV-tiedostoja.
+- **Laskentataulukot** — solut ja kaavat fontteineen, tasauksineen, lukumuotoineen, ehdollisine muotoiluineen, solutyyleineen sekä solujen lisääminen ja poistaminen Home-välilehdellä; taulukot, kuvat, muodot, kuvakkeet, valintaruudut, kaaviot ja sparklinet Insert-välilehdellä; useita taulukoita, valinnan summat ja keskiarvot. Solujen välinen aritmetiikka (=A1*B1+10) laskee reaaliajassa selaimessa kirjoittaessasi, ja jokainen tiedoston sisältämä kaava säilyy ehjänä; täysi kaavamoottori (SUM, IF, VLOOKUP ja satoja muita) toimii ilmaiseksi MR Office -työpöytäsovelluksessa ja hostatun upotuksen Free-suunnitelmassa. Tallentaa oman muotonsa (.mrsheet); avaa ja tallentaa CSV- ja TSV-tiedostoja.
 - **Esitykset** — diat asetteluilla ja osioilla, teksti, fontit ja kappaleet sekä muodot järjestelyineen Aloitus-välilehdellä; taulukot, kuvat, kuvakkeet, SmartArt, kaaviot, tekstiruudut, WordArt, ylä- ja alatunnisteet, yhtälöt, symbolit ja video Lisää-välilehdellä; muistiinpanot, kommentit ja esittäminen. Tallentaa oman formaattinsa (.mrslides).
-- **PDF** — PDF-tiedostojen luku, esittäminen ja tulostus: yhden ja kahden sivun näkymät, jatkuva vieritys, kierto, pikkukuvat ja lukutila, tekstin haku ja kopiointi sekä kommentit tiedoston ollessa auki; tallennus palauttaa tiedoston sellaisena kuin se avattiin.
-- **Koodi** — kevyt koodieditori, jossa on syntaksikorostus monille kielille, jäsennyspuu, haku, pikahaku, tiedostoselain ja ongelmaluettelo.
+- **PDF** — lue, esitä ja tulosta PDF-tiedostoja: yhden ja kahden sivun näkymät, jatkuva vieritys, kierto, pikkukuvat ja lukutila, tekstin haku ja kopiointi sekä kommentit; PDF:n oman tekstin muokkaaminen ja tallentaminen takaisin tiedostoon on ilmaista MR Office -työpöytäsovelluksessa ja hostatussa upotuksessa.
+- **Koodi** — nopea koodieditori, jossa on syntaksikorostus monille kielille, jäsennys, haku, pikahaku, tiedostoselain ja ongelmaluettelo.
 
-Kaavat funktioineen, kaaviot ja SmartArt lasketaan ja piirretään MR Officen moottorilla sekä ilmaisessa työpöytäsovelluksessa että hostatussa palvelussa; tämän repositorion editorit säilyttävät jokaisen tiedoston sisältämän kaavan, kaavion ja SmartArtin ja näyttävät SmartArtin sellaisena kuin se on tallennettu.
+Kaavat funktioineen (SUM, IF, VLOOKUP ja satoja muita), Word-, Excel- ja PowerPoint-tiedostot, kaaviot, SmartArt ja automaatio-API ovat ilmaisia käyttää: ilmaisessa MR Office -työpöytäsovelluksessa ja omassa sovelluksessasi hostatun upotuksen Free-suunnitelman kautta. Tiedostot säilyttävät jokaisen kaavan, kaavion ja SmartArtin ehjänä myös avoimen lähdekoodin editoreissa.
 
 ## Editorien ajaminen
 
@@ -140,13 +140,14 @@ npm run desktop
 
 ## Kaikki ominaisuudet: asenna MR Officen työpöytäsovellus (maksuton)
 
-MR Office -työpöytäsovellus on ilmainen, sisältää nämä editorit ja koko palvelun, ja toimii offline-tilassa omalla tietokoneellasi. Editorien lisäksi se tarjoaa:
+MR Office -työpöytäsovellus on ilmainen, sisältää nämä editorit ja täyden palvelun, ja toimii offline-tilassa omalla tietokoneellasi. Se tuo myös:
 
 - Word-, Excel- ja PowerPoint-tiedostojen (.docx, .xlsx, .pptx) avaaminen ja tallentaminen
-- Funktioita sisältävien kaavojen (SUMMA, JOS, PHAKU …) laskenta
-- Kaaviot
+- Kaavat funktioilla (SUM, IF, VLOOKUP …), laskettuna täydellä kaavamoottorilla
+- Kaaviot lasketaan ja piirretään tiedoistasi
 - SmartArtin muokkaus
 - PDF-muokkausten tallentaminen takaisin tiedostoon
+- Automaatio-API: dokumentin oliomalli, makrot ja liitännäiset
 
 **[Lataa MR Office (ilmainen) →](https://mroffice.ai/fi/office/download)**
 

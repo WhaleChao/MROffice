@@ -65,7 +65,7 @@ Alles voor ontwikkelaars staat op **[MR Office Developers](https://mroffice.ai/n
 
 ### De editors in je webapp insluiten (aanbevolen)
 
-MR Office host de editors; je server ondertekent een kortlevend sessietoken en je pagina opent de editor. Hij bewerkt echte Word-, Excel-, PowerPoint- en PDF-bestanden (.docx, .xlsx, .pptx, .pdf), met co-editing, uploads, elk exportformaat, afdrukken en opslaan teruggestuurd naar je server in een ondertekende callback. Gratis plan: 1.000 sessies per maand op localhost, 100 op je eigen domeinen, tot 2 apps. Als gehoste service legt het geen AGPL-verplichtingen op aan je eigen app.
+MR Office host de editors; je server ondertekent een kortlevend sessietoken en je pagina opent de editor. Hij bewerkt echte Word-, Excel-, PowerPoint- en PDF-bestanden (.docx, .xlsx, .pptx, .pdf), met de volledige formule-engine, co-editing, uploads, elk exportformaat, afdrukken, de automatiserings-API (document object model, macro's, plugins) en opslagacties die via een ondertekende callback naar je server worden teruggestuurd. Alles zit in het Free-plan: 1.000 sessies per maand op localhost, 100 op je eigen domeinen, tot 2 apps, geen kaart nodig. Als hosted service legt het geen AGPL-verplichtingen op aan je eigen app.
 
 1. Voer in de map van je project `npx mroffice-embed init` uit (of maak een app in de ontwikkelaarsconsole): één klik op "Toestaan" in de browser en de sleutels van de app staan in `.env.local` / `.env`.
 2. Je server maakt een sessietoken met `createSessionToken` uit `mroffice-embed/server`; de geheime sleutel verlaat de server nooit.
@@ -99,7 +99,7 @@ MR Office is een OAuth 2.1-autorisatieserver (PKCE, client-ID-metadatadocumenten
 
 ### De open-source editors zelf hosten
 
-De vijf editors in deze repository kunnen onder de AGPL-3.0 in je eigen product worden gebouwd: als mensen een gewijzigde versie via een netwerk gebruiken, moet je hun de volledige broncode aanbieden en de vermelding "MR Office" behouden (NOTICE.md). Ze openen hun eigen formaten, CSV, HTML, Markdown en PDF; gebruik voor Word-, Excel- en PowerPoint-bestanden de gehoste embed hierboven. Een commerciële licentie is verkrijgbaar via support@mr-note.com. [Open-sourcegids →](https://mroffice.ai/nl/developers/open-source)
+De vijf editors in deze repository kunnen onder de AGPL-3.0 in je eigen product worden gebouwd: als mensen een gewijzigde versie via een netwerk gebruiken, moet je hun de volledige broncode aanbieden en de vermelding "MR Office" (NOTICE.md) behouden. Ze openen hun eigen formaten, CSV, HTML, Markdown en PDF; Word-, Excel- en PowerPoint-bestanden komen met de hosted embed hierboven, Free-plan inbegrepen. Een commerciële licentie is verkrijgbaar via support@mr-note.com. [Open-sourcegids →](https://mroffice.ai/nl/developers/open-source)
 
 De editors staan op npm als React-componenten: `npm i mroffice-docs mroffice-core` (en `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-code`); de README van elk pakket laat zien hoe je het insluit.
 
@@ -108,12 +108,12 @@ De editors staan op npm als React-componenten: `npm i mroffice-docs mroffice-cor
 Wat elke editor in deze repository doet:
 
 - **Documenten** — een paginagebonden tekstverwerker: lettertypen, alinea-opmaak, lijsten en stijlen op Start; voorblad en lege pagina's, pagina-einden, tabellen, afbeeldingen, vormen, SmartArt, grafieken, koppelingen, bladwijzers, opmerkingen, kop- en voetteksten en paginanummers, vergelijkingen, symbolen, tekstvakken en WordArt op Invoegen. Slaat het eigen formaat op (.mrdoc); opent HTML, Markdown en platte tekst.
-- **Spreadsheets** — cellen en formules met lettertypen, uitlijning, getalnotaties, voorwaardelijke opmaak, celstijlen en het invoegen of verwijderen van cellen op Start; tabellen, afbeeldingen, vormen, pictogrammen, selectievakjes, grafieken en sparklines op Invoegen; meerdere bladen, met sommen en gemiddelden van de selectie. Rekenkunde tussen cellen (=A1*B1+10) wordt tijdens het typen in de browser berekend; formules met functies (SUM, IF, VLOOKUP …) blijven zoals geschreven. Slaat het eigen formaat op (.mrsheet); opent en slaat CSV en TSV op.
+- **Spreadsheets** — cellen en formules met lettertypen, uitlijning, getalnotaties, voorwaardelijke opmaak, celstijlen en cellen invoegen of verwijderen op Start; tabellen, afbeeldingen, vormen, pictogrammen, selectievakjes, grafieken en sparklines op Invoegen; meerdere bladen, met sommen en gemiddelden van de selectie. Rekenkundige bewerkingen tussen cellen (=A1*B1+10) worden live in de browser berekend terwijl je typt, en elke formule in een bestand blijft intact; de volledige formule-engine (SUM, IF, VLOOKUP en honderden meer) werkt gratis in de MR Office desktop-app en in het Free-plan van de hosted embed. Slaat het eigen formaat op (.mrsheet); opent en slaat CSV en TSV op.
 - **Presentaties** — dia's met lay-outs en secties, tekst, lettertypen en alinea's, en vormen met hun rangschikking op Start; tabellen, afbeeldingen, pictogrammen, SmartArt, grafieken, tekstvakken, WordArt, kop- en voetteksten, vergelijkingen, symbolen en video op Invoegen; sprekersnotities, opmerkingen en presenteren. Slaat het eigen formaat op (.mrslides).
-- **PDF** — PDF-bestanden lezen, presenteren en afdrukken: weergaven met één en twee pagina's, continu scrollen, draaien, miniaturen en leesmodus, zoeken in en kopiëren van hun tekst, en opmerkingen terwijl een bestand open is; opslaan geeft het bestand terug zoals het werd geopend.
-- **Code** — een lichte code-editor met syntaxiskleuring voor veel talen, een overzicht, zoeken, snel openen, een bestandsverkenner en een problemenlijst.
+- **PDF** — PDF-bestanden lezen, presenteren en afdrukken: weergaven met één en twee pagina's, continu scrollen, roteren, miniaturen en leesmodus, zoeken in en kopiëren van de tekst, en opmerkingen; de eigen tekst van een PDF bewerken en terug in het bestand opslaan is gratis in de MR Office desktop-app en de hosted embed.
+- **Code** — een snelle code-editor met syntaxiskleuring voor vele talen, een overzicht, zoeken, snel openen, een bestandsverkenner en een problemenlijst.
 
-Formules met functies, grafieken en SmartArt worden berekend en getekend door de engine van MR Office, in de gratis desktop-app en de gehoste service; de editors hier behouden elke formule, grafiek en SmartArt die een bestand bevat, en tonen SmartArt zoals het is opgeslagen.
+Formules met functies (SUM, IF, VLOOKUP en honderden meer), Word-, Excel- en PowerPoint-bestanden, grafieken, SmartArt en de automatiserings-API zijn gratis te gebruiken: in de gratis MR Office desktop-app, en in je eigen app via het Free-plan van de hosted embed. Bestanden behouden elke formule, grafiek en SmartArt ook in de open-source editors.
 
 ## De editors draaien
 
@@ -140,13 +140,14 @@ npm run desktop
 
 ## Voor alle functies: installeer de desktop-app van MR Office (gratis)
 
-De MR Office desktop-app is gratis, bevat deze editors en de volledige service, en werkt offline op je eigen computer. Bovenop de editors voegt hij toe:
+De MR Office desktop-app is gratis, bevat deze editors en de volledige service, en werkt offline op je eigen computer. Hij brengt ook:
 
 - Word-, Excel- en PowerPoint-bestanden (.docx, .xlsx, .pptx) openen en opslaan
-- Formules met functies (SOM, ALS, VERT.ZOEKEN …) berekenen
-- Grafieken
+- Formules met functies (SUM, IF, VLOOKUP …), berekend door de volledige formule-engine
+- Grafieken berekend en getekend op basis van je gegevens
 - SmartArt bewerken
 - Bewerkingen van een pdf terugschrijven in het bestand
+- De automatiserings-API: het document object model, macro's en plugins
 
 **[MR Office downloaden (gratis) →](https://mroffice.ai/nl/office/download)**
 

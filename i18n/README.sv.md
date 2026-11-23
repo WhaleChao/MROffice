@@ -65,7 +65,7 @@ Allt för utvecklare finns på **[MR Office Developers](https://mroffice.ai/sv/d
 
 ### Bädda in redigerarna i din webbapp (rekommenderas)
 
-MR Office hostar editorerna; din server signerar en kortlivad sessionstoken och din sida öppnar editorn. Den redigerar riktiga Word-, Excel-, PowerPoint- och PDF-filer (.docx, .xlsx, .pptx, .pdf), med samredigering, uppladdningar, alla exportformat, utskrift, och sparanden som skickas tillbaka till din server i en signerad callback. Gratisplan: 1 000 sessioner i månaden på localhost, 100 på dina egna domäner, upp till 2 appar. Som hostad tjänst lägger den inga AGPL-skyldigheter på din egen app.
+MR Office tillhandahåller redigerarna; din server signerar en kortlivad sessionstoken och din sida öppnar redigeraren. Den redigerar riktiga Word-, Excel-, PowerPoint- och PDF-filer (.docx, .xlsx, .pptx, .pdf), med den fullständiga formelmotorn, samredigering, uppladdningar, alla exportformat, utskrift, automatiserings-API:et (dokumentobjektmodell, makron, plugin-program) och sparanden som skickas tillbaka till din server i en signerad callback. Allt ingår i Free-planen: 1 000 sessioner per månad på localhost, 100 på dina egna domäner, upp till 2 appar, inget kort behövs. Som en hostad tjänst lägger den inga AGPL-skyldigheter på din egen app.
 
 1. Kör `npx mroffice-embed init` i projektets mapp (eller skapa en app i utvecklarkonsolen): ett klick på "Tillåt" i webbläsaren, så skrivs appens nycklar till `.env.local` / `.env`.
 2. Din server skapar en sessionstoken med `createSessionToken` från `mroffice-embed/server`; den hemliga nyckeln lämnar aldrig servern.
@@ -99,7 +99,7 @@ MR Office är en OAuth 2.1-auktoriseringsserver (PKCE, metadatadokument för kli
 
 ### Kör redigerarna med öppen källkod själv
 
-De fem redigerarna i det här arkivet kan byggas in i din egen produkt under AGPL-3.0: om människor använder en modifierad version över ett nätverk måste du erbjuda dem dess fullständiga källkod och behålla attributionen "MR Office" (NOTICE.md). De öppnar sina egna format, CSV, HTML, Markdown och PDF; för Word-, Excel- och PowerPoint-filer, använd den hostade inbäddningen ovan. En kommersiell licens finns tillgänglig från support@mr-note.com. [Guide för öppen källkod →](https://mroffice.ai/sv/developers/open-source)
+De fem redigerarna i detta arkiv kan byggas in i din egen produkt under AGPL-3.0: om människor använder en modifierad version över ett nätverk måste du erbjuda dem dess fullständiga källkod, och behålla attributionen "MR Office" (NOTICE.md). De öppnar sina egna format, CSV, HTML, Markdown och PDF; Word-, Excel- och PowerPoint-filer medföljer den hostade inbäddningen ovan, Free-planen inkluderad. En kommersiell licens finns tillgänglig från support@mr-note.com. [Guide för öppen källkod →](https://mroffice.ai/sv/developers/open-source)
 
 Redigerarna finns på npm som React-komponenter: `npm i mroffice-docs mroffice-core` (och `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-code`); varje pakets README visar hur man bäddar in det.
 
@@ -108,12 +108,12 @@ Redigerarna finns på npm som React-komponenter: `npm i mroffice-docs mroffice-c
 Vad varje redigerare gör i det här arkivet:
 
 - **Dokument** — en sidindelad ordbehandlare: teckensnitt, styckeformatering, listor och stilar på Start; omslags- och tomma sidor, sidbrytningar, tabeller, bilder, former, SmartArt, diagram, länkar, bokmärken, kommentarer, sidhuvuden, sidfötter och sidnummer, ekvationer, symboler, textrutor och WordArt på Infoga. Sparar sitt eget format (.mrdoc); öppnar HTML, Markdown och oformaterad text.
-- **Kalkylblad** — celler och formler med teckensnitt, justering, talformat, villkorsstyrd formatering, cellstilar och infoga eller ta bort celler på Start; tabeller, bilder, former, ikoner, kryssrutor, diagram och miniatyrdiagram på Infoga; flera blad, med summor och medelvärden för markeringen. Aritmetik mellan celler (=A1*B1+10) beräknas i webbläsaren medan du skriver; formler med funktioner (SUM, IF, VLOOKUP …) behålls som skrivna. Sparar sitt eget format (.mrsheet); öppnar och sparar CSV och TSV.
+- **Kalkylblad** — celler och formler med teckensnitt, justering, talformat, villkorsstyrd formatering, cellformat och infoga eller ta bort celler på fliken Start; tabeller, bilder, former, ikoner, kryssrutor, diagram och miniatyrdiagram på fliken Infoga; flera blad, med summor och medelvärden för markeringen. Aritmetik mellan celler (=A1*B1+10) beräknas live i webbläsaren medan du skriver, och varje formel som en fil innehåller bevaras intakt; den fullständiga formelmotorn (SUM, IF, VLOOKUP och hundratals fler) körs gratis i MR Office-skrivbordsappen och i den hostade inbäddningens Free-plan. Sparar i sitt eget format (.mrsheet); öppnar och sparar CSV och TSV.
 - **Presentationer** — bilder med layouter och avsnitt, text, teckensnitt och stycken, och former med deras arrangemang på Start; tabeller, bilder, ikoner, SmartArt, diagram, textrutor, WordArt, sidhuvuden och sidfötter, ekvationer, symboler och video på Infoga; talarnoter, kommentarer och presentation. Sparar sitt eget format (.mrslides).
-- **PDF** — läs, presentera och skriv ut PDF-filer: enkel- och tvåsidiga vyer, kontinuerlig rullning, rotation, miniatyrbilder och läsläge, sökning och kopiering av deras text, och kommentarer medan en fil är öppen; spara lämnar tillbaka filen som den öppnades.
-- **Kod** — en lättviktskodredigerare med syntaxmarkering för många språk, en disposition, sök, snabböppning, en filutforskare och en problemlista.
+- **PDF** — läs, presentera och skriv ut PDF-filer: enkel- och tvåsidiga vyer, kontinuerlig rullning, rotation, miniatyrbilder och läsläge, sökning och kopiering av deras text, samt kommentarer; redigering av en PDFs egen text och spara tillbaka den i filen är gratis i MR Office-skrivbordsappen och den hostade inbäddningen.
+- **Kod** — en snabb kodredigerare med syntaxmarkering för många språk, en disposition, sök, snabböppning, en filutforskare och en problemlista.
 
-Formler med funktioner, diagram och SmartArt beräknas och ritas av MR Offices motor, i den kostnadsfria skrivbordsappen och i den hostade tjänsten; editorerna här bevarar varje formel, diagram och SmartArt som en fil innehåller, och visar SmartArt så som det sparades.
+Formler med funktioner (SUM, IF, VLOOKUP och hundratals fler), Word-, Excel- och PowerPoint-filer, diagram, SmartArt och automatiserings-API:et är gratis att använda: i den kostnadsfria MR Office-skrivbordsappen, och i din egen app via den hostade inbäddningens Free-plan. Filer behåller varje formel, diagram och SmartArt intakt även i de öppna källkodsredigerarna.
 
 ## Kör redigerarna
 
@@ -140,13 +140,14 @@ npm run desktop
 
 ## För alla funktioner: installera MR Offices skrivbordsapp (gratis)
 
-Skrivbordsappen MR Office är kostnadsfri, har dessa editorer och hela tjänsten, och fungerar offline på din egen dator. Utöver editorerna lägger den till:
+MR Office-skrivbordsappen är gratis, har dessa redigerare och den fullständiga tjänsten, och fungerar offline på din egen dator. Den erbjuder även:
 
 - Öppna och spara Word-, Excel- och PowerPoint-filer (.docx, .xlsx, .pptx)
-- Beräkna formler med funktioner (SUMMA, OM, LETARAD …)
-- Diagram
+- Formler med funktioner (SUM, IF, VLOOKUP …), beräknade av den fullständiga formelmotorn
+- Diagram beräknade och ritade från dina data
 - Redigering av SmartArt
 - Spara ändringar i en PDF tillbaka i filen
+- Automatiserings-API:et: dokumentobjektmodellen, makron och plugin-program
 
 **[Ladda ned MR Office (gratis) →](https://mroffice.ai/sv/office/download)**
 

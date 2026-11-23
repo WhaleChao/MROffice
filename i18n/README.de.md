@@ -65,7 +65,7 @@ Alles für Entwickler finden Sie bei **[MR Office Developers](https://mroffice.a
 
 ### Die Editoren in Ihre Web-App einbetten (empfohlen)
 
-MR Office hostet die Editoren; dein Server signiert ein kurzlebiges Sitzungstoken und deine Seite öffnet den Editor. Er bearbeitet echte Word-, Excel-, PowerPoint- und PDF-Dateien (.docx, .xlsx, .pptx, .pdf), mit Co-Editing, Uploads, jedem Exportformat, Drucken und Speicherungen, die per signiertem Callback an deinen Server zurückgesendet werden. Kostenloser Plan: 1.000 Sitzungen pro Monat auf localhost, 100 auf deinen eigenen Domains, bis zu 2 Apps. Als gehosteter Dienst legt er deiner eigenen App keine AGPL-Pflichten auf.
+MR Office hostet die Editoren; Ihr Server signiert ein kurzlebiges Sitzungstoken und Ihre Seite öffnet den Editor. Er bearbeitet echte Word-, Excel-, PowerPoint- und PDF-Dateien (.docx, .xlsx, .pptx, .pdf), mit der vollständigen Formel-Engine, Co-Editing, Uploads, jedem Exportformat, Drucken, der Automatisierungs-API (Dokumentobjektmodell, Makros, Plugins) und Speicherungen, die per signiertem Callback an Ihren Server zurückgehen. All das ist im Free-Plan enthalten: 1.000 Sitzungen pro Monat auf localhost, 100 auf Ihren eigenen Domains, bis zu 2 Apps, keine Karte nötig. Als gehosteter Dienst erlegt er Ihrer eigenen App keine AGPL-Pflichten auf.
 
 1. Führen Sie im Ordner Ihres Projekts `npx mroffice-embed init` aus (oder legen Sie eine App in der Entwicklerkonsole an): ein Klick auf „Erlauben“ im Browser, und die Schlüssel der App stehen in `.env.local` / `.env`.
 2. Ihr Server erzeugt ein Sitzungstoken mit `createSessionToken` aus `mroffice-embed/server`; der geheime Schlüssel verlässt den Server nie.
@@ -99,7 +99,7 @@ MR Office ist ein OAuth-2.1-Autorisierungsserver (PKCE, Client-ID-Metadatendokum
 
 ### Die Open-Source-Editoren selbst hosten
 
-Die fünf Editoren in diesem Repository lassen sich unter der AGPL-3.0 in ein eigenes Produkt einbauen: Wenn Personen eine veränderte Version über ein Netzwerk nutzen, musst du ihnen den vollständigen Quellcode anbieten und die Nennung „MR Office“ beibehalten (NOTICE.md). Sie öffnen ihre eigenen Formate, CSV, HTML, Markdown und PDF; für Word-, Excel- und PowerPoint-Dateien nutze das gehostete Embed oben. Eine kommerzielle Lizenz ist unter support@mr-note.com erhältlich. [Open-Source-Leitfaden →](https://mroffice.ai/de/developers/open-source)
+Die fünf Editoren in diesem Repository können unter der AGPL-3.0 in Ihr eigenes Produkt eingebaut werden: Wenn Personen eine geänderte Version über ein Netzwerk nutzen, müssen Sie ihnen den vollständigen Quellcode anbieten und die Namensnennung "MR Office" (NOTICE.md) beibehalten. Sie öffnen ihre eigenen Formate, CSV, HTML, Markdown und PDF; Word-, Excel- und PowerPoint-Dateien kommen mit dem oben genannten gehosteten Embed, Free-Plan inklusive. Eine kommerzielle Lizenz ist unter support@mr-note.com erhältlich. [Open-Source-Leitfaden →](https://mroffice.ai/de/developers/open-source)
 
 Die Editoren sind als React-Komponenten auf npm verfügbar: `npm i mroffice-docs mroffice-core` (sowie `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-code`); die README jedes Pakets zeigt, wie man es einbettet.
 
@@ -108,12 +108,12 @@ Die Editoren sind als React-Komponenten auf npm verfügbar: `npm i mroffice-docs
 Was jeder Editor in diesem Repository kann:
 
 - **Dokumente** — eine seitenbasierte Textverarbeitung: Schriftarten, Absatzformatierung, Listen und Formatvorlagen unter Start; Deckblatt und leere Seiten, Seitenumbrüche, Tabellen, Bilder, Formen, SmartArt, Diagramme, Links, Lesezeichen, Kommentare, Kopf- und Fußzeilen und Seitenzahlen, Gleichungen, Symbole, Textfelder und WordArt unter Einfügen. Speichert das eigene Format (.mrdoc); öffnet HTML, Markdown und reinen Text.
-- **Tabellen** — Zellen und Formeln mit Schriftarten, Ausrichtung, Zahlenformaten, bedingter Formatierung, Zellformatvorlagen sowie Einfügen oder Löschen von Zellen unter Start; Tabellen, Bilder, Formen, Symbole, Kontrollkästchen, Diagramme und Sparklines unter Einfügen; mehrere Tabellenblätter, mit Summen und Mittelwerten der Auswahl. Arithmetik zwischen Zellen (=A1*B1+10) wird beim Tippen im Browser berechnet; Formeln mit Funktionen (SUMME, WENN, SVERWEIS …) bleiben wie geschrieben erhalten. Speichert das eigene Format (.mrsheet); öffnet und speichert CSV und TSV.
+- **Tabellen** — Zellen und Formeln mit Schriftarten, Ausrichtung, Zahlenformaten, bedingter Formatierung, Zellvorlagen sowie Einfügen oder Löschen von Zellen unter Start; Tabellen, Bilder, Formen, Symbole, Kontrollkästchen, Diagramme und Sparklines unter Einfügen; mehrere Tabellenblätter mit Summen und Mittelwerten der Auswahl. Arithmetik zwischen Zellen (=A1*B1+10) wird beim Tippen live im Browser berechnet, und jede in einer Datei enthaltene Formel bleibt unverändert erhalten; die vollständige Formel-Engine (SUM, IF, VLOOKUP und Hunderte mehr) läuft kostenlos in der MR Office Desktop-App und im Free-Plan des gehosteten Embeds. Speichert das eigene Format (.mrsheet); öffnet und speichert CSV und TSV.
 - **Präsentationen** — Folien mit Layouts und Abschnitten, Text, Schriftarten und Absätzen sowie Formen mit ihrer Anordnung unter Start; Tabellen, Bilder, Symbole, SmartArt, Diagramme, Textfelder, WordArt, Kopf- und Fußzeilen, Gleichungen, Symbole und Video unter Einfügen; Notizen, Kommentare und Präsentieren. Speichert das eigene Format (.mrslides).
-- **PDF** — PDF-Dateien lesen, präsentieren und drucken: Einzel- und Doppelseitenansicht, fortlaufendes Scrollen, Drehen, Miniaturansichten und Lesemodus, Suchen und Kopieren des Textes sowie Kommentare, solange eine Datei geöffnet ist; beim Speichern wird die Datei so zurückgegeben, wie sie geöffnet wurde.
-- **Code** — ein schlanker Code-Editor mit Syntaxhervorhebung für viele Sprachen, einer Gliederung, Suchen, Schnellöffnen, einem Datei-Explorer und einer Problemliste.
+- **PDF** — PDF-Dateien lesen, präsentieren und drucken: Einzel- und Doppelseitenansicht, fortlaufendes Scrollen, Drehen, Miniaturansichten und Lesemodus, Suchen und Kopieren des Textes sowie Kommentare; das Bearbeiten des eigenen Textes einer PDF und das Zurückspeichern in die Datei ist kostenlos in der MR Office Desktop-App und im gehosteten Embed.
+- **Code** — ein schneller Code-Editor mit Syntaxhervorhebung für viele Sprachen, einer Gliederung, Suchen, Schnellöffnen, einem Datei-Explorer und einer Problemliste.
 
-Formeln mit Funktionen, Diagramme und SmartArt werden von der Engine von MR Office berechnet und gezeichnet, in der kostenlosen Desktop-App und im gehosteten Dienst; die Editoren hier bewahren jede Formel, jedes Diagramm und jedes SmartArt einer Datei und zeigen SmartArt so an, wie es gespeichert wurde.
+Formeln mit Funktionen (SUM, IF, VLOOKUP und Hunderte mehr), Word-, Excel- und PowerPoint-Dateien, Diagramme, SmartArt und die Automatisierungs-API sind kostenlos nutzbar: in der kostenlosen MR Office Desktop-App und in Ihrer eigenen App über den Free-Plan des gehosteten Embeds. Dateien behalten jede Formel, jedes Diagramm und jedes SmartArt auch in den Open-Source-Editoren unverändert.
 
 ## Die Editoren ausführen
 
@@ -140,13 +140,14 @@ npm run desktop
 
 ## Für den vollen Funktionsumfang: die MR Office Desktop-App installieren (kostenlos)
 
-Die MR Office Desktop-App ist kostenlos, enthält diese Editoren und den vollen Dienst und funktioniert offline auf deinem eigenen Computer. Zusätzlich zu den Editoren bietet sie:
+Die MR Office Desktop-App ist kostenlos, enthält diese Editoren und den vollen Funktionsumfang und funktioniert offline auf Ihrem eigenen Computer. Sie bringt außerdem mit:
 
 - Word-, Excel- und PowerPoint-Dateien (.docx, .xlsx, .pptx) öffnen und speichern
-- Formeln mit Funktionen (SUMME, WENN, SVERWEIS …) berechnen
-- Diagramme
+- Formeln mit Funktionen (SUM, IF, VLOOKUP …), berechnet von der vollständigen Formel-Engine
+- Diagramme, berechnet und gezeichnet aus Ihren Daten
 - SmartArt bearbeiten
 - PDF-Änderungen in die Datei zurückschreiben
+- Die Automatisierungs-API: das Dokumentobjektmodell, Makros und Plugins
 
 **[MR Office herunterladen (kostenlos) →](https://mroffice.ai/de/office/download)**
 

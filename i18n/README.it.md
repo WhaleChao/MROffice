@@ -65,7 +65,7 @@ Tutto per gli sviluppatori è su **[MR Office Developers](https://mroffice.ai/it
 
 ### Incorpora gli editor nella tua app web (consigliato)
 
-MR Office ospita gli editor; il tuo server firma un token di sessione a breve scadenza e la tua pagina apre l'editor. Modifica file Word, Excel, PowerPoint e PDF reali (.docx, .xlsx, .pptx, .pdf), con co-editing, caricamenti, ogni formato di esportazione, stampa e salvataggi inviati al tuo server tramite callback firmata. Piano gratuito: 1000 sessioni al mese su localhost, 100 sui tuoi domini, fino a 2 app. Come servizio ospitato, non impone obblighi AGPL alla tua app.
+MR Office ospita gli editor; il tuo server firma un token di sessione a breve scadenza e la tua pagina apre l'editor. Modifica file Word, Excel, PowerPoint e PDF reali (.docx, .xlsx, .pptx, .pdf), con il motore di formule completo, co-editing, caricamenti, tutti i formati di esportazione, stampa, l'API di automazione (document object model, macro, plugin) e salvataggi inviati al tuo server in un callback firmato. Tutto è incluso nel piano Free: 1000 sessioni al mese su localhost, 100 sui tuoi domini, fino a 2 app, senza carta di credito. In quanto servizio ospitato, non impone obblighi AGPL alla tua app.
 
 1. Nella cartella del progetto esegui `npx mroffice-embed init` (oppure crea un'app nella console sviluppatori): un clic su "Consenti" nel browser e le chiavi dell'app vengono scritte in `.env.local` / `.env`.
 2. Il tuo server crea un token di sessione con `createSessionToken` di `mroffice-embed/server`; la chiave segreta non lascia mai il server.
@@ -99,7 +99,7 @@ MR Office è un server di autorizzazione OAuth 2.1 (PKCE, documenti di metadati 
 
 ### Ospita tu stesso gli editor open source
 
-I cinque editor di questo repository possono essere integrati nel tuo prodotto con licenza AGPL-3.0: se le persone usano una versione modificata tramite rete, devi offrire loro il codice sorgente completo e mantenere l'attribuzione "MR Office" (NOTICE.md). Aprono i propri formati, CSV, HTML, Markdown e PDF; per i file Word, Excel e PowerPoint, usa l'embed ospitato qui sopra. Una licenza commerciale è disponibile scrivendo a support@mr-note.com. [Guida open source →](https://mroffice.ai/it/developers/open-source)
+I cinque editor di questo repository possono essere integrati nel tuo prodotto con licenza AGPL-3.0: se le persone usano una versione modificata tramite rete, devi offrire loro il codice sorgente completo e mantenere l'attribuzione "MR Office" (NOTICE.md). Aprono i propri formati, CSV, HTML, Markdown e PDF; i file Word, Excel e PowerPoint sono disponibili con l'embed ospitato sopra, piano Free incluso. Una licenza commerciale è disponibile scrivendo a support@mr-note.com. [Guida open source →](https://mroffice.ai/it/developers/open-source)
 
 Gli editor sono su npm come componenti React: `npm i mroffice-docs mroffice-core` (e `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-code`); il README di ogni pacchetto mostra come integrarlo.
 
@@ -108,12 +108,12 @@ Gli editor sono su npm come componenti React: `npm i mroffice-docs mroffice-core
 Cosa fa ogni editor in questo repository:
 
 - **Documenti** — un elaboratore di testi a pagine: caratteri, formattazione dei paragrafi, elenchi e stili in Home; copertine e pagine vuote, interruzioni di pagina, tabelle, immagini, forme, SmartArt, grafici, link, segnalibri, commenti, intestazioni, piè di pagina e numeri di pagina, equazioni, simboli, caselle di testo e WordArt in Inserisci. Salva il proprio formato (.mrdoc); apre HTML, Markdown e testo semplice.
-- **Fogli di calcolo** — celle e formule con caratteri, allineamento, formati numerici, formattazione condizionale, stili di cella e inserimento o eliminazione di celle in Home; tabelle, immagini, forme, icone, caselle di controllo, grafici e sparkline in Inserisci; più fogli, con somme e medie della selezione. L'aritmetica tra celle (=A1*B1+10) viene calcolata nel browser mentre digiti; le formule con funzioni (SUM, IF, VLOOKUP …) vengono mantenute come scritte. Salva il proprio formato (.mrsheet); apre e salva CSV e TSV.
+- **Fogli di calcolo** — celle e formule con caratteri, allineamento, formati numerici, formattazione condizionale, stili di cella e inserimento o eliminazione di celle in Home; tabelle, immagini, forme, icone, caselle di controllo, grafici e sparkline in Inserisci; più fogli, con somme e medie della selezione. L'aritmetica tra celle (=A1*B1+10) viene calcolata in tempo reale nel browser mentre digiti e ogni formula contenuta in un file resta intatta; il motore di formule completo (SUM, IF, VLOOKUP e centinaia di altre) funziona gratuitamente nell'app desktop MR Office e nel piano Free dell'embed ospitato. Salva il proprio formato (.mrsheet); apre e salva CSV e TSV.
 - **Presentazioni** — diapositive con layout e sezioni, testo, caratteri e paragrafi, e forme con la loro disposizione in Home; tabelle, immagini, icone, SmartArt, grafici, caselle di testo, WordArt, intestazioni e piè di pagina, equazioni, simboli e video in Inserisci; note del relatore, commenti e presentazione. Salva il proprio formato (.mrslides).
-- **PDF** — leggi, presenta e stampa file PDF: viste a pagina singola e doppia, scorrimento continuo, rotazione, miniature e modalità lettura, ricerca e copia del testo, e commenti mentre un file è aperto; il salvataggio restituisce il file così com'era stato aperto.
-- **Codice** — un editor di codice leggero con evidenziazione della sintassi per molti linguaggi, una struttura, ricerca, apertura rapida, un esplora file e un elenco dei problemi.
+- **PDF** — leggi, presenta e stampa file PDF: viste a pagina singola e doppia, scorrimento continuo, rotazione, miniature e modalità lettura, ricerca e copia del testo e commenti; la modifica del testo di un PDF e il suo salvataggio nel file sono gratuiti nell'app desktop MR Office e nell'embed ospitato.
+- **Codice** — un editor di codice veloce con evidenziazione della sintassi per molti linguaggi, una struttura, ricerca, apertura rapida, un esploratore di file e un elenco dei problemi.
 
-Formule con funzioni, grafici e SmartArt sono calcolati e disegnati dal motore di MR Office, nell'app desktop gratuita e nel servizio ospitato; gli editor qui presenti conservano ogni formula, grafico e SmartArt contenuti in un file e mostrano SmartArt così come è stato salvato.
+Formule con funzioni (SUM, IF, VLOOKUP e centinaia di altre), file Word, Excel e PowerPoint, grafici, SmartArt e l'API di automazione sono gratuiti: nell'app desktop MR Office gratuita e nella tua app tramite il piano Free dell'embed ospitato. I file mantengono intatte ogni formula, grafico e SmartArt anche negli editor open source.
 
 ## Eseguire gli editor
 
@@ -140,13 +140,14 @@ npm run desktop
 
 ## Per tutte le funzioni, installa l'app desktop di MR Office (gratuita)
 
-L'app desktop MR Office è gratuita, include questi editor e il servizio completo, e funziona offline sul tuo computer. Oltre agli editor aggiunge:
+L'app desktop MR Office è gratuita, include questi editor e il servizio completo e funziona offline sul tuo computer. Inoltre offre:
 
 - Aprire e salvare file Word, Excel e PowerPoint (.docx, .xlsx, .pptx)
-- Calcolare formule con funzioni (SOMMA, SE, CERCA.VERT …)
-- Grafici
+- Formule con funzioni (SUM, IF, VLOOKUP …), calcolate dal motore di formule completo
+- Grafici calcolati e disegnati dai tuoi dati
 - Modifica degli SmartArt
 - Salvare nel file le modifiche a un PDF
+- L'API di automazione: il document object model, le macro e i plugin
 
 **[Scarica MR Office (gratis) →](https://mroffice.ai/it/office/download)**
 

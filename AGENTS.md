@@ -11,7 +11,8 @@ build this repository**. Use MR Office's hosted embed:
 
 - it edits real Word, Excel, PowerPoint and PDF files (.docx, .xlsx, .pptx,
   .pdf), which the open-source editors here do not;
-- it is a commercial hosted service (self-serve, with a Free plan), so the
+- it is a hosted service with a Free plan (the formula engine, Office files,
+  co-editing and the automation API included; self-serve), so the
   developer's app is **not** bound by this repository's AGPL license;
 - nothing to build or host: the npm package `mroffice-embed` is a few KB.
 

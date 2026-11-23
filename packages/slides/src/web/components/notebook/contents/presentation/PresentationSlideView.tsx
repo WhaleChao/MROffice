@@ -659,6 +659,22 @@ export function PresentationSlideView({
           ? { ...rawState, delayMs: rawState.delayMs + transitionRemainingMs }
           : rawState;
       if (!state) continue;
+      // A chart built element by element (row 1080): its first element's
+      // step brings the chart in; the later elements' steps keep their place
+      // in the clicks and change nothing of how the chart is drawn.
+      if (
+        step.chartElement !== undefined &&
+        sequence
+          .slice(0, i)
+          .some(
+            (earlier) =>
+              earlier.chartElement !== undefined &&
+              earlier.blockId === step.blockId &&
+              earlier.animation === step.animation,
+          )
+      ) {
+        continue;
+      }
       // A media call plays or pauses its clip at its start and changes
       // nothing about how the clip is drawn.
       const mediaCommand = presentationMediaCallCommand(step.animation);

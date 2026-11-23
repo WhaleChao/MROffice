@@ -65,7 +65,7 @@ Mọi thứ cho nhà phát triển có tại **[MR Office Developers](https://mr
 
 ### Nhúng trình soạn thảo vào ứng dụng web của bạn (khuyên dùng)
 
-MR Office lưu trữ các trình soạn thảo; máy chủ của bạn ký một session token ngắn hạn và trang của bạn mở trình soạn thảo. Nó chỉnh sửa các tệp Word, Excel, PowerPoint và PDF thật (.docx, .xlsx, .pptx, .pdf), với đồng chỉnh sửa, tải lên, mọi định dạng xuất, in ấn, và lưu được gửi lại máy chủ của bạn qua callback đã ký. Gói miễn phí: 1.000 phiên mỗi tháng trên localhost, 100 trên tên miền của bạn, tối đa 2 ứng dụng. Là dịch vụ được lưu trữ, nó không đặt nghĩa vụ AGPL nào lên ứng dụng của bạn.
+MR Office lưu trữ các trình soạn thảo; máy chủ của bạn ký một session token ngắn hạn và trang của bạn mở trình soạn thảo. Trình soạn thảo chỉnh sửa tệp Word, Excel, PowerPoint và PDF thật (.docx, .xlsx, .pptx, .pdf), với đầy đủ công cụ tính công thức, đồng chỉnh sửa, tải lên, mọi định dạng xuất, in, API tự động hóa (document object model, macro, plugin) và lưu được gửi lại máy chủ của bạn qua callback có ký. Tất cả đều nằm trong gói Free: 1.000 phiên mỗi tháng trên localhost, 100 trên tên miền của bạn, tối đa 2 ứng dụng, không cần thẻ. Là dịch vụ được lưu trữ, nó không đặt nghĩa vụ AGPL nào lên ứng dụng của bạn.
 
 1. Trong thư mục dự án, chạy `npx mroffice-embed init` (hoặc tạo ứng dụng trong bảng điều khiển nhà phát triển): bấm "Cho phép" một lần trong trình duyệt, khóa của ứng dụng sẽ được ghi vào `.env.local` / `.env`.
 2. Máy chủ của bạn tạo token phiên bằng `createSessionToken` từ `mroffice-embed/server`; khóa bí mật không bao giờ rời máy chủ.
@@ -99,7 +99,7 @@ MR Office là máy chủ ủy quyền OAuth 2.1 (PKCE, tài liệu siêu dữ li
 
 ### Tự lưu trữ các trình soạn thảo mã nguồn mở
 
-Năm trình soạn thảo trong kho lưu trữ này có thể được xây dựng thành sản phẩm của riêng bạn theo AGPL-3.0: nếu mọi người sử dụng phiên bản đã sửa đổi qua mạng, bạn phải cung cấp cho họ mã nguồn đầy đủ của nó, và giữ ghi công "MR Office" (NOTICE.md). Chúng mở các định dạng riêng, CSV, HTML, Markdown và PDF; đối với tệp Word, Excel và PowerPoint, hãy dùng nhúng được lưu trữ ở trên. Giấy phép thương mại có sẵn từ support@mr-note.com. [Hướng dẫn mã nguồn mở →](https://mroffice.ai/vi/developers/open-source)
+Năm trình soạn thảo trong kho lưu trữ này có thể được tích hợp vào sản phẩm của riêng bạn theo AGPL-3.0: nếu mọi người sử dụng phiên bản đã sửa đổi qua mạng, bạn phải cung cấp cho họ mã nguồn đầy đủ của nó và giữ ghi công "MR Office" (NOTICE.md). Chúng mở các định dạng riêng, CSV, HTML, Markdown và PDF; tệp Word, Excel và PowerPoint đi kèm với bản nhúng được lưu trữ ở trên, bao gồm gói Miễn phí. Giấy phép thương mại có sẵn từ support@mr-note.com. [Hướng dẫn mã nguồn mở →](https://mroffice.ai/vi/developers/open-source)
 
 Các trình soạn thảo có trên npm dưới dạng thành phần React: `npm i mroffice-docs mroffice-core` (và `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-code`); README của mỗi gói hướng dẫn cách nhúng nó.
 
@@ -108,12 +108,12 @@ Các trình soạn thảo có trên npm dưới dạng thành phần React: `npm
 Những gì mỗi trình soạn thảo làm được trong kho này:
 
 - **Tài liệu** — một trình xử lý văn bản có phân trang: phông chữ, định dạng đoạn văn, danh sách và kiểu trên Home; trang bìa và trang trống, ngắt trang, bảng, hình ảnh, hình dạng, SmartArt, biểu đồ, liên kết, dấu trang, nhận xét, đầu trang, chân trang và số trang, phương trình, ký hiệu, hộp văn bản và WordArt trên Insert. Lưu định dạng riêng (.mrdoc); mở HTML, Markdown và văn bản thuần.
-- **Bảng tính** — ô và công thức với phông chữ, căn chỉnh, định dạng số, định dạng có điều kiện, kiểu ô và chèn hoặc xóa ô trên Home; bảng, hình ảnh, hình dạng, biểu tượng, hộp kiểm, biểu đồ và biểu đồ thu nhỏ trên Insert; nhiều trang tính, với tổng và trung bình của vùng chọn. Số học giữa các ô (=A1*B1+10) được tính trong trình duyệt khi bạn nhập; công thức với hàm (SUM, IF, VLOOKUP …) được giữ nguyên như đã viết. Lưu định dạng riêng (.mrsheet); mở và lưu CSV và TSV.
+- **Bảng tính** — ô và công thức với phông chữ, căn chỉnh, định dạng số, định dạng có điều kiện, kiểu ô và chèn hoặc xóa ô trên Home; bảng, hình ảnh, hình dạng, biểu tượng, hộp kiểm, biểu đồ và sparkline trên Insert; nhiều trang tính, với tổng và trung bình của vùng chọn. Số học giữa các ô (=A1*B1+10) được tính trực tiếp trong trình duyệt khi bạn nhập, và mọi công thức trong tệp được giữ nguyên; công cụ công thức đầy đủ (SUM, IF, VLOOKUP và hàng trăm hàm khác) chạy miễn phí trong ứng dụng MR Office trên máy tính để bàn và trong gói Miễn phí của bản nhúng được lưu trữ. Lưu định dạng riêng (.mrsheet); mở và lưu CSV và TSV.
 - **Bản trình bày** — trang chiếu với bố cục và phần, văn bản, phông chữ và đoạn văn, và hình dạng với cách sắp xếp của chúng trên Home; bảng, hình ảnh, biểu tượng, SmartArt, biểu đồ, hộp văn bản, WordArt, đầu trang và chân trang, phương trình, ký hiệu và video trên Insert; ghi chú diễn giả, nhận xét và trình chiếu. Lưu định dạng riêng (.mrslides).
-- **PDF** — đọc, trình bày và in tệp PDF: chế độ xem một trang và hai trang, cuộn liên tục, xoay, hình thu nhỏ và chế độ đọc, tìm kiếm và sao chép văn bản của chúng, và nhận xét khi một tệp đang mở; lưu trả lại tệp như khi mở.
-- **Mã** — một trình soạn thảo mã nhẹ với tô sáng cú pháp cho nhiều ngôn ngữ, dàn ý, tìm kiếm, mở nhanh, trình khám phá tệp và danh sách vấn đề.
+- **PDF** — đọc, trình bày và in tệp PDF: chế độ xem một trang và hai trang, cuộn liên tục, xoay, hình thu nhỏ và chế độ đọc, tìm kiếm và sao chép văn bản, và nhận xét; chỉnh sửa văn bản của PDF và lưu lại vào tệp là miễn phí trong ứng dụng MR Office trên máy tính để bàn và bản nhúng được lưu trữ.
+- **Mã** — trình soạn thảo mã nhanh với tô sáng cú pháp cho nhiều ngôn ngữ, dàn ý, tìm kiếm, mở nhanh, trình duyệt tệp và danh sách vấn đề.
 
-Công thức với hàm, biểu đồ và SmartArt được tính toán và vẽ bởi engine của MR Office, trong ứng dụng desktop miễn phí và dịch vụ được lưu trữ; các trình soạn thảo ở đây giữ nguyên mọi công thức, biểu đồ và SmartArt mà tệp chứa, và hiển thị SmartArt đúng như khi được lưu.
+Công thức với các hàm (SUM, IF, VLOOKUP và hàng trăm hàm khác), tệp Word, Excel và PowerPoint, biểu đồ, SmartArt và API tự động hóa được sử dụng miễn phí: trong ứng dụng MR Office miễn phí trên máy tính để bàn và trong ứng dụng của riêng bạn thông qua gói Miễn phí của bản nhúng được lưu trữ. Tệp giữ nguyên mọi công thức, biểu đồ và SmartArt trong các trình soạn thảo mã nguồn mở.
 
 ## Chạy các trình soạn thảo
 
@@ -140,13 +140,14 @@ npm run desktop
 
 ## Để dùng đầy đủ tính năng, hãy cài ứng dụng máy tính MR Office (miễn phí)
 
-Ứng dụng desktop MR Office miễn phí, có các trình soạn thảo này và đầy đủ dịch vụ, hoạt động ngoại tuyến trên máy của bạn. Ngoài các trình soạn thảo, nó còn bổ sung:
+Ứng dụng MR Office trên máy tính để bàn miễn phí, có các trình soạn thảo này và dịch vụ đầy đủ, và hoạt động ngoại tuyến trên máy tính của riêng bạn. Nó cũng mang lại:
 
 - Mở và lưu tệp Word, Excel và PowerPoint (.docx, .xlsx, .pptx)
-- Tính công thức có hàm (SUM, IF, VLOOKUP …)
-- Biểu đồ
+- Các công thức với hàm (SUM, IF, VLOOKUP …), được tính bởi công cụ tính công thức đầy đủ
+- Biểu đồ được tính toán và vẽ từ dữ liệu của bạn
 - Chỉnh sửa SmartArt
 - Ghi các chỉnh sửa PDF trở lại tệp
+- API tự động hóa: document object model, macro và plugin
 
 **[Tải MR Office (miễn phí) →](https://mroffice.ai/vi/office/download)**
 

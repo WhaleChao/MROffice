@@ -1680,6 +1680,12 @@ export function hasEditableSlideAnimationSource(source: unknown): boolean {
       ...(entry.paragraphs === undefined ? [] : ["paragraphs"]),
       // On the shape behind the text (row 1077): only ever `true`.
       ...(entry.background === true ? ["background"] : []),
+      // On one shape of a SmartArt (row 1079).
+      ...(entry.diagramElement !== undefined && isDiagramElementId(entry.diagramElement)
+        ? ["diagramElement"]
+        : []),
+      // On one element of a chart (row 1080).
+      ...(entry.chartElement !== undefined && normalizeChartElement(entry.chartElement) ? ["chartElement"] : []),
       ...(entry.triggerNativeShapeId === undefined
         ? []
         : ["triggerNativeShapeId"]),
@@ -1922,6 +1928,22 @@ export interface TimelineStep {
    */
   background?: true;
   /**
+   * The step plays on one shape of a SmartArt (PowerPoint's Effect Options,
+   * Sequence: One by One -- `p:graphicEl/a:dgm`, row 1079): the data model's
+   * id of that shape. `blockId` names the first member drawing it; the show
+   * plays the step on every member drawing it ({@link expandGroupTargetSteps}),
+   * found by the shape's id, not by the members' places.
+   */
+  diagramElement?: string;
+  /**
+   * The step plays on one element of its chart (PowerPoint's Effect Options,
+   * Group chart: By Series / By Category -- `p:graphicEl/a:chart`, row 1080):
+   * a series, a category, or the chart's background with its gridlines and
+   * legend (`bldStep` "gridLegend"), as PowerPoint writes them. The show
+   * brings the chart in with its first element's step.
+   */
+  chartElement?: TimelineChartElement;
+  /**
    * A motion path as PowerPoint wrote it (row 1078): its preset, its path
    * and its point types, rotation and rotation centre, carried exactly so an
    * unedited path is written back as it was. `motionPath` holds the editor's
@@ -2026,14 +2048,88 @@ export function clampDelayMs(value: unknown): number {
  * the step's own start and every other playing with it (the same delay from
  * the run's start), so the group moves as one. Every other step is as it is.
  */
+/** One element of a chart a step plays on (`TimelineStep.chartElement`). */
+export interface TimelineChartElement {
+  readonly seriesIdx: number;
+  readonly categoryIdx: number;
+  readonly bldStep: "category" | "ptInCategory" | "series" | "ptInSeries" | "allPts" | "gridLegend";
+}
+
+const CHART_BUILD_STEPS = new Set(["category", "ptInCategory", "series", "ptInSeries", "allPts", "gridLegend"]);
+
+/** A well-formed chart element (exactly as the server reads it), else null. */
+export function normalizeChartElement(value: unknown): TimelineChartElement | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    keys.length !== 3 ||
+    !Number.isInteger(record.seriesIdx) || (record.seriesIdx as number) < -4 || (record.seriesIdx as number) > 9_999 ||
+    !Number.isInteger(record.categoryIdx) || (record.categoryIdx as number) < -4 || (record.categoryIdx as number) > 99_999 ||
+    typeof record.bldStep !== "string" || !CHART_BUILD_STEPS.has(record.bldStep)
+  ) {
+    return null;
+  }
+  return {
+    seriesIdx: record.seriesIdx as number,
+    categoryIdx: record.categoryIdx as number,
+    bldStep: record.bldStep as TimelineChartElement["bldStep"],
+  };
+}
+
+/** A SmartArt shape's id as the data model gives it (a GUID in braces). */
+export function isDiagramElementId(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^\{[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\}$/.test(value)
+  );
+}
+
+/** The SmartArt shape a projected diagram member draws (upper case), or "". */
+function drawnDiagramShape(block: { readonly source?: unknown }): string {
+  const source = block.source;
+  if (!source || typeof source !== "object") return "";
+  const view = (source as { nativeSmartArtView?: unknown }).nativeSmartArtView;
+  if (!view || typeof view !== "object") return "";
+  const modelId = (view as { modelId?: unknown }).modelId;
+  return typeof modelId === "string" ? modelId.toUpperCase() : "";
+}
+
 export function expandGroupTargetSteps<T extends TimelineStep>(
   sequence: readonly T[],
-  blocks: readonly { readonly id: string; readonly groupId?: unknown }[],
+  blocks: readonly { readonly id: string; readonly groupId?: unknown; readonly source?: unknown }[],
 ): readonly T[] {
-  if (!sequence.some((step) => step.targetGroup === true)) return sequence;
+  if (!sequence.some((step) => step.targetGroup === true || step.diagramElement !== undefined)) {
+    return sequence;
+  }
   const groupOf = new Map(blocks.map((block) => [block.id, block.groupId]));
   const out: T[] = [];
   for (const step of sequence) {
+    if (step.diagramElement !== undefined) {
+      // One shape of a SmartArt (row 1079): every member drawing it, found
+      // by the shape's id; none drawing it any more plays nothing.
+      const { diagramElement: element, ...own } = step;
+      const group = groupOf.get(step.blockId);
+      const wanted = element.toUpperCase();
+      const drawing = blocks.filter(
+        (block) =>
+          typeof group === "string" && group && block.groupId === group && drawnDiagramShape(block) === wanted,
+      );
+      drawing.forEach((block, position) => {
+        if (position === 0) {
+          out.push({ ...own, blockId: block.id } as T);
+          return;
+        }
+        const { triggerBlockId: _trigger, id: _id, ...member } = own as TimelineStep;
+        out.push({
+          ...member,
+          blockId: block.id,
+          trigger: "with-previous",
+          ...(step.id ? { id: `${step.id}:${block.id}` } : {}),
+        } as T);
+      });
+      continue;
+    }
     if (step.targetGroup !== true) {
       out.push(step);
       continue;
@@ -2272,6 +2368,15 @@ export function validateStep(
   if (record.targetGroup === true) step.targetGroup = true;
   // On the shape behind the text (row 1077): kept only as `true`.
   if (record.background === true) step.background = true;
+  // On one shape of a SmartArt (row 1079): a well-formed shape id only.
+  if (isDiagramElementId(record.diagramElement) && record.targetGroup !== true) {
+    step.diagramElement = record.diagramElement;
+  }
+  // On one element of a chart (row 1080): exactly as PowerPoint wrote it.
+  const chartElement = normalizeChartElement(record.chartElement);
+  if (chartElement && record.targetGroup !== true && step.diagramElement === undefined) {
+    step.chartElement = chartElement;
+  }
   // A path as PowerPoint wrote it (row 1078), only beside the polyline of it.
   const nativePath = normalizeMotionPathNative(record.motionPathNative);
   if (nativePath && step.animation === "none" && record.motionPath !== undefined) {
@@ -2922,6 +3027,8 @@ export function timelineStepsEqual(
     left.triggerBlockId !== right.triggerBlockId ||
     left.targetGroup !== right.targetGroup ||
     left.background !== right.background ||
+    left.diagramElement !== right.diagramElement ||
+    JSON.stringify(left.chartElement ?? null) !== JSON.stringify(right.chartElement ?? null) ||
     left.paragraphs?.start !== right.paragraphs?.start ||
     left.paragraphs?.end !== right.paragraphs?.end ||
     left.motionPath?.preset !== right.motionPath?.preset ||

@@ -31252,6 +31252,23 @@ async function prepareNativeTextFromReadInspection(
 
 
 
+
+
+export function pdfNativeShowOperatorStrings(operator: string): RegExpExecArray | null {
+  const string = String.raw`(?:\((?:[^()\\]|\\[\s\S])*\)|<[0-9A-Fa-f\s]*>)`;
+  return new RegExp(String.raw`^\s*(${string})\s*Tj\s*$`, "u").exec(operator) ??
+    new RegExp(String.raw`^\s*\[((?:\s*(?:${string}|-?(?:\d+(?:\.\d*)?|\.\d+)(?![\d.])))*)\s*\]\s*TJ\s*$`, "u").exec(operator);
+}
+
+
+
+
+
+
+
+
+
+
 function blankKeepingItsAdvance(plan: PdfNativeListTextReplacementPlan): PdfNativeContentStreamTransactionRequest {
   const { request, evidence } = plan;
   const state = evidence.sameLineLayoutState;
@@ -31260,9 +31277,7 @@ function blankKeepingItsAdvance(plan: PdfNativeListTextReplacementPlan): PdfNati
     !(state.horizontalScale > 0) || !Number.isFinite(missing) || Math.abs(missing) < 0.001 ||
     request.replacementPieces) return request;
   const operator = LATIN1_EXACT.decode(request.replacement);
-  const string = String.raw`(?:\((?:[^()\\]|\\[\s\S])*\)|<[0-9A-Fa-f\s]*>)`;
-  const show = new RegExp(String.raw`^\s*(${string})\s*Tj\s*$`, "u").exec(operator) ??
-    new RegExp(String.raw`^\s*\[((?:\s*(?:${string}|-?(?:\d+\.?\d*|\.\d+)))*)\s*\]\s*TJ\s*$`, "u").exec(operator);
+  const show = pdfNativeShowOperatorStrings(operator);
   if (!show) return request;
   const number = (-missing * 1_000) / (state.fontSize * (state.horizontalScale / 100));
   return Object.freeze({ ...request,

@@ -77,6 +77,8 @@ const ASSET_LITERALS = [
   ["core/src/web/lib/office-fonts/substitutes.ts", '"/fonts/cjk-latin/"', 1],
   // not part of the open build's public files (nor the playground's): named, so it is the assets' when it is
   ["core/src/web/lib/office-fonts/hangul-em.ts", '"/fonts/hangul-em/"', 1, undefined, { absent: true }],
+  // the spreadsheet's regional-letters face (Selawik subset): not among the open build's public files either
+  ["core/src/web/lib/spreadsheet/office-regional-letters.ts", '"/fonts/regional-letters/regional-letters-600.woff2"', 1, undefined, { absent: true }],
   ["core/src/web/lib/office-fonts/embeddable-faces.ts", '"/fonts/office/"', 1],
   ["core/src/web/lib/text-engine/face-order.ts", '"/fonts/office/carlito/400-latin.woff2"', 1],
   ["core/src/web/lib/text-engine/face-order.ts", '"/fonts/office/arimo/400-latin.woff2"', 1],
