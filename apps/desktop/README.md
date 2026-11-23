@@ -10,14 +10,14 @@ two ways:
   file, and you can sign in with an MR Office account to use AI. The
   component is the compiled local service that the MR Office installer
   ships: the API, the web app, the file engines and their runtime. It is
-  free, but it is not open source.
+  free to use.
 - **Without the component**, it runs the open-source editors in this
   repository on their own. They open `.mrdoc`, `.mrsheet` and `.mrslides`
   files, CSV, HTML, Markdown and PDF, and save the editors' own
   formats and CSV back into the same file. When you open a Word, Excel or
   PowerPoint file, the app tells you where to get the component.
 
-## What is open source, and what is not
+## What is in this repository, and what you download
 
 | Part | Where | License |
 | --- | --- | --- |
@@ -25,7 +25,6 @@ two ways:
 | The editors (`packages/*`, `apps/playground`) | source, here | GNU AGPL-3.0 with the terms in NOTICE.md |
 | The MR Office component | compiled, on [Releases](https://github.com/XinaTian/MROffice/releases) | its own license (`LICENSE-COMPONENT.md` in the download): free to use; modified copies may not be distributed |
 
-The component's source code is not published.
 
 ## Build and run
 

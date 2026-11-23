@@ -7,6 +7,11 @@
  */
 import { type ReactNode, type Ref } from "react";
 import { usePdfRibbonGroupCommands } from "./PdfOfficeRibbon";
+import { PdfRibbonGroupFlyout } from "./PdfRibbonGroupFlyout";
+import {
+  PDF_RIBBON_COLLAPSIBLE_ATTRIBUTE,
+  usePdfRibbonGroupCollapsed,
+} from "./pdfRibbonFit";
 
 import {
   OfficeHomeCommandRow,
@@ -36,6 +41,7 @@ export function PdfSurfaceRibbonGroup({
   ariaBusy,
   children,
   className,
+  collapsedIcon,
   controlId,
   dataAttributes,
   eager = false,
@@ -46,6 +52,9 @@ export function PdfSurfaceRibbonGroup({
   ariaBusy?: boolean;
   children: ReactNode;
   className?: string;
+  /** The 24px glyph of the group's one button when the band is too narrow
+   * for it (pdfRibbonFit): naming one lets the group collapse. */
+  collapsedIcon?: ReactNode;
   controlId?: string;
   /** Extra `data-*` attributes on the group (a state a walkthrough reads). */
   dataAttributes?: Record<`data-${string}`, string | undefined>;
@@ -61,15 +70,21 @@ export function PdfSurfaceRibbonGroup({
     tab;
   const keptCommands = usePdfRibbonGroupCommands(ribbon, children);
   const commands = eager ? children : keptCommands;
-  return (
+  const collapseId = collapsedIcon === undefined ? undefined : (testId ?? label);
+  const collapsed = usePdfRibbonGroupCollapsed(collapseId);
+  const group = (content: ReactNode, flyout = false) => (
     <OfficeHomeRibbonGroup
       ariaBusy={ariaBusy}
       className={className}
-      controlId={controlId}
+      controlId={flyout ? undefined : controlId}
       dataAttributes={{
         ...dataAttributes,
         "data-pdf-ribbon-label": label,
         "data-pdf-ribbon-tab": tab,
+        ...(collapseId !== undefined && !flyout
+          ? { [PDF_RIBBON_COLLAPSIBLE_ATTRIBUTE]: collapseId }
+          : {}),
+        ...(collapsed && !flyout ? { "data-pdf-ribbon-collapsed": "true" } : {}),
       }}
       label={label}
       // A contextual tab's groups carry the `context` token the Office ribbon
@@ -77,11 +92,36 @@ export function PdfSurfaceRibbonGroup({
       // group keeps its divider); without it the picture tab's first group
       // ran into the next with no divider.
       ribbon={ribbon}
-      testId={testId}
+      testId={flyout ? (testId ? `${testId}-flyout-group` : undefined) : testId}
     >
-      <OfficeHomeCommandRow className={styles.lane}>{commands}</OfficeHomeCommandRow>
+      <OfficeHomeCommandRow className={styles.lane}>{content}</OfficeHomeCommandRow>
     </OfficeHomeRibbonGroup>
   );
+  if (collapsed && collapsedIcon !== undefined) {
+    return group(
+      <PdfRibbonGroupFlyout
+        icon={collapsedIcon}
+        label={label}
+        renderGroup={(content) => group(content, true)}
+        renderTrigger={(trigger) => (
+          <PdfSurfaceRibbonCommand
+            active={trigger.active}
+            ariaExpanded={trigger.ariaExpanded}
+            ariaHasPopup="dialog"
+            buttonRef={trigger.buttonRef}
+            icon={trigger.icon}
+            label={trigger.label}
+            onClick={trigger.onClick}
+            testId={trigger.testId}
+          />
+        )}
+        testId={testId}
+      >
+        {children}
+      </PdfRibbonGroupFlyout>,
+    );
+  }
+  return group(commands);
 }
 
 export interface PdfSurfaceRibbonCommandProps {

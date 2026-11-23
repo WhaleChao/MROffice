@@ -28,6 +28,14 @@
 
 MR Office ist eine KI-Office-Suite für echte Dateien: Word, Excel, PowerPoint und PDF, im Web und in einer kostenlosen Desktop-App, mit einer KI neben jedem Dokument und Live-Co-Editing. Dieses Repository veröffentlicht den Quellcode der Editoren: dieselben Editoren, die MR Office ausführt und die du selbst bauen, betreiben und einbetten kannst.
 
+## Kostenlos für Einzelpersonen und kleine Teams
+
+- **MR Office online und die Desktop-App** — kostenlos: echtes Bearbeiten von Word-, Excel-, PowerPoint- und PDF-Dateien, Live-Co-Editing und Freigabe, im Web, auf dem Smartphone und offline auf Ihrem Computer. Die KI kommt mit einem kostenlosen Tageskontingent; intensivere KI-Nutzung ist ein optionaler kostenpflichtiger Tarif.
+- **Das Embed für Ihre eigene App** — kostenlos zum Starten, mit allem inklusive: die vollständige Formel-Engine, echte Office-Dateien, Co-Editing, jedes Exportformat und die Automatisierungs-API (1.000 Sitzungen pro Monat auf localhost, 100 auf Ihren eigenen Domains, bis zu 2 Apps, keine Karte).
+- **Unternehmen mit intensiverer Nutzung** — Pay as you go auf einem vollständig gehosteten Service: Starter für US$29 pro Monat mit 5.000 Sitzungen, Pro für US$149 pro Monat mit 40.000 Sitzungen, White-Label und Priority-Support. Keine Jahreslizenz, keine Server zu betreiben, keine Upgrades zu verwalten: Updates, Skalierung und Backups übernehmen wir.
+
+Zum Vergleich: ONLYOFFICE Docs Developer Edition ist ab etwa US$6.000 pro Jahr für 250 gleichzeitige Verbindungen auf Servern gelistet, die Sie selbst betreiben (Reseller-Listenpreis, November 2026); der Preis von Univer Pro ist nicht veröffentlicht. [Preise und Limits →](https://mroffice.ai/de/developers/pricing)
+
 ## Eine KI, die in deinen Dateien arbeitet
 
 In MR Office arbeitet die KI am Dokument selbst, nicht an Text, der in einen Chat eingefügt wurde. Sie liest die Datei, nimmt die Änderung an den Objekten der Datei selbst vor und zeigt dir, was sie angefasst hat, bevor du es übernimmst.

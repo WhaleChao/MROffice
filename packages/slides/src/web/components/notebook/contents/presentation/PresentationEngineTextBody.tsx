@@ -323,6 +323,7 @@ export function presentationEngineBodyInput(args: {
                 lineLanguage: powerPointLineLanguage(
                   run.style?.proofingLanguage ?? eastAsianRow("lang", row),
                   run.style?.alternateLanguage ?? eastAsianRow("altLang", row),
+                  eastAsianRow("koreanRules", row) === true,
                 ),
               }
             : {}),

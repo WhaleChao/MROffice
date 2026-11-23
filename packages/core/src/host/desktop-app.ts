@@ -30,11 +30,11 @@ export function noteDesktopFeature(feature?: string): void {
   lastNotice.set(key, now);
   try {
     editorHost().notify?.({
-      title: feature ? `${feature} is in the MR Office desktop app` : "This is in the MR Office desktop app",
-      description: "Install the MR Office desktop app (free) for the full service.",
+      title: feature ? `${feature}: free in MR Office` : "Free in MR Office",
+      description: "MR Office online opens it right away in any browser, on Linux too; the free desktop app also works offline on Mac and Windows.",
       tone: "info",
-      action: { label: "Download MR Office (free)", href: DESKTOP_DOWNLOAD_URL },
-      secondary: { label: "mroffice.ai", href: WEB_APP_URL },
+      action: { label: "Open MR Office online (free)", href: WEB_APP_URL },
+      secondary: { label: "Desktop app (Mac, Windows)", href: DESKTOP_DOWNLOAD_URL },
     });
   } catch {
     // no host to tell

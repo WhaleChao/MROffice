@@ -94,6 +94,7 @@ import { PresentationCameoGraphic } from "./PresentationCameo";
 import { blockGeometryStyle, presentationSmartArtFaceSpan } from "../../../../lib/presentation/selection-geometry";
 import {
   PresentationParagraphPlayContext,
+  chartPlayCss,
   presentationParagraphFlyOffsetVars,
   playKeyframeName,
   playTimingFunction,
@@ -767,6 +768,7 @@ function PresentationBlockViewDrawing({
         data-testid="presentation-present-chart"
         data-presentation-block-id={block.id}
       >
+        {play?.chartPlay ? <style>{chartPlayCss(block.id, play.chartPlay)}</style> : null}
         <PresentationChartVisual block={block} />
       </div>
     );

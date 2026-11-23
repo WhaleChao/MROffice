@@ -7,24 +7,30 @@ import { lineBreakOpportunities } from "./line-break";
 import { KINSOKU_EAST_ASIAN, OFFICE_KINSOKU } from "./kinsoku";
 
 /** The rules a run's words break by: a language's, or "none" (no list, no hanging). */
-export type PowerPointLineLanguage = "ja" | "zh-TW" | "zh-CN" | "none";
+/**
+ * "ko": a Korean run of a row read under readings row 1024 (`koreanRules`):
+ * broken as "none" is -- by word, or between letters under latinLnBrk -- and
+ * hanging PowerPoint's Korean marks (office-truth tp-kohang / tp-kohang2).
+ */
+export type PowerPointLineLanguage = "ja" | "zh-TW" | "zh-CN" | "ko" | "none";
 
 const set = (chars: string): ReadonlySet<string> => new Set([...chars]);
 
 /** Office's line-start marks PowerPoint lets start a line all the same (hang-full-probe "NONE"). */
-const NOT_HELD: Readonly<Record<Exclude<PowerPointLineLanguage, "none">, ReadonlySet<string>>> = {
+const NOT_HELD: Readonly<Record<Exclude<PowerPointLineLanguage, "none" | "ko">, ReadonlySet<string>>> = {
   ja: set("¢"),
   "zh-TW": set("¢•‧╴］｝､"),
   "zh-CN": set("%>¢°ˉ―‰′″›℃〞︶︺︾﹀﹄﹚﹜﹞％￠"),
 };
 
-const withoutHeld = (language: Exclude<PowerPointLineLanguage, "none">): ReadonlySet<string> =>
+const withoutHeld = (language: Exclude<PowerPointLineLanguage, "none" | "ko">): ReadonlySet<string> =>
   new Set([...OFFICE_KINSOKU[language].noStart].filter((char) => !NOT_HELD[language].has(char)));
 
 const NO_START: Readonly<Record<PowerPointLineLanguage, ReadonlySet<string>>> = {
   ja: withoutHeld("ja"),
   "zh-TW": withoutHeld("zh-TW"),
   "zh-CN": withoutHeld("zh-CN"),
+  ko: new Set(),
   none: new Set(),
 };
 
@@ -32,6 +38,7 @@ const NO_END: Readonly<Record<PowerPointLineLanguage, ReadonlySet<string>>> = {
   ja: OFFICE_KINSOKU.ja.noEnd,
   "zh-TW": OFFICE_KINSOKU["zh-TW"].noEnd,
   "zh-CN": OFFICE_KINSOKU["zh-CN"].noEnd,
+  ko: new Set(),
   none: new Set(),
 };
 
@@ -40,6 +47,9 @@ const HANGS: Readonly<Record<PowerPointLineLanguage, ReadonlySet<string>>> = {
   ja: set(",.、。，．"),
   "zh-TW": set("!),.:;?]}’”、。〉》」』】〕！），：；？"),
   "zh-CN": set("!),.:;?]}’”、。〉》」』】〕！），：；？〗］｝"),
+  // PowerPoint for Windows, ko-KR with hangingPunct on (tp-kohang, tp-kohang2):
+  // all thirty marks hang; under latinLnBrk 1 "〗" does not (`powerPointHangs`).
+  ko: set("!),.:;?]}’”、。〉》」』】〕！），：；？］｝，．〗"),
   none: new Set(),
 };
 
@@ -72,9 +82,11 @@ function eastAsianOf(tag: string): PowerPointLineLanguage | null {
  * whether that is the editing language's doing is not known, so pages without a
  * language do not move).
  */
-export function powerPointLineLanguage(lang: unknown, altLang: unknown): PowerPointLineLanguage | null {
+export function powerPointLineLanguage(lang: unknown, altLang: unknown, koreanRules = false): PowerPointLineLanguage | null {
   const own = typeof lang === "string" && lang.trim() ? lang.trim() : null;
   const alternate = typeof altLang === "string" && altLang.trim() ? eastAsianOf(altLang.trim()) : null;
+  // A Korean run of a row read under readings row 1024 hangs Korean marks.
+  if (koreanRules && own !== null && own.toLowerCase().split("-")[0] === "ko") return "ko";
   if (own !== null) return eastAsianOf(own) ?? alternate ?? "none";
   return alternate;
 }
@@ -85,7 +97,12 @@ export function powerPointHoldsAtLineStart(mark: string, language: PowerPointLin
 }
 
 /** Whether PowerPoint hangs `mark` past a line's end in `language`'s run. */
-export function powerPointHangs(mark: string, language: PowerPointLineLanguage | null): boolean {
+export function powerPointHangs(
+  mark: string,
+  language: PowerPointLineLanguage | null,
+  options: { readonly latinLineBreak?: boolean } = {},
+): boolean {
+  if (language === "ko" && mark === "〗" && options.latinLineBreak === true) return false;
   return language !== null && HANGS[language].has(mark);
 }
 
@@ -109,14 +126,22 @@ export function powerPointLineBreakOpportunities(
     (WORD_DOTS.has(graphemes[index] ?? "") && EAST_ASIAN_LETTER.test(graphemes[index - 1] ?? "") && EAST_ASIAN_LETTER.test(graphemes[index + 1] ?? ""));
   const out = new Array<boolean>(graphemes.length).fill(false);
   for (let index = 1; index < graphemes.length; index += 1) {
-    const before = languages[index - 1] ?? null;
-    const after = languages[index] ?? null;
+    // A Korean run breaks as "none" does; only its hang set is its own.
+    const asBroken = (language: PowerPointLineLanguage | null): PowerPointLineLanguage | null => (language === "ko" ? "none" : language);
+    const before = asBroken(languages[index - 1] ?? null);
+    const after = asBroken(languages[index] ?? null);
     if (before === null && after === null) {
       out[index] = legacy[index];
       continue;
     }
     if (before === "none" && after === "none") {
       out[index] = base[index] && (options.latinLineBreak === true || !(wordLetter(index - 1) && wordLetter(index)));
+      // A Korean run's "〗" under latinLnBrk 1 starts a line of its own after
+      // a syllable: it neither hangs nor takes the syllable down (tp-kohang2,
+      // in Batang, Gulim, Dotum, Gungsuh and 맑은 고딕 alike).
+      if (languages[index] === "ko" && graphemes[index] === "〗" && options.latinLineBreak === true && EAST_ASIAN_LETTER.test(graphemes[index - 1] ?? "")) {
+        out[index] = true;
+      }
       continue;
     }
     const previous = graphemes[index - 1];

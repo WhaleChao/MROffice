@@ -13,9 +13,12 @@ import {
   Circle,
 } from "../office-ribbon/icons/houseIcons";
 
+import { hideOthers } from "aria-hidden"
+
 import { cn } from "../../lib/utils"
 import { usePortalHostContainer } from "./portal-host"
 import { useDocumentDirection } from "../../lib/document-direction"
+import { canvasPerfLegacy } from "../notebook/canvas-scroll-store"
 
 
 
@@ -32,18 +35,111 @@ const DropdownMenuFocusContext = React.createContext<{
   trigger: React.MutableRefObject<HTMLElement | null>
   interactedOutside: React.MutableRefObject<boolean>
   modal: boolean
+  /** Modal by `ModalMenuShield`, not by Radix (see there). */
+  shielded: boolean
+  open: boolean
+  /** The open menu's stacking level, for its submenus (`ModalMenuShield`). */
+  layerZ: React.MutableRefObject<number | null>
+  setLayerZ: (level: number | null) => void
 } | null>(null)
 
-const DropdownMenu = ({ modal = true, dir, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function useModalMenuShield(
+  active: boolean,
+  node: HTMLElement | null,
+  setLayerZ: ((level: number | null) => void) | undefined,
+) {
+  React.useLayoutEffect(() => {
+    const anchor = node?.parentElement
+    if (!active || !node || !anchor?.parentNode) return
+    const doc = node.ownerDocument
+    const shield = doc.createElement("div")
+    shield.setAttribute("data-modal-menu-shield", "")
+    shield.setAttribute("aria-hidden", "true")
+    // Just under the menu: its own level, which Radix also gives the
+    // positioned wrapper it lays the menu out in; earlier in the document,
+    // so the menu, at the same level, is drawn over it.
+    const z = Number.parseInt(doc.defaultView?.getComputedStyle(node).zIndex ?? "", 10)
+    const level = Number.isFinite(z) ? z : 50
+    setLayerZ?.(level)
+    shield.style.cssText = `position:fixed;inset:0;z-index:${level};background:transparent;touch-action:none;`
+    const eat = (event: Event) => event.preventDefault()
+    shield.addEventListener("wheel", eat, { passive: false })
+    shield.addEventListener("touchmove", eat, { passive: false })
+    anchor.parentNode.insertBefore(shield, anchor)
+    const undoHidden = hideOthers(node)
+    return () => {
+      undoHidden()
+      shield.removeEventListener("wheel", eat)
+      shield.removeEventListener("touchmove", eat)
+      shield.remove()
+      setLayerZ?.(null)
+    }
+  }, [active, node, setLayerZ])
+}
+
+const DropdownMenu = ({
+  modal = true,
+  dir,
+  open: openProp,
+  defaultOpen,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) => {
   const trigger = React.useRef<HTMLElement | null>(null)
   const interactedOutside = React.useRef(false)
-  const value = React.useMemo(() => ({ trigger, interactedOutside, modal }), [modal])
+  const layerZ = React.useRef<number | null>(null)
+  const setLayerZ = React.useCallback((level: number | null) => {
+    layerZ.current = level
+  }, [])
+  // Read once: a menu does not change how it is modal while it lives.
+  const [radixModal] = React.useState(() => canvasPerfLegacy("menumodal"))
+  const shielded = modal && !radixModal
+  const [ownOpen, setOwnOpen] = React.useState(defaultOpen ?? false)
+  const open = openProp ?? ownOpen
+  const handleOpenChange = React.useCallback(
+    (next: boolean) => {
+      if (openProp === undefined) setOwnOpen(next)
+      onOpenChange?.(next)
+    },
+    [openProp, onOpenChange],
+  )
+  const value = React.useMemo(
+    () => ({ trigger, interactedOutside, modal, shielded, open, layerZ, setLayerZ }),
+    [modal, shielded, open, setLayerZ],
+  )
   // Under an rtl interface a submenu opens on the left and the arrow keys
   // swap, as Radix does for `dir="rtl"`; an ltr page passes nothing, as before.
   const documentDir = useDocumentDirection()
   return (
     <DropdownMenuFocusContext.Provider value={value}>
-      <DropdownMenuPrimitive.Root modal={modal} dir={dir ?? documentDir} {...props} />
+      <DropdownMenuPrimitive.Root
+        modal={shielded ? false : modal}
+        dir={dir ?? documentDir}
+        open={open}
+        onOpenChange={handleOpenChange}
+        {...props}
+      />
     </DropdownMenuFocusContext.Provider>
   )
 }
@@ -137,14 +233,29 @@ DropdownMenuSubTrigger.displayName =
  * against the viewport rather than the scroll box. Nested submenus portal the
  * same way, one level each.
  */
+/** A submenu's level under a shielded modal menu placed above the default
+ * menu level: the menu's own, so the shield does not cover it. */
+function subLevel(
+  focus: React.ContextType<typeof DropdownMenuFocusContext>,
+  style: React.CSSProperties | undefined,
+): React.CSSProperties | undefined {
+  const level = focus?.shielded ? focus.layerZ.current : null
+  return level !== null && level !== undefined && level > 50 ? { zIndex: level, ...style } : style
+}
+
 const DropdownMenuSubContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent> &
     Pick<React.ComponentProps<typeof DropdownMenuPrimitive.Portal>, "container">
->(({ className, container, ...props }, ref) => (
+>(({ className, container, style, ...props }, ref) => {
+  const focus = React.useContext(DropdownMenuFocusContext)
+  return (
   <DropdownMenuPortal container={container}>
     <DropdownMenuPrimitive.SubContent
       ref={ref}
+      // Over the shield of a modal menu that sits higher than a submenu's
+      // own level (`ModalMenuShield`).
+      style={subLevel(focus, style)}
       className={cn(
         "z-50 min-w-[8rem] max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto overflow-x-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=open]:duration-150 data-[state=closed]:duration-[110ms] data-[state=open]:ease-[cubic-bezier(0.22,1,0.36,1)] data-[state=closed]:ease-[cubic-bezier(0.4,0,1,1)] origin-[--radix-dropdown-menu-content-transform-origin]",
         className
@@ -152,7 +263,8 @@ const DropdownMenuSubContent = React.forwardRef<
       {...props}
     />
   </DropdownMenuPortal>
-))
+  )
+})
 DropdownMenuSubContent.displayName =
   DropdownMenuPrimitive.SubContent.displayName
 
@@ -174,10 +286,22 @@ const DropdownMenuContent = React.forwardRef<
     Pick<React.ComponentProps<typeof DropdownMenuPrimitive.Portal>, "container">
 >(({ className, sideOffset = 4, container, onFocusOutside, onCloseAutoFocus, onInteractOutside, ...props }, ref) => {
   const focus = React.useContext(DropdownMenuFocusContext)
+  // State, not a ref: Radix's portal puts the menu in the page a render
+  // after it opens, and the shield goes in with it.
+  const [contentNode, setContentNode] = React.useState<HTMLDivElement | null>(null)
+  const setContentRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      setContentNode(node)
+      if (typeof ref === "function") ref(node)
+      else if (ref) ref.current = node
+    },
+    [ref],
+  )
+  useModalMenuShield(Boolean(focus?.shielded && focus.open), contentNode, focus?.setLayerZ)
   return (
   <DropdownMenuPortal container={container}>
     <DropdownMenuPrimitive.Content
-      ref={ref}
+      ref={setContentRef}
       sideOffset={sideOffset}
       // Focus goes back to the trigger without scrolling (see
       // `DropdownMenuFocusContext`); Radix's own return, a scrolling
@@ -212,9 +336,13 @@ const DropdownMenuContent = React.forwardRef<
       // take down a menu (the same one or the next) opened in between. A real
       // move to another trigger is a pointer press, which dismisses on its
       // own, and Tab never leaves a menu. Modal menus trap focus and never
-      // get here.
+      // get here; a shielded modal menu stays open as Radix's modal does.
       onFocusOutside={(event) => {
         onFocusOutside?.(event)
+        if (focus?.shielded) {
+          event.preventDefault()
+          return
+        }
         const target = event.target
         if (
           !event.defaultPrevented &&

@@ -133,6 +133,13 @@ export interface BlockPlayState {
    */
   paragraphPlay?: ReadonlyMap<number, ParagraphPlayRow>;
   /**
+   * A chart built by series or by category (row 1080): each element a step
+   * names (`chartElementPlayKey`) and whether it is drawn now, and how long
+   * its coming in or going takes. The chart itself is on stage (its
+   * background step, or the background drawn from the start).
+   */
+  chartPlay?: ReadonlyMap<string, ChartElementPlay>;
+  /**
    * Picture Format > Animate as Background (PPT-A134): the picture's
    * endless zoom-and-pan loop in the show (its keyframe and length).
    */
@@ -160,6 +167,64 @@ export const MAX_PARAGRAPH_PLAY_ROWS = 500;
  * away once played (it stays while it plays), anything else leaves it as it
  * was. The one rule the show, the Morph layer and an outgoing slide read.
  */
+/** One chart element's play state (`BlockPlayState.chartPlay`). */
+export interface ChartElementPlay {
+  readonly visible: boolean;
+  readonly durationMs: number;
+  readonly delayMs: number;
+}
+
+/**
+ * A chart element's key in `chartPlay`, and the marks of the chart picture's
+ * shapes that draw it (the engine keeps ECharts' `ecmeta_series_index` /
+ * `ecmeta_data_index` on every shape): a series, a category (that point of
+ * every series), or one point. The background (`gridLegend`) is the chart's
+ * own step.
+ */
+export function chartElementPlayKey(element: {
+  readonly seriesIdx: number;
+  readonly categoryIdx: number;
+  readonly bldStep: string;
+}): string | null {
+  if (element.bldStep === "series" && element.seriesIdx >= 0) return `s:${element.seriesIdx}`;
+  if (element.bldStep === "category" && element.categoryIdx >= 0) return `c:${element.categoryIdx}`;
+  if (
+    (element.bldStep === "ptInSeries" || element.bldStep === "ptInCategory" || element.bldStep === "allPts") &&
+    element.seriesIdx >= 0 &&
+    element.categoryIdx >= 0
+  ) {
+    return `p:${element.seriesIdx}:${element.categoryIdx}`;
+  }
+  return null;
+}
+
+/** The CSS that draws a chart picture's elements as `chartPlay` says: an
+ * element not drawn yet (or any more) is transparent where it stands -- the
+ * chart keeps its layout, as PowerPoint's build does -- and one coming in or
+ * going fades over its step's duration. The legend is the background's. */
+export function chartPlayCss(blockId: string, play: ReadonlyMap<string, ChartElementPlay>): string {
+  const scope = `[data-presentation-block-id="${blockId.replace(/["\\]/g, "\\$&")}"]`;
+  const rules: string[] = [];
+  for (const [key, element] of play) {
+    const [kind, first, second] = key.split(":");
+    const marks =
+      kind === "s"
+        ? `[ecmeta_series_index="${first}"]`
+        : kind === "c"
+          ? `[ecmeta_data_index="${first}"]`
+          : `[ecmeta_series_index="${first}"][ecmeta_data_index="${second}"]`;
+    rules.push(
+      `${scope} svg ${marks}{opacity:${element.visible ? 1 : 0};transition:opacity ${Math.max(0, element.durationMs)}ms linear ${Math.max(0, element.delayMs)}ms}`,
+    );
+  }
+  if (rules.length) {
+    rules.push(
+      `${scope} svg [ecmeta_part="legend"][ecmeta_series_index],${scope} svg [ecmeta_part="legend"] [ecmeta_series_index]{opacity:1}`,
+    );
+  }
+  return rules.join("");
+}
+
 export function timelineVisibleAfterStep(
   category: string | undefined,
   state: { visible: boolean; animate: boolean; afterHidden?: boolean; afterShown?: boolean },

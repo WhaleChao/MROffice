@@ -28,6 +28,14 @@
 
 MR Office is een AI-kantoorsuite voor echte bestanden: Word, Excel, PowerPoint en PDF, op het web en in een gratis desktopapp, met een AI naast elk document en live samen bewerken. Deze repository publiceert de broncode van de editors: dezelfde editors die MR Office gebruikt, die je zelf kunt bouwen, draaien en embedden.
 
+## Gratis voor particulieren en kleine teams
+
+- **MR Office online en de desktop-app** — gratis: echt Word-, Excel-, PowerPoint- en PDF-bewerken, live samen bewerken en delen, op het web, op telefoons en offline op je computer. De AI komt met een gratis daglimiet; zwaarder AI-gebruik is een optioneel betaald plan.
+- **De embed, voor je eigen app** — gratis om te starten, met alles inbegrepen: de volledige formule-engine, echte Office-bestanden, samen bewerken, elk exportformaat en de automatiserings-API (1.000 sessies per maand op localhost, 100 op je eigen domeinen, tot 2 apps, geen kaart nodig).
+- **Bedrijven met zwaarder gebruik** — betaal naar gebruik op een volledig gehoste service: Starter voor US$29 per maand met 5.000 sessies, Pro voor US$149 per maand met 40.000 sessies, white-label en prioriteitsondersteuning. Geen jaarlijkse licentie, geen servers om te draaien, geen upgrades om te beheren: updates, schaling en back-ups zijn aan ons.
+
+Ter vergelijking: ONLYOFFICE Docs Developer Edition wordt vermeld vanaf ongeveer US$6.000 per jaar voor 250 gelijktijdige verbindingen op servers die je zelf draait (reseller-adviesprijs, november 2026); de prijs van Univer Pro is niet gepubliceerd. [Prijzen en limieten →](https://mroffice.ai/nl/developers/pricing)
+
 ## AI die in je bestanden werkt
 
 In MR Office werkt de AI op het document zelf, niet op tekst die in een chat is geplakt. Hij leest het bestand, voert de wijziging door in de eigen objecten van het bestand en laat je zien wat hij heeft aangepast voordat je het overneemt.

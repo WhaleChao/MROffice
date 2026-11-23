@@ -822,10 +822,14 @@ function SpreadsheetChartCanvasDrawn({
         </div>
       ) : null}
       {drawn ? (
+        // Hidden in a 1px box of its own: a table is never narrower than its
+        // words (`width: 1` does not hold it), and a long one laid out 3,493px
+        // across past the page's right edge, so the editor's print shrank the
+        // whole sheet to fit it (R478-X59 0.879, X23 0.918).
+        <div style={VISUALLY_HIDDEN}>
         <table
           aria-label={t("spreadsheet.finalCopy.chartDataLabel", { name: accessibleName })}
           data-chart-accessible-table="true"
-          style={VISUALLY_HIDDEN}
         >
           <caption>{t("spreadsheet.chartA11y.summary", {
             chartType: t(`toolbar.chartV2.subtype.${drawn.attrs.chartType}.${drawn.attrs.chartSubtype}`),
@@ -865,6 +869,7 @@ function SpreadsheetChartCanvasDrawn({
             })}
           </tbody>
         </table>
+        </div>
       ) : null}
     </div>
   );

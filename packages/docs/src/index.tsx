@@ -45,7 +45,7 @@ export function documentFromFile(name: string, bytes: Uint8Array): { title: stri
     return { title: imported.embeddedTitle || stem(name), content: imported.content as unknown as Record<string, unknown> };
   }
   if (lower.endsWith(".docx")) {
-    throw new Error("Word files (.docx) open in the MR Office desktop app (free, https://github.com/XinaTian/MROffice/releases); the open-source editor opens .mrdoc, HTML, Markdown and text.");
+    throw new Error("Word files (.docx) open free in MR Office: online at https://mroffice.ai in any browser (Linux too), or in the desktop app; the open-source editor opens .mrdoc, HTML, Markdown and text.");
   }
   const nodes = plainTextToDocumentNodes(text);
   return { title: stem(name), content: { type: "doc", content: nodes.length ? nodes : [{ type: "paragraph" }] } };

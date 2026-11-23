@@ -76,16 +76,26 @@ export function pdfNativeSourceRiskReadOnlyReason(input: {
   // Page-tree and decoration writers too (PDF_PAGE_REVISION_ACTIONS).
   const native = input.subject === "text" || input.subject === "image" || input.subject === "vector" ||
     input.subject === "link" || input.subject === "page" || input.subject === "decoration";
+  // Form authoring is judged by its own rule (PDF_FORM_AUTHORING_ACTIONS):
+  // encryption, a signature, or an XFA form drawn from its template keep the
+  // fields read-only; tags, layers, attachments, a PDF/A claim or a static
+  // XFA form do not (a tagged IRS form read 「包含标签结构」 as the reason).
+  const form = input.subject === "form";
   const blocking = native
     ? present.filter(([key]) =>
       key === "encryption" ||
       (key === "certificateSignatures" && profile.certifiedSignatures !== "none"))
-    : present;
+    : form
+      ? present.filter(([key]) =>
+        key === "encryption" ||
+        key === "certificateSignatures" ||
+        (key === "xfa" && !(profile.xfa === "present" && profile.xfaDynamic === "none")))
+      : present;
   // A native writer none of the present risks keeps read-only is not
   // read-only for them: naming them as the reason told the reader of a
   // tagged PDF that its tags kept text read-only, whatever had held the
   
-  if (native && blocking.length === 0) return undefined;
+  if ((native || form) && blocking.length === 0) return undefined;
   const risks = (blocking.length > 0 ? blocking : present).map(([, labelKey]) => input.t(labelKey));
   if (risks.length === 0) return undefined;
   const detail = risks.join(input.t("pdf.pageWindow.listSeparator"));
@@ -244,5 +254,22 @@ export function takePdfaClaimEditNotice(snapshot: PdfSourceRiskSnapshot | null):
   const key = `${snapshot.identity.dataItemId}:${snapshot.identity.sha256}`;
   if (pdfaClaimEditNoticesShown.has(key)) return false;
   pdfaClaimEditNoticesShown.add(key);
+  return true;
+}
+
+const xfaFormAuthoringNoticesShown = new Set<string>();
+
+/**
+ * Whether a field authored now says, once per file this session, that the
+ * file's static XFA form was left out and the file is now the AcroForm form
+ * every reader shows (the server's _native_form_release_source_grants). The
+ * XFA packets carry the form's own scripts and calculations, which Acrobat
+ * ran and which do not come back.
+ */
+export function takeXfaFormAuthoringNotice(snapshot: PdfSourceRiskSnapshot | null): boolean {
+  if (snapshot?.profile.xfa !== "present") return false;
+  const key = snapshot.identity.dataItemId;
+  if (xfaFormAuthoringNoticesShown.has(key)) return false;
+  xfaFormAuthoringNoticesShown.add(key);
   return true;
 }

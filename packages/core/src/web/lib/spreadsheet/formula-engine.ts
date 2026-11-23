@@ -481,6 +481,12 @@ export interface StructuredSpec {
   band: StructuredBand;
   column: string | null;
   columnEnd?: string;
+  /**
+   * A bare name with one colon (`Tabelle1[Fragen: Wie]`): `column` is the whole
+   * text, a column of that name; a table with none reads it as the span of the
+   * two names either side (the `[Col1]:[Col2]` reading it had before).
+   */
+  bareSpan?: readonly [string, string];
 }
 
 // A non-special-item, non-bracketed column NAME inside [...] may contain any
@@ -555,6 +561,7 @@ function readStructuredSelector(
   let bandSeen = false;
   let column: string | null = null;
   let columnEnd: string | undefined;
+  let bareSpan: readonly [string, string] | undefined;
   // A leading `@` (this-row) may appear bare: [@Column] or [@[Col]:[Col]].
   if (src[j] === "@") {
     band = "thisrow";
@@ -607,7 +614,9 @@ function readStructuredSelector(
     const c = src[j];
     if (c === "]") {
       j += 1;
-      return { spec: buildSpec(band, bandSeen, column, columnEnd), next: j };
+      const spec = buildSpec(band, bandSeen, column, columnEnd);
+      if (bareSpan) spec.bareSpan = bareSpan;
+      return { spec, next: j };
     }
     if (c === ",") {
       j += 1;
@@ -642,6 +651,18 @@ function readStructuredSelector(
       if (src[name.next] !== "]") return null;
       if (!setColumn(name.name)) return null;
       j = name.next + 1;
+      continue;
+    }
+    // A bare name holding a colon up to the closing `]` is a column of that
+    // name as Excel stores it (R479-X03: Tabelle1[Assetflow. ... Fragen:  Wie
+    // ...], 40 in Excel, read as a span of two columns that do not exist and
+    // #REF!); the span stays the reading where the table has no such column.
+    const whole = column === null ? readStructuredName(src, j, false) : null;
+    if (whole && src[whole.next] === "]" && whole.name.includes(":")) {
+      const cut = whole.name.indexOf(":");
+      if (!setColumn(whole.name)) return null;
+      if (whole.name.indexOf(":", cut + 1) < 0) bareSpan = [whole.name.slice(0, cut), whole.name.slice(cut + 1)];
+      j = whole.next;
       continue;
     }
     // A bare (un-bracketed) name part: runs to the next `]`/`,`/`:`.
@@ -790,10 +811,15 @@ export function makeTableRefResolver(
     let colStart = c1;
     let colEnd = c2;
     if (spec.column !== null) {
-      const start = columnIndex(table, spec.column);
+      let start = columnIndex(table, spec.column);
+      let endName = spec.columnEnd;
+      if (start === null && spec.bareSpan) {
+        start = columnIndex(table, spec.bareSpan[0]);
+        endName = spec.bareSpan[1];
+      }
       if (start === null) return ERRORS.REF; // unknown column
-      if (spec.columnEnd !== undefined) {
-        const end = columnIndex(table, spec.columnEnd);
+      if (endName !== undefined) {
+        const end = columnIndex(table, endName);
         if (end === null) return ERRORS.REF;
         colStart = Math.min(start, end);
         colEnd = Math.max(start, end);

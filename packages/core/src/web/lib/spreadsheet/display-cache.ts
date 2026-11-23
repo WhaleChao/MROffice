@@ -1348,7 +1348,15 @@ export function withSheetChartModels<S extends ChartModelSheet>(
 /** Whether a formula calls a function this engine does not know (outside its
  *  string literals): an add-in's (`_xll.`), a future one, a misspelling. */
 export function formulaCallsUnknownFunction(formula: string): boolean {
-  const outside = formula.replace(/"(?:[^"]|"")*"/g, '""');
+  let outside = formula.replace(/"(?:[^"]|"")*"/g, '""');
+  // A structured reference's column name and a quoted sheet name are names, not
+  // calls: Tabelle1[Assets (d.h. ...)] is no function "Assets" (xlsx-rounds
+  // R479-X03: E3's spill kept its stamp after the table grew, E3:E20 for E3:E21).
+  for (let previous = ""; previous !== outside; ) {
+    previous = outside;
+    outside = outside.replace(/\[[^[\]]*\]/g, "[]");
+  }
+  outside = outside.replace(/'(?:[^']|'')*'!/g, "''!");
   for (const match of outside.matchAll(/(^|[^\w.!$'])([A-Za-z_][\w.]*)\s*\(/g)) {
     if (!isKnownFunction(match[2]!)) return true;
   }

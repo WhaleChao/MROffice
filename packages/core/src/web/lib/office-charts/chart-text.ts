@@ -98,6 +98,10 @@ export interface OfficeChartText {
 
 
   readonly outline?: OfficeChartTextOutline;
+  /** Format ▸ Text Fill ▸ No fill (`a:noFill` on the run): the words keep
+   * their room and are not drawn (R478-X52's legend and category labels,
+   * blank in Windows Excel). Only ever true, never beside a `color`. */
+  readonly noFill?: true;
 }
 
 export interface OfficeChartTextOutline {
@@ -134,6 +138,7 @@ export const OFFICE_CHART_TEXT_KEYS = [
   "kerningPt",
   "glow",
   "outline",
+  "noFill",
 ] as const satisfies readonly (keyof OfficeChartText)[];
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
@@ -282,6 +287,10 @@ export function normalizeOfficeChartText(
     if (typeof outline.color !== "string" || !HEX_COLOR_RE.test(outline.color) || !width) return undefined;
     next.outline = { color: outline.color.toLowerCase() as `#${string}`, widthPt: width };
   }
+  if (value.noFill !== undefined) {
+    if (value.noFill !== true || next.color !== undefined) return undefined;
+    next.noFill = true;
+  }
   return Object.keys(next).length ? next : undefined;
 }
 
@@ -349,6 +358,8 @@ export function applyOfficeChartTextCommand(
       else draft.underline = command.variant;
       break;
     case "color":
+      // A colour (or Automatic) is a solid fill: it ends a Text Fill > No fill.
+      delete draft.noFill;
       if (command.color) draft.color = command.color.toLowerCase();
       else delete draft.color;
       break;
@@ -436,6 +447,9 @@ export function officeChartTextEChartsStyle(
       ? {}
       : { fontStyle: text.italic ? "italic" : "normal" }),
     ...(text.color ? { color: text.color } : {}),
+    // Text Fill > No fill: the words take their room and draw nothing (the
+    // engine's text with fill "none" is laid out and not painted).
+    ...(text.noFill ? { color: "none" } : {}),
     // Character Spacing and All / Small Caps: measured and drawn by the
     // picture renderer (`chart-letter-spacing`).
     ...(text.spacingPt ? { [OFFICE_CHART_TEXT_SPACING]: ptToPx(text.spacingPt) * scale } : {}),

@@ -15,6 +15,7 @@
  */
 
 import { officeFontMetricMatchesWidths, officeFontSubstitution, powerPointSubstitutes } from "../office-fonts/substitutes";
+import { windowsOfficeDrawsThoughPdfLacks } from "../office-fonts/windows-office-faces";
 import substituteTable from "../office-fonts/substitutes.generated.json";
 import { notedFontFaceCount, notedFontFaces, type DeclaredFontFace } from "../font-face-declarations";
 import {
@@ -489,6 +490,10 @@ export function drawnWithOfficeWidths(family: string): boolean {
   const office =
     exactStandIns.get(key) ?? (officeFontMetricMatchesWidths(officeFontSubstitution(key)?.metric) ? key : undefined);
   if (!office) return false;
+  // (powerpoint-substitutes.json is PowerPoint for Mac's: a face Windows PowerPoint draws as itself -- Bahnschrift's
+  // truncated "SemiLight SemiConde" / "SemiBold SemiConden", which Mac PowerPoint, lacking them, set in Calibri -- is
+  // drawn at its own widths where the truth is drawn, triage TRIAGE 119.)
+  if (windowsOfficeDrawsThoughPdfLacks(key)) return true;
   const drawnBy = powerPointSubstitutes(key)[0];
   return !drawnBy || familyKey(drawnBy) === office;
 }

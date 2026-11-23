@@ -1144,6 +1144,8 @@ html[data-theme-mode="high-contrast"] {
 }
 
 body {
+   
+  --removed-body-scroll-bar-size: 0px;
   margin: 0;
   min-height: var(--viewport-h);
   color: var(--fg);

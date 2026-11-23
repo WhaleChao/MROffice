@@ -3220,6 +3220,21 @@ export default function NoteEditor({
   const savedAsPartsRef = useRef<string | null>(null);
   /** The body this editor last hydrated was held as parts. */
   const hydratedAsPartsRef = useRef(false);
+  /**
+   * A document held as parts saves no whole-document layout records: its
+   * parts and its body leave them out (document-page-parts
+   * PRIVATE_LAYOUT_ATTRS, "the whole loaded document, never the body
+   * alone"). Its serializations after a pause in typing (the commit, the
+   * unsaved copy) still read the page's cuts and digested the whole
+   * document's layout key, each time, for records thrown away: R286 (124
+   * pages, 5 parts), 0.9 s of the 1.25 s task each pause took.
+   * `window.__docsPartsCommitLayoutRecords = true`: read and digested as
+   * before.
+   */
+  const partsSaveNoLayoutRecords = useCallback(() => {
+    if (!(documentPartsPageRef.current || hydratedAsPartsRef.current)) return false;
+    return (window as Window & { __docsPartsCommitLayoutRecords?: boolean }).__docsPartsCommitLayoutRecords !== true;
+  }, []);
   const savedAnswerParts = documentPartsCount(autosave.lastSaveAcknowledgement?.page?.content_json) > 1;
   useEffect(() => {
     // (Only a page the editor did not open as parts: on one it did, the first save
@@ -4991,12 +5006,15 @@ export default function NoteEditor({
             ? (ed.state?.doc as ProseMirrorNode | undefined)
             : docAtUpdate;
           const deferPagination = inkLayoutUnsettled();
+          // A document held as parts saves no whole-document layout records
+          // (document-page-parts PRIVATE_LAYOUT_ATTRS): not read, not digested.
+          const noLayoutRecords = partsSaveNoLayoutRecords();
           const normalized = normalizeDocumentForSave(
             (documentAtCommit?.toJSON
               ? runtimeDocumentJson(documentAtCommit)
               : ed.getJSON()) as Record<string, unknown>,
-            true,
-            deferPagination,
+            !noLayoutRecords,
+            deferPagination || noLayoutRecords,
           );
           paginationDeferredRef.current = deferPagination;
           if (deferPagination) schedulePaginationSettleRef.current();
@@ -5663,10 +5681,10 @@ export default function NoteEditor({
     saveBaseEditorRef.current = isUsableEditor(editor)
       ? (editor as unknown as { state?: { doc?: { toJSON(): unknown } } }) : null;
     saveBaseNormalizeRef.current = (json) => {
-      const normalized = normalizeDocumentForSave(json, false);
+      const normalized = normalizeDocumentForSave(json, false, partsSaveNoLayoutRecords());
       return normalized.ok ? normalized.document : null;
     };
-  }, [editor, normalizeDocumentForSave]);
+  }, [editor, normalizeDocumentForSave, partsSaveNoLayoutRecords]);
   const displayFonts = useDocumentDisplayFonts(editor, {pageId, notebookId: autosave.page?.notebook_id,
     version: autosave.page?.content_version, enabled: !guestMode && editorHydrated,
     lineMetricsTarget: WORD_LINE_METRICS_TARGET});

@@ -1383,7 +1383,11 @@ export function PdfViewerRibbon({ ribbon }: { ribbon: PdfViewerRibbonModel }) {
         // in a view group before it.
         trailing={
           <>
-            <HomeGroup label={t("toolbar.ribbonView")} testId="pdf-home-view-utilities">
+            <HomeGroup
+              collapsedIcon={<Moon size={24} aria-hidden />}
+              label={t("toolbar.ribbonView")}
+              testId="pdf-home-view-utilities"
+            >
               <OfficeHomeCommandStack>
                 <span
                   className="contents"
@@ -1420,7 +1424,11 @@ export function PdfViewerRibbon({ ribbon }: { ribbon: PdfViewerRibbonModel }) {
                 </span>
               </OfficeHomeCommandStack>
             </HomeGroup>
-            <HomeGroup label={t("pdf.viewer.document")} testId="pdf-home-workspace-actions">
+            <HomeGroup
+              collapsedIcon={<Sparkles size={24} aria-hidden />}
+              label={t("pdf.viewer.document")}
+              testId="pdf-home-workspace-actions"
+            >
             {onRequestPageSummary ? (
               null
             ) : null}

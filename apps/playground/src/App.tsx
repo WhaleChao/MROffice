@@ -47,12 +47,32 @@ const BANNER_KEY = "mrnote-editors:desktop-banner";
 /** Office's and PDF's own formats the desktop app opens (the editors here do not). */
 const DESKTOP_FORMATS = /\.(docx?|dotx|xlsx?|xlsm|xltx|pptx?|potx|ppsx)$/i;
 
+/** An editor's code is a few chunks the host serves; a host can answer one
+ * of them with a passing error (the live demo's static host: an occasional
+ * 503). The load is retried a few times before it is reported, and a failed
+ * load is not kept, so the next press tries again instead of doing nothing. */
+const LOAD_RETRY_DELAYS_MS = [400, 1200, 3000];
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+async function loadWithRetry(id: EditorId): Promise<EditorDefinition> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await EDITOR_LOADERS[id].load();
+    } catch (error) {
+      if (attempt >= LOAD_RETRY_DELAYS_MS.length) throw error;
+      await wait(LOAD_RETRY_DELAYS_MS[attempt]);
+    }
+  }
+}
 const definitions = new Map<EditorId, Promise<EditorDefinition>>();
 function loadDefinition(id: EditorId): Promise<EditorDefinition> {
   let definition = definitions.get(id);
   if (!definition) {
-    definition = EDITOR_LOADERS[id].load();
+    definition = loadWithRetry(id);
     definitions.set(id, definition);
+    definition.catch(() => {
+      if (definitions.get(id) === definition) definitions.delete(id);
+      components.delete(id);
+    });
   }
   return definition;
 }
@@ -188,7 +208,14 @@ export function App() {
 
   const newFile = useCallback(
     async (id: EditorId) => {
-      const definition = await loadDefinition(id);
+      let definition: EditorDefinition;
+      try {
+        definition = await loadDefinition(id);
+      } catch {
+        setNoticeLink(null);
+        setNotice(`The ${EDITOR_LOADERS[id].label} editor could not be loaded (the network or the host did not answer). Press it again, or reload the page.`);
+        return;
+      }
       const created = definition.newFile?.();
       if (created) openFile({ id: nextId(), ...created });
     },

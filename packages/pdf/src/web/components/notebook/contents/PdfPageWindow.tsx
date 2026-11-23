@@ -1132,6 +1132,7 @@ import {
   pdfNativeListTextRiskProfileIsSafe,
   pdfNativeEmbeddedImageRiskProfileIsSafe,
   takePdfaClaimEditNotice,
+  takeXfaFormAuthoringNotice,
 } from "./pdf/window/sourceRisk";
 import {
   pdfReaderCountsLoseOnlyLine,
@@ -12734,6 +12735,11 @@ export default function PdfPageWindow({
             undo: (replayLease) => replay(previous, previousFields, replayLease),
             redo: (replayLease) => replay(next, nextFields, replayLease),
           });
+          // A static XFA form is written as its AcroForm: said once, as the
+          // PDF/A claim is (the server leaves the XFA packets out).
+          if (takeXfaFormAuthoringNotice(nativeListTextRuntimeRef.current.sourceRiskSnapshot)) {
+            toast({ description: t("pdf.pageWindow.xfaFormAuthoringNotice") });
+          }
           return true;
         },
       );
@@ -65721,6 +65727,16 @@ export default function PdfPageWindow({
   const annotationAttachmentCount = viewerAnnotationList?.fileAttachments?.length ?? 0;
   const annotationExportDisabled =
     !viewerAnnotationList || Boolean(viewerAnnotationList.disabled) || viewerAnnotationList.items.length === 0;
+  // Each export says why it is grey, as 导出批注（.xfdf） does: a file with
+  // no comments showed three dead exports and nothing more (ribbon audit
+  
+  const annotationExportDisabledReason = !viewerAnnotationList || viewerAnnotationList.reading
+    ? t("pdfViewer.annotationsReading")
+    : viewerAnnotationList.disabled
+      ? t("pdfViewer.loading")
+      : viewerAnnotationList.items.length === 0
+        ? t("pdfViewer.annotationsEmpty")
+        : undefined;
   const annotationRibbonCommands: PdfCommentRibbonCommand[] = [
     {
       icon: "excerptPage",
@@ -65752,6 +65768,11 @@ export default function PdfPageWindow({
       displayLabel: label,
       label: `${t("pdfViewer.annotationsExport")} · ${label}`,
       disabled: annotationExportDisabled || (format === "docx" && Boolean(viewerAnnotationList?.exportDocxPending)),
+      disabledReason: annotationExportDisabled
+        ? annotationExportDisabledReason
+        : format === "docx" && viewerAnnotationList?.exportDocxPending
+          ? t("pdfViewer.exportFormDataInflight")
+          : undefined,
       onInvoke: run,
       testId: `pdf-annotations-export-${format}`,
     })),

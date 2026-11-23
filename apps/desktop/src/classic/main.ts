@@ -104,6 +104,7 @@ import {
   revoke,
   saveAccount,
 } from "./ai-account";
+import { CONNECT_TTL_MS, PendingConnect } from "./connect-pending";
 import {
   installLibreOffice,
   type LibreOfficeContext,
@@ -1222,7 +1223,24 @@ ipcMain.handle("mrai:usage-reports", async (event, on: unknown) => {
 
 // --- AI sign-in -----------------------------------------------------------------
 
-let pendingSignIn: { verifier: string; resolve: (done: boolean) => void; timer: NodeJS.Timeout } | null = null;
+/** The sign-in for AI waiting on its link from the browser (connect-pending.ts). */
+const pendingConnect = new PendingConnect(newVerifier, challengeFor);
+let connectSweep: NodeJS.Timeout | null = null;
+
+/** Open (again) the connect page of the waiting sign-in, starting one if none waits. */
+function openConnectPage(): Promise<boolean> {
+  const { challenge, done } = pendingConnect.begin();
+  // The waiting sign-in lapses after CONNECT_TTL_MS: whoever waits is answered then.
+  if (connectSweep) clearTimeout(connectSweep);
+  connectSweep = setTimeout(() => pendingConnect.sweep(), CONNECT_TTL_MS + 1_000);
+  connectSweep.unref?.();
+  const url = connectUrl(cloudOrigin(), challenge);
+  // Automated checks open the page themselves (the challenge only; the
+  // verifier never leaves this process).
+  if (HIDDEN) console.log(`[classic] connect: ${url}`);
+  else void shell.openExternal(url);
+  return done;
+}
 
 /**
  * The person's sign-in to the API (or that there is none). At start-up it is
@@ -1316,8 +1334,9 @@ ipcMain.handle("mrai:ai-sign-in", async (event, reason: unknown) => {
   if (!fromApp(event)) return false;
   if (account) return true;
   const owner = BrowserWindow.fromWebContents(event.sender);
-  // An explicit sign-in button (Settings, Messages) needs no AI explanation first.
-  if (reason !== "settings" && reason !== "messages" && !HIDDEN) {
+  // An explicit sign-in button (Settings, Messages) needs no AI explanation
+  // first, nor does a press while a sign-in already waits.
+  if (reason !== "settings" && reason !== "messages" && !HIDDEN && !pendingConnect.waiting()) {
     const options = {
       type: "info" as const,
       buttons: [say("登录", "Sign In"), say("取消", "Cancel")],
@@ -1334,23 +1353,10 @@ ipcMain.handle("mrai:ai-sign-in", async (event, reason: unknown) => {
     const { response } = owner ? await dialog.showMessageBox(owner, options) : await dialog.showMessageBox(options);
     if (response !== 0) return false;
   }
-  if (pendingSignIn) {
-    clearTimeout(pendingSignIn.timer);
-    pendingSignIn.resolve(false);
-  }
-  const verifier = newVerifier();
-  return new Promise<boolean>((resolve) => {
-    const timer = setTimeout(() => {
-      pendingSignIn = null;
-      resolve(false);
-    }, 15 * 60_000);
-    pendingSignIn = { verifier, resolve, timer };
-    const url = connectUrl(cloudOrigin(), challengeFor(verifier));
-    // Automated checks open the page themselves (the challenge only; the
-    // verifier never leaves this process).
-    if (HIDDEN) console.log(`[classic] connect: ${url}`);
-    else void shell.openExternal(url);
-  });
+  // A press while a sign-in already waits joins it: the same page opens
+  // again (it may be behind other windows), and the page the person allows,
+  // this one or an earlier one, still signs the app in.
+  return openConnectPage();
 });
 
 ipcMain.handle("mrai:ai-sign-out", async (event) => {
@@ -1465,28 +1471,59 @@ function handleLink(url: string): void {
   const window = pageWindows.target();
   if (window) bringForward(window);
   const code = codeFromLink(url);
-  const pending = pendingSignIn;
-  if (!code || !pending) return;
-  pendingSignIn = null;
-  clearTimeout(pending.timer);
-  void redeem(cloudOrigin(), code, pending.verifier)
-    .then(async (signedIn) => {
+  if (!code) return;
+  const taken = pendingConnect.take();
+  if (taken.kind === "busy") return; // the same link opened twice: one redeem runs
+  if (taken.kind === "none") {
+    // Signed in already (a page allowed twice), or a link this run of the
+    // app never asked for, or one that came back after the sign-in lapsed:
+    
+    if (account) return;
+    void offerSignInAgain(window, say("这个登录链接已失效", "This sign-in link has expired"));
+    return;
+  }
+  void redeem(cloudOrigin(), code, taken.verifier).then(
+    async (signedIn) => {
       account = signedIn;
       saveAccount(signedIn);
-      await pushAccountToApi();
-      await refreshProfile();
-      pending.resolve(true);
+      try {
+        await pushAccountToApi();
+        await refreshProfile();
+      } catch (error) {
+        console.warn(`[classic] signed in; the API takes it at its next start: ${error instanceof Error ? error.message : error}`);
+      }
+      pendingConnect.finish(true);
       checkForUpdatesAfterSignIn();
-    })
-    .catch(async () => {
-      const options = {
-        type: "warning" as const,
-        message: say("登录没有完成", "Sign-in did not finish"),
-        detail: say("请从应用里重新开始登录。", "Please try again from the app."),
-      };
-      if (window) await dialog.showMessageBox(window, options);
-      pending.resolve(false);
-    });
+    },
+    async (error: unknown) => {
+      console.warn(`[classic] sign-in not redeemed: ${error instanceof Error ? error.message : error}`);
+      // The sign-in still waits: its page can be allowed again.
+      pendingConnect.finish(false);
+      await offerSignInAgain(window, say("登录没有完成", "Sign-in did not finish"));
+    },
+  );
+}
+
+/** Tell the person a sign-in did not go through, and open its page again if they want. */
+async function offerSignInAgain(window: BrowserWindow | null | undefined, message: string): Promise<void> {
+  const options = {
+    type: "warning" as const,
+    buttons: [say("重新登录", "Sign In Again"), say("取消", "Cancel")],
+    defaultId: 0,
+    cancelId: 1,
+    message,
+    detail: say(
+      "会在浏览器里再打开一次登录页，在那里点“允许”即可。",
+      "The sign-in page opens in your browser again; choose Allow there.",
+    ),
+  };
+  if (HIDDEN) {
+    console.warn(`[classic] ${message}`);
+    return;
+  }
+  const owner = window && !window.isDestroyed() ? window : null;
+  const { response } = owner ? await dialog.showMessageBox(owner, options) : await dialog.showMessageBox(options);
+  if (response === 0 && !account) void openConnectPage();
 }
 
 // --- the hosted profile ------------------------------------------------------------

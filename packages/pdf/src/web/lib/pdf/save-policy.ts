@@ -2753,6 +2753,37 @@ const PDF_PAGE_COPY_FILE_ACTIONS: ReadonlySet<PdfSavePolicyAction> = new Set<Pdf
   "pdf.file.split",
   "pdf.file.merge",
 ]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export const PDF_FORM_AUTHORING_ACTIONS: ReadonlySet<PdfSavePolicyAction> = new Set<PdfSavePolicyAction>([
+  "pdf.form.create-detected-fields",
+  "pdf.form.edit-existing-field",
+  "pdf.form.delete-existing-field",
+]);
+
+/** Whether a source's form fields can be authored natively (the rule of
+ * PDF_FORM_AUTHORING_ACTIONS). */
+export function pdfFormAuthoringRiskProfileIsSafe(profile: PdfSourceRiskProfile): boolean {
+  return (
+    profile.encryption === "none" &&
+    profile.certifiedSignatures === "none" &&
+    profile.certificateSignatures === "none" &&
+    (profile.xfa === "none" || (profile.xfa === "present" && profile.xfaDynamic === "none"))
+  );
+}
+
 /** Compression rewrites the file whole but keeps its catalog: tags, layers
  * and attachments are carried over as they are (pruned only of objects
  * nothing reaches). A signature, approval or certification, would not
@@ -2799,6 +2830,9 @@ function profileAllowsActionMutation(
   if (PDF_STRUCTURE_KEEPING_REWRITE_ACTIONS.has(action)) {
     return profile.encryption === "none" && profile.certifiedSignatures === "none" &&
       profile.certificateSignatures === "none";
+  }
+  if (PDF_FORM_AUTHORING_ACTIONS.has(action)) {
+    return pdfFormAuthoringRiskProfileIsSafe(profile);
   }
   // Replace Source writes nothing into the current file: the page takes a
   // different file whole, so what the current one carries (tags, layers,

@@ -89,6 +89,12 @@ function officeDrawsThoughPdfLacks(name: string): boolean {
   return OFFICE_DRAWN_THOUGH_PDF_LACKS.some((family) => name === family || name.startsWith(`${family} `) || name.startsWith(`${family}-`));
 }
 
+/** Whether Windows PowerPoint lays out and draws `family` as itself though its PDF export swaps another face in
+ * (OFFICE_DRAWN_THOUGH_PDF_LACKS): Bahnschrift's named instances, the truncated LOGFONT names included. */
+export function windowsOfficeDrawsThoughPdfLacks(family: string | null | undefined): boolean {
+  return !!family && officeDrawsThoughPdfLacks(normalize(family));
+}
+
 /**
  * The face Windows Office draws `family` in, or undefined where Office has it
  * (or the name is an East Asian or complex-script face, which keeps its

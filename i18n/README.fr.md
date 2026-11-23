@@ -28,6 +28,14 @@
 
 MR Office est une suite bureautique IA pour de vrais fichiers : Word, Excel, PowerPoint et PDF, sur le web et dans une application de bureau gratuite, avec une IA à côté de chaque document et l'édition collaborative en direct. Ce dépôt publie le code source de ses éditeurs : les mêmes éditeurs que fait tourner MR Office, que vous pouvez compiler, exécuter et intégrer chez vous.
 
+## Gratuit pour les particuliers et les petites équipes
+
+- **MR Office en ligne et l'application de bureau** — gratuit : édition réelle de Word, Excel, PowerPoint et PDF, coédition en direct et partage, sur le web, sur mobile et hors ligne sur votre ordinateur. L'IA est incluse avec une allocation quotidienne gratuite ; un usage plus intensif de l'IA est un forfait payant en option.
+- **L'intégration, pour votre propre application** — gratuit pour démarrer, tout est inclus : le moteur de formules complet, de vrais fichiers Office, la coédition, tous les formats d'export et l'API d'automatisation (1 000 sessions par mois sur localhost, 100 sur vos propres domaines, jusqu'à 2 applications, sans carte).
+- **Les entreprises à usage intensif** — payez à l'usage sur un service entièrement hébergé : Starter à US$29 par mois avec 5 000 sessions, Pro à US$149 par mois avec 40 000 sessions, marque blanche et support prioritaire. Pas de licence annuelle, pas de serveurs à gérer, pas de mises à jour à administrer : les mises à jour, la mise à l'échelle et les sauvegardes sont de notre ressort.
+
+À titre de comparaison, ONLYOFFICE Docs Developer Edition est affiché à partir d'environ US$6 000 par an pour 250 connexions simultanées sur des serveurs que vous hébergez vous-même (prix public revendeur, novembre 2026) ; le prix d'Univer Pro n'est pas publié. [Tarifs et limites →](https://mroffice.ai/fr/developers/pricing)
+
 ## Une IA qui travaille dans vos fichiers
 
 Dans MR Office, l'IA travaille sur le document lui-même, pas sur du texte collé dans un chat. Elle lit le fichier, effectue la modification dans les objets propres au fichier et vous montre ce qu'elle a touché avant que vous ne validiez.

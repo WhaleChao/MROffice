@@ -138,6 +138,10 @@ export function clearRangeContents<T extends BlockClearCell>(
       // (style/comment/span/lock) preserved.
       const cleared = { ...existing, value: "", kind: "text" } as T;
       delete (cleared as Record<string, unknown>).formula;
+      // A legacy array formula goes whole with its formula (part of one is
+      // refused before this runs): left on the blank, the page still held an
+      // array there that the save did not write (xlsx-rounds R480-X22 WALK2).
+      delete (cleared as Record<string, unknown>).arrayRef;
       // The cell's link goes with its contents, as under Clear All: Windows
       // Excel's Clear Contents (the Delete key) deletes the hyperlink of a
       // cleared cell and keeps it under Clear Formats (xlsx-rounds
@@ -247,6 +251,7 @@ function applyClearVariantToCell<T extends BlockClearCell>(
     next.value = "";
     next.kind = "text";
     delete next.formula;
+    delete next.arrayRef; // the legacy array goes with its formula (clearRangeContents)
     // A picture placed in the cell is its content (Place in Cell).
     delete next.picture;
     // Drop the export display cache too — it baked the now-cleared value/format.

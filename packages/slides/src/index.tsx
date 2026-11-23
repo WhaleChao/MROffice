@@ -34,7 +34,7 @@ export function emptyDeck(title = "Presentation"): Deck {
 }
 
 export function deckFromFile(name: string, bytes: Uint8Array): Deck {
-  if (name.toLowerCase().endsWith(".pptx")) throw new Error("PowerPoint files (.pptx) open in the MR Office desktop app (free, https://github.com/XinaTian/MROffice/releases); the open-source editor opens .mrslides.");
+  if (name.toLowerCase().endsWith(".pptx")) throw new Error("PowerPoint files (.pptx) open free in MR Office: online at https://mroffice.ai in any browser (Linux too), or in the desktop app; the open-source editor opens .mrslides.");
   const parsed = JSON.parse(decoder.decode(bytes)) as Deck;
   if (parsed.type !== MRSLIDES_TYPE || !Array.isArray(parsed.slides)) throw new Error(`${name} is not an MR Note presentation.`);
   return parsed;

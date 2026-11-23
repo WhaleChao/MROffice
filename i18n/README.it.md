@@ -28,6 +28,14 @@
 
 MR Office è una suite office con AI per file reali: Word, Excel, PowerPoint e PDF, sul web e in un'app desktop gratuita, con un'AI accanto a ogni documento e co-editing live. Questo repository pubblica il codice sorgente dei suoi editor: gli stessi editor che esegue MR Office, che puoi compilare, eseguire e integrare per conto tuo.
 
+## Gratuito per privati e piccoli team
+
+- **MR Office online e l'app desktop** — gratis: modifica reale di Word, Excel, PowerPoint e PDF, co-editing live e condivisione, sul web, su telefono e offline sul tuo computer. L'AI include una quota giornaliera gratuita; un uso più intenso dell'AI è un piano a pagamento opzionale.
+- **L'embed, per la tua app** — gratis per iniziare, con tutto incluso: il motore di formule completo, file Office reali, co-editing, tutti i formati di esportazione e l'API di automazione (1000 sessioni al mese su localhost, 100 sui tuoi domini, fino a 2 app, senza carta).
+- **Aziende con un uso più intenso** — paghi a consumo su un servizio completamente gestito: Starter a US$29 al mese con 5.000 sessioni, Pro a US$149 al mese con 40.000 sessioni, white-label e supporto prioritario. Nessuna licenza annuale, nessun server da gestire, nessun aggiornamento da amministrare: aggiornamenti, scalabilità e backup sono a nostro carico.
+
+Per confronto, ONLYOFFICE Docs Developer Edition parte da circa US$6.000 all'anno per 250 connessioni simultanee su server gestiti da te (prezzo di listino rivenditori, novembre 2026); il prezzo di Univer Pro non è pubblicato. [Prezzi e limiti →](https://mroffice.ai/it/developers/pricing)
+
 ## Un'AI che lavora dentro i tuoi file
 
 In MR Office l'AI lavora sul documento stesso, non su testo incollato in una chat. Legge il file, applica la modifica sugli oggetti propri del file e ti mostra cosa ha toccato prima che tu la confermi.

@@ -234,6 +234,8 @@ export function officeChartTextFromFontDraft(
     }
   }
   if (touched.has("color")) {
+    // A colour (or Automatic) is a solid fill: it ends a Text Fill > No fill.
+    delete next.noFill;
     if (draft.color) next.color = draft.color.toLowerCase();
     else delete next.color;
   }

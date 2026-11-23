@@ -513,7 +513,7 @@ function fillLines(
     if (!languages || !paragraph.powerPointEastAsian?.hangingPunct || paragraph.powerPointEastAsian.eastAsianRules === false) return false;
     const glyph = glyphs[index];
     if (glyph.kind !== "ink" || index <= start || glyphs[index - 1].kind !== "ink") return false;
-    if (!powerPointHangs(glyph.text, languages[index])) return false;
+    if (!powerPointHangs(glyph.text, languages[index], { latinLineBreak: paragraph.powerPointEastAsian.latinLineBreak === true })) return false;
     const next = glyphs[index + 1];
     return !(next && next.kind === "ink" && powerPointHoldsAtLineStart(next.text, languages[index + 1]));
   };

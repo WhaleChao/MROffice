@@ -275,6 +275,12 @@ export function servedTableCellFontFamily(value: unknown, scriptFaces?: { cs?: s
   return served;
 }
 
+/** The face PowerPoint sets the words of a cell naming none in (readings row 1033, `source.nativeTableFace`), or null. */
+export function tableInheritedFace(block: PresentationTableBlock): string | null {
+  const face = (block.source as { nativeTableFace?: unknown } | null | undefined)?.nativeTableFace;
+  return typeof face === "string" && face.trim() && face.length <= 200 ? face.trim() : null;
+}
+
 export function tableCellVisualTextStyle(
   block: PresentationTableBlock,
   cellStyle: ReturnType<typeof normalizeCellStyle>,
@@ -323,7 +329,7 @@ export function tableCellVisualTextStyle(
     importedPresentationTable(block) && exactSpacing === undefined && tableCellLineSpacing(cell) !== 1
       ? officePercentLeadingEm(
           Math.round(IMPORTED_TABLE_CELL_LINE_HEIGHT * tableCellLineSpacing(cell) * 10_000) / 10_000,
-          cellStyle.fontFamily ?? strutFontFamily ?? undefined,
+          cellStyle.fontFamily ?? strutFontFamily ?? tableInheritedFace(block) ?? undefined,
         )
       : { shift: 0, tail: 0 };
   const leadingDrop =
@@ -459,7 +465,12 @@ export function tableCellVisualTextStyle(
         }
       : strutFontFamily !== null
         ? { fontFamily: servedTableCellFontFamily(strutFontFamily, tableCellScriptFaces(cell)) }
-        : {}),
+        : tableInheritedFace(block) !== null
+          // A cell naming no face is set in the one PowerPoint sets its
+          // table's words in (readings row 1033, `nativeTableFace`): on the
+          // canvas, in the text engine and in print alike.
+          ? { fontFamily: servedTableCellFontFamily(tableInheritedFace(block), tableCellScriptFaces(cell)) }
+          : {}),
     ...(cellStyle.fontSize !== null
       ? {
           fontSize: `${cellStyle.fontSize}pt`,

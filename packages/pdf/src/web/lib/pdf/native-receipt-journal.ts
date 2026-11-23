@@ -32,9 +32,10 @@ export type PdfNativeReceiptSourceAction =
   | "pdf.image.remove-source"
   | "pdf.image.replace-source"
   // Package writers (annotations, links, outline, forms, page tree and
-  // decorations). The save policy judges the page tree, forms and
-  // decorations by the strict source rule; annotations, links and the
-  // outline by the package-sibling rule (PDF_ANNOTATION_WRITER_ACTIONS).
+  // decorations). The save policy judges annotations, links and the outline
+  // by the package-sibling rule (PDF_ANNOTATION_WRITER_ACTIONS), the page
+  // tree and decorations as page revisions, forms by their own rule
+  // (PDF_FORM_AUTHORING_ACTIONS).
   | "pdf.text.free-text.commit"
   | "pdf.page.import-native"
   | "pdf.page.replace-native"
@@ -136,6 +137,11 @@ export const PDF_NATIVE_RECEIPT_REPLAY_SOURCE_ACTIONS: ReadonlySet<PdfNativeRece
     "pdf.decoration.watermark.commit",
     "pdf.decoration.page-number.commit",
     "pdf.decoration.header-footer.commit",
+    // The form authoring writers (PDF_FORM_AUTHORING_ACTIONS): one
+    // incremental revision of the field's own objects, Undo included.
+    "pdf.form.create-detected-fields",
+    "pdf.form.edit-existing-field",
+    "pdf.form.delete-existing-field",
   ]);
 
 const replayPolicyBrand: unique symbol = Symbol("PdfNativeReceiptReplayPolicy");

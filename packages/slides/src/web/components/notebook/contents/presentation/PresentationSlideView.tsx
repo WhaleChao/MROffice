@@ -102,6 +102,7 @@ import {
   MAX_PARAGRAPH_PLAY_ROWS,
   initialTimelineVisibility,
   timelineVisibleAfterStep,
+  chartElementPlayKey,
   effectRecipeBoxOf,
   animationEffectOptionKeyframeBody,
   PRESENTATION_TIMELINE_EFFECT_KEYFRAMES_CSS,
@@ -644,7 +645,10 @@ export function PresentationSlideView({
     // the default slide), so the conversion is well-defined.
     const motionWidthEmu = bounds.width;
     const motionHeightEmu = bounds.height;
-    const initialVisibilityByBlock = initialTimelineVisibility(sequence);
+    // (A chart's element steps leave the chart itself on stage.)
+    const initialVisibilityByBlock = initialTimelineVisibility(
+      sequence.filter((step) => step.chartElement === undefined || chartElementPlayKey(step.chartElement) === null),
+    );
     // Dedupe injected keyframes by name (two steps with the same path + dims
     // share one rule). Only the CURRENTLY ANIMATING steps inject CSS.
     const keyframeByName = new Map<string, string>();
@@ -659,20 +663,31 @@ export function PresentationSlideView({
           ? { ...rawState, delayMs: rawState.delayMs + transitionRemainingMs }
           : rawState;
       if (!state) continue;
-      // A chart built element by element (row 1080): its first element's
-      // step brings the chart in; the later elements' steps keep their place
-      // in the clicks and change nothing of how the chart is drawn.
-      if (
-        step.chartElement !== undefined &&
-        sequence
-          .slice(0, i)
-          .some(
-            (earlier) =>
-              earlier.chartElement !== undefined &&
-              earlier.blockId === step.blockId &&
-              earlier.animation === step.animation,
-          )
-      ) {
+      // A chart built element by element (row 1080): the background step
+      // (gridlines and legend) brings the chart itself; each series,
+      // category or point comes in (or goes) with its own step, drawn where
+      // it stands. Without a background step the background is there from
+      // the start.
+      const chartKey = step.chartElement !== undefined ? chartElementPlayKey(step.chartElement) : null;
+      if (chartKey !== null) {
+        const existing = map.get(step.blockId);
+        const elements = new Map(existing?.chartPlay ?? []);
+        const elementCategory = presentationAnimationEffect(step.animation)?.category;
+        const prior = elements.get(chartKey);
+        elements.set(chartKey, {
+          visible: timelineVisibleAfterStep(elementCategory, state, prior?.visible ?? elementCategory !== "entrance"),
+          durationMs: state.animate ? state.durationMs : 0,
+          delayMs: state.animate ? state.delayMs : 0,
+        });
+        map.set(step.blockId, {
+          ...(existing ?? {
+            timelineControlled: true,
+            visible: initialVisibilityByBlock.get(step.blockId) ?? true,
+            animate: false,
+          }),
+          chartPlay: elements,
+          playKey: existing?.playKey ?? playKeyOf(step.blockId),
+        });
         continue;
       }
       // A media call plays or pauses its clip at its start and changes
@@ -1011,6 +1026,7 @@ export function PresentationSlideView({
         effects,
         playKey,
         paragraphPlay: existing?.paragraphPlay,
+        chartPlay: existing?.chartPlay,
       });
     }
     // The theme colours a recipe may name (Color Typewriter, Brush Color).

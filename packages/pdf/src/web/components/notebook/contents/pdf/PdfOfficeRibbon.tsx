@@ -18,6 +18,8 @@ import {
 } from "@mrnote/core/web/components/office-ribbon/OfficeRibbonQuickStrip.tsx";
 import { computeRibbonOverflow } from "@mrnote/core/web/components/console/editor/ribbonOverflow.ts";
 
+import { PdfRibbonFitContext, usePdfRibbonFit } from "./pdfRibbonFit";
+
 export type PdfRibbonSaveStatus = "saved" | "saving" | "unsaved" | "conflict";
 export type PdfOfficeActionRail = Omit<
   ComponentProps<typeof OfficeEditorActionRail>,
@@ -180,6 +182,8 @@ export function PdfOfficeRibbon<TabId extends string>({
   const usesHomeAnatomy =
     (Boolean(activeTabEntry?.contextual) && activeTabEntry?.surface !== "insert") ||
     activeTabEntry?.surface === "home";
+  // Groups that do not fit collapse, the furthest along first (pdfRibbonFit).
+  const fit = usePdfRibbonFit(activeTab);
   const stripProps = {
     activeTab,
     panelId,
@@ -274,16 +278,19 @@ export function PdfOfficeRibbon<TabId extends string>({
           }
         />
         <PdfRibbonActiveTabContext.Provider value={activeTab}>
-          {/* One strip for both anatomies (OfficeRibbonSurfaceStrip): a
-              contextual tab no longer unmounts and re-inserts the ribbon.
-              Every tab's groups are children here, gated by data-ribbon. */}
-          <OfficeRibbonSurfaceStrip
-            surface={usesHomeAnatomy ? "home" : "insert"}
-            density="office"
-            {...stripProps}
-          >
-            {children}
-          </OfficeRibbonSurfaceStrip>
+          <PdfRibbonFitContext.Provider value={fit.collapsed}>
+            {/* One strip for both anatomies (OfficeRibbonSurfaceStrip): a
+                contextual tab no longer unmounts and re-inserts the ribbon.
+                Every tab's groups are children here, gated by data-ribbon. */}
+            <OfficeRibbonSurfaceStrip
+              surface={usesHomeAnatomy ? "home" : "insert"}
+              density="office"
+              {...stripProps}
+            >
+              <span ref={fit.markerRef} hidden aria-hidden="true" data-pdf-ribbon-fit-marker="" />
+              {children}
+            </OfficeRibbonSurfaceStrip>
+          </PdfRibbonFitContext.Provider>
         </PdfRibbonActiveTabContext.Provider>
       </section>
     </div>

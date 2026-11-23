@@ -2240,8 +2240,13 @@ export function isEditableAnimationTimingMs(value: unknown): value is number {
 
 /** Durations also retain ANI01's canonical 380ms default. */
 export function isEditableAnimationDurationMs(value: unknown): value is number {
+  // Any whole millisecond: a file's own duration off the 50 ms grid (a
+  // producer's 1 ms fade, PowerPoint's 1.822 s) is kept exactly (row 1082).
   return (
-    isEditableAnimationTimingMs(value) || value === DEFAULT_STEP_DURATION_MS
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= MAX_STEP_DURATION_MS
   );
 }
 

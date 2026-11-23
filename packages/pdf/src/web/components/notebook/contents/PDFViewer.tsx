@@ -1144,7 +1144,10 @@ import { samplePdfTextInkColor,
 } from "../../../lib/pdf/native-text-ink-bounds";
 import { erasePdfLoadedLineOnShownPage, readPdfLoadedTextSourceGeometry, renderPdfLoadedTextEditingSurface } from "../../../lib/pdf/native-text-loaded-surface";
 import { samePdfNativeTextCommandSelection } from "../../../lib/pdf/native-text-edit-preparation";
-import { pdfNativeListTextRiskProfileIsSafe } from "./pdf/window/sourceRisk";
+import {
+  pdfNativeListTextRiskProfileIsSafe,
+  pdfNativeSourceRiskReadOnlyReason,
+} from "./pdf/window/sourceRisk";
 import { collectPdfJsGlyphUnicodes, collectPdfJsGlyphWidths, ensureRepairedPdfJsFace } from "../../../lib/pdf/pdfjs-face-metrics";
 import { fitPdfCanvasToPageBox, notePdfCanvasPainted, PDF_PAINTED_ROTATION_ATTR, PDF_TURNED_AHEAD_ATTR } from "../../../lib/pdf/page-canvas-turn";
 import { pdfFaceNameStyle } from "../../../lib/pdf/pdfjs-face-draws-text";
@@ -1223,7 +1226,7 @@ import {
   type PdfPageOrganizerOperation,
   type PdfPageSelectionPreset,
 } from "../../../lib/pdf/page-organizer";
-import { createPdfBoundedInputDigest, createPdfLossyCompressionPolicyContext, createPdfOutputLossReport, createPdfOutputLossReportForAction, createPdfOutputPlanDigest, pdfSourceStructureLossEntries, createPdfPagePackagePlanDigest, createPdfPagePackagePolicyContext, createPdfSavePolicyEditSnapshot, createPdfSourceRiskProfile, createPdfSourceRiskSnapshot, inspectPdfPagePackageSource, inspectPdfSourceRiskSnapshot, PDF_LOSS_CURRENT_EDITOR_EDITS_EXCLUDED, PDF_LOSS_VISUAL_MASK_RECOVERABLE_CONTENT, readPdfSavePolicyDecision, resolvePdfSavePolicy, validatePdfPagePackageOutputs, verifyPdfSavePolicyDecision, type PdfOutputLossReport, type PdfDeskewRasterPolicyContext, type PdfLossyCompressionPolicyContext, type PdfPagePackagePolicyContext, type PdfPagePackageSourceSnapshot, type PdfSavePolicyAction, type PdfSavePolicyDecision, type PdfSavePolicyRequest, type PdfSourceRiskSnapshot } from "../../../lib/pdf/save-policy";
+import { createPdfBoundedInputDigest, createPdfLossyCompressionPolicyContext, pdfFormAuthoringRiskProfileIsSafe, createPdfOutputLossReport, createPdfOutputLossReportForAction, createPdfOutputPlanDigest, pdfSourceStructureLossEntries, createPdfPagePackagePlanDigest, createPdfPagePackagePolicyContext, createPdfSavePolicyEditSnapshot, createPdfSourceRiskProfile, createPdfSourceRiskSnapshot, inspectPdfPagePackageSource, inspectPdfSourceRiskSnapshot, PDF_LOSS_CURRENT_EDITOR_EDITS_EXCLUDED, PDF_LOSS_VISUAL_MASK_RECOVERABLE_CONTENT, readPdfSavePolicyDecision, resolvePdfSavePolicy, validatePdfPagePackageOutputs, verifyPdfSavePolicyDecision, type PdfOutputLossReport, type PdfDeskewRasterPolicyContext, type PdfLossyCompressionPolicyContext, type PdfPagePackagePolicyContext, type PdfPagePackageSourceSnapshot, type PdfSavePolicyAction, type PdfSavePolicyDecision, type PdfSavePolicyRequest, type PdfSourceRiskSnapshot } from "../../../lib/pdf/save-policy";
 import {
   bindPdfSignatureProofToSource,
   presentPdfSignatureProof,
@@ -33785,14 +33788,21 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         t("pdf.viewer.nativePdfFieldPropertyWriteback")
       );
     }
-    if (
-      formMutationBlocked ||
-      !sourceProfile ||
-      sourceProfile.encryption !== "none" ||
-      sourceProfile.certificateSignatures !== "none" ||
-      sourceProfile.xfa !== "none"
-    ) {
-      return formMutationBlockedReason;
+    if (formMutationBlocked) return formMutationBlockedReason;
+    if (!sourceProfile) return t("pdf.viewer.pdfFormSafetyStillBeing");
+    // The save policy's own rule for field authoring (PDF_FORM_AUTHORING_
+    // ACTIONS): a static XFA form is authored as its AcroForm. Any XFA form
+    // kept every field's properties, size and place read-only, the reason
+    // read 「静态 XFA 表单，通过 AcroForm 字段填写」 (97 of the 105 forms of
+    
+    if (!pdfFormAuthoringRiskProfileIsSafe(sourceProfile)) {
+      return (
+        pdfNativeSourceRiskReadOnlyReason({
+          profile: sourceProfile,
+          t: t as unknown as Parameters<typeof pdfNativeSourceRiskReadOnlyReason>[0]["t"],
+          subject: "form",
+        }) ?? t("pdf.viewer.pdfDoesNotAllowField")
+      );
     }
     return currentDetectedFieldSourceIdentityRef.current === null
       ? t("document.capability.unavailable")

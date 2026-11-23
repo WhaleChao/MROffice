@@ -42,6 +42,8 @@ import { useContext, useEffect, useMemo, useState, type CSSProperties, type Reac
 import type { PresentationTableBlock, PresentationTableCell } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
 import { layoutOfficeTextBody, type OfficeParagraphInput, type OfficeTextBodyLayout, type OfficeTextFont } from "@mrnote/core/web/lib/text-engine/office-text-body.ts";
 import { pageOfficeTextMeasurer } from "@mrnote/core/web/lib/text-engine/office-text-measurer.ts";
+import { powerPointLineLanguage } from "@mrnote/core/web/lib/text-engine/powerpoint-east-asian.ts";
+import { normalizeParagraphEastAsianLines, type ParagraphEastAsianLines } from "@mrnote/core/web/lib/presentation-paragraphs.ts";
 import { onTextEngineChange, textEngineEpoch } from "@mrnote/core/web/lib/text-engine/measure.ts";
 import { textEngineOn } from "@mrnote/core/web/lib/text-engine/page-adapter.ts";
 import { cellCharacterRuns, presentationCellTextRunCss } from "@mrnote/core/web/lib/presentation-cell-rich-text.ts";
@@ -165,8 +167,14 @@ function cellInput(
     statedFontAlign === "auto" || statedFontAlign === "t" || statedFontAlign === "ctr" || statedFontAlign === "base" || statedFontAlign === "b"
       ? statedFontAlign
       : undefined;
+  // A cell of East Asian words read under readings row 1024 breaks and hangs
+  // its lines by PowerPoint's East Asian line rules, as a text box does:
+  // each paragraph's (`eastAsianLines`, by position -- a paragraph typed past
+  // the last takes the last's) and each run's own languages.
+  const eastAsianLines = presentationTableCellEastAsianLines(cell);
   const paragraphs = split.map((paragraph, paragraphIndex): OfficeParagraphInput => {
     const spaced = spacing?.[paragraphIndex];
+    const lines = eastAsianLines ? eastAsianLines[Math.min(paragraphIndex, eastAsianLines.length - 1)] : undefined;
     const css = paragraph.map((run) => {
       if ((run as { math?: unknown }).math) throw new Unsupported("equation");
       if (run.style?.textPaint) throw new Unsupported("run WordArt");
@@ -184,6 +192,15 @@ function cellInput(
         ...(css[index].textTransform === "uppercase" ? { allCaps: true } : {}),
         ...(typeof css[index].letterSpacing === "string"
           ? { letterSpacingPt: Math.round(lengthPx(css[index].letterSpacing, 16) * PT_PER_PX * 100) / 100 }
+          : {}),
+        ...(lines
+          ? {
+              lineLanguage: powerPointLineLanguage(
+                run.style?.proofingLanguage ?? lines.lang,
+                run.style?.alternateLanguage ?? lines.altLang,
+                lines.koreanRules === true,
+              ),
+            }
           : {}),
       })),
       // An empty paragraph stands on its end mark, the size its closing
@@ -205,11 +222,31 @@ function cellInput(
       spaceBeforePt: paragraphIndex > 0 ? spaced?.spaceBeforePt ?? 0 : 0,
       spaceAfterPt: paragraphIndex < split.length - 1 ? spaced?.spaceAfterPt ?? 0 : 0,
       kinsoku: "zh-CN",
+      ...(lines
+        ? {
+            powerPointEastAsian: {
+              hangingPunct: lines.hangingPunct !== false,
+              ...(lines.latinLnBrk === true ? { latinLineBreak: true } : {}),
+              ...(lines.eaLnBrk === false ? { eastAsianRules: false } : {}),
+            },
+          }
+        : {}),
       // The cell's Text alignment (`a:pPr@fontAlgn` its rows state, readings row 513).
       ...(cellFontAlign ? { fontAlign: cellFontAlign } : {}),
     };
   });
   return { paragraphs, drawn, css: cssRows, fonts: fontRows };
+}
+
+/**
+ * A cell's East Asian line rules by paragraph (`eastAsianLines`, readings row
+ * 1024), each bounded as a text body row's (`normalizeParagraphEastAsianLines`),
+ * or undefined for a cell read before it.
+ */
+export function presentationTableCellEastAsianLines(cell: PresentationTableCell): ParagraphEastAsianLines[] | undefined {
+  const raw = (cell as { eastAsianLines?: unknown }).eastAsianLines;
+  if (!Array.isArray(raw) || !raw.length || raw.length > 1000) return undefined;
+  return raw.map((entry) => normalizeParagraphEastAsianLines(entry) ?? {});
 }
 
 /** Where a cell's last whole line ends (its last line's full pitch, not its descent), pt. */

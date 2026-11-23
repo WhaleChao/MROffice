@@ -28,6 +28,14 @@
 
 MR Office adalah suite kantor AI untuk file asli: Word, Excel, PowerPoint, dan PDF, di web dan di aplikasi desktop gratis, dengan AI di samping setiap dokumen dan pengeditan bersama secara langsung. Repositori ini menerbitkan kode sumber editornya: editor yang sama dengan yang dijalankan MR Office, yang dapat Anda bangun, jalankan, dan sematkan sendiri.
 
+## Gratis untuk individu dan tim kecil
+
+- **MR Office online dan aplikasi desktop** — gratis: pengeditan Word, Excel, PowerPoint, dan PDF sungguhan, pengeditan bersama langsung dan berbagi, di web, di ponsel, dan offline di komputer Anda. AI hadir dengan kuota harian gratis; penggunaan AI yang lebih berat tersedia sebagai paket berbayar opsional.
+- **Embed, untuk aplikasi Anda sendiri** — gratis untuk memulai, dengan semua yang disertakan: mesin formula lengkap, file Office asli, pengeditan bersama, semua format ekspor, dan API otomasi (1.000 sesi per bulan di localhost, 100 di domain Anda sendiri, hingga 2 aplikasi, tanpa kartu).
+- **Bisnis dengan penggunaan lebih berat** — bayar sesuai pemakaian pada layanan yang sepenuhnya terkelola: Starter seharga US$29 per bulan dengan 5.000 sesi, Pro seharga US$149 per bulan dengan 40.000 sesi, white-label dan dukungan prioritas. Tanpa lisensi tahunan, tanpa server yang harus dijalankan, tanpa upgrade yang harus dikelola: pembaruan, penskalaan, dan pencadangan adalah tanggung jawab kami.
+
+Sebagai perbandingan, ONLYOFFICE Docs Developer Edition tercantum mulai sekitar US$6.000 per tahun untuk 250 koneksi simultan di server yang Anda jalankan sendiri (harga daftar reseller, November 2026); harga Univer Pro tidak dipublikasikan. [Harga dan batas →](https://mroffice.ai/id/developers/pricing)
+
 ## AI yang bekerja di dalam file Anda
 
 Di MR Office, AI bekerja pada dokumen itu sendiri, bukan pada teks yang ditempel ke dalam chat. AI membaca file, melakukan perubahan pada objek milik file itu, dan menunjukkan apa yang diubahnya sebelum Anda menyimpannya.

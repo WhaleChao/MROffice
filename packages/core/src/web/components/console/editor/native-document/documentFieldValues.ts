@@ -436,8 +436,9 @@ export function normalizeDocumentFieldInstruction(
     return canonicalDocumentFieldInstruction(type, format, options) ?? "";
   }
   // A kept Word field's instruction is its code exactly as read, spaces
-  // included; the server checks it against the code it carries.
-  if (type === "NATIVE") return typeof value === "string" ? value.slice(0, 65_536) : "";
+  // included; the server checks it against the code it carries (its bound,
+  // MAX_PRESERVED_FIELD_CODE_TEXT: a Mendeley citation's whole record).
+  if (type === "NATIVE") return typeof value === "string" ? value.slice(0, 262_144) : "";
   if (candidate && keyword === type && !dangerous) return ` ${candidate} `;
   return canonicalDocumentFieldInstruction(type, format, options) ?? "";
 }

@@ -3999,7 +3999,20 @@ function assertXfaRenderingAuthority(
     "PDF AcroForm XFA",
     true,
   );
-  if (!xfaEntry) refuseUnprovenXfa();
+  if (!xfaEntry) {
+    // The form the current revision declares carries no XFA: a later
+    // revision took it out (the form authoring writer leaves a static form's
+    // XFA packets out; pdf-lib drops them when it writes a form). The /XFA
+    // text this gate was called for is an earlier revision's, which no reader
+    // draws. Refused, a static IRS form whose field had been edited once was
+    // preserve-only for every native edit after it, and a field's 必填 could
+    
+    // An /XFA on the catalog itself is still one this engine cannot explain.
+    if (oneTopLevelDictionaryEntry(catalogSource, "XFA", "PDF Catalog XFA", true)) {
+      refuseUnprovenXfa();
+    }
+    return;
+  }
   const config = readXfaConfigPacket(bytes, parsed, acroFormSource, xfaEntry);
   if (
     config !== null &&

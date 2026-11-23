@@ -6,6 +6,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { Loader2 } from "lucide-react";
+import { Languages, ShieldCheck } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import { type ReactNode, useRef } from "react";
 
 import {
@@ -200,15 +201,18 @@ function commandLabel(command: PdfHomeCompactCommand): string {
 
 export function HomeGroup({
   children,
+  collapsedIcon,
   label,
   testId,
 }: {
   children: ReactNode;
+  /** Lets the group collapse to one button when the band is narrow. */
+  collapsedIcon?: ReactNode;
   label: string;
   testId: string;
 }) {
   return (
-    <PdfSurfaceRibbonGroup label={label} tab="home" testId={testId}>
+    <PdfSurfaceRibbonGroup collapsedIcon={collapsedIcon} label={label} tab="home" testId={testId}>
       {children}
     </PdfSurfaceRibbonGroup>
   );
@@ -894,7 +898,11 @@ export default function PdfHomeCompactRibbon({
         </>
       </HomeGroup>
 
-      <HomeGroup label={groupLabels.editing} testId="pdf-home-content-tools">
+      <HomeGroup
+        collapsedIcon={<Languages size={24} aria-hidden />}
+        label={groupLabels.editing}
+        testId="pdf-home-content-tools"
+      >
         <>
           <div
             className={`pdf-home-segment-item ${styles.segment}`}
@@ -944,6 +952,7 @@ export default function PdfHomeCompactRibbon({
       </HomeGroup>
 
       <HomeGroup
+        collapsedIcon={<ShieldCheck size={24} aria-hidden />}
         label={groupLabels.security}
         testId="pdf-home-encryption-tools"
       >

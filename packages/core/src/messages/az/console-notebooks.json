@@ -9333,6 +9333,7 @@
  "pdfViewer.compressPresetPrint": "Çap (300 DPI, yüksək keyfiyyət)",
  "pdfViewer.exportFormData": "Forma məlumatlarını ixrac et",
  "pdfViewer.exportFormDataFormat": "Forma məlumatlarının ixrac formatı",
+ "pdfViewer.exportFormDataInflight": "İxrac edilir…",
  "pdfViewer.exportFormDataRejected": "Forma məlumatları ixrac edilmədi: {count, plural, one {cari dəyər öz sahəsində saxlanıla bilmir} other {# cari dəyər öz sahəsində saxlanıla bilmir}} ({fields})",
  "pdfViewer.exportFormDataUnreadable": "Forma məlumatları ixrac edilmədi: {count, plural, one {bir sahə oxuna bilmir} other {# sahə oxuna bilmir}} ({fields})",
  "pdfViewer.exportFormDataUnnamedField": "(adsız sahə)",

@@ -1,5 +1,5 @@
 {
-  "sourceCommit": "45e17a3949e5c1b89073e8f0ec752b7aed8ac746",
+  "sourceCommit": "58464350ecb737e3e6355220ec62fc9c03ec1373",
   "editors": [
     "code",
     "pdf",
@@ -14,28 +14,28 @@
       "stubs": 0
     },
     "pdf": {
-      "files": 740,
-      "lines": 472344,
+      "files": 742,
+      "lines": 472920,
       "stubs": 0
     },
     "docs": {
       "files": 382,
-      "lines": 200915,
+      "lines": 200933,
       "stubs": 0
     },
     "sheets": {
       "files": 564,
-      "lines": 315522,
+      "lines": 315532,
       "stubs": 0
     },
     "slides": {
       "files": 330,
-      "lines": 163519,
+      "lines": 163651,
       "stubs": 0
     },
     "core": {
-      "files": 1900,
-      "lines": 923280,
+      "files": 1901,
+      "lines": 923578,
       "stubs": 101
     }
   },

@@ -28,6 +28,14 @@
 
 MR Office là bộ ứng dụng văn phòng AI dành cho tệp thật: Word, Excel, PowerPoint và PDF, trên web và trong ứng dụng desktop miễn phí, với AI bên cạnh mọi tài liệu và khả năng đồng chỉnh sửa trực tiếp. Kho lưu trữ này công bố mã nguồn của các trình soạn thảo: chính những trình soạn thảo mà MR Office đang vận hành, để bạn có thể tự build, chạy và nhúng vào hệ thống của mình.
 
+## Miễn phí cho cá nhân và nhóm nhỏ
+
+- **MR Office trực tuyến và ứng dụng máy tính** — miễn phí: chỉnh sửa Word, Excel, PowerPoint và PDF thực thụ, đồng chỉnh sửa trực tiếp và chia sẻ, trên web, trên điện thoại và ngoại tuyến trên máy tính của bạn. AI đi kèm hạn mức miễn phí hàng ngày; dùng AI nhiều hơn là gói trả phí tùy chọn.
+- **Nhúng vào ứng dụng của riêng bạn** — miễn phí để bắt đầu, với mọi thứ được bao gồm: toàn bộ công cụ công thức, tệp Office thực thụ, đồng chỉnh sửa, mọi định dạng xuất và API tự động hóa (1.000 phiên mỗi tháng trên localhost, 100 trên tên miền của bạn, tối đa 2 ứng dụng, không cần thẻ).
+- **Doanh nghiệp sử dụng nhiều hơn** — trả theo mức dùng trên dịch vụ được lưu trữ hoàn toàn: Starter với US$29 mỗi tháng cho 5.000 phiên, Pro với US$149 mỗi tháng cho 40.000 phiên, white-label và hỗ trợ ưu tiên. Không giấy phép hàng năm, không máy chủ phải vận hành, không bản nâng cấp phải quản lý: cập nhật, mở rộng và sao lưu là việc của chúng tôi.
+
+Để so sánh, ONLYOFFICE Docs Developer Edition được niêm yết từ khoảng US$6.000 mỗi năm cho 250 kết nối đồng thời trên máy chủ bạn tự vận hành (giá niêm yết của nhà phân phối, tháng 11 năm 2026); giá của Univer Pro không được công bố. [Giá và giới hạn →](https://mroffice.ai/vi/developers/pricing)
+
 ## AI làm việc ngay trong tệp của bạn
 
 Trong MR Office, AI làm việc trên chính tài liệu, không phải trên đoạn văn bản dán vào khung chat. Nó đọc tệp, thực hiện thay đổi trên các đối tượng gốc của tệp và cho bạn xem những gì đã tác động trước khi bạn giữ lại.

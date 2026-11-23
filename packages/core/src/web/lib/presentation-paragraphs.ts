@@ -191,6 +191,8 @@ export interface ParagraphEastAsianLines {
   hangingPunct?: false;
   latinLnBrk?: true;
   eaLnBrk?: false;
+  /** The row's Korean runs hang PowerPoint's Korean marks (readings row 1024). */
+  koreanRules?: true;
 }
 
 const LINE_RULE_LANGUAGE = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,5}$/;
@@ -210,6 +212,7 @@ export function normalizeParagraphEastAsianLines(value: unknown): ParagraphEastA
   if (raw.hangingPunct === false) out.hangingPunct = false;
   if (raw.latinLnBrk === true) out.latinLnBrk = true;
   if (raw.eaLnBrk === false) out.eaLnBrk = false;
+  if (raw.koreanRules === true) out.koreanRules = true;
   return out;
 }
 

@@ -28,6 +28,14 @@
 
 MR Office er en AI-kontorpakke for ekte filer: Word, Excel, PowerPoint og PDF, på nettet og i en gratis skrivebordsapp, med en AI ved siden av hvert dokument og sanntids samredigering. Dette repositoriet publiserer kildekoden til redigeringsprogrammene: de samme redigeringsprogrammene som MR Office kjører, som du kan bygge, kjøre og bygge inn på egen hånd.
 
+## Gratis for enkeltpersoner og små team
+
+- **MR Office på nett og skrivebordsappen** — gratis: ekte redigering av Word, Excel, PowerPoint og PDF, sanntidssamredigering og deling, på nett, på mobil og offline på datamaskinen. AI-en kommer med en gratis daglig kvote; tyngre AI-bruk er en valgfri betalplan.
+- **Innebyggingen, for din egen app** — gratis å starte, med alt inkludert: den fullstendige formelmotoren, ekte Office-filer, samredigering, alle eksportformater og automatiserings-API-et (1 000 økter i måneden på localhost, 100 på egne domener, opptil 2 apper, uten kort).
+- **Virksomheter med tyngre bruk** — betal etter bruk på en fullt driftet tjeneste: Starter til US$29 i måneden med 5 000 økter, Pro til US$149 i måneden med 40 000 økter, white-label og prioritert støtte. Ingen årlig lisens, ingen servere å drifte, ingen oppgraderinger å håndtere: oppdateringer, skalering og sikkerhetskopier er vårt ansvar.
+
+Til sammenligning er ONLYOFFICE Docs Developer Edition oppgitt fra omtrent US$6 000 i året for 250 samtidige tilkoblinger på servere du drifter selv (forhandlerens listepris, november 2026); prisen for Univer Pro er ikke offentliggjort. [Priser og grenser →](https://mroffice.ai/no/developers/pricing)
+
 ## AI som jobber inne i filene dine
 
 I MR Office jobber AI-en på selve dokumentet, ikke på tekst som er limt inn i en chat. Den leser filen, gjør endringen i filens egne objekter og viser deg hva den har endret før du beholder det.

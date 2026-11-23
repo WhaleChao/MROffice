@@ -28,6 +28,14 @@
 
 MR Office on tekoälytoimisto-ohjelmisto oikeille tiedostoille: Word, Excel, PowerPoint ja PDF, verkossa ja ilmaisessa työpöytäsovelluksessa, tekoäly jokaisen asiakirjan vierellä ja reaaliaikainen yhteismuokkaus. Tämä repositorio julkaisee sen editorien lähdekoodin: samat editorit, joita MR Office käyttää ja jotka voit kääntää, ajaa ja upottaa omiin sovelluksiisi.
 
+## Ilmainen yksityishenkilöille ja pienille tiimeille
+
+- **MR Office verkossa ja työpöytäsovellus** — ilmainen: aito Word-, Excel-, PowerPoint- ja PDF-muokkaus, reaaliaikainen yhteismuokkaus ja jakaminen verkossa, puhelimilla ja offline-tilassa tietokoneellasi. Tekoäly sisältyy ilmaiseen päiväkiintiöön; runsaampi tekoälyn käyttö on valinnainen maksullinen suunnitelma.
+- **Upotus omaan sovellukseesi** — ilmainen aloittaa, kaikki sisältyy: täysi kaavakone, aidot Office-tiedostot, yhteismuokkaus, kaikki vientimuodot ja automaatio-API (1 000 istuntoa kuukaudessa localhostissa, 100 omilla verkkotunnuksillasi, enintään 2 sovellusta, ei korttia).
+- **Yrityksille, joilla on runsaampaa käyttöä** — maksa käytön mukaan täysin ylläpidetyssä palvelussa: Starter US$29 kuukaudessa 5 000 istunnolla, Pro US$149 kuukaudessa 40 000 istunnolla, white-label ja priorisoitu tuki. Ei vuosilisenssiä, ei palvelimia ajettavaksi, ei päivityksiä hallittavaksi: päivitykset, skaalautuminen ja varmuuskopiot ovat meidän.
+
+Vertailun vuoksi ONLYOFFICE Docs Developer Edition on listattu noin US$6 000 vuodessa 250 samanaikaiselle yhteydelle itse ylläpitämilläsi palvelimilla (jälleenmyyjän listahinta, marraskuu 2026); Univer Pron hintaa ei ole julkaistu. [Hinnat ja rajat →](https://mroffice.ai/fi/developers/pricing)
+
 ## Tekoäly, joka toimii tiedostojesi sisällä
 
 MR Officessa tekoäly työskentelee itse asiakirjalla, ei chattiin liitetyllä tekstillä. Se lukee tiedoston, tekee muutoksen tiedoston omiin objekteihin ja näyttää, mitä se kosketti, ennen kuin hyväksyt muutoksen.
