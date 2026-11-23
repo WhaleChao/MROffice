@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Този текст използва шрифт или структура на PDF съдържанието, които не могат да бъдат редактирани безопасно",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Удостоверените права върху оригиналния файл не са налични.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Удостоверяване на текущия PDF източник.",
+ "pdf.viewer.toolWaitsForSource": "PDF файлът все още се проверява. Инструментът ще се включи веднага щом е готов.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Все още не може да се добавя текст към новодобавена страница. Добавете го на съществуваща страница.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Източникът на прикачения файл не е готов. Опитайте отново.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Прикаченият файл не може да бъде изтеглен. Опитайте отново.",

@@ -14,7 +14,7 @@ import { fitNumberText } from "../../../../lib/spreadsheet/general-number-fit";
 import { CELL_BASE_PADDING_X_PX, effectiveVerticalAlign, SPREADSHEET_WRAP_LINE_HEIGHT, horizontalAlignToCss, cellIndentInsetsPx, cellVerticalSpread, resolveBorderCss, resolveDiagonalCss, dashDotEdgeLayers, type CellBackgroundLayer, shrinkToFitCss, shrinkToFitFontScale, verticalAlignToCss } from "@mrnote/core/web/lib/spreadsheet/cell-format.ts";
 import { cellUnderlineIsDouble, DOUBLE_UNDERLINE_THICKNESS } from "@mrnote/core/web/lib/spreadsheet/cell-text-effects.ts";
 import { estimateTextWidthPx } from "../../../../lib/spreadsheet/text-spill";
-import { spreadsheetFillPatternCss, spreadsheetGradientFillCss } from "@mrnote/core/web/lib/spreadsheet/fill-pattern.ts";
+import { SHEET_PATTERN_PRINT_FILL, spreadsheetFillPatternCss, spreadsheetFillPatternPrintColor, spreadsheetGradientFillCss } from "@mrnote/core/web/lib/spreadsheet/fill-pattern.ts";
 import { cssFontFamilyOrUndefined } from "@mrnote/core/web/lib/css-font-family.ts";
 import { excelCutFamilyEmboldens } from "@mrnote/core/web/lib/office-fonts/excel-cut-families.ts";
 import { ensureOfficeFauxBoldProbe, officeFamilyHasNoBold } from "@mrnote/core/web/lib/office-fonts/faux-bold.ts";
@@ -178,10 +178,14 @@ function buildCellStyleCss(
     : [];
   const overLayers = [...dashDot.layers, ...diagonalLayers];
   const layered = overLayers.length > 0 ? cellBackgroundWithEdgeLayers(overLayers, backgroundImage, fillCss) : null;
+  // The printed page sets a pattern as its one mixed colour
+  // (`printPatternFillsAsInk`); a cell with edge or diagonal layers keeps it.
+  const patternPrintFill = fillPattern && !layered ? spreadsheetFillPatternPrintColor(style.fillPattern) : undefined;
   return Object.fromEntries(Object.entries({
     ...(fillCss ?? {}),
     ...(backgroundImage ? { backgroundImage } : {}),
     ...(layered ?? {}),
+    ...(patternPrintFill ? { [SHEET_PATTERN_PRINT_FILL]: patternPrintFill } : {}),
     backgroundColor:
       fillPattern?.backgroundColor ||
       gradientFill?.backgroundColor ||

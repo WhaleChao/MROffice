@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Ten tekst używa czcionki lub struktury zawartości PDF, której nie można bezpiecznie edytować",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Uwierzytelnione uprawnienia do oryginalnego pliku są niedostępne.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Uwierzytelnianie bieżącego źródła PDF.",
+ "pdf.viewer.toolWaitsForSource": "PDF jest nadal sprawdzany. Narzędzie włączy się, gdy tylko będzie gotowy.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Nie można jeszcze dodać tekstu do nowo wstawionej strony. Dodaj go na istniejącej stronie.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Źródło załącznika nie jest gotowe. Spróbuj ponownie.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Nie można pobrać załącznika. Spróbuj ponownie.",

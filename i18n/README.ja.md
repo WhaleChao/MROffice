@@ -2,13 +2,13 @@
 
 <p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
-<p align="center"><b>Microsoft Officeに最も近いエディター、MR Officeのオープンソースエディター — 文書、スプレッドシート、プレゼンテーション、PDF、コード — がブラウザーで動作します。</b></p>
+<p align="center"><b>Microsoft Officeに最も近いAIオフィススイート、MR Officeのオープンソースエディタ。ブラウザで文書、表計算、プレゼンテーション、PDF、コードを扱い、AIが実際のWord、Excel、PowerPointファイルをあなたと一緒に編集します。</b></p>
 
 <p align="center"><a href="https://mroffice.ai/ja"><b>▶ オンラインで試す</b></a> · <a href="https://mroffice.ai/ja/office/download"><b>⬇ ダウンロード</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/ja/developers">🧑‍💻 開発者</a> · <a href="https://mroffice.ai/ja/developers/embed">🧩 埋め込み</a> · <a href="https://mroffice.ai/ja/developers/mcp">🤖 AI アプリ向け MCP</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm SDK</a> · <a href="https://mroffice.ai/ja/developers/oauth">🔑 MR Office でサインイン</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
-<p align="center"><a href="https://mroffice.ai/ja"><img src="../docs/media/mr-office-demo.webp" alt="Microsoft Officeに最も近いエディター、MR Officeのオープンソースエディター — 文書、スプレッドシート、プレゼンテーション、PDF、コード — がブラウザーで動作します。" width="100%"></a></p>
+<p align="center"><a href="https://mroffice.ai/ja"><img src="../docs/media/mr-office-demo.webp" alt="Microsoft Officeに最も近いAIオフィススイート、MR Officeのオープンソースエディタ。ブラウザで文書、表計算、プレゼンテーション、PDF、コードを扱い、AIが実際のWord、Excel、PowerPointファイルをあなたと一緒に編集します。" width="100%"></a></p>
 
 <p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 50 秒の紹介動画を見る（音声あり）</a></p>
 
@@ -26,7 +26,38 @@
 </tr>
 </table>
 
-MR Officeは、ノート、AI、実際のファイルのためのワークスペースです。このリポジトリは、そのエディタのソースコードを公開しています。MR Officeが動かしているのと同じエディタで、自分でビルドし、実行し、組み込むことができます。無料のMR Officeデスクトップアプリやホスト型の埋め込みと合わせて、本物のWord、Excel、PowerPointファイルを開いて保存できます。
+MR Officeは、Word、Excel、PowerPoint、PDFといった実際のファイルを扱うAIオフィススイートです。Webと無料のデスクトップアプリで利用でき、すべての文書のそばにAIがいて、リアルタイムの共同編集も可能です。このリポジトリでは、そのエディタのソースコードを公開しています。MR Officeが実際に動かしているのと同じエディタを、ビルドし、実行し、自分の環境に組み込むことができます。
+
+## ファイルの中で働くAI
+
+MR Officeでは、AIはチャットに貼り付けたテキストではなく、文書そのものを操作します。ファイルを読み取り、ファイル自身のオブジェクトを変更し、確定する前に何を触ったかを表示します。
+
+- **すべてのエディタにCopilot** — 文書、表計算、プレゼンテーション、PDF、コード。対象を選択するか丸で囲んで、してほしいことを伝えるだけ。段落、表、セルと数式、図形、スライドをその場で編集し、指示が不明確なときは確認し、反映前に変更をプレビューし、すべての変更を元に戻せます。
+- **確認してから反映される変更** — AIの提案は、あなたが確認したときにだけ適用されます。その間にファイルが変更されていた場合、提案は無効になり、あなたが書いた内容が上書きされることはありません。
+- **ワークスペースを把握するAIウィンドウ** — ファイル、ノート、キャンバスについて質問すると、出典を示した回答が得られます。新しい文書、シート、デッキの下書きを作成し、必要ならキャンバス上に小さなツールを構築します。
+- **メモリ** — メモリグラフが重要な人物、プロジェクト、決定事項を保持するので、AIは会話のたびにゼロから始めることはありません。
+- **最先端のモデル** — 会話ごとに、今日の主要なAIモデルから選べます。ファイルはワークスペース内、またはデスクトップアプリなら自分のコンピュータ上に保持されます。
+
+**[MR OfficeのAIを無料で試す →](https://mroffice.ai/ja)**
+
+### AIエージェントにOfficeファイルを編集させる（MCP）
+
+Claude、ChatGPT、Cursor、Codex、VS Code、その他のMCPクライアントは、MR OfficeのMCPサーバーを通じて文書や表計算を作成、開く、編集、読み戻し、画像化、エクスポートできます（`create_document`、`open_document`、`update_document`、`get_document`、`render_page`、`export_document`でdocx、xlsx、pptx、pdf、md、html、csvに出力）。MCP Appsを表示するアプリではエディタが会話の中に現れ、それ以外ではツールが同じエディタへのリンクとページの画像を返します。あなたとAIは同じ文書を編集します。アシスタントは続行前にあなたの編集を読み戻し、未確認の編集の上に加えられた更新は失われずに拒否されます。
+
+```bash
+# Claude Code
+claude mcp add mroffice -- npx -y mroffice-mcp
+# Codex
+codex mcp add mroffice -- npx -y mroffice-mcp
+```
+
+Claude Desktop、Cursor、その他JSON設定を受け付けるアプリ:
+
+```json
+{ "mcpServers": { "mroffice": { "command": "npx", "args": ["-y", "mroffice-mcp"] } } }
+```
+
+インストール不要: ホストされたエンドポイント`https://mcp.mroffice.ai/mcp`に接続し、MR Officeアカウントでサインインします。Word、Excel、PowerPointファイルは、あなた自身のアカウントとしてMR OfficeのOfficeエンジンを通ります。MCPサーバーのソースは`apps/mcp`にあります。 [MCP ガイド →](https://mroffice.ai/ja/developers/mcp)
 
 ## 開発者向け
 
@@ -60,7 +91,7 @@ open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r
 
 ### AI アプリ: MCP サーバー
 
-AI アプリは MCP サーバーを通じて、本物の MR Office エディターでドキュメントを開き、読み、編集し、エクスポートできます。ホスト型エンドポイント `https://mcp.mroffice.ai/mcp`（MR Office アカウントでサインイン、キー不要）に接続するか、自分のコンピューターで `npx -y mroffice-mcp` を実行します。ソースは `apps/mcp` にあります。 [MCP ガイド →](https://mroffice.ai/ja/developers/mcp)
+上記のMCPサーバーは、あなた自身のAI機能が実際のMR Officeエディタで文書を開く、読む、編集する、エクスポートする手段でもあります。ホストされたエンドポイント`https://mcp.mroffice.ai/mcp`（OAuthサインイン、キー不要）または自分のコンピュータで`npx -y mroffice-mcp`を使います。 [MCP ガイド →](https://mroffice.ai/ja/developers/mcp)
 
 ### MR Office でサインイン（OAuth）
 
@@ -118,10 +149,6 @@ MR Officeデスクトップアプリは無料で、これらのエディタと�
 - PDF の編集内容をファイルに書き戻す
 
 **[MR Office をダウンロード（無料） →](https://mroffice.ai/ja/office/download)**
-
-### Word、Excel、PowerPoint、PDF ファイル
-
-本物のWord、Excel、PowerPointファイル（.docx、.xlsx、.pptx）で作業し、PDFの編集内容をファイルにそのまま保存できます。無料のMR Officeデスクトップアプリにはこれらのエディタがすべて揃い、お使いのコンピュータでオフラインでも動作します：
 
 ## 構成
 

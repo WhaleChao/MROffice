@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Testu honek letra-tipo edo PDF eduki-egitura bat erabiltzen du, eta ezin da modu seguruan editatu",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Jatorrizko fitxategiaren baimen egiaztatua ez dago erabilgarri.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Uneko PDF iturria egiaztatzen.",
+ "pdf.viewer.toolWaitsForSource": "PDFa egiaztatzen ari da oraindik. Tresna prest dagoenean aktibatuko da.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Ezin da testua gehitu oraindik txertatutako orri berri batean. Gehitu lehendik dagoen orri batean.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Eranskinaren iturria ez dago prest. Saiatu berriro.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Ezin izan da eranskina deskargatu. Saiatu berriro.",

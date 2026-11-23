@@ -11062,6 +11062,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Văn bản này dùng phông chữ hoặc cấu trúc nội dung PDF không thể chỉnh sửa an toàn",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Không có quyền đối với tệp gốc đã xác thực.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Đang xác thực nguồn PDF hiện tại.",
+ "pdf.viewer.toolWaitsForSource": "PDF vẫn đang được kiểm tra. Công cụ sẽ bật ngay khi sẵn sàng.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Chưa thể thêm văn bản vào trang mới chèn. Hãy thêm trên trang hiện có.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Nguồn tệp đính kèm chưa sẵn sàng. Hãy thử lại.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Không thể tải xuống tệp đính kèm. Hãy thử lại.",

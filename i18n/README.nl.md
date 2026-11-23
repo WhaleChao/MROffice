@@ -2,13 +2,13 @@
 
 <p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
-<p align="center"><b>De open-source editors van MR Office, de editor die het dichtst bij Microsoft Office staat — documenten, spreadsheets, presentaties, PDF en code — in de browser.</b></p>
+<p align="center"><b>De open-source editors van MR Office, de AI-kantoorsuite die het dichtst bij Microsoft Office staat: documenten, spreadsheets, presentaties, PDF en code in de browser, en een AI die samen met jou echte Word-, Excel- en PowerPoint-bestanden bewerkt.</b></p>
 
 <p align="center"><a href="https://mroffice.ai/nl"><b>▶ Online proberen</b></a> · <a href="https://mroffice.ai/nl/office/download"><b>⬇ Downloaden</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/nl/developers">🧑‍💻 Ontwikkelaars</a> · <a href="https://mroffice.ai/nl/developers/embed">🧩 Insluiten</a> · <a href="https://mroffice.ai/nl/developers/mcp">🤖 MCP voor AI-apps</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm-SDK</a> · <a href="https://mroffice.ai/nl/developers/oauth">🔑 Inloggen met MR Office</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
-<p align="center"><a href="https://mroffice.ai/nl"><img src="../docs/media/mr-office-demo.webp" alt="De open-source editors van MR Office, de editor die het dichtst bij Microsoft Office staat — documenten, spreadsheets, presentaties, PDF en code — in de browser." width="100%"></a></p>
+<p align="center"><a href="https://mroffice.ai/nl"><img src="../docs/media/mr-office-demo.webp" alt="De open-source editors van MR Office, de AI-kantoorsuite die het dichtst bij Microsoft Office staat: documenten, spreadsheets, presentaties, PDF en code in de browser, en een AI die samen met jou echte Word-, Excel- en PowerPoint-bestanden bewerkt." width="100%"></a></p>
 
 <p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 Bekijk de rondleiding van 50 seconden met geluid</a></p>
 
@@ -26,7 +26,38 @@
 </tr>
 </table>
 
-MR Office is een werkruimte voor notities, AI en echte bestanden. Deze repository publiceert de broncode van de editors: dezelfde editors die MR Office gebruikt, die je zelf kunt bouwen, uitvoeren en embedden. Samen met de gratis MR Office desktop-app of de gehoste embed openen en opslaan ze echte Word-, Excel- en PowerPoint-bestanden.
+MR Office is een AI-kantoorsuite voor echte bestanden: Word, Excel, PowerPoint en PDF, op het web en in een gratis desktopapp, met een AI naast elk document en live samen bewerken. Deze repository publiceert de broncode van de editors: dezelfde editors die MR Office gebruikt, die je zelf kunt bouwen, draaien en embedden.
+
+## AI die in je bestanden werkt
+
+In MR Office werkt de AI op het document zelf, niet op tekst die in een chat is geplakt. Hij leest het bestand, voert de wijziging door in de eigen objecten van het bestand en laat je zien wat hij heeft aangepast voordat je het overneemt.
+
+- **Copilot in elke editor** — documenten, spreadsheets, presentaties, PDF en code. Selecteer of omcirkel wat je bedoelt en zeg wat je wilt: hij bewerkt alinea's, tabellen, cellen en formules, vormen en dia's ter plaatse, vraagt om verduidelijking als de opdracht onduidelijk is, toont een voorbeeld van de wijziging voordat die wordt toegepast, en elke wijziging kan ongedaan worden gemaakt.
+- **Wijzigingen die je beoordeelt** — wat de AI voorstelt wordt pas toegepast als je het bevestigt; is het bestand intussen gewijzigd, dan vervalt het voorstel en wordt niets van wat je hebt geschreven overschreven.
+- **Een AI-venster dat je werkruimte kent** — vraag naar je bestanden, notities en canvas en krijg antwoorden die hun bronnen citeren; hij stelt nieuwe documenten, spreadsheets en presentaties op, en bouwt een klein hulpmiddel op het canvas wanneer je er een nodig hebt.
+- **Geheugen** — een geheugengraaf bewaart de mensen, projecten en beslissingen die ertoe doen, zodat de AI niet in elk gesprek vanaf nul begint.
+- **Toonaangevende modellen** — kies per gesprek het model uit de toonaangevende AI-modellen van dit moment; je bestanden blijven in je werkruimte, of op je eigen computer met de desktopapp.
+
+**[Probeer de AI in MR Office, gratis →](https://mroffice.ai/nl)**
+
+### Laat je AI-agent Office-bestanden bewerken (MCP)
+
+Claude, ChatGPT, Cursor, Codex, VS Code en elke andere MCP-client kunnen documenten en spreadsheets maken, openen, bewerken, teruglezen, weergeven en exporteren via de MCP-server van MR Office (`create_document`, `open_document`, `update_document`, `get_document`, `render_page`, `export_document` naar docx, xlsx, pptx, pdf, md, html of csv). In apps die MCP Apps tonen verschijnt de editor direct in het gesprek; elders antwoorden de tools met een link naar dezelfde editor en een afbeelding van de pagina. Jij en de AI bewerken hetzelfde document: de assistent leest je wijzigingen terug voordat hij verdergaat, en een update bovenop wijzigingen die hij niet heeft gezien wordt geweigerd in plaats van verloren te gaan.
+
+```bash
+# Claude Code
+claude mcp add mroffice -- npx -y mroffice-mcp
+# Codex
+codex mcp add mroffice -- npx -y mroffice-mcp
+```
+
+Claude Desktop, Cursor en andere apps die een JSON-configuratie accepteren:
+
+```json
+{ "mcpServers": { "mroffice": { "command": "npx", "args": ["-y", "mroffice-mcp"] } } }
+```
+
+Geen installatie: verbind het gehoste endpoint `https://mcp.mroffice.ai/mcp` en log in met je MR Office-account. Word-, Excel- en PowerPoint-bestanden gaan via de Office-engine van MR Office als je eigen account; de broncode van de MCP-server staat in `apps/mcp`. [MCP-gids →](https://mroffice.ai/nl/developers/mcp)
 
 ## Voor ontwikkelaars
 
@@ -60,7 +91,7 @@ open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r
 
 ### AI-apps: de MCP-server
 
-AI-apps openen, lezen, bewerken en exporteren documenten in de echte MR Office-editor via de MCP-server: verbind het gehoste eindpunt `https://mcp.mroffice.ai/mcp` (inloggen met je MR Office-account, geen sleutel) of voer `npx -y mroffice-mcp` uit op je eigen computer. De broncode staat in `apps/mcp`. [MCP-gids →](https://mroffice.ai/nl/developers/mcp)
+De bovenstaande MCP-server is ook hoe je eigen AI-functies documenten kunnen openen, lezen, bewerken en exporteren in de echte MR Office-editor: het gehoste endpoint `https://mcp.mroffice.ai/mcp` (OAuth-inlog, geen sleutel) of `npx -y mroffice-mcp` op je eigen computer. [MCP-gids →](https://mroffice.ai/nl/developers/mcp)
 
 ### Inloggen met MR Office (OAuth)
 
@@ -118,10 +149,6 @@ De MR Office desktop-app is gratis, bevat deze editors en de volledige service, 
 - Bewerkingen van een pdf terugschrijven in het bestand
 
 **[MR Office downloaden (gratis) →](https://mroffice.ai/nl/office/download)**
-
-### Word-, Excel-, PowerPoint- en pdf-bestanden
-
-Werk met echte Word-, Excel- en PowerPoint-bestanden (.docx, .xlsx, .pptx) en sla PDF-bewerkingen direct op in het bestand met de gratis MR Office desktop-app, die al deze editors bevat en offline op je eigen computer werkt:
 
 ## Hoe de onderdelen samenhangen
 

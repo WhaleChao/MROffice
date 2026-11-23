@@ -11062,6 +11062,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Ce texte utilise une police ou une structure de contenu PDF qui ne peut pas être modifiée en toute sécurité",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "L’autorisation authentifiée sur le fichier d’origine n’est pas disponible.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Authentification de la source du PDF actuel.",
+ "pdf.viewer.toolWaitsForSource": "Le PDF est encore en cours de vérification. L'outil s'activera dès qu'il sera prêt.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Impossible d’ajouter du texte à une page nouvellement insérée pour le moment. Ajoutez-le sur une page existante.",
  "pdf.viewer.attachmentSourceNotReadyTry": "La source de la pièce jointe n’est pas prête. Réessayez.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Impossible de télécharger la pièce jointe. Réessayez.",

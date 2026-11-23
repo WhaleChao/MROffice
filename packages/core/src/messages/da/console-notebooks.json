@@ -11062,6 +11062,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Denne tekst bruger en skrifttype eller en PDF-indholdsstruktur, der ikke kan redigeres sikkert",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Bekræftet tilladelse til den oprindelige fil er ikke tilgængelig.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Bekræfter den aktuelle PDF-kilde.",
+ "pdf.viewer.toolWaitsForSource": "PDF'en kontrolleres stadig. Værktøjet slås til, så snart den er klar.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Der kan endnu ikke tilføjes tekst til en nyindsat side. Tilføj den på en eksisterende side.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Kilden til den vedhæftede fil er ikke klar. Prøv igen.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Den vedhæftede fil kunne ikke downloades. Prøv igen.",

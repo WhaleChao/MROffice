@@ -2,13 +2,13 @@
 
 <p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
-<p align="center"><b>Microsoft Office에 가장 가까운 에디터, MR Office의 오픈소스 에디터 — 문서, 스프레드시트, 프레젠테이션, PDF, 코드를 브라우저에서 실행합니다.</b></p>
+<p align="center"><b>Microsoft Office에 가장 가까운 AI 오피스 제품군, MR Office의 오픈소스 편집기: 브라우저에서 문서, 스프레드시트, 프레젠테이션, PDF, 코드를 다루고, 실제 Word, Excel, PowerPoint 파일을 함께 편집하는 AI까지.</b></p>
 
 <p align="center"><a href="https://mroffice.ai/ko"><b>▶ 온라인 체험</b></a> · <a href="https://mroffice.ai/ko/office/download"><b>⬇ 다운로드</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/ko/developers">🧑‍💻 개발자</a> · <a href="https://mroffice.ai/ko/developers/embed">🧩 임베드</a> · <a href="https://mroffice.ai/ko/developers/mcp">🤖 AI 앱용 MCP</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm SDK</a> · <a href="https://mroffice.ai/ko/developers/oauth">🔑 MR Office로 로그인</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
-<p align="center"><a href="https://mroffice.ai/ko"><img src="../docs/media/mr-office-demo.webp" alt="Microsoft Office에 가장 가까운 에디터, MR Office의 오픈소스 에디터 — 문서, 스프레드시트, 프레젠테이션, PDF, 코드를 브라우저에서 실행합니다." width="100%"></a></p>
+<p align="center"><a href="https://mroffice.ai/ko"><img src="../docs/media/mr-office-demo.webp" alt="Microsoft Office에 가장 가까운 AI 오피스 제품군, MR Office의 오픈소스 편집기: 브라우저에서 문서, 스프레드시트, 프레젠테이션, PDF, 코드를 다루고, 실제 Word, Excel, PowerPoint 파일을 함께 편집하는 AI까지." width="100%"></a></p>
 
 <p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 50초 소개 영상 보기 (소리 포함)</a></p>
 
@@ -26,7 +26,38 @@
 </tr>
 </table>
 
-MR Office는 노트, AI, 실제 파일을 위한 워크스페이스입니다. 이 저장소는 MR Office가 구동하는 편집기의 소스 코드를 공개합니다. 직접 빌드하고 실행하고 임베드할 수 있는 동일한 편집기입니다. 무료 MR Office 데스크톱 앱 또는 호스팅 임베드와 함께 사용하면 실제 Word, Excel, PowerPoint 파일을 열고 저장할 수 있습니다.
+MR Office는 실제 파일을 위한 AI 오피스 제품군입니다. 웹과 무료 데스크톱 앱에서 Word, Excel, PowerPoint, PDF를 다루며, 모든 문서 옆에 AI가 있고 실시간 공동 편집도 지원합니다. 이 저장소는 MR Office가 실제로 구동하는 편집기의 소스 코드를 공개합니다. 직접 빌드하고 실행하고 임베드할 수 있습니다.
+
+## 파일 안에서 작동하는 AI
+
+MR Office에서 AI는 채팅에 붙여넣은 텍스트가 아니라 문서 자체를 다룹니다. 파일을 읽고, 파일 고유의 객체를 직접 수정하며, 반영하기 전에 무엇을 바꿨는지 보여줍니다.
+
+- **모든 편집기에 있는 Copilot** — 문서, 스프레드시트, 프레젠테이션, PDF, 코드까지. 원하는 부분을 선택하거나 동그라미로 표시하고 원하는 것을 말하세요. 문단, 표, 셀과 수식, 도형과 슬라이드를 제자리에서 편집하고, 요청이 불분명하면 되묻고, 반영 전에 변경 사항을 미리 보여주며, 모든 변경은 되돌릴 수 있습니다.
+- **검토하는 변경 사항** — AI가 제안한 내용은 확인했을 때만 적용됩니다. 그 사이 파일이 변경되었다면 제안은 무효가 되며, 작성한 내용이 덮어써지지 않습니다.
+- **워크스페이스를 아는 AI 창** — 파일, 노트, 캔버스에 대해 질문하고 출처를 인용한 답변을 받으세요. 새 문서, 시트, 덱을 초안으로 만들고, 필요하면 캔버스 위에 작은 도구를 만들어 줍니다.
+- **메모리** — 메모리 그래프가 중요한 사람, 프로젝트, 결정을 기억하므로 AI가 매 대화마다 처음부터 시작하지 않습니다.
+- **최고의 모델** — 오늘날 최고의 AI 모델 중에서 대화마다 모델을 선택하세요. 파일은 워크스페이스에, 또는 데스크톱 앱을 쓰면 내 컴퓨터에 그대로 남습니다.
+
+**[MR Office에서 AI를 무료로 사용해 보세요 →](https://mroffice.ai/ko)**
+
+### AI 에이전트가 Office 파일을 편집하게 하세요 (MCP)
+
+Claude, ChatGPT, Cursor, Codex, VS Code 및 기타 모든 MCP 클라이언트가 MR Office의 MCP 서버를 통해 문서와 스프레드시트를 생성, 열기, 편집, 다시 읽기, 이미지화, 내보내기할 수 있습니다 (`create_document`, `open_document`, `update_document`, `get_document`, `render_page`, `export_document`로 docx, xlsx, pptx, pdf, md, html, csv로 내보내기). MCP Apps를 표시하는 앱에서는 편집기가 대화 안에 바로 나타나고, 그 외 환경에서는 도구가 같은 편집기 링크와 페이지 이미지로 응답합니다. 사용자와 AI가 같은 문서를 편집합니다. 어시스턴트는 계속하기 전에 사용자의 편집 내용을 다시 읽고, 보지 못한 편집 위에 덮어쓰는 업데이트는 유실되지 않도록 거부됩니다.
+
+```bash
+# Claude Code
+claude mcp add mroffice -- npx -y mroffice-mcp
+# Codex
+codex mcp add mroffice -- npx -y mroffice-mcp
+```
+
+Claude Desktop, Cursor 및 JSON 설정을 지원하는 기타 앱:
+
+```json
+{ "mcpServers": { "mroffice": { "command": "npx", "args": ["-y", "mroffice-mcp"] } } }
+```
+
+설치 불필요: 호스팅 엔드포인트 `https://mcp.mroffice.ai/mcp`에 연결하고 MR Office 계정으로 로그인하세요. Word, Excel, PowerPoint 파일은 사용자 본인의 계정으로 MR Office의 Office 엔진을 거쳐 처리됩니다. MCP 서버의 소스는 `apps/mcp`에 있습니다. [MCP 가이드 →](https://mroffice.ai/ko/developers/mcp)
 
 ## 개발자용
 
@@ -60,7 +91,7 @@ open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r
 
 ### AI 앱: MCP 서버
 
-AI 앱은 MCP 서버를 통해 실제 MR Office 편집기에서 문서를 열고, 읽고, 편집하고, 내보낼 수 있습니다. 호스팅 엔드포인트 `https://mcp.mroffice.ai/mcp`(MR Office 계정으로 로그인, 키 불필요)에 연결하거나 내 컴퓨터에서 `npx -y mroffice-mcp`를 실행하세요. 소스는 `apps/mcp`에 있습니다. [MCP 가이드 →](https://mroffice.ai/ko/developers/mcp)
+위의 MCP 서버는 자체 AI 기능이 실제 MR Office 편집기에서 문서를 열고, 읽고, 편집하고, 내보내는 방법이기도 합니다. 호스팅 엔드포인트 `https://mcp.mroffice.ai/mcp`(OAuth 로그인, 키 불필요) 또는 내 컴퓨터에서 `npx -y mroffice-mcp`를 사용하세요. [MCP 가이드 →](https://mroffice.ai/ko/developers/mcp)
 
 ### MR Office로 로그인(OAuth)
 
@@ -118,10 +149,6 @@ MR Office 데스크톱 앱은 무료이며 이 편집기들과 전체 서비스�
 - PDF 편집 내용을 파일에 다시 저장
 
 **[MR Office 다운로드(무료) →](https://mroffice.ai/ko/office/download)**
-
-### Word, Excel, PowerPoint, PDF 파일
-
-실제 Word, Excel, PowerPoint 파일(.docx, .xlsx, .pptx)을 작업하고 PDF 편집 내용을 파일에 바로 저장하세요. 이 모든 편집기를 갖추고 내 컴퓨터에서 오프라인으로 동작하는 무료 MR Office 데스크톱 앱으로 가능합니다:
 
 ## 구성
 

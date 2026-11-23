@@ -10335,6 +10335,13 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     }), []);
   const prepareOrdinaryNoteSource = useCallback<PreparePdfOrdinaryNoteSource>(async request => {
     const owner = ordinaryReaderOwnerRef.current;
+    // A field being typed into holds a new revision off; fill mode alone does
+    // not. The values filled are the window's (formValues), drawn again over
+    // the revision's pages, and one not yet saved holds the refresh off as a
+    // pending draft. Held for the whole of fill mode, a fillable PDF -- whose
+    // window opens in it -- never took a co-editor's note or a peer's save
+    
+    const formFieldBeingFilled = formMode && focusedFormField !== null;
     const previousDoc = pdfDocRef.current;
     const previousIdentity = loadedPdfSourceIdentityRef.current;
     // Asked before the reader has rendered what it shows: the revision just
@@ -10373,7 +10380,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
       try {
         const why = ordinaryPrepareBoundaryRef.current !== ordinaryPrepareBoundary ? "boundary" : !owner ? "owner"
           : !previousDoc ? "document" : !previousIdentity ? "identity" : workingSource && !working ? "working-source"
-          : pendingNote || activeNoteId ? "note" : formMode ? "form" : pendingSignature ? "signature"
+          : pendingNote || activeNoteId ? "note" : formFieldBeingFilled ? "form" : pendingSignature ? "signature"
           : printing || pendingPrintPreflight || false ? "print"
           : previousIdentity.url !== url ? "url" : previousIdentity.byteGenerationKey !== expectedSourceByteGenerationKey ? "byte-key"
           : previousIdentity.documentRevision !== expectedSourceDocumentRevision ? "revision"
@@ -10433,7 +10440,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
       previousIdentity.documentRevision === expectedSourceDocumentRevision && request.url) return sameBytesStage();
     if (ordinaryPrepareBoundaryRef.current !== ordinaryPrepareBoundary || !owner || !previousDoc || !previousIdentity ||
       (workingSource && !working) ||
-      pendingNote || activeNoteId || formMode || pendingSignature || printing || pendingPrintPreflight ||
+      pendingNote || activeNoteId || formFieldBeingFilled || pendingSignature || printing || pendingPrintPreflight ||
       false || exportImageInFlightRef.current || formDataExportInFlightRef.current ||
       textExportBusy || documentEncryptInFlightRef.current || cadExportInFlightRef.current ||
       previousIdentity.dataItemId !== request.dataItemId || request.dataItemId !== dataItemId ||
@@ -10708,7 +10715,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
       return null;
     }
   }, [activeNoteId, false, dataItemId, expectedSourceByteGenerationKey, expectedSourceDocumentRevision,
-    formMode, nextRenderedOrdinaryPrepare, ordinaryPrepareBoundary, pendingNote, pendingPrintPreflight,
+    focusedFormField, formMode, nextRenderedOrdinaryPrepare, ordinaryPrepareBoundary, pendingNote, pendingPrintPreflight,
     pendingSignature, printing, sourceSha256, textExportBusy, url, workingSource]);
   useLayoutEffect(() => {
     const pendingDisposals = pendingOrdinaryReaderDisposalsRef.current;
@@ -37457,6 +37464,14 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
   );
   const pendingReaderNativeActivationRef =
     useRef<PendingPdfReaderActivation | null>(null);
+  // A tool pressed before the document was ready, carried out once it is.
+  const deferredReaderNativeActivationRef = useRef<
+    | (PendingPdfReaderActivation & {
+        readonly disabledReason: string | undefined;
+        readonly notice: string;
+      })
+    | null
+  >(null);
 
   const downloadOriginalHandlerRef = useRef(handleDirectPdfDownload);
   const downloadCurrentHandlerRef = useRef(handleDownloadCurrent);
@@ -39426,6 +39441,25 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         return Promise.resolve("blocked" as const);
       }
       readerNativeActivationRecoveryScheduledRef.current = false;
+      // Pressed while the document is still opening: the pages are drawn
+      // and the command is enabled, but the source's inspection has not
+      // landed (documentReady), so the registry refuses it. That refusal
+      // was silent -- 插入文字 pressed 4 s before a 54 s inspection landed,
+      // and the click on the page and the typed words went nowhere (walk
+      // ro0440). The press is kept (the latest one) and carried out once
+      // the document is ready, and the window says so meanwhile.
+      if (enabled && resolved.reasonKey === "pdf.capability.documentLoading") {
+        const notice = t("pdf.viewer.toolWaitsForSource");
+        deferredReaderNativeActivationRef.current = Object.freeze({
+          invocation,
+          execute,
+          disabledReason,
+          notice,
+        });
+        setPdfActionNotice(notice, "status");
+        return Promise.resolve("blocked" as const);
+      }
+      deferredReaderNativeActivationRef.current = null;
       if (pendingReaderNativeActivationRef.current) {
         return Promise.resolve("blocked" as const);
       }
@@ -39447,8 +39481,43 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
       readerNativeActivationAuthority,
       readerRuntimeFor,
       requestReaderNativeActivationRecovery,
+      setPdfActionNotice,
+      t,
     ],
   );
+  const pdfActionNoticeRef = useRef(pdfActionNotice);
+  pdfActionNoticeRef.current = pdfActionNotice;
+  useEffect(() => {
+    const deferred = deferredReaderNativeActivationRef.current;
+    if (
+      !deferred ||
+      !readerCapabilityContext.documentReady ||
+      !readerNativeActivationAuthority
+    ) {
+      return;
+    }
+    deferredReaderNativeActivationRef.current = null;
+    // The waiting notice would stand over the page and take the placing
+    // click; it is no longer the case.
+    if (pdfActionNoticeRef.current?.message === deferred.notice) {
+      setPdfActionNotice(null);
+    }
+    void executeReaderNativeActivation(
+      deferred.invocation,
+      true,
+      deferred.execute,
+      deferred.disabledReason,
+    );
+  }, [
+    executeReaderNativeActivation,
+    readerCapabilityContext.documentReady,
+    readerNativeActivationAuthority,
+    setPdfActionNotice,
+  ]);
+  // A press kept for another document is not carried out on this one.
+  useEffect(() => {
+    deferredReaderNativeActivationRef.current = null;
+  }, [url]);
 
   // Every output decision below used to explain itself with
   // `pdf.downloadEditedUnavailable` ("this edited PDF cannot be downloaded").

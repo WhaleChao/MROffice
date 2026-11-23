@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Bu metin, güvenli şekilde düzenlenemeyen bir yazı tipi veya PDF içerik yapısı kullanıyor",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Kimliği doğrulanmış özgün dosya yetkisi kullanılamıyor.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Geçerli PDF kaynağının kimliği doğrulanıyor.",
+ "pdf.viewer.toolWaitsForSource": "PDF hâlâ denetleniyor. Araç hazır olur olmaz açılacak.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Yeni eklenen bir sayfaya henüz metin eklenemiyor. Metni var olan bir sayfaya ekleyin.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Ek kaynağı hazır değil. Yeniden deneyin.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Ek indirilemedi. Yeniden deneyin.",

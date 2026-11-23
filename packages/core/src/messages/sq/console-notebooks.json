@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Ky tekst përdor një shkronjë ose strukturë përmbajtjeje PDF që nuk mund të redaktohet në mënyrë të sigurt",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Autoriteti i vërtetuar i skedarit origjinal nuk është i disponueshëm.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Po vërtetohet burimi aktual PDF.",
+ "pdf.viewer.toolWaitsForSource": "PDF-ja ende po kontrollohet. Mjeti do të aktivizohet sapo të jetë gati.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Teksti nuk mund të shtohet ende në një faqe të sapo futur. Shtoje në një faqe ekzistuese.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Burimi i bashkëngjitjes nuk është gati. Provo përsëri.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Bashkëngjitja nuk mund të shkarkohej. Provo përsëri.",

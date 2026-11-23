@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "یہ متن ایسا فونٹ یا PDF مواد کی ساخت استعمال کرتا ہے جس میں محفوظ طریقے سے ترمیم نہیں کی جا سکتی",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "تصدیق شدہ اصل فائل کا اختیار دستیاب نہیں ہے۔",
  "pdf.viewer.authenticatingCurrentPdfSource": "موجودہ PDF ماخذ کی تصدیق ہو رہی ہے۔",
+ "pdf.viewer.toolWaitsForSource": "PDF کی ابھی جانچ ہو رہی ہے۔ تیار ہوتے ہی ٹول فعال ہو جائے گا۔",
  "pdf.viewer.textCannotAddedNewlyInserted": "نئے داخل کردہ صفحے میں ابھی متن شامل نہیں کیا جا سکتا۔ اسے موجودہ صفحے میں شامل کریں۔",
  "pdf.viewer.attachmentSourceNotReadyTry": "منسلکہ کا ماخذ تیار نہیں ہے۔ دوبارہ کوشش کریں۔",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "منسلکہ ڈاؤن لوڈ نہیں کیا جا سکا۔ دوبارہ کوشش کریں۔",

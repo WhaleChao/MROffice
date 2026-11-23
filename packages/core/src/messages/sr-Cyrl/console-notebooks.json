@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Овај текст користи фонт или структуру садржаја PDF-а која се не може безбедно уређивати",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Оверено овлашћење за изворну датотеку није доступно.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Провера овлашћења за текући извор PDF-а.",
+ "pdf.viewer.toolWaitsForSource": "PDF се још проверава. Алатка ће се укључити чим буде спреман.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Текст се још не може додати на новоуметнуту страницу. Додајте га на постојећу страницу.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Извор прилога није спреман. Покушајте поново.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Прилог није могао бити преузет. Покушајте поново.",

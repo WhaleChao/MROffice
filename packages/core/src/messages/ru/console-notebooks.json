@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Этот текст использует шрифт или структуру содержимого PDF, которые нельзя безопасно изменить",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Проверенный источник исходного файла недоступен.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Проверка текущего источника PDF.",
+ "pdf.viewer.toolWaitsForSource": "PDF ещё проверяется. Инструмент включится, как только он будет готов.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Текст пока нельзя добавить на только что вставленную страницу. Добавьте его на существующей странице.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Источник вложения не готов. Повторите попытку.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Не удалось скачать вложение. Повторите попытку.",

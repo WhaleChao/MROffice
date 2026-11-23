@@ -2,13 +2,13 @@
 
 <p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
-<p align="center"><b>De open source-editore i MR Office, den editor der ligner Microsoft Office mest — dokumenter, regneark, præsentationer, PDF og kode — der kører i browseren.</b></p>
+<p align="center"><b>MR Office's open source-editore, den AI-kontorpakke der er tættest på Microsoft Office: dokumenter, regneark, præsentationer, PDF og kode i browseren, og en AI der redigerer rigtige Word-, Excel- og PowerPoint-filer sammen med dig.</b></p>
 
 <p align="center"><a href="https://mroffice.ai/da"><b>▶ Prøv online</b></a> · <a href="https://mroffice.ai/da/office/download"><b>⬇ Download</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/da/developers">🧑‍💻 Udviklere</a> · <a href="https://mroffice.ai/da/developers/embed">🧩 Indlejr</a> · <a href="https://mroffice.ai/da/developers/mcp">🤖 MCP til AI-apps</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm-SDK</a> · <a href="https://mroffice.ai/da/developers/oauth">🔑 Log ind med MR Office</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
-<p align="center"><a href="https://mroffice.ai/da"><img src="../docs/media/mr-office-demo.webp" alt="De open source-editore i MR Office, den editor der ligner Microsoft Office mest — dokumenter, regneark, præsentationer, PDF og kode — der kører i browseren." width="100%"></a></p>
+<p align="center"><a href="https://mroffice.ai/da"><img src="../docs/media/mr-office-demo.webp" alt="MR Office's open source-editore, den AI-kontorpakke der er tættest på Microsoft Office: dokumenter, regneark, præsentationer, PDF og kode i browseren, og en AI der redigerer rigtige Word-, Excel- og PowerPoint-filer sammen med dig." width="100%"></a></p>
 
 <p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 Se den 50 sekunder lange rundvisning med lyd</a></p>
 
@@ -26,7 +26,38 @@
 </tr>
 </table>
 
-MR Office er et arbejdsområde til noter, AI og rigtige filer. Dette repository udgiver kildekoden til dets editorer: de samme editorer, som MR Office kører, og som du selv kan bygge, køre og indlejre. Sammen med den gratis MR Office-skrivebordsapp eller det hostede embed åbner og gemmer de rigtige Word-, Excel- og PowerPoint-filer.
+MR Office er en AI-kontorpakke til rigtige filer: Word, Excel, PowerPoint og PDF, på nettet og i en gratis desktop-app, med en AI ved siden af hvert dokument og live-samredigering. Dette repository udgiver kildekoden til pakkens editorer: de samme editorer som MR Office kører, og som du selv kan bygge, køre og integrere.
+
+## AI der arbejder inde i dine filer
+
+I MR Office arbejder AI'en på selve dokumentet, ikke på tekst indsat i en chat. Den læser filen, foretager ændringen i filens egne objekter og viser dig, hvad den har rørt ved, før du beholder det.
+
+- **Copilot i hver editor** — dokumenter, regneark, præsentationer, PDF og kode. Markér eller tegn en cirkel om det, du mener, og sig, hvad du vil have: den redigerer afsnit, tabeller, celler og formler, figurer og slides direkte, spørger når anmodningen er uklar, viser ændringen før den gemmes, og hver ændring kan fortrydes.
+- **Ændringer du gennemgår** — det AI'en foreslår, anvendes kun når du bekræfter det; hvis filen er ændret i mellemtiden, er forslaget ugyldigt, og intet af det, du har skrevet, overskrives.
+- **Et AI-vindue der kender dit workspace** — spørg om dine filer, noter og canvas og få svar der citerer deres kilder; den udkaster nye dokumenter, regneark og præsentationer og bygger et lille værktøj på canvas, når du har brug for det.
+- **Hukommelse** — en hukommelsesgraf holder styr på de personer, projekter og beslutninger, der betyder noget, så AI'en ikke starter fra nul i hver samtale.
+- **Førende modeller** — vælg modellen til hver samtale blandt tidens førende AI-modeller; dine filer bliver i dit workspace, eller på din egen computer med desktop-appen.
+
+**[Prøv AI'en i MR Office, gratis →](https://mroffice.ai/da)**
+
+### Lad din AI-agent redigere Office-filer (MCP)
+
+Claude, ChatGPT, Cursor, Codex, VS Code og enhver anden MCP-klient kan oprette, åbne, redigere, læse tilbage, gengive og eksportere dokumenter og regneark via MR Office's MCP-server (`create_document`, `open_document`, `update_document`, `get_document`, `render_page`, `export_document` til docx, xlsx, pptx, pdf, md, html eller csv). I apps der viser MCP Apps, vises editoren direkte i samtalen; andre steder svarer værktøjerne med et link til den samme editor og et billede af siden. Du og AI'en redigerer det samme dokument: assistenten læser dine ændringer tilbage, før den fortsætter, og en opdatering oven på ændringer, den ikke har set, afvises i stedet for at gå tabt.
+
+```bash
+# Claude Code
+claude mcp add mroffice -- npx -y mroffice-mcp
+# Codex
+codex mcp add mroffice -- npx -y mroffice-mcp
+```
+
+Claude Desktop, Cursor og andre apps der tager en JSON-konfiguration:
+
+```json
+{ "mcpServers": { "mroffice": { "command": "npx", "args": ["-y", "mroffice-mcp"] } } }
+```
+
+Ingen installation: forbind det hostede endpoint `https://mcp.mroffice.ai/mcp` og log ind med din MR Office-konto. Word-, Excel- og PowerPoint-filer går gennem MR Office's Office-motor som din egen konto; MCP-serverens kildekode ligger i `apps/mcp`. [MCP-guide →](https://mroffice.ai/da/developers/mcp)
 
 ## For udviklere
 
@@ -60,7 +91,7 @@ open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r
 
 ### AI-apps: MCP-serveren
 
-AI-apps åbner, læser, redigerer og eksporterer dokumenter i den rigtige MR Office-editor via dens MCP-server: forbind det hostede endpoint `https://mcp.mroffice.ai/mcp` (log ind med din MR Office-konto, ingen nøgle), eller kør `npx -y mroffice-mcp` på din egen computer. Kildekoden ligger i `apps/mcp`. [MCP-guide →](https://mroffice.ai/da/developers/mcp)
+MCP-serveren ovenfor er også måden, hvorpå dine egne AI-funktioner kan åbne, læse, redigere og eksportere dokumenter i den rigtige MR Office-editor: det hostede endpoint `https://mcp.mroffice.ai/mcp` (OAuth-login, ingen nøgle) eller `npx -y mroffice-mcp` på din egen computer. [MCP-guide →](https://mroffice.ai/da/developers/mcp)
 
 ### Log ind med MR Office (OAuth)
 
@@ -118,10 +149,6 @@ MR Office-skrivebordsappen er gratis, har disse editorer og den fulde tjeneste o
 - Gemme ændringer i en PDF tilbage i filen
 
 **[Download MR Office (gratis) →](https://mroffice.ai/da/office/download)**
-
-### Word-, Excel-, PowerPoint- og PDF-filer
-
-Arbejd på rigtige Word-, Excel- og PowerPoint-filer (.docx, .xlsx, .pptx) og gem PDF-redigeringer direkte i filen med den gratis MR Office-skrivebordsapp, som har alle disse editorer og virker offline på din egen computer:
 
 ## Sådan hænger delene sammen
 

@@ -2,13 +2,13 @@
 
 <p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
-<p align="center"><b>MR Office 的开源编辑器，最接近 Microsoft Office 的编辑器——文档、表格、演示文稿、PDF 和代码——在浏览器中运行。</b></p>
+<p align="center"><b>MR Office 的开源编辑器，最贴近 Microsoft Office 的 AI 办公套件：在浏览器中处理文档、表格、演示文稿、PDF 和代码，还有 AI 与你一起编辑真实的 Word、Excel 和 PowerPoint 文件。</b></p>
 
 <p align="center"><a href="https://mroffice.ai"><b>▶ 在线试用</b></a> · <a href="https://mroffice.ai/office/download"><b>⬇ 下载</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/developers">🧑‍💻 开发者</a> · <a href="https://mroffice.ai/developers/embed">🧩 嵌入</a> · <a href="https://mroffice.ai/developers/mcp">🤖 AI 应用的 MCP</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm SDK</a> · <a href="https://mroffice.ai/developers/oauth">🔑 用 MR Office 登录</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
-<p align="center"><a href="https://mroffice.ai"><img src="../docs/media/mr-office-demo.webp" alt="MR Office 的开源编辑器，最接近 Microsoft Office 的编辑器——文档、表格、演示文稿、PDF 和代码——在浏览器中运行。" width="100%"></a></p>
+<p align="center"><a href="https://mroffice.ai"><img src="../docs/media/mr-office-demo.webp" alt="MR Office 的开源编辑器，最贴近 Microsoft Office 的 AI 办公套件：在浏览器中处理文档、表格、演示文稿、PDF 和代码，还有 AI 与你一起编辑真实的 Word、Excel 和 PowerPoint 文件。" width="100%"></a></p>
 
 <p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 观看 50 秒介绍视频（有声）</a></p>
 
@@ -26,7 +26,38 @@
 </tr>
 </table>
 
-MR Office 是一个集笔记、AI 和真实文件于一体的工作空间。本仓库发布其编辑器的源代码：这些正是 MR Office 运行的编辑器，你可以自行构建、运行并嵌入。配合免费的 MR Office 桌面应用或托管嵌入服务，它们可以打开并保存真实的 Word、Excel 和 PowerPoint 文件。
+MR Office 是一款面向真实文件的 AI 办公套件：Word、Excel、PowerPoint 和 PDF，支持网页端和免费桌面应用，每个文档旁都有 AI 相伴，并支持实时协同编辑。本仓库发布其编辑器的源代码：正是 MR Office 所运行的同一批编辑器，你可以自行构建、运行和嵌入。
+
+## 在你的文件内部工作的 AI
+
+在 MR Office 中，AI 直接作用于文档本身，而不是粘贴到聊天里的文本。它会读取文件，在文件自身的对象中完成修改，并在你确认之前展示它改动了什么。
+
+- **每个编辑器中都有 Copilot** — 文档、表格、演示文稿、PDF 和代码。选中或圈出你要指的内容，说出你的需求：它会就地编辑段落、表格、单元格和公式、形状和幻灯片，请求不明确时会主动询问，改动落地前先预览，每一步都可撤销。
+- **由你审阅的改动** — AI 提出的修改只有在你确认后才会应用；如果文件在此期间发生了变化，该提案即作废，你写的内容不会被覆盖。
+- **了解你工作区的 AI 窗口** — 询问你的文件、笔记和画布，获得带来源引用的回答；它能起草新文档、表格和演示文稿，需要时还能在画布上搭建一个小工具。
+- **记忆** — 记忆图谱会保存重要的人物、项目和决策，让 AI 不必在每次对话中都从零开始。
+- **领先模型** — 每次对话都可以从当今领先的 AI 模型中选择；你的文件保留在你的工作区中，使用桌面应用时则保留在你自己的电脑上。
+
+**[免费试用 MR Office 中的 AI →](https://mroffice.ai)**
+
+### 让你的 AI 智能体编辑 Office 文件（MCP）
+
+Claude、ChatGPT、Cursor、Codex、VS Code 以及任何其他 MCP 客户端，都可以通过 MR Office 的 MCP 服务器创建、打开、编辑、读回、渲染和导出文档与表格（`create_document`、`open_document`、`update_document`、`get_document`、`render_page`、`export_document`，可导出为 docx、xlsx、pptx、pdf、md、html 或 csv）。在支持 MCP Apps 的应用中，编辑器会直接出现在对话里；在其他应用中，工具会返回同一编辑器的链接和页面图片。你和 AI 编辑的是同一个文档：助手会先读回你的修改再继续，若更新基于它尚未看到的修改，则会被拒绝而不是丢失。
+
+```bash
+# Claude Code
+claude mcp add mroffice -- npx -y mroffice-mcp
+# Codex
+codex mcp add mroffice -- npx -y mroffice-mcp
+```
+
+Claude Desktop、Cursor 及其他接受 JSON 配置的应用：
+
+```json
+{ "mcpServers": { "mroffice": { "command": "npx", "args": ["-y", "mroffice-mcp"] } } }
+```
+
+无需安装：连接托管端点 `https://mcp.mroffice.ai/mcp`，用你的 MR Office 账户登录即可。Word、Excel 和 PowerPoint 文件会以你自己的账户通过 MR Office 的 Office 引擎处理；MCP 服务器的源代码位于 `apps/mcp`。 [MCP 指南 →](https://mroffice.ai/developers/mcp)
 
 ## 开发者
 
@@ -60,7 +91,7 @@ open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r
 
 ### AI 应用：MCP 服务器
 
-AI 应用可以通过 MCP 服务器在真正的 MR Office 编辑器里打开、读取、编辑和导出文档：连接托管端点 `https://mcp.mroffice.ai/mcp`（用 MR Office 账号登录，无需密钥），或在自己电脑上运行 `npx -y mroffice-mcp`。源码在 `apps/mcp`。 [MCP 指南 →](https://mroffice.ai/developers/mcp)
+上述 MCP 服务器也是你自己的 AI 功能在真实 MR Office 编辑器中打开、读取、编辑和导出文档的方式：使用托管端点 `https://mcp.mroffice.ai/mcp`（OAuth 登录，无需密钥），或在你自己的电脑上运行 `npx -y mroffice-mcp`。 [MCP 指南 →](https://mroffice.ai/developers/mcp)
 
 ### 用 MR Office 账号登录（OAuth）
 
@@ -118,10 +149,6 @@ MR Office 桌面应用免费，包含这些编辑器和完整服务，并可在�
 - PDF 编辑后写回文件
 
 **[下载 MR Office（免费） →](https://mroffice.ai/office/download)**
-
-### Word、Excel、PowerPoint 和 PDF 文件
-
-使用免费的 MR Office 桌面应用处理真实的 Word、Excel 和 PowerPoint 文件（.docx、.xlsx、.pptx），并将 PDF 编辑直接保存到文件中；该应用包含所有这些编辑器，并可在你自己的电脑上离线使用：
 
 ## 各部分的关系
 

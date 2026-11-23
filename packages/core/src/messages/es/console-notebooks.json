@@ -11059,6 +11059,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Este texto usa una fuente o una estructura de contenido PDF que no se puede editar de forma segura",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "La autoridad autenticada del archivo original no está disponible.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Autenticando el origen del PDF actual.",
+ "pdf.viewer.toolWaitsForSource": "El PDF todavía se está comprobando. La herramienta se activará en cuanto esté listo.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Aún no se puede agregar texto a una página recién insertada. Agrégalo en una página existente.",
  "pdf.viewer.attachmentSourceNotReadyTry": "El origen del dato adjunto no está listo. Vuelve a intentarlo.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "No se pudo descargar el dato adjunto. Vuelve a intentarlo.",

@@ -11062,6 +11062,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Questo testo usa un tipo di carattere o una struttura di contenuto PDF che non può essere modificata in modo sicuro",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "L’autorizzazione autenticata sul file originale non è disponibile.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Autenticazione dell’origine del PDF corrente in corso.",
+ "pdf.viewer.toolWaitsForSource": "Il PDF è ancora in fase di verifica. Lo strumento si attiverà non appena sarà pronto.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Non è ancora possibile aggiungere testo a una pagina appena inserita. Aggiungilo in una pagina esistente.",
  "pdf.viewer.attachmentSourceNotReadyTry": "L’origine dell’allegato non è pronta. Riprova.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Impossibile scaricare l’allegato. Riprova.",

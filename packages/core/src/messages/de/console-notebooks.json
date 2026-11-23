@@ -11062,6 +11062,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Dieser Text verwendet eine Schrift oder PDF-Inhaltsstruktur, die nicht sicher bearbeitet werden kann",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Die authentifizierte Berechtigung für die Originaldatei ist nicht verfügbar.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Die aktuelle PDF-Quelle wird authentifiziert.",
+ "pdf.viewer.toolWaitsForSource": "Das PDF wird noch geprüft. Das Werkzeug wird aktiviert, sobald es bereit ist.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Zu einer neu eingefügten Seite kann noch kein Text hinzugefügt werden. Fügen Sie ihn auf einer vorhandenen Seite hinzu.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Die Quelle des Anhangs ist nicht bereit. Versuchen Sie es erneut.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Der Anhang konnte nicht heruntergeladen werden. Versuchen Sie es erneut.",

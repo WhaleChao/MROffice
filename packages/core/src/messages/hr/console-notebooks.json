@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Ovaj tekst upotrebljava font ili strukturu PDF sadržaja koje nije moguće sigurno urediti",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Ovlast za provjerenu izvornu datoteku nije dostupna.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Provjera trenutačnog PDF izvora.",
+ "pdf.viewer.toolWaitsForSource": "PDF se još provjerava. Alat će se uključiti čim bude spreman.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Tekst se još ne može dodati na novo umetnutu stranicu. Dodajte ga na postojeću stranicu.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Izvor privitka nije spreman. Pokušajte ponovno.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Privitak nije moguće preuzeti. Pokušajte ponovno.",

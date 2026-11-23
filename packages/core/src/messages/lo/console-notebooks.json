@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "ຂໍ້ຄວາມນີ້ໃຊ້ຟອນ ຫຼື ໂຄງສ້າງເນື້ອຫາ PDF ທີ່ບໍ່ສາມາດແກ້ໄຂໄດ້ຢ່າງປອດໄພ",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "ສິດອຳນາດໄຟລ໌ຕົ້ນສະບັບທີ່ຢືນຢັນແລ້ວບໍ່ມີ.",
  "pdf.viewer.authenticatingCurrentPdfSource": "ກຳລັງຢືນຢັນແຫຼ່ງ PDF ປັດຈຸບັນ.",
+ "pdf.viewer.toolWaitsForSource": "ຍັງກຳລັງກວດສອບ PDF ຢູ່. ເຄື່ອງມືຈະເປີດທັນທີທີ່ພ້ອມ.",
  "pdf.viewer.textCannotAddedNewlyInserted": "ຍັງບໍ່ສາມາດເພີ່ມຂໍ້ຄວາມໃສ່ໜ້າທີ່ເພີ່ມໃໝ່ໄດ້. ໃຫ້ເພີ່ມໃສ່ໜ້າທີ່ມີຢູ່ແລ້ວ.",
  "pdf.viewer.attachmentSourceNotReadyTry": "ແຫຼ່ງໄຟລ໌ແນບຍັງບໍ່ພ້ອມ. ລອງອີກຄັ້ງ.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "ບໍ່ສາມາດດາວໂຫລດໄຟລ໌ແນບໄດ້. ລອງອີກຄັ້ງ.",

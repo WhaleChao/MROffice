@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "يستخدم هذا النص خطًا أو بنية محتوى PDF لا يمكن تحريرها بأمان",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "صلاحية الملف الأصلي المصادق عليها غير متوفرة.",
  "pdf.viewer.authenticatingCurrentPdfSource": "جارٍ المصادقة على مصدر PDF الحالي.",
+ "pdf.viewer.toolWaitsForSource": "لا يزال ملف PDF قيد الفحص. ستعمل الأداة فور جاهزيته.",
  "pdf.viewer.textCannotAddedNewlyInserted": "لا يمكن بعد إضافة نص إلى صفحة مدرجة حديثًا. أضفه في صفحة موجودة.",
  "pdf.viewer.attachmentSourceNotReadyTry": "مصدر المرفق ليس جاهزًا. أعد المحاولة.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "تعذر تنزيل المرفق. أعد المحاولة.",

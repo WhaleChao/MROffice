@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Гэты тэкст выкарыстоўвае шрыфт або структуру змесціва PDF, якую нельга бяспечна змяніць",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Аўтэнтыфікаванае права на зыходны файл недаступнае.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Аўтэнтыфікацыя бягучай крыніцы PDF.",
+ "pdf.viewer.toolWaitsForSource": "PDF яшчэ правяраецца. Інструмент уключыцца, як толькі ён будзе гатовы.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Тэкст пакуль нельга дадаць на нядаўна ўстаўленую старонку. Дадайце яго на існуючай старонцы.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Крыніца ўкладання не гатова. Паспрабуйце зноў.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Не ўдалося спампаваць укладанне. Паспрабуйце зноў.",

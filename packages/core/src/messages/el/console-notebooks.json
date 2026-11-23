@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Αυτό το κείμενο χρησιμοποιεί γραμματοσειρά ή δομή περιεχομένου PDF που δεν μπορεί να επεξεργαστεί με ασφάλεια",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Η αρχή ελέγχου ταυτότητας του αρχικού αρχείου δεν είναι διαθέσιμη.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Γίνεται έλεγχος ταυτότητας της τρέχουσας πηγής PDF.",
+ "pdf.viewer.toolWaitsForSource": "Το PDF ελέγχεται ακόμη. Το εργαλείο θα ενεργοποιηθεί μόλις είναι έτοιμο.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Δεν είναι ακόμα δυνατή η προσθήκη κειμένου σε μια νέα σελίδα που μόλις εισαγάγατε. Προσθέστε το σε μια υπάρχουσα σελίδα.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Η πηγή του συνημμένου δεν είναι έτοιμη. Δοκιμάστε ξανά.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Δεν ήταν δυνατή η λήψη του συνημμένου. Δοκιμάστε ξανά.",

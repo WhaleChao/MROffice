@@ -11062,6 +11062,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Den här texten använder ett teckensnitt eller en PDF-innehållsstruktur som inte kan redigeras säkert",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Autentiserad behörighet för originalfilen är inte tillgänglig.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Autentiserar den aktuella PDF-källan.",
+ "pdf.viewer.toolWaitsForSource": "PDF:en kontrolleras fortfarande. Verktyget slås på så snart den är klar.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Text kan inte läggas till på en nyligen infogad sida ännu. Lägg till den på en befintlig sida.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Bilagans källa är inte klar. Försök igen.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Bilagan kunde inte laddas ned. Försök igen.",

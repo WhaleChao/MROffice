@@ -83,6 +83,34 @@ export function normalizeSpreadsheetFillPattern(
   };
 }
 
+/** The style property a cell's pattern carries its printed colour in. */
+export const SHEET_PATTERN_PRINT_FILL = "--sheet-pattern-print-fill";
+
+/** The share (of 64) of each pattern's 8 x 8 tile Windows Excel prints in
+ * the pattern colour (lookwin p286-lw; the server's
+ * _SHEET_FILL_PATTERN_INK): its Save as PDF tiles the GDI bitmap at 600 dpi,
+ * 0.96pt a tile, which reads at print size as the two colours mixed. */
+const PATTERN_PRINT_INK: Readonly<Record<string, number>> = {
+  darkGray: 32, mediumGray: 16, lightGray: 8, gray125: 4, gray0625: 2,
+  darkHorizontal: 32, darkVertical: 32, darkDown: 32, darkUp: 32, darkGrid: 32, darkTrellis: 48,
+  lightHorizontal: 16, lightVertical: 16, lightDown: 16, lightUp: 16, lightGrid: 28, lightTrellis: 28,
+};
+
+
+
+
+
+
+export function spreadsheetFillPatternPrintColor(raw: unknown): string | undefined {
+  const pattern = normalizeSpreadsheetFillPattern(raw);
+  const ink = pattern ? PATTERN_PRINT_INK[pattern.type] : undefined;
+  if (!pattern || ink === undefined) return undefined;
+  const channel = (hex: string, at: number) => parseInt(hex.slice(1 + at * 2, 3 + at * 2), 16);
+  return `#${[0, 1, 2]
+    .map((at) => Math.round((channel(pattern.foregroundColor, at) * ink + channel(pattern.backgroundColor, at) * (64 - ink)) / 64).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
 function stripes(
   backgroundColor: string,
   foregroundColor: string,

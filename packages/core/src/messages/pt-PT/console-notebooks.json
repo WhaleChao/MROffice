@@ -6097,6 +6097,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Este texto utiliza um tipo de letra ou uma estrutura de conteúdo PDF que não pode ser editada com segurança",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "A autoridade autenticada do ficheiro original não está disponível.",
  "pdf.viewer.authenticatingCurrentPdfSource": "A autenticar a origem do PDF atual.",
+ "pdf.viewer.toolWaitsForSource": "O PDF ainda está a ser verificado. A ferramenta será ativada assim que estiver pronto.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Ainda não é possível adicionar texto a uma página recém-inserida. Adicione-o numa página existente.",
  "pdf.viewer.attachmentSourceNotReadyTry": "A origem do anexo não está pronta. Tente novamente.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Não foi possível transferir o anexo. Tente novamente.",

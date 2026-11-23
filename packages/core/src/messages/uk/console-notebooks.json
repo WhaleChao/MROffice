@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Цей текст використовує шрифт або структуру вмісту PDF, які не можна безпечно редагувати",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Автентифіковане джерело оригінального файлу недоступне.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Виконується автентифікація поточного джерела PDF.",
+ "pdf.viewer.toolWaitsForSource": "PDF ще перевіряється. Інструмент увімкнеться, щойно він буде готовий.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Текст ще не можна додати на щойно вставлену сторінку. Додайте його на наявній сторінці.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Джерело вкладення не готове. Повторіть спробу.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Не вдалося завантажити вкладення. Повторіть спробу.",

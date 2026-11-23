@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Ez a szöveg olyan betűtípust vagy PDF-tartalomszerkezetet használ, amely nem szerkeszthető biztonságosan",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "A hitelesített eredeti fájl jogosultsága nem érhető el.",
  "pdf.viewer.authenticatingCurrentPdfSource": "A jelenlegi PDF-forrás hitelesítése folyamatban.",
+ "pdf.viewer.toolWaitsForSource": "A PDF ellenőrzése még folyamatban van. Az eszköz azonnal bekapcsol, amint elkészül.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Az újonnan beszúrt oldalra még nem lehet szöveget hozzáadni. Adja hozzá egy meglévő oldalon.",
  "pdf.viewer.attachmentSourceNotReadyTry": "A melléklet forrása nem áll készen. Próbálja újra.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "A mellékletet nem sikerült letölteni. Próbálja újra.",

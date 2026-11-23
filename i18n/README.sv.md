@@ -2,13 +2,13 @@
 
 <p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
-<p align="center"><b>MR Office öppna källkodsredigerare, redigeraren som ligger närmast Microsoft Office — dokument, kalkylblad, presentationer, PDF och kod — som körs i webbläsaren.</b></p>
+<p align="center"><b>De öppna källkodsredigerarna i MR Office, AI-kontorssviten som ligger närmast Microsoft Office: dokument, kalkylblad, presentationer, PDF och kod i webbläsaren, och en AI som redigerar riktiga Word-, Excel- och PowerPoint-filer tillsammans med dig.</b></p>
 
 <p align="center"><a href="https://mroffice.ai/sv"><b>▶ Prova online</b></a> · <a href="https://mroffice.ai/sv/office/download"><b>⬇ Ladda ned</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/sv/developers">🧑‍💻 Utvecklare</a> · <a href="https://mroffice.ai/sv/developers/embed">🧩 Bädda in</a> · <a href="https://mroffice.ai/sv/developers/mcp">🤖 MCP för AI-appar</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm-SDK</a> · <a href="https://mroffice.ai/sv/developers/oauth">🔑 Logga in med MR Office</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
-<p align="center"><a href="https://mroffice.ai/sv"><img src="../docs/media/mr-office-demo.webp" alt="MR Office öppna källkodsredigerare, redigeraren som ligger närmast Microsoft Office — dokument, kalkylblad, presentationer, PDF och kod — som körs i webbläsaren." width="100%"></a></p>
+<p align="center"><a href="https://mroffice.ai/sv"><img src="../docs/media/mr-office-demo.webp" alt="De öppna källkodsredigerarna i MR Office, AI-kontorssviten som ligger närmast Microsoft Office: dokument, kalkylblad, presentationer, PDF och kod i webbläsaren, och en AI som redigerar riktiga Word-, Excel- och PowerPoint-filer tillsammans med dig." width="100%"></a></p>
 
 <p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 Se den 50 sekunder långa rundturen med ljud</a></p>
 
@@ -26,7 +26,38 @@
 </tr>
 </table>
 
-MR Office är en arbetsyta för anteckningar, AI och riktiga filer. Det här repot publicerar källkoden till dess editorer: samma editorer som MR Office kör, och som du kan bygga, köra och bädda in själv. Tillsammans med den kostnadsfria skrivbordsappen MR Office eller den hostade inbäddningen öppnar och sparar de riktiga Word-, Excel- och PowerPoint-filer.
+MR Office är en AI-kontorssvit för riktiga filer: Word, Excel, PowerPoint och PDF, på webben och i en gratis skrivbordsapp, med en AI bredvid varje dokument och direktsamredigering. Det här repot publicerar källkoden för dess redigerare: samma redigerare som MR Office kör, som du kan bygga, köra och bädda in själv.
+
+## AI som arbetar inuti dina filer
+
+I MR Office arbetar AI:n på själva dokumentet, inte på text som klistrats in i en chatt. Den läser filen, gör ändringen i filens egna objekt och visar vad den rört innan du behåller den.
+
+- **Copilot i varje redigerare** — dokument, kalkylblad, presentationer, PDF och kod. Markera eller ringa in det du menar och säg vad du vill: den redigerar stycken, tabeller, celler och formler, former och bilder på plats, frågar när begäran är otydlig, förhandsgranskar ändringen innan den sparas, och varje ändring kan ångras.
+- **Ändringar du granskar** — det AI:n föreslår tillämpas först när du bekräftar det; om filen ändrats under tiden blir förslaget ogiltigt och inget du skrivit skrivs över.
+- **Ett AI-fönster som känner din arbetsyta** — fråga om dina filer, anteckningar och din canvas och få svar som anger sina källor; den utformar nya dokument, kalkylblad och presentationer, och bygger ett litet verktyg på canvasen när du behöver ett.
+- **Minne** — en minnesgraf håller reda på personerna, projekten och besluten som spelar roll, så att AI:n inte börjar från noll i varje konversation.
+- **Ledande modeller** — välj modell för varje konversation bland dagens ledande AI-modeller; dina filer stannar på din arbetsyta, eller på din egen dator med skrivbordsappen.
+
+**[Prova AI:n i MR Office, gratis →](https://mroffice.ai/sv)**
+
+### Låt din AI-agent redigera Office-filer (MCP)
+
+Claude, ChatGPT, Cursor, Codex, VS Code och alla andra MCP-klienter kan skapa, öppna, redigera, läsa tillbaka, avbilda och exportera dokument och kalkylblad via MR Office MCP-server (`create_document`, `open_document`, `update_document`, `get_document`, `render_page`, `export_document` till docx, xlsx, pptx, pdf, md, html eller csv). I appar som visar MCP Apps visas redigeraren direkt i konversationen; på andra ställen svarar verktygen med en länk till samma redigerare och en bild av sidan. Du och AI:n redigerar samma dokument: assistenten läser tillbaka dina ändringar innan den fortsätter, och en uppdatering som görs ovanpå ändringar den inte har sett avvisas i stället för att gå förlorad.
+
+```bash
+# Claude Code
+claude mcp add mroffice -- npx -y mroffice-mcp
+# Codex
+codex mcp add mroffice -- npx -y mroffice-mcp
+```
+
+Claude Desktop, Cursor och andra appar som tar en JSON-konfiguration:
+
+```json
+{ "mcpServers": { "mroffice": { "command": "npx", "args": ["-y", "mroffice-mcp"] } } }
+```
+
+Ingen installation: anslut den hostade endpointen `https://mcp.mroffice.ai/mcp` och logga in med ditt MR Office-konto. Word-, Excel- och PowerPoint-filer går genom MR Office Office-motor som ditt eget konto; MCP-serverns källkod finns i `apps/mcp`. [MCP-guide →](https://mroffice.ai/sv/developers/mcp)
 
 ## För utvecklare
 
@@ -60,7 +91,7 @@ open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r
 
 ### AI-appar: MCP-servern
 
-AI-appar öppnar, läser, redigerar och exporterar dokument i den riktiga MR Office-redigeraren via dess MCP-server: anslut den hostade slutpunkten `https://mcp.mroffice.ai/mcp` (logga in med ditt MR Office-konto, ingen nyckel) eller kör `npx -y mroffice-mcp` på din egen dator. Källkoden finns i `apps/mcp`. [MCP-guide →](https://mroffice.ai/sv/developers/mcp)
+MCP-servern ovan är också hur dina egna AI-funktioner kan öppna, läsa, redigera och exportera dokument i den riktiga MR Office-redigeraren: den hostade endpointen `https://mcp.mroffice.ai/mcp` (OAuth-inloggning, ingen nyckel) eller `npx -y mroffice-mcp` på din egen dator. [MCP-guide →](https://mroffice.ai/sv/developers/mcp)
 
 ### Logga in med MR Office (OAuth)
 
@@ -118,10 +149,6 @@ Skrivbordsappen MR Office är kostnadsfri, har dessa editorer och hela tjänsten
 - Spara ändringar i en PDF tillbaka i filen
 
 **[Ladda ned MR Office (gratis) →](https://mroffice.ai/sv/office/download)**
-
-### Word-, Excel-, PowerPoint- och PDF-filer
-
-Arbeta med riktiga Word-, Excel- och PowerPoint-filer (.docx, .xlsx, .pptx) och spara PDF-ändringar direkt i filen med den kostnadsfria skrivbordsappen MR Office, som har alla dessa editorer och fungerar offline på din egen dator:
 
 ## Hur delarna hänger ihop
 

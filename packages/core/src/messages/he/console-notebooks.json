@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "טקסט זה משתמש בגופן או במבנה תוכן PDF שאי אפשר לערוך בבטחה",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "סמכות מאומתת של הקובץ המקורי אינה זמינה.",
  "pdf.viewer.authenticatingCurrentPdfSource": "מאמת את מקור ה-PDF הנוכחי.",
+ "pdf.viewer.toolWaitsForSource": "קובץ ה-PDF עדיין נבדק. הכלי יופעל ברגע שהוא יהיה מוכן.",
  "pdf.viewer.textCannotAddedNewlyInserted": "עדיין אי אפשר להוסיף טקסט לעמוד שנוסף זה עתה. יש להוסיף אותו בעמוד קיים.",
  "pdf.viewer.attachmentSourceNotReadyTry": "מקור הקובץ המצורף אינו מוכן. יש לנסות שוב.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "לא ניתן היה להוריד את הקובץ המצורף. יש לנסות שוב.",

@@ -2,13 +2,13 @@
 
 <p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
-<p align="center"><b>MR Officen avoimen lähdekoodin editorit, Microsoft Officea lähimpänä oleva editori — asiakirjat, laskentataulukot, esitykset, PDF ja koodi — selaimessa.</b></p>
+<p align="center"><b>MR Office -toimisto-ohjelmiston avoimen lähdekoodin editorit, lähimpänä Microsoft Officea oleva tekoälytoimisto-ohjelmisto: asiakirjat, laskentataulukot, esitykset, PDF ja koodi selaimessa sekä tekoäly, joka muokkaa kanssasi oikeita Word-, Excel- ja PowerPoint-tiedostoja.</b></p>
 
 <p align="center"><a href="https://mroffice.ai/fi"><b>▶ Kokeile verkossa</b></a> · <a href="https://mroffice.ai/fi/office/download"><b>⬇ Lataa</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/fi/developers">🧑‍💻 Kehittäjät</a> · <a href="https://mroffice.ai/fi/developers/embed">🧩 Upota</a> · <a href="https://mroffice.ai/fi/developers/mcp">🤖 MCP tekoälysovelluksille</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm-SDK</a> · <a href="https://mroffice.ai/fi/developers/oauth">🔑 Kirjaudu MR Officella</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
-<p align="center"><a href="https://mroffice.ai/fi"><img src="../docs/media/mr-office-demo.webp" alt="MR Officen avoimen lähdekoodin editorit, Microsoft Officea lähimpänä oleva editori — asiakirjat, laskentataulukot, esitykset, PDF ja koodi — selaimessa." width="100%"></a></p>
+<p align="center"><a href="https://mroffice.ai/fi"><img src="../docs/media/mr-office-demo.webp" alt="MR Office -toimisto-ohjelmiston avoimen lähdekoodin editorit, lähimpänä Microsoft Officea oleva tekoälytoimisto-ohjelmisto: asiakirjat, laskentataulukot, esitykset, PDF ja koodi selaimessa sekä tekoäly, joka muokkaa kanssasi oikeita Word-, Excel- ja PowerPoint-tiedostoja." width="100%"></a></p>
 
 <p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 Katso 50 sekunnin esittely äänen kanssa</a></p>
 
@@ -26,7 +26,38 @@
 </tr>
 </table>
 
-MR Office on työtila muistiinpanoille, tekoälylle ja oikeille tiedostoille. Tämä repositorio julkaisee sen editorien lähdekoodin: samat editorit, joita MR Office käyttää, ja jotka voit kääntää, ajaa ja upottaa omiin tuotteisiisi. Yhdessä ilmaisen MR Office -työpöytäsovelluksen tai hostatun upotuksen kanssa ne avaavat ja tallentavat oikeita Word-, Excel- ja PowerPoint-tiedostoja.
+MR Office on tekoälytoimisto-ohjelmisto oikeille tiedostoille: Word, Excel, PowerPoint ja PDF, verkossa ja ilmaisessa työpöytäsovelluksessa, tekoäly jokaisen asiakirjan vierellä ja reaaliaikainen yhteismuokkaus. Tämä repositorio julkaisee sen editorien lähdekoodin: samat editorit, joita MR Office käyttää ja jotka voit kääntää, ajaa ja upottaa omiin sovelluksiisi.
+
+## Tekoäly, joka toimii tiedostojesi sisällä
+
+MR Officessa tekoäly työskentelee itse asiakirjalla, ei chattiin liitetyllä tekstillä. Se lukee tiedoston, tekee muutoksen tiedoston omiin objekteihin ja näyttää, mitä se kosketti, ennen kuin hyväksyt muutoksen.
+
+- **Copilot jokaisessa editorissa** — asiakirjat, laskentataulukot, esitykset, PDF ja koodi. Valitse tai ympyröi haluamasi kohta ja kerro, mitä haluat: se muokkaa kappaleita, taulukoita, soluja ja kaavoja, muotoja ja dioja paikan päällä, kysyy, jos pyyntö on epäselvä, esikatselee muutoksen ennen sen toteuttamista, ja jokainen muutos voidaan kumota.
+- **Muutokset, jotka tarkistat** — tekoälyn ehdottama muutos toteutetaan vain, kun vahvistat sen; jos tiedosto on muuttunut sillä välin, ehdotus raukeaa eikä mitään kirjoittamaasi ylikirjoiteta.
+- **Tekoälyikkuna, joka tuntee työtilasi** — kysy tiedostoistasi, muistiinpanoistasi ja kanvaksestasi ja saa vastauksia, jotka viittaavat lähteisiinsä; se luonnostelee uusia asiakirjoja, taulukoita ja esityksiä ja rakentaa pienen työkalun kanvakselle, kun tarvitset sellaisen.
+- **Muisti** — muistiverkko pitää tallessa tärkeät henkilöt, projektit ja päätökset, joten tekoäly ei aloita nollasta joka keskustelussa.
+- **Johtavat mallit** — valitse malli kullekin keskustelulle tämän hetken johtavista tekoälymalleista; tiedostosi pysyvät työtilassasi tai omalla tietokoneellasi työpöytäsovelluksen kanssa.
+
+**[Kokeile tekoälyä MR Officessa ilmaiseksi →](https://mroffice.ai/fi)**
+
+### Anna tekoälyagenttisi muokata Office-tiedostoja (MCP)
+
+Claude, ChatGPT, Cursor, Codex, VS Code ja mikä tahansa muu MCP-asiakas voi luoda, avata, muokata, lukea takaisin, kuvittaa ja viedä asiakirjoja ja laskentataulukoita MR Officen MCP-palvelimen kautta (`create_document`, `open_document`, `update_document`, `get_document`, `render_page`, `export_document` muotoon docx, xlsx, pptx, pdf, md, html tai csv). Sovelluksissa, jotka näyttävät MCP Apps -sisältöä, editori ilmestyy suoraan keskusteluun; muualla työkalut vastaavat linkillä samaan editoriin ja kuvalla sivusta. Sinä ja tekoäly muokkaatte samaa asiakirjaa: avustaja lukee muokkauksesi takaisin ennen kuin jatkaa, ja päivitys, joka tehdään sen näkemättömien muokkausten päälle, hylätään sen sijaan että se häviäisi.
+
+```bash
+# Claude Code
+claude mcp add mroffice -- npx -y mroffice-mcp
+# Codex
+codex mcp add mroffice -- npx -y mroffice-mcp
+```
+
+Claude Desktop, Cursor ja muut sovellukset, jotka ottavat vastaan JSON-määrityksen:
+
+```json
+{ "mcpServers": { "mroffice": { "command": "npx", "args": ["-y", "mroffice-mcp"] } } }
+```
+
+Ei asennusta: yhdistä isännöityyn päätepisteeseen `https://mcp.mroffice.ai/mcp` ja kirjaudu sisään MR Office -tililläsi. Word-, Excel- ja PowerPoint-tiedostot kulkevat MR Officen Office-moottorin kautta omana tilinäsi; MCP-palvelimen lähdekoodi on kansiossa `apps/mcp`. [MCP-opas →](https://mroffice.ai/fi/developers/mcp)
 
 ## Kehittäjille
 
@@ -60,7 +91,7 @@ open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r
 
 ### Tekoälysovellukset: MCP-palvelin
 
-Tekoälysovellukset avaavat, lukevat, muokkaavat ja vievät asiakirjoja oikeassa MR Office -editorissa sen MCP-palvelimen kautta: yhdistä ylläpidettyyn päätepisteeseen `https://mcp.mroffice.ai/mcp` (kirjaudu MR Office -tililläsi, ei avainta) tai suorita `npx -y mroffice-mcp` omalla koneellasi. Lähdekoodi on hakemistossa `apps/mcp`. [MCP-opas →](https://mroffice.ai/fi/developers/mcp)
+Yllä oleva MCP-palvelin on myös se, miten omat tekoälyominaisuutesi voivat avata, lukea, muokata ja viedä asiakirjoja oikeassa MR Office -editorissa: isännöity päätepiste `https://mcp.mroffice.ai/mcp` (OAuth-kirjautuminen, ei avainta) tai `npx -y mroffice-mcp` omalla tietokoneellasi. [MCP-opas →](https://mroffice.ai/fi/developers/mcp)
 
 ### Kirjaudu MR Officella (OAuth)
 
@@ -118,10 +149,6 @@ MR Office -työpöytäsovellus on ilmainen, sisältää nämä editorit ja koko 
 - PDF-muokkausten tallentaminen takaisin tiedostoon
 
 **[Lataa MR Office (ilmainen) →](https://mroffice.ai/fi/office/download)**
-
-### Word-, Excel-, PowerPoint- ja PDF-tiedostot
-
-Työskentele oikeiden Word-, Excel- ja PowerPoint-tiedostojen (.docx, .xlsx, .pptx) parissa ja tallenna PDF-muokkaukset suoraan tiedostoon ilmaisella MR Office -työpöytäsovelluksella, joka sisältää kaikki nämä editorit ja toimii offline-tilassa omalla tietokoneellasi:
 
 ## Miten osat liittyvät toisiinsa
 

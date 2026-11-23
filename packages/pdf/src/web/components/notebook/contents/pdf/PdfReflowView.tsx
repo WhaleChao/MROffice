@@ -69,7 +69,12 @@ export default function PdfReflowView({ document, pageNumbers, startPage, onShow
   }, []);
 
   const mounted = useRef(true);
-  useEffect(() => () => { mounted.current = false; }, []);
+  useEffect(() => {
+    // (Set again on a remount: React's development double mount runs the
+    // cleanup once before the view is really shown.)
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   // Each page's text, read once, as the reader comes to it.
   useEffect(() => {
     for (const pageNumber of pageNumbers.slice(startIndex, readUntil)) {

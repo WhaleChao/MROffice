@@ -2606,6 +2606,28 @@ const PDF_TEXT_BOX_VERTICAL_ROW_CONTROLS: ReadonlySet<string> = new Set([
   "columns", "spaceBefore", "spaceAfter", "tabStops",
 ]);
 
+/** Development: one write held on its way to the working copy
+ * (copyWritesOnTheirWay), what started it and where it waits. */
+interface PdfCopyWriteHold {
+  readonly kind: string;
+  readonly at: number;
+  readonly by: string;
+  phase: string;
+  readonly trail: string[];
+  said: number;
+}
+function pdfCopyWriteHold(kind: string): PdfCopyWriteHold {
+  // Each caller as its function and the last part of its place.
+  const by = (new Error().stack ?? "").split("\n").slice(2, 10).map((line) => line.trim().replace(/^at\s+/, "")
+    .replace(/\(?(?:[^\s()]*\/)([^/\s()]+)\)?$/, "($1)").slice(0, 90)).join(" < ");
+  return { kind, at: Date.now(), by, phase: "queued", trail: ["queued@0"], said: 0 };
+}
+function notePdfCopyWriteHoldPhase(hold: PdfCopyWriteHold | undefined, phase: string): void {
+  if (!hold) return;
+  hold.phase = phase;
+  hold.trail.push(`${phase}@${Date.now() - hold.at}`);
+}
+
 export default function PdfPageWindow({
   pageId,
   notebookId,
@@ -7154,12 +7176,34 @@ export default function PdfPageWindow({
   /** The window reads 保存中, and asks before it is left, until `work` has
    * answered: staged on the copy (whose own save reads 保存中 from there),
    * refused, or nothing to do. */
-  const holdCopyWriteOnItsWay = useCallback(<T,>(work: Promise<T>): Promise<T> => {
+  const holdCopyWriteOnItsWay = useCallback(<T,>(work: Promise<T>, hold?: PdfCopyWriteHold): Promise<T> => {
     setCopyWritesOnTheirWay((running) => running + 1);
+    const entry = hold ?? (process.env.NODE_ENV !== "production" ? pdfCopyWriteHold("copy-write") : undefined);
+    if (entry) copyWriteHoldsRef.current.add(entry);
     return work.finally(() => {
+      if (entry) copyWriteHoldsRef.current.delete(entry);
       if (mountedRef.current) setCopyWritesOnTheirWay((running) => Math.max(0, running - 1));
     });
   }, []);
+  // Development: a write held on its way to the copy for long is named --
+  // what started it and where it waits -- (pdf-walk-1000 te0371c: the face
+  // stayed 未保存 with "copy=saving" for good after a watermark).
+  const copyWriteHoldsRef = useRef(new Set<PdfCopyWriteHold>());
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production" || copyWritesOnTheirWay === 0) return;
+    const timer = window.setInterval(() => {
+      for (const hold of copyWriteHoldsRef.current) {
+        const age = Date.now() - hold.at;
+        if (age < 15_000 || hold.said >= Math.floor(age / 15_000)) continue;
+        hold.said = Math.floor(age / 15_000);
+        try {
+          console.warn("[pdf-copy-hold] still on its way " + JSON.stringify({ kind: hold.kind, phase: hold.phase,
+            ms: age, phases: hold.trail.slice(-8), by: hold.by }));
+        } catch { /* diagnostics never throw */ }
+      }
+    }, 5_000);
+    return () => window.clearInterval(timer);
+  }, [copyWritesOnTheirWay]);
   /** Saves of a text box running behind the reader (text-background-save)
    * whose page save is not sent yet: the editor has closed, nothing is on
    * its way. Once sent, the page's own save status says the rest. */
@@ -32695,10 +32739,13 @@ export default function PdfPageWindow({
    * the copy does not take them. Nothing is published here. */
   const stageAnnotationsOnCopyNow = useCallback(async (rows: JsonValue[], previousRows: JsonValue[],
     ownLease?: PdfNativeReceiptMutationLease,
-    companions?: Readonly<{ before: PdfRowCompanions; after: PdfRowCompanions }>): Promise<string | null> => {
+    companions?: Readonly<{ before: PdfRowCompanions; after: PdfRowCompanions }>,
+    /** Development: where the write waits (pdf-copy-hold). */
+    hold?: PdfCopyWriteHold): Promise<string | null> => {
     nativeRowPlanRefusalRef.current = null;
     nativeRowPlanUnreachedRef.current = false;
     const runtime = nativeListTextRuntimeRef.current;
+    notePdfCopyWriteHoldPhase(hold, nativeWorkingDocumentRef.current ? "copy-open" : "copy-opening");
     const document = nativeWorkingDocumentRef.current ??
       await openNativeWorkingCopy(runtime.sourceRiskSnapshot?.identity.sha256 ?? "", ownLease);
     if (!document?.canWrite() || document.getSnapshot().failure) return null;
@@ -32711,6 +32758,7 @@ export default function PdfPageWindow({
       // many files replays the whole page (seconds under load).
       let operation: PdfWorkingEngineOperationInput | null = null;
       for (let attempt = 0; !operation; attempt += 1) {
+        notePdfCopyWriteHoldPhase(hold, `planning-${attempt}`);
         try {
           operation = await planNativeRowOperation(livePageIdRef.current, id, headBytes, snapshot.workingSha256,
             snapshot.savedSource, previousRows, rows, companions?.after, companions?.before);
@@ -32728,7 +32776,9 @@ export default function PdfPageWindow({
         operation.candidateBytes.fill(0);
         return null;
       }
+      notePdfCopyWriteHoldPhase(hold, "author-session");
       await awaitNativeWorkingAuthorSession();
+      notePdfCopyWriteHoldPhase(hold, "staging");
       try { document.stageEngine(operation, { start: false }); }
       finally { operation.candidateBytes.fill(0); }
       nativeRowOpRowsRef.current.set(id, Object.freeze({ before: previousRows, after: rows,
@@ -32752,8 +32802,12 @@ export default function PdfPageWindow({
   }, [awaitNativeWorkingAuthorSession, openNativeWorkingCopy]);
   /** (The window reads 保存中 while the rows are on their way to the copy:
    * copyWritesOnTheirWay.) */
-  const stageAnnotationsOnCopy = useCallback((...staged: Parameters<typeof stageAnnotationsOnCopyNow>) =>
-    holdCopyWriteOnItsWay(stageAnnotationsOnCopyNow(...staged)), [holdCopyWriteOnItsWay, stageAnnotationsOnCopyNow]);
+  const stageAnnotationsOnCopy = useCallback((rows: JsonValue[], previousRows: JsonValue[],
+    ownLease?: PdfNativeReceiptMutationLease,
+    companions?: Readonly<{ before: PdfRowCompanions; after: PdfRowCompanions }>) => {
+    const hold = process.env.NODE_ENV !== "production" ? pdfCopyWriteHold(`rows:${rows.length}`) : undefined;
+    return holdCopyWriteOnItsWay(stageAnnotationsOnCopyNow(rows, previousRows, ownLease, companions, hold), hold);
+  }, [holdCopyWriteOnItsWay, stageAnnotationsOnCopyNow]);
   const stageAnnotationsOnCopyRef = useRef(stageAnnotationsOnCopy);
   stageAnnotationsOnCopyRef.current = stageAnnotationsOnCopy;
   const writeHeldAnnotationsOnCopy = useCallback(async (rows: JsonValue[], previousRows: JsonValue[],
@@ -47546,11 +47600,31 @@ export default function PdfPageWindow({
     read();
     return subscribePdfMarkupWrites(dataItemId, read);
   }, [dataItemId]);
+  /** canUndoNativeReceipt as the last render read it (pressNativeUndoWhenReady). */
+  const canUndoNativeReceiptRef = useRef(false);
   const canUndoNativeReceipt = markupQueue.pending || heldTextUndoAvailable || heldContentHistory.undo > 0 ||
     // A line's edit being staged (its editor already closed) is undoable.
     nativeWorkingBoxesHeld || (
     (nativeReceiptJournalSnapshot.canUndo || viewerNativeFormPending) &&
     nativeHistoryRouteAvailable);
+  /** The history holds a step to take back, but is busy with a write now:
+   * an Undo pressed is kept for when it is free (pressNativeUndoWhenReady). */
+  const nativeUndoPressQueueable = !canUndoNativeReceipt && nativeReceiptJournalSnapshot.cursor > 0 &&
+    nativeReceiptJournalSnapshot.cursor <= nativeReceiptJournalSnapshot.length;
+  canUndoNativeReceiptRef.current = canUndoNativeReceipt;
+  // Development: what the Undo button is read from, as it changes (pdf-walk-1000
+  // rk0981: a turn saved on a scan whose copy is not writable, Undo greyed).
+  const undoWhyRef = useRef("");
+  if (process.env.NODE_ENV !== "production") {
+    const why = JSON.stringify({ can: canUndoNativeReceipt, queueable: nativeUndoPressQueueable,
+      cursor: nativeReceiptJournalSnapshot.cursor, length: nativeReceiptJournalSnapshot.length,
+      journalCan: nativeReceiptJournalSnapshot.canUndo, route: nativeHistoryRouteAvailable,
+      capacity: nativeListTextHistoryCapacityAvailable, copy: nativeWorkingCopyWritable });
+    if (why !== undoWhyRef.current) {
+      undoWhyRef.current = why;
+      try { console.debug("[pdf-undo-why] " + why); } catch { /* diagnostics never throw */ }
+    }
+  }
   const canRedoNativeReceipt = markupQueue.withdrawn > 0 || heldTextRedoAvailable || heldContentHistory.redo > 0 || (
     !nativeWorkingPending &&
     !viewerNativeFormPending &&
@@ -48414,6 +48488,31 @@ export default function PdfPageWindow({
       .finally(() => { createdTextUndoRunningRef.current = false; });
     return true;
   }, []);
+  /** Undo pressed while the history holds a step but cannot take it yet
+   * (a write still being carried out holds it): taken now, run once it can
+   * be, as a write pressed during another waits for it -- a minute at most,
+   * then said. One press at a time. */
+  const nativeUndoPressWaitingRef = useRef(false);
+  const pressNativeUndoWhenReady = useCallback(async () => {
+    if (nativeUndoPressWaitingRef.current) return;
+    nativeUndoPressWaitingRef.current = true;
+    markPdfTextLatency("history.press-waits", { direction: "undo" });
+    try {
+      const deadline = Date.now() + 60_000;
+      while (!canUndoNativeReceiptRef.current && Date.now() < deadline && mountedRef.current) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 100));
+      }
+      if (!mountedRef.current) return;
+      if (!canUndoNativeReceiptRef.current) {
+        toast({ title: t("pdf.editNotReady"), variant: "destructive" });
+        return;
+      }
+      markPdfTextLatency("history.press-ran", { direction: "undo" });
+      await Promise.resolve(executeNativeUndoRef.current());
+    } finally {
+      nativeUndoPressWaitingRef.current = false;
+    }
+  }, [t]);
   const executeNativeUndo = useCallback(
     () => {
       markPdfTextLatency("history.press", { direction: "undo" });
@@ -65360,11 +65459,17 @@ export default function PdfPageWindow({
     },
     undo: {
       label: t("pdf.editUndo"),
-      disabled: nativeFileAttachmentBusy || nativePageImportBusy || !canUndoNativeReceipt,
+      // A step the history holds, while a write is still being carried out
+      // (the saved revision of a turn read for 12 s on a large scan, a
+      // catch-up holding the history): the press is taken and waits for it
+      // (pressNativeUndoWhenReady). Greyed meanwhile, the press shown a
+      // moment before went nowhere and the page stayed turned (rk0981b,
+      
+      disabled: nativeFileAttachmentBusy || nativePageImportBusy || (!canUndoNativeReceipt && !nativeUndoPressQueueable),
       onClick: () => {
-        if (!nativeFileAttachmentBusyRef.current && !nativePageImportBusyRef.current && canUndoNativeReceipt) {
-          void executeNativeUndo();
-        }
+        if (nativeFileAttachmentBusyRef.current || nativePageImportBusyRef.current) return;
+        if (canUndoNativeReceipt) void executeNativeUndo();
+        else if (nativeUndoPressQueueable) void pressNativeUndoWhenReady();
       },
       testId: "pdf-action-undo",
     },

@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Ovaj tekst koristi font ili strukturu sadržaja PDF-a koja se ne može bezbedno uređivati",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Overeno ovlašćenje za izvornu datoteku nije dostupno.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Provera ovlašćenja za tekući izvor PDF-a.",
+ "pdf.viewer.toolWaitsForSource": "PDF se još proverava. Alatka će se uključiti čim bude spreman.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Tekst se još ne može dodati na novoumetnutu stranicu. Dodajte ga na postojeću stranicu.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Izvor priloga nije spreman. Pokušajte ponovo.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Prilog nije mogao biti preuzet. Pokušajte ponovo.",

@@ -11062,6 +11062,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Deze tekst gebruikt een lettertype of PDF-inhoudsstructuur die niet veilig kan worden bewerkt",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Geauthenticeerde bevoegdheid voor het oorspronkelijke bestand is niet beschikbaar.",
  "pdf.viewer.authenticatingCurrentPdfSource": "De huidige PDF-bron wordt geauthenticeerd.",
+ "pdf.viewer.toolWaitsForSource": "De pdf wordt nog gecontroleerd. Het hulpmiddel wordt ingeschakeld zodra het klaar is.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Aan een nieuw ingevoegde pagina kan nog geen tekst worden toegevoegd. Voeg de tekst toe op een bestaande pagina.",
  "pdf.viewer.attachmentSourceNotReadyTry": "De bron van de bijlage is niet gereed. Probeer het opnieuw.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "De bijlage kan niet worden gedownload. Probeer het opnieuw.",

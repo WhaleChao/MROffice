@@ -2,13 +2,13 @@
 
 <p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
-<p align="center"><b>Gli editor open source di MR Office, l'editor più vicino a Microsoft Office — documenti, fogli di calcolo, presentazioni, PDF e codice — che funzionano nel browser.</b></p>
+<p align="center"><b>Gli editor open source di MR Office, la suite office con AI più vicina a Microsoft Office: documenti, fogli di calcolo, presentazioni, PDF e codice nel browser, e un'AI che modifica con te file Word, Excel e PowerPoint reali.</b></p>
 
 <p align="center"><a href="https://mroffice.ai/it"><b>▶ Prova online</b></a> · <a href="https://mroffice.ai/it/office/download"><b>⬇ Scarica</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/it/developers">🧑‍💻 Sviluppatori</a> · <a href="https://mroffice.ai/it/developers/embed">🧩 Incorpora</a> · <a href="https://mroffice.ai/it/developers/mcp">🤖 MCP per app di IA</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 SDK npm</a> · <a href="https://mroffice.ai/it/developers/oauth">🔑 Accedi con MR Office</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
-<p align="center"><a href="https://mroffice.ai/it"><img src="../docs/media/mr-office-demo.webp" alt="Gli editor open source di MR Office, l'editor più vicino a Microsoft Office — documenti, fogli di calcolo, presentazioni, PDF e codice — che funzionano nel browser." width="100%"></a></p>
+<p align="center"><a href="https://mroffice.ai/it"><img src="../docs/media/mr-office-demo.webp" alt="Gli editor open source di MR Office, la suite office con AI più vicina a Microsoft Office: documenti, fogli di calcolo, presentazioni, PDF e codice nel browser, e un'AI che modifica con te file Word, Excel e PowerPoint reali." width="100%"></a></p>
 
 <p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 Guarda il tour di 50 secondi con l'audio</a></p>
 
@@ -26,7 +26,38 @@
 </tr>
 </table>
 
-MR Office è uno spazio di lavoro per note, AI e file reali. Questo repository pubblica il codice sorgente dei suoi editor: gli stessi editor che MR Office esegue, che puoi compilare, eseguire e integrare in autonomia. Insieme all'app desktop gratuita MR Office o all'embed ospitato, aprono e salvano file Word, Excel e PowerPoint reali.
+MR Office è una suite office con AI per file reali: Word, Excel, PowerPoint e PDF, sul web e in un'app desktop gratuita, con un'AI accanto a ogni documento e co-editing live. Questo repository pubblica il codice sorgente dei suoi editor: gli stessi editor che esegue MR Office, che puoi compilare, eseguire e integrare per conto tuo.
+
+## Un'AI che lavora dentro i tuoi file
+
+In MR Office l'AI lavora sul documento stesso, non su testo incollato in una chat. Legge il file, applica la modifica sugli oggetti propri del file e ti mostra cosa ha toccato prima che tu la confermi.
+
+- **Copilot in ogni editor** — documenti, fogli di calcolo, presentazioni, PDF e codice. Seleziona o cerchia ciò che intendi e di' cosa vuoi: modifica paragrafi, tabelle, celle e formule, forme e slide sul posto, chiede quando la richiesta non è chiara, mostra l'anteprima della modifica prima che venga applicata e ogni modifica può essere annullata.
+- **Modifiche che rivedi tu** — ciò che l'AI propone viene applicato solo quando lo confermi; se nel frattempo il file è cambiato, la proposta decade e nulla di ciò che hai scritto viene sovrascritto.
+- **Una finestra AI che conosce il tuo workspace** — chiedi dei tuoi file, note e canvas e ottieni risposte che citano le fonti; crea nuovi documenti, fogli e presentazioni e costruisce un piccolo strumento sul canvas quando ti serve.
+- **Memoria** — un grafo di memoria conserva le persone, i progetti e le decisioni che contano, così l'AI non riparte da zero a ogni conversazione.
+- **Modelli leader** — scegli il modello per ogni conversazione tra i principali modelli AI di oggi; i tuoi file restano nel tuo workspace, o sul tuo computer con l'app desktop.
+
+**[Prova l'AI in MR Office, gratis →](https://mroffice.ai/it)**
+
+### Lascia che il tuo agente AI modifichi i file Office (MCP)
+
+Claude, ChatGPT, Cursor, Codex, VS Code e qualsiasi altro client MCP possono creare, aprire, modificare, rileggere, visualizzare ed esportare documenti e fogli di calcolo tramite il server MCP di MR Office (`create_document`, `open_document`, `update_document`, `get_document`, `render_page`, `export_document` in docx, xlsx, pptx, pdf, md, html o csv). Nelle app che mostrano MCP Apps l'editor compare direttamente nella conversazione; altrove gli strumenti rispondono con un link allo stesso editor e un'immagine della pagina. Tu e l'AI modificate lo stesso documento: l'assistente rilegge le tue modifiche prima di proseguire, e un aggiornamento basato su modifiche che non ha visto viene rifiutato anziché perso.
+
+```bash
+# Claude Code
+claude mcp add mroffice -- npx -y mroffice-mcp
+# Codex
+codex mcp add mroffice -- npx -y mroffice-mcp
+```
+
+Claude Desktop, Cursor e altre app che accettano una configurazione JSON:
+
+```json
+{ "mcpServers": { "mroffice": { "command": "npx", "args": ["-y", "mroffice-mcp"] } } }
+```
+
+Nessuna installazione: collega l'endpoint ospitato `https://mcp.mroffice.ai/mcp` e accedi con il tuo account MR Office. I file Word, Excel e PowerPoint passano attraverso il motore Office di MR Office con il tuo account; il codice sorgente del server MCP è in `apps/mcp`. [Guida MCP →](https://mroffice.ai/it/developers/mcp)
 
 ## Per gli sviluppatori
 
@@ -60,7 +91,7 @@ open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r
 
 ### App di IA: il server MCP
 
-Le app di IA aprono, leggono, modificano ed esportano documenti nel vero editor di MR Office tramite il suo server MCP: collega l'endpoint ospitato `https://mcp.mroffice.ai/mcp` (accesso con il tuo account MR Office, nessuna chiave) oppure esegui `npx -y mroffice-mcp` sul tuo computer. Il codice sorgente è in `apps/mcp`. [Guida MCP →](https://mroffice.ai/it/developers/mcp)
+Il server MCP qui sopra è anche il modo in cui le tue funzionalità AI possono aprire, leggere, modificare ed esportare documenti nel vero editor di MR Office: l'endpoint ospitato `https://mcp.mroffice.ai/mcp` (accesso OAuth, nessuna chiave) oppure `npx -y mroffice-mcp` sul tuo computer. [Guida MCP →](https://mroffice.ai/it/developers/mcp)
 
 ### Accedi con MR Office (OAuth)
 
@@ -118,10 +149,6 @@ L'app desktop MR Office è gratuita, include questi editor e il servizio complet
 - Salvare nel file le modifiche a un PDF
 
 **[Scarica MR Office (gratis) →](https://mroffice.ai/it/office/download)**
-
-### File Word, Excel, PowerPoint e PDF
-
-Lavora su file Word, Excel e PowerPoint reali (.docx, .xlsx, .pptx) e salva le modifiche PDF direttamente nel file con l'app desktop gratuita MR Office, che include tutti questi editor e funziona offline sul tuo computer:
 
 ## Come si combinano le parti
 

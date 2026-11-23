@@ -11062,6 +11062,7 @@
  "pdf.viewer.textUsesFontPdfContent": "ข้อความนี้ใช้แบบอักษรหรือโครงสร้างเนื้อหา PDF ที่แก้ไขอย่างปลอดภัยไม่ได้",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "ไม่มีสิทธิ์ไฟล์ต้นฉบับที่ยืนยันแล้ว",
  "pdf.viewer.authenticatingCurrentPdfSource": "กำลังยืนยันต้นทาง PDF ปัจจุบัน",
+ "pdf.viewer.toolWaitsForSource": "ยังกำลังตรวจสอบ PDF อยู่ เครื่องมือจะเปิดทันทีที่พร้อม",
  "pdf.viewer.textCannotAddedNewlyInserted": "ยังเพิ่มข้อความลงในหน้าที่เพิ่งแทรกไม่ได้ โปรดเพิ่มในหน้าที่มีอยู่",
  "pdf.viewer.attachmentSourceNotReadyTry": "ต้นทางของไฟล์แนบยังไม่พร้อม โปรดลองอีกครั้ง",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "ดาวน์โหลดไฟล์แนบไม่ได้ โปรดลองอีกครั้ง",

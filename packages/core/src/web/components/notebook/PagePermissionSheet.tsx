@@ -22,6 +22,7 @@ import {
   Lock,
   PenLine,
   ShieldCheck,
+  UsersRound,
 } from "../office-ribbon/icons/houseIcons";
 
 import { CupertinoSheet, sheetStyles } from "./CupertinoSheet";
@@ -29,9 +30,12 @@ import styles from "./PagePermissionSheet.module.css";
 import { Reveal } from "../../__cut__/m29998b7df8";
 import { SlidingSegmentedControl } from "../console/SlidingSegmentedControl";
 import {
+  followNotebookPageAccess,
+  getPageAccessFollow,
   getPageAccessPolicy,
   getPageCollab,
   replacePageAccessPolicy,
+  type PageAccessFollow,
   type PageAccessGrant,
   type PageAccessPolicy,
   type PageCollabState,
@@ -49,6 +53,8 @@ import { boxWithin, watchGlideLayout } from "../../lib/glide-geometry";
 import UserAvatar from "../console/UserAvatar";
 import type { UserAvatarSource } from "../../lib/user-avatar";
 import { announcePageFileShared } from "../../lib/collaboration-windows/page-file-shared";
+import { pageFollowText } from "../../lib/page-follow-text";
+import { useProductSurface } from "../../lib/use-product-surface";
 
 const TIERS: PageVisibility[] = [
   "private",
@@ -210,6 +216,21 @@ function currentGrants(
   });
 }
 
+
+
+function roleGrants(
+  members: PagePermissionMember[],
+  ownerUserId: string,
+): PageAccessGrant[] {
+  return members
+    .filter((member) => member.userId !== ownerUserId)
+    .map((member) => ({
+      userId: member.userId,
+      grantRole: member.role === "viewer" ? "view" : "edit",
+      membershipIncarnation: candidateIncarnation(member),
+    }));
+}
+
 /** The people whose shown access differs between two complete grant sets. */
 function changedRecipients(
   before: readonly PageAccessGrant[],
@@ -243,7 +264,13 @@ function PagePermissionEditorScope({
   const [loaded, setLoaded] = useState<{
     policy: PageAccessPolicy;
     members: PagePermissionMember[];
+    /** null: the follow state could not be read (the tier is not offered) */
+    follow: PageAccessFollow | null;
   } | null>(null);
+  // the page's language (<html lang>, set by the locale layout)
+  const locale = typeof document === "undefined" ? "en" : document.documentElement.lang || "en";
+  const followProduct = useProductSurface() === "office" ? "office" : "note";
+  const [draftFollow, setDraftFollow] = useState(false);
   const [visibility, setVisibility] = useState(state.visibility);
   const [grants, setGrants] = useState<readonly PageAccessGrant[]>([]);
   const [confirmedLegacy, setConfirmedLegacy] = useState(false);
@@ -281,7 +308,7 @@ function PagePermissionEditorScope({
     if (!root) return;
     const place = () => {
       const row = root.querySelector<HTMLElement>(
-        `[data-tier="${visibility}"]`,
+        `[data-tier="${draftFollow ? "follow" : visibility}"]`,
       );
       if (!row) return;
       // Measured as drawn, in the list's own pixels: offsetTop put the
@@ -305,7 +332,7 @@ function PagePermissionEditorScope({
         });
       }
     });
-  }, [visibility]);
+  }, [draftFollow, visibility]);
   useEffect(() => {
     // The first position is where the highlight starts, not somewhere it
     // travels to: transitions switch on only after it has been drawn once.
@@ -346,8 +373,13 @@ function PagePermissionEditorScope({
 
   const suggestionsRef = useRef(suggestedViewerUserIds);
   const install = useCallback(
-    (policy: PageAccessPolicy, members: PagePermissionMember[]) => {
-      setLoaded({ policy, members });
+    (
+      policy: PageAccessPolicy,
+      members: PagePermissionMember[],
+      follow: PageAccessFollow | null,
+    ) => {
+      setLoaded({ policy, members, follow });
+      setDraftFollow(Boolean(follow?.followsNotebook));
       // Old NULL/old-incarnation grants are never rebound to today's roster.
       const grants = currentGrants(policy, members);
       // Suggestions apply once, to the first policy this sheet loads.
@@ -402,7 +434,7 @@ function PagePermissionEditorScope({
     requestRef.current = controller;
     setPhase("loading");
     try {
-      const [policy, members] = await runCollaborationRequestWithTimeout(
+      const [policy, members, follow] = await runCollaborationRequestWithTimeout(
         controller,
         async (signal) => {
           const roster = membersOverride
@@ -431,12 +463,16 @@ function PagePermissionEditorScope({
               workspaceId,
             ),
             roster,
+            // Not offered when it cannot be read (an older server).
+            Promise.resolve()
+              .then(() => getPageAccessFollow(pageId, { signal }, workspaceId))
+              .catch(() => null),
           ]);
         },
         "File permission read timed out",
       );
       if (requestRef.current === controller && !retiredRef.current)
-        install(policy, members);
+        install(policy, members, follow);
     } catch {
       if (requestRef.current === controller && !retiredRef.current) {
         setPhase("failed");
@@ -489,11 +525,15 @@ function PagePermissionEditorScope({
     !!loaded &&
     currentGrants(loaded.policy, loaded.members).length !==
       loaded.policy.grants.length;
+  const savedFollow = Boolean(loaded?.follow?.followsNotebook);
   const changed =
     !!loaded &&
-    (legacy ||
-      visibility !== loaded.policy.visibility ||
-      !sameGrants(grants, loaded.policy.grants));
+    (draftFollow
+      ? !savedFollow
+      : savedFollow ||
+        legacy ||
+        visibility !== loaded.policy.visibility ||
+        !sameGrants(grants, loaded.policy.grants));
 
   const save = async () => {
     if (
@@ -503,9 +543,13 @@ function PagePermissionEditorScope({
       !workspaceId ||
       requestRef.current ||
       retiredRef.current ||
-      (legacy && !confirmedLegacy)
+      (legacy && !confirmedLegacy && !draftFollow)
     )
       return;
+    if (draftFollow) {
+      await saveFollow();
+      return;
+    }
     const intent = {
       visibility,
       grants: grants.map((grant) => ({ ...grant })),
@@ -574,7 +618,10 @@ function PagePermissionEditorScope({
       ) {
         throw new Error("File edit authority changed");
       }
-      install(policy, loaded.members);
+      // An explicit choice for this file ends following the notebook.
+      install(policy, loaded.members, loaded.follow
+        ? { ...loaded.follow, followsNotebook: false, aclRevision: policy.aclRevision }
+        : null);
       setSaveFeedback(feedback);
       onChanged(next); // Only the fresh server's seven-field writable verdict.
       // Its owner's open windows of the page follow the file onto desks.
@@ -590,8 +637,64 @@ function PagePermissionEditorScope({
     }
   };
 
+   
+  const saveFollow = async () => {
+    if (!loaded || !workspaceId) return;
+    const controller = new AbortController();
+    requestRef.current = controller;
+    setPhase("saving");
+    setError(null);
+    setSaveFeedback(null);
+    const active = () =>
+      requestRef.current === controller && !retiredRef.current;
+    try {
+      const follow = await runCollaborationRequestWithTimeout(
+        controller,
+        (signal) =>
+          followNotebookPageAccess(pageId, loaded.policy.aclRevision, { signal }, workspaceId),
+        "File permission update timed out",
+      );
+      if (!active()) return;
+      const [policy, next] = await runCollaborationRequestWithTimeout(
+        controller,
+        (signal) =>
+          Promise.all([
+            getPageAccessPolicy(pageId, loaded.policy, { signal }, workspaceId),
+            getPageCollab(pageId, { signal }, workspaceId),
+          ]),
+        "File edit authority refresh timed out",
+      );
+      if (!active()) return;
+      install(policy, loaded.members, follow);
+      setSaveFeedback({ rows: new Set(), tier: null });
+      onChanged(next);
+      announcePageFileShared(pageId);
+    } catch {
+      if (active()) {
+        setLoaded(null);
+        setPhase("failed");
+        setError("saveFailed");
+      }
+    } finally {
+      if (requestRef.current === controller) requestRef.current = null;
+    }
+  };
+
+  const chooseFollow = () => {
+    if (!canManage || !loaded) return;
+    setDraftFollow(true);
+    setConfirmedLegacy(false);
+    setVisibility("shared_editable");
+    setGrants(
+      savedFollow
+        ? currentGrants(loaded.policy, loaded.members)
+        : roleGrants(loaded.members, loaded.policy.ownerUserId),
+    );
+  };
+
   const changeTier = (next: PageVisibility) => {
     if (!canManage) return;
+    setDraftFollow(false);
     setVisibility(next);
     setConfirmedLegacy(false);
     setGrants(
@@ -606,6 +709,7 @@ function PagePermissionEditorScope({
   const changeGrant = (member: PagePermissionMember, role: string) => {
     if (
       !canManage ||
+      draftFollow ||
       visibility === "private" ||
       !["none", "view", "edit"].includes(role) ||
       (role === "edit" &&
@@ -663,9 +767,32 @@ function PagePermissionEditorScope({
           data-disabled={!canManage || undefined}
         >
           <span className={styles.tierGlide} aria-hidden="true" />
+          {loaded?.follow ? (
+            <button
+              type="button"
+              role="radio"
+              aria-checked={draftFollow}
+              disabled={!canManage}
+              className={styles.tier}
+              data-tier="follow"
+              data-active={draftFollow || undefined}
+              data-testid="page-tier-follow"
+              onClick={chooseFollow}
+            >
+              <UsersRound size={15} aria-hidden="true" />
+              <span>{pageFollowText("tier", locale, followProduct)}</span>
+              <span
+                className={styles.tierCheck}
+                data-on={draftFollow || undefined}
+                aria-hidden="true"
+              >
+                <Check size={15} />
+              </span>
+            </button>
+          ) : null}
           {TIERS.map((tier) => {
             const Icon = TIER_ICON[tier];
-            const active = visibility === tier;
+            const active = !draftFollow && visibility === tier;
             return (
               <button
                 key={tier}
@@ -693,6 +820,12 @@ function PagePermissionEditorScope({
             );
           })}
         </div>
+        {loaded?.follow ? (
+          <p className={styles.hint} data-testid="page-follow-state" data-follows={savedFollow || undefined}>
+            {pageFollowText(savedFollow ? "stateFollow" : "stateCustom", locale, followProduct)}
+            {draftFollow ? ` · ${pageFollowText("hint", locale, followProduct)}` : ""}
+          </p>
+        ) : null}
         {!state.isOwner || preview ? (
           <p className={styles.hint}>{t("pageCollab.sheet.viewerNotice")}</p>
         ) : null}
@@ -727,7 +860,7 @@ function PagePermissionEditorScope({
             <div className={styles.bulk}>
               <button
                 type="button"
-                disabled={!canManage || candidates.length === 0}
+                disabled={!canManage || draftFollow || candidates.length === 0}
                 data-testid="page-editors-select-all"
                 onClick={() => {
                   setGrants(
@@ -748,7 +881,7 @@ function PagePermissionEditorScope({
               </button>
               <button
                 type="button"
-                disabled={!canManage}
+                disabled={!canManage || draftFollow}
                 data-testid="page-editors-clear"
                 onClick={() => {
                   setGrants([]);
@@ -812,7 +945,7 @@ function PagePermissionEditorScope({
                     size="compact"
                     className={styles.roleControl}
                     value={access}
-                    disabled={!canManage || visibility === "private"}
+                    disabled={!canManage || draftFollow || visibility === "private"}
                     ariaLabel={member.name}
                     testId={`page-access-${member.userId}`}
                     options={[
@@ -850,7 +983,7 @@ function PagePermissionEditorScope({
           </div>
         </section>
       </Reveal>
-      {legacy ? (
+      {legacy && !draftFollow ? (
         <section className={sheetStyles.group}>
           <p className={styles.hint}>{t("pageCollab.sheet.legacyNotice")}</p>
           <label className={styles.policyConfirmation}>

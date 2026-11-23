@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Teks ini menggunakan fon atau struktur kandungan PDF yang tidak boleh disunting dengan selamat",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Kuasa fail asli yang disahkan tidak tersedia.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Mengesahkan sumber PDF semasa.",
+ "pdf.viewer.toolWaitsForSource": "PDF masih sedang disemak. Alat akan dihidupkan sebaik sahaja ia sedia.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Teks belum boleh ditambah pada halaman yang baru disisipkan. Tambah pada halaman sedia ada.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Sumber lampiran belum sedia. Cuba lagi.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Lampiran tidak dapat dimuat turun. Cuba lagi.",

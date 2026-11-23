@@ -11416,6 +11416,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Tento text používá písmo nebo strukturu obsahu PDF, kterou nelze bezpečně upravit.",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Ověřený zdroj původního souboru není k dispozici.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Ověřuje se aktuální zdroj PDF.",
+ "pdf.viewer.toolWaitsForSource": "PDF se stále kontroluje. Nástroj se zapne, jakmile bude připraven.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Do nově vložené stránky zatím nelze přidat text. Přidejte ho na existující stránce.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Zdroj přílohy není připraven. Zkuste to znovu.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Přílohu se nepodařilo stáhnout. Zkuste to znovu.",

@@ -11422,6 +11422,7 @@
  "pdf.viewer.textUsesFontPdfContent": "此文本使用的字体或 PDF 内容结构暂不能安全编辑",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "当前文档没有可认证的原始文件权限。",
  "pdf.viewer.authenticatingCurrentPdfSource": "正在认证当前 PDF 来源。",
+ "pdf.viewer.toolWaitsForSource": "PDF 仍在检查中，就绪后工具会自动打开。",
  "pdf.viewer.textCannotAddedNewlyInserted": "新插入的页面暂不支持添加文字。请先保存，或在原有页面上添加。",
  "pdf.viewer.attachmentSourceNotReadyTry": "附件来源尚未准备好，请稍后重试",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "附件下载失败，请重试",

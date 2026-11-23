@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Acest text folosește un font sau o structură de conținut PDF care nu poate fi editată în siguranță",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Autoritate autentificată asupra fișierului original indisponibilă.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Se autentifică sursa PDF curentă.",
+ "pdf.viewer.toolWaitsForSource": "PDF-ul este încă verificat. Instrumentul se va activa imediat ce este gata.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Textul nu poate fi adăugat încă pe o pagină nou inserată. Adăugați-l pe o pagină existentă.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Sursa atașării nu este pregătită. Încercați din nou.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Atașarea nu a putut fi descărcată. Încercați din nou.",

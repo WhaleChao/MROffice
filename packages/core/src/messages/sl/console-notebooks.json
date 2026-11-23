@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "To besedilo uporablja pisavo ali strukturo vsebine PDF, ki je ni mogoče varno urediti",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Preverjeno pooblastilo za izvorno datoteko ni na voljo.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Preverjanje trenutnega vira PDF.",
+ "pdf.viewer.toolWaitsForSource": "PDF se še preverja. Orodje se bo vklopilo, takoj ko bo pripravljen.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Besedila še ni mogoče dodati na novo vstavljeno stran. Dodajte ga na obstoječo stran.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Vir priloge ni pripravljen. Poskusite znova.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Priloge ni bilo mogoče prenesti. Poskusite znova.",

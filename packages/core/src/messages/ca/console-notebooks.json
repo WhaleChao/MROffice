@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Aquest text utilitza una font o una estructura de contingut PDF que no es pot editar de manera segura",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "L'autoritat autenticada del fitxer original no està disponible.",
  "pdf.viewer.authenticatingCurrentPdfSource": "S'està autenticant l'origen del PDF actual.",
+ "pdf.viewer.toolWaitsForSource": "Encara s'està comprovant el PDF. L'eina s'activarà tan aviat com estigui a punt.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Encara no es pot afegir text a una pàgina inserida recentment. Afegiu-lo en una pàgina existent.",
  "pdf.viewer.attachmentSourceNotReadyTry": "L'origen de l'adjunció no està a punt. Torneu-ho a provar.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "No s'ha pogut baixar l'adjunció. Torneu-ho a provar.",

@@ -11062,6 +11062,7 @@
  "pdf.viewer.textUsesFontPdfContent": "このテキストは、安全に編集できないフォントまたは PDF のコンテンツ構造を使用しています",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "認証済みの元のファイルの権限を利用できません。",
  "pdf.viewer.authenticatingCurrentPdfSource": "現在の PDF のソースを認証しています。",
+ "pdf.viewer.toolWaitsForSource": "PDF をまだ確認しています。準備ができるとツールが自動でオンになります。",
  "pdf.viewer.textCannotAddedNewlyInserted": "新しく挿入したページにはまだテキストを追加できません。既存のページに追加してください。",
  "pdf.viewer.attachmentSourceNotReadyTry": "添付ファイルのソースの準備ができていません。もう一度お試しください。",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "添付ファイルをダウンロードできませんでした。もう一度お試しください。",

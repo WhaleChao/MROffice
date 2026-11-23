@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "මෙම පෙළ ආරක්ෂිතව සංස්කරණය කළ නොහැකි ෆොන්ට් එකක් හෝ PDF අන්තර්ගත ව්‍යුහයක් භාවිත කරයි",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "සත්‍යාපිත මුල්-ගොනු අධිකාරිය නොමැත.",
  "pdf.viewer.authenticatingCurrentPdfSource": "වත්මන් PDF මූලාශ්‍රය සත්‍යාපනය කරමින්.",
+ "pdf.viewer.toolWaitsForSource": "PDF තවමත් පරීක්ෂා කෙරෙමින් පවතී. එය සූදානම් වූ වහාම මෙවලම ක්‍රියාත්මක වේ.",
  "pdf.viewer.textCannotAddedNewlyInserted": "අලුතින් ඇතුළු කළ පිටුවකට තවමත් පෙළ එකතු කළ නොහැක. දැනට ඇති පිටුවක එය එකතු කරන්න.",
  "pdf.viewer.attachmentSourceNotReadyTry": "ඇමුණුම් මූලාශ්‍රය සූදානම් නැත. නැවත උත්සාහ කරන්න.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "ඇමුණුම බාගත කළ නොහැක. නැවත උත්සාහ කරන්න.",

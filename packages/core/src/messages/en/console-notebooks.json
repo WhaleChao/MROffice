@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "This text uses a font or PDF content structure that cannot be edited safely",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Authenticated original-file authority is unavailable.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Authenticating the current PDF source.",
+ "pdf.viewer.toolWaitsForSource": "The PDF is still being checked. The tool turns on as soon as it is ready.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Text cannot be added to a newly inserted page yet. Add it on an existing page.",
  "pdf.viewer.attachmentSourceNotReadyTry": "The attachment source is not ready. Try again.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "The attachment could not be downloaded. Try again.",

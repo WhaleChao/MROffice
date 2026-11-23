@@ -11062,6 +11062,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Teks ini menggunakan font atau struktur konten PDF yang tidak dapat diedit dengan aman",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Otoritas file asli yang terautentikasi tidak tersedia.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Mengautentikasi sumber PDF saat ini.",
+ "pdf.viewer.toolWaitsForSource": "PDF masih diperiksa. Alat akan aktif segera setelah siap.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Teks belum dapat ditambahkan ke halaman yang baru disisipkan. Tambahkan di halaman yang sudah ada.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Sumber lampiran belum siap. Coba lagi.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Lampiran tidak dapat diunduh. Coba lagi.",

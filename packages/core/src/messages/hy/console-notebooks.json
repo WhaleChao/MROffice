@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Այս տեքստն օգտագործում է տառատեսակ կամ PDF բովանդակության կառուցվածք, որը հնարավոր չէ ապահով խմբագրել",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Բնօրինակ ֆայլի հաստատված լիազորությունը հասանելի չէ։",
  "pdf.viewer.authenticatingCurrentPdfSource": "Ընթացիկ PDF աղբյուրի իսկության հաստատում։",
+ "pdf.viewer.toolWaitsForSource": "PDF-ը դեռ ստուգվում է։ Գործիքը կմիանա, հենց այն պատրաստ լինի։",
  "pdf.viewer.textCannotAddedNewlyInserted": "Նոր տեղադրված էջում դեռ հնարավոր չէ տեքստ ավելացնել։ Ավելացրեք այն գոյություն ունեցող էջում։",
  "pdf.viewer.attachmentSourceNotReadyTry": "Կցորդի աղբյուրը պատրաստ չէ։ Կրկին փորձեք։",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Կցորդը հնարավոր չէր ներբեռնել։ Կրկին փորձեք։",

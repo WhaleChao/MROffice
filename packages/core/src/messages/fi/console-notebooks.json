@@ -11062,6 +11062,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Tämä teksti käyttää fonttia tai PDF-sisältörakennetta, jota ei voi muokata turvallisesti",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Todennettua alkuperäisen tiedoston oikeutta ei ole saatavilla.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Todennetaan nykyistä PDF-lähdettä.",
+ "pdf.viewer.toolWaitsForSource": "PDF:ää tarkistetaan vielä. Työkalu otetaan käyttöön heti, kun se on valmis.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Tekstiä ei voi vielä lisätä juuri lisätylle sivulle. Lisää se olemassa olevalle sivulle.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Liitteen lähde ei ole valmis. Yritä uudelleen.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Liitettä ei voitu ladata. Yritä uudelleen.",

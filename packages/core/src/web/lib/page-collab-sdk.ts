@@ -286,6 +286,72 @@ function boundPageAccessPolicy(
   return parsed;
 }
 
+
+
+
+
+
+export interface PageAccessFollow {
+  readonly pageId: string;
+  readonly followsNotebook: boolean;
+  readonly aclRevision: number;
+}
+
+function pageAccessFollowFromWire(wire: unknown, pageId: string): PageAccessFollow {
+  if (
+    !isRecord(wire) ||
+    wire.page_id !== pageId ||
+    typeof wire.follows_notebook !== "boolean" ||
+    typeof wire.acl_revision !== "number" ||
+    !Number.isSafeInteger(wire.acl_revision) ||
+    wire.acl_revision < 1
+  ) {
+    throw new InvalidPageCollabResponseError("file follow state is malformed");
+  }
+  return Object.freeze({
+    pageId,
+    followsNotebook: wire.follows_notebook,
+    aclRevision: wire.acl_revision,
+  });
+}
+
+/** Owner-only: does the file follow its notebook's member roles? */
+export async function getPageAccessFollow(
+  pageId: string,
+  init: RequestInit | undefined,
+  workspaceId: string,
+): Promise<PageAccessFollow> {
+  const id = identity(pageId, "page id");
+  identity(workspaceId, "workspace id");
+  return pageAccessFollowFromWire(
+    await apiGet<unknown>(`${base(id)}/access-follow`, withWorkspaceHeader(init, workspaceId)),
+    id,
+  );
+}
+
+/** Owner-only, revision-bound: the file goes back to its notebook's member roles. */
+export async function followNotebookPageAccess(
+  pageId: string,
+  expectedAclRevision: number,
+  init: RequestInit | undefined,
+  workspaceId: string,
+): Promise<PageAccessFollow> {
+  const id = identity(pageId, "page id");
+  identity(workspaceId, "workspace id");
+  const result = pageAccessFollowFromWire(
+    await apiPost<unknown>(
+      `${base(id)}/access-follow`,
+      { expected_acl_revision: expectedAclRevision },
+      withWorkspaceHeader(init, workspaceId),
+    ),
+    id,
+  );
+  if (!result.followsNotebook || result.aclRevision < expectedAclRevision) {
+    throw new InvalidPageCollabResponseError("file follow did not confirm");
+  }
+  return result;
+}
+
 /** Owner-only policy read; opening this endpoint never converts a legacy audience. */
 export async function getPageAccessPolicy(
   pageId: string,

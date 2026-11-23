@@ -2,13 +2,13 @@
 
 <p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
-<p align="center"><b>Các trình soạn thảo mã nguồn mở của MR Office, trình soạn thảo gần gũi nhất với Microsoft Office — tài liệu, bảng tính, bản trình bày, PDF và mã — chạy trong trình duyệt.</b></p>
+<p align="center"><b>Các trình soạn thảo mã nguồn mở của MR Office, bộ ứng dụng văn phòng AI gần gũi nhất với Microsoft Office: văn bản, bảng tính, bài trình chiếu, PDF và mã trong trình duyệt, cùng một AI chỉnh sửa trực tiếp các tệp Word, Excel và PowerPoint cùng bạn.</b></p>
 
 <p align="center"><a href="https://mroffice.ai/vi"><b>▶ Dùng thử trực tuyến</b></a> · <a href="https://mroffice.ai/vi/office/download"><b>⬇ Tải xuống</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/vi/developers">🧑‍💻 Nhà phát triển</a> · <a href="https://mroffice.ai/vi/developers/embed">🧩 Nhúng</a> · <a href="https://mroffice.ai/vi/developers/mcp">🤖 MCP cho ứng dụng AI</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 SDK npm</a> · <a href="https://mroffice.ai/vi/developers/oauth">🔑 Đăng nhập bằng MR Office</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
-<p align="center"><a href="https://mroffice.ai/vi"><img src="../docs/media/mr-office-demo.webp" alt="Các trình soạn thảo mã nguồn mở của MR Office, trình soạn thảo gần gũi nhất với Microsoft Office — tài liệu, bảng tính, bản trình bày, PDF và mã — chạy trong trình duyệt." width="100%"></a></p>
+<p align="center"><a href="https://mroffice.ai/vi"><img src="../docs/media/mr-office-demo.webp" alt="Các trình soạn thảo mã nguồn mở của MR Office, bộ ứng dụng văn phòng AI gần gũi nhất với Microsoft Office: văn bản, bảng tính, bài trình chiếu, PDF và mã trong trình duyệt, cùng một AI chỉnh sửa trực tiếp các tệp Word, Excel và PowerPoint cùng bạn." width="100%"></a></p>
 
 <p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 Xem video giới thiệu 50 giây có âm thanh</a></p>
 
@@ -26,7 +26,38 @@
 </tr>
 </table>
 
-MR Office là không gian làm việc cho ghi chú, AI và tệp thật. Kho lưu trữ này công bố mã nguồn của các trình soạn thảo: chính những trình soạn thảo mà MR Office sử dụng, bạn có thể tự build, chạy và nhúng vào sản phẩm của mình. Cùng với ứng dụng desktop MR Office miễn phí hoặc bản nhúng được lưu trữ, chúng mở và lưu các tệp Word, Excel và PowerPoint thật.
+MR Office là bộ ứng dụng văn phòng AI dành cho tệp thật: Word, Excel, PowerPoint và PDF, trên web và trong ứng dụng desktop miễn phí, với AI bên cạnh mọi tài liệu và khả năng đồng chỉnh sửa trực tiếp. Kho lưu trữ này công bố mã nguồn của các trình soạn thảo: chính những trình soạn thảo mà MR Office đang vận hành, để bạn có thể tự build, chạy và nhúng vào hệ thống của mình.
+
+## AI làm việc ngay trong tệp của bạn
+
+Trong MR Office, AI làm việc trên chính tài liệu, không phải trên đoạn văn bản dán vào khung chat. Nó đọc tệp, thực hiện thay đổi trên các đối tượng gốc của tệp và cho bạn xem những gì đã tác động trước khi bạn giữ lại.
+
+- **Copilot trong mọi trình soạn thảo** — văn bản, bảng tính, bài trình chiếu, PDF và mã. Chọn hoặc khoanh vùng nội dung bạn muốn và nói điều bạn cần: nó chỉnh sửa đoạn văn, bảng, ô và công thức, hình khối và slide ngay tại chỗ, hỏi lại khi yêu cầu chưa rõ, xem trước thay đổi trước khi áp dụng, và mọi thay đổi đều có thể hoàn tác.
+- **Thay đổi có kiểm duyệt** — những gì AI đề xuất chỉ được áp dụng khi bạn xác nhận; nếu tệp đã thay đổi trong lúc đó, đề xuất sẽ bị hủy và không có nội dung nào bạn viết bị ghi đè.
+- **Cửa sổ AI hiểu không gian làm việc của bạn** — hỏi về tệp, ghi chú và canvas của bạn và nhận câu trả lời có trích dẫn nguồn; nó soạn tài liệu, bảng tính và bài trình chiếu mới, và dựng một công cụ nhỏ trên canvas khi bạn cần.
+- **Bộ nhớ** — một đồ thị bộ nhớ lưu giữ những người, dự án và quyết định quan trọng, để AI không phải bắt đầu lại từ đầu trong mỗi cuộc trò chuyện.
+- **Các mô hình hàng đầu** — chọn mô hình cho từng cuộc trò chuyện trong số các mô hình AI hàng đầu hiện nay; tệp của bạn ở lại trong không gian làm việc, hoặc trên chính máy bạn với ứng dụng desktop.
+
+**[Dùng thử AI trong MR Office, miễn phí →](https://mroffice.ai/vi)**
+
+### Để AI agent của bạn chỉnh sửa tệp Office (MCP)
+
+Claude, ChatGPT, Cursor, Codex, VS Code và bất kỳ MCP client nào khác đều có thể tạo, mở, chỉnh sửa, đọc lại, hiển thị và xuất tài liệu cùng bảng tính thông qua MCP server của MR Office (`create_document`, `open_document`, `update_document`, `get_document`, `render_page`, `export_document` sang docx, xlsx, pptx, pdf, md, html hoặc csv). Trong các ứng dụng hỗ trợ MCP Apps, trình soạn thảo hiện ngay trong cuộc trò chuyện; ở nơi khác, các công cụ trả về liên kết tới cùng trình soạn thảo đó kèm hình ảnh của trang. Bạn và AI cùng chỉnh sửa một tài liệu: trợ lý đọc lại các thay đổi của bạn trước khi tiếp tục, và một cập nhật dựa trên những chỉnh sửa nó chưa thấy sẽ bị từ chối thay vì bị mất.
+
+```bash
+# Claude Code
+claude mcp add mroffice -- npx -y mroffice-mcp
+# Codex
+codex mcp add mroffice -- npx -y mroffice-mcp
+```
+
+Claude Desktop, Cursor và các ứng dụng khác nhận cấu hình JSON:
+
+```json
+{ "mcpServers": { "mroffice": { "command": "npx", "args": ["-y", "mroffice-mcp"] } } }
+```
+
+Không cần cài đặt: kết nối tới endpoint được lưu trữ `https://mcp.mroffice.ai/mcp` và đăng nhập bằng tài khoản MR Office của bạn. Tệp Word, Excel và PowerPoint được xử lý qua Office engine của MR Office dưới chính tài khoản của bạn; mã nguồn của MCP server nằm trong `apps/mcp`. [Hướng dẫn MCP →](https://mroffice.ai/vi/developers/mcp)
 
 ## Dành cho nhà phát triển
 
@@ -60,7 +91,7 @@ open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r
 
 ### Ứng dụng AI: máy chủ MCP
 
-Ứng dụng AI mở, đọc, chỉnh sửa và xuất tài liệu trong trình soạn thảo MR Office thật thông qua máy chủ MCP: kết nối endpoint được lưu trữ `https://mcp.mroffice.ai/mcp` (đăng nhập bằng tài khoản MR Office, không cần khóa), hoặc chạy `npx -y mroffice-mcp` trên máy tính của bạn. Mã nguồn nằm trong `apps/mcp`. [Hướng dẫn MCP →](https://mroffice.ai/vi/developers/mcp)
+MCP server ở trên cũng là cách để các tính năng AI của riêng bạn có thể mở, đọc, chỉnh sửa và xuất tài liệu trong trình soạn thảo MR Office thật: endpoint được lưu trữ `https://mcp.mroffice.ai/mcp` (đăng nhập OAuth, không cần key) hoặc `npx -y mroffice-mcp` trên chính máy bạn. [Hướng dẫn MCP →](https://mroffice.ai/vi/developers/mcp)
 
 ### Đăng nhập bằng MR Office (OAuth)
 
@@ -118,10 +149,6 @@ npm run desktop
 - Ghi các chỉnh sửa PDF trở lại tệp
 
 **[Tải MR Office (miễn phí) →](https://mroffice.ai/vi/office/download)**
-
-### Tệp Word, Excel, PowerPoint và PDF
-
-Làm việc trên các tệp Word, Excel và PowerPoint thật (.docx, .xlsx, .pptx) và lưu chỉnh sửa PDF thẳng vào tệp với ứng dụng desktop MR Office miễn phí, có đầy đủ các trình soạn thảo này và hoạt động ngoại tuyến trên máy của bạn:
 
 ## Các phần kết hợp với nhau thế nào
 

@@ -11093,6 +11093,7 @@
  "pdf.viewer.textUsesFontPdfContent": "此文字使用的字型或 PDF 內容結構無法安全編輯",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "無法使用經過驗證的原始檔案權限。",
  "pdf.viewer.authenticatingCurrentPdfSource": "正在驗證目前的 PDF 來源。",
+ "pdf.viewer.toolWaitsForSource": "PDF 仍在檢查中，就緒後工具會自動開啟。",
  "pdf.viewer.textCannotAddedNewlyInserted": "目前還無法在新插入的頁面上新增文字。請在現有的頁面上新增。",
  "pdf.viewer.attachmentSourceNotReadyTry": "附件來源尚未就緒。請再試一次。",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "無法下載附件。請再試一次。",

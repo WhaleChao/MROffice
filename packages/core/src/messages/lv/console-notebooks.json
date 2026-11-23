@@ -11417,6 +11417,7 @@
  "pdf.viewer.textUsesFontPdfContent": "Šis teksts izmanto fontu vai PDF satura struktūru, ko nevar droši rediģēt",
  "pdf.viewer.authenticatedOriginalFileAuthorityUnavailable": "Autentificēta oriģinālā faila pilnvara nav pieejama.",
  "pdf.viewer.authenticatingCurrentPdfSource": "Notiek pašreizējā PDF avota autentificēšana.",
+ "pdf.viewer.toolWaitsForSource": "PDF vēl tiek pārbaudīts. Rīks ieslēgsies, tiklīdz tas būs gatavs.",
  "pdf.viewer.textCannotAddedNewlyInserted": "Tekstu vēl nevar pievienot tikko ievietotai lapai. Pievienojiet to esošā lapā.",
  "pdf.viewer.attachmentSourceNotReadyTry": "Pielikuma avots nav gatavs. Mēģiniet vēlreiz.",
  "pdf.viewer.attachmentCouldNotDownloadedTry": "Pielikumu nevarēja lejupielādēt. Mēģiniet vēlreiz.",
