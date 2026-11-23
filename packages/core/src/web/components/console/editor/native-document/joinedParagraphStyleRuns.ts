@@ -226,13 +226,22 @@ export function restyleJoinedRuns(
 
 type JoinedTail = { from: number; to: number; before: string; after: string };
 
-/** The joins the transactions made: the second paragraph's words, where they
- *  now stand, and the two styles. A step joins when it deletes from inside
- *  one text block into another and puts no inline content of its own there. */
+/** The joins the transactions made: the words of each joined paragraph whose
+ *  style is not the merged paragraph's, where they now stand, and the two
+ *  styles. A step joins when it deletes from inside one text block into
+ *  another and puts no inline content of its own there. The merged paragraph
+ *  is the first's after Backspace or Delete, so the second's words trade
+ *  their style's look; a removed tracked paragraph mark (Reject of an
+ *  inserted one, Accept of a deleted one) leaves the second's, as in Word
+ *  (its final view of a deleted mark draws the "ALPHA" of a bold Heading 1
+ *  regular beside the Normal paragraph it joined; work-I/out34/truth/delmark),
+ *  so there the first's words trade theirs and the second's keep their look
+ *  (a Heading 1's look was put on a clause paragraph's words whose heading
+ *  mark Reject All removed). */
 function joinedTails(transactions: readonly Transaction[], newState: EditorState): JoinedTail[] {
   const docAttrs = newState.doc.attrs as Record<string, unknown>;
   const maps = transactions.flatMap((tr) => tr.mapping.maps);
-  const found: Array<JoinedTail & { step: number }> = [];
+  const found: Array<{ head: [number, number]; tail: [number, number]; first: string | null; second: string | null; step: number }> = [];
   let index = 0;
   for (const tr of transactions) {
     tr.steps.forEach((step, own) => {
@@ -253,20 +262,33 @@ function joinedTails(transactions: readonly Transaction[], newState: EditorState
       const $to = doc.resolve(to);
       const first = $from.parent;
       const second = $to.parent;
-      if (first === second || !first.isTextblock || !second.isTextblock || $to.parentOffset >= second.content.size) return;
-      const before = paragraphStyleId(second, docAttrs);
-      const after = paragraphStyleId(first, docAttrs);
-      if (before && after && before !== after) found.push({ from: to, to: $to.end(), before, after, step: at });
+      if (first === second || !first.isTextblock || !second.isTextblock) return;
+      const firstStyle = paragraphStyleId(first, docAttrs);
+      const secondStyle = paragraphStyleId(second, docAttrs);
+      if (!firstStyle || !secondStyle || firstStyle === secondStyle) return;
+      found.push({ head: [$from.start(), from], tail: [to, $to.end()], first: firstStyle, second: secondStyle, step: at });
     });
     index += tr.steps.length;
   }
-  return found.map(({ from, to, before, after, step }) => {
+  const out: JoinedTail[] = [];
+  for (const { head, tail, first, second, step } of found) {
+    let [headFrom, headTo] = head;
+    let [tailFrom, tailTo] = tail;
     for (const map of maps.slice(step)) {
-      from = map.map(from, 1);
-      to = map.map(to, -1);
+      headFrom = map.map(headFrom, 1);
+      headTo = map.map(headTo, -1);
+      tailFrom = map.map(tailFrom, 1);
+      tailTo = map.map(tailTo, -1);
     }
-    return { from, to, before, after };
-  });
+    // The merged paragraph's own style, as the transactions left it.
+    const at = Math.max(0, Math.min(tailFrom, newState.doc.content.size));
+    const merged = newState.doc.resolve(at).parent;
+    const style = merged.isTextblock ? paragraphStyleId(merged, docAttrs) : null;
+    if (!style) continue;
+    if (style !== second) out.push({ from: tailFrom, to: tailTo, before: second!, after: style });
+    if (style !== first) out.push({ from: headFrom, to: headTo, before: first!, after: style });
+  }
+  return out;
 }
 
 const joinedParagraphStyleRunsKey = new PluginKey("joinedParagraphStyleRuns");

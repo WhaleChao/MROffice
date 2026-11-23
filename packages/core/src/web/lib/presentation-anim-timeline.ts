@@ -1600,10 +1600,21 @@ export function hasEditableSlideAnimationSource(source: unknown): boolean {
       ...(entry.effectOption === undefined ? [] : ["effectOption"]),
       ...(entry.effectColor === undefined ? [] : ["effectColor"]),
       ...(entry.effectSettings === undefined ? [] : ["effectSettings"]),
+      ...(entry.paragraphs === undefined ? [] : ["paragraphs"]),
       ...(entry.triggerNativeShapeId === undefined
         ? []
         : ["triggerNativeShapeId"]),
     ]);
+    if (
+      entry.paragraphs !== undefined &&
+      (() => {
+        const range = normalizeStepParagraphs(entry.paragraphs);
+        const raw = entry.paragraphs as { start?: unknown; end?: unknown } | null;
+        return !range || Object.keys(raw ?? {}).length !== 2 || range.start !== raw?.start || range.end !== raw?.end;
+      })()
+    ) {
+      return false;
+    }
     if (
       entry.effectSettings !== undefined &&
       !effectSettingsEqual(
@@ -1639,7 +1650,9 @@ export function hasEditableSlideAnimationSource(source: unknown): boolean {
           entry.triggerNativeShapeId !== entry.nativeShapeId)) &&
       isTimelineTrigger(entry.trigger) &&
       isEditableAnimationTimingMs(entry.delayMs) &&
-      isEditableAnimationDurationMs(entry.durationMs)
+      (isEditableAnimationDurationMs(entry.durationMs) ||
+        // PowerPoint's own duration for a recipe effect (80 ms a letter).
+        (typeof entry.durationMs === "number" && entry.durationMs === effect.recipeDurationMs))
     );
   });
 }

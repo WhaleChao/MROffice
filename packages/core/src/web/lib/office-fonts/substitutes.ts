@@ -22,7 +22,7 @@ import { excelCutFamilyOf, excelCutRangeIsEastAsian, isExcelCutFamily } from "./
 import { HANGUL_EM_PREFIX, hangulEmFamilyOf, sheetHangulEmFamily, stackPrimaryFamily } from "./hangul-em";
 import powerPointTable from "./powerpoint-substitutes.json";
 import { notedFontFaces, noteFamilyRegistration, noteFontFaceSource, type DeclaredFontFace } from "../font-face-declarations";
-import { loadOfficeDataParts, officeDataObtainable, officeDataPartKnown } from "../office-data/store";
+import { loadOfficeDataParts, officeDataObtainable, officeDataPartKnown, officeDataPartsRetryDelay } from "../office-data/store";
 import { parseUnicodeRange } from "../text-engine/face-index";
 import { officeFamilyHasNoBold } from "./faux-bold";
 
@@ -777,6 +777,25 @@ export function officeFontRegistrationGeneration(): number {
   return registrationGeneration;
 }
 
+
+
+
+
+
+
+
+
+
+function letGoWhenAskable(keys: readonly string[], letGo: () => void): void {
+  const wait = officeDataPartsRetryDelay("font-registry", keys);
+  const release = () => {
+    letGo();
+    registrationGeneration += 1;
+  };
+  if (wait > 0) setTimeout(release, wait);
+  else release();
+}
+
 const aliasFamilies = new WeakMap<Document, Set<string>>();
 
 /**
@@ -802,8 +821,7 @@ export function ensureOfficeAliasFamily(
     .then((served) => {
       const registry = served as Registry | undefined;
       if (!registry) {
-        done.delete(alias);
-        registrationGeneration += 1;
+        letGoWhenAskable(faces.map(normalize), () => done.delete(alias));
         return;
       }
       const index = registryIndexOf(registry);
@@ -815,10 +833,7 @@ export function ensureOfficeAliasFamily(
         }
       }
     })
-    .catch(() => {
-      done.delete(alias);
-      registrationGeneration += 1;
-    })
+    .catch(() => letGoWhenAskable(faces.map(normalize), () => done.delete(alias)))
     .finally(() => afterFacesDeclared(settle)), `registry ${alias}`);
 }
 
@@ -909,7 +924,8 @@ export function ensureOfficeScaledScriptFamily(
   if (done.has(alias)) return;
   done.add(alias);
   const office = unlessInstalled ? normalize(unlessInstalled) : undefined;
-  void loadOfficeDataParts("font-registry", office ? [normalize(face), office] : [normalize(face)])
+  const asked = office ? [normalize(face), office] : [normalize(face)];
+  void loadOfficeDataParts("font-registry", asked)
     .then(async (served) => {
       const registry = served as Registry | undefined;
       const indexed = registry ? registryIndexOf(registry).get(normalize(face)) : undefined;
@@ -920,8 +936,7 @@ export function ensureOfficeScaledScriptFamily(
       const name = indexed && registry?.substitutes?.[indexed] ? indexed : undefined;
       const statics = name ? [] : staticFaceRules(doc, face);
       if (!name && !statics.length) {
-        done.delete(alias);
-        registrationGeneration += 1;
+        letGoWhenAskable(asked, () => done.delete(alias));
         return;
       }
       if (office) {
@@ -948,10 +963,7 @@ export function ensureOfficeScaledScriptFamily(
         addFace(doc, alias, weight, italic, [`url(${PUBLIC_PREFIX}${out}) format("woff2")`], range, sizeAdjust);
       }
     })
-    .catch(() => {
-      done.delete(alias);
-      registrationGeneration += 1;
-    });
+    .catch(() => letGoWhenAskable(asked, () => done.delete(alias)));
 }
 
 /** A family's @font-face rules in the document's own stylesheets: weight, slant, unicode-range, url() and local() sources apart. */
@@ -1012,10 +1024,7 @@ export function ensureExcelCutFamily(
   if (done.has(aliasKey)) return;
   done.add(aliasKey);
   const key = normalize(cut.face);
-  const again = () => {
-    done.delete(aliasKey);
-    registrationGeneration += 1;
-  };
+  const again = () => letGoWhenAskable([key], () => done.delete(aliasKey));
   const settle = noteFamilyRegistration(cut.alias);
   void trackRegistration(loadOfficeDataParts("font-registry", [key])
     .then((served) => {
@@ -1161,7 +1170,8 @@ export function ensureOfficeFontFaces(
   // document, the text engine waits for this family rather than measuring the
   // stack's next one (`noteFamilyRegistration`).
   const settle = noteFamilyRegistration(key);
-  void trackRegistration(loadOfficeDataParts("font-registry", [key, ...styled.map((candidate) => normalize(candidate.base))])
+  const asked = [key, ...styled.map((candidate) => normalize(candidate.base))];
+  void trackRegistration(loadOfficeDataParts("font-registry", asked)
     .then((served) => {
       const registry = served as Registry | undefined;
       const name = registry ? registryIndexOf(registry).get(key) : undefined;
@@ -1177,8 +1187,7 @@ export function ensureOfficeFontFaces(
         // Not answered yet (no connection, refused): a later call asks again.
         // A family the registry does not know stays settled.
         if (officeDataObtainable("font-registry") && !officeDataPartKnown("font-registry", key)) {
-          names.delete(key);
-          registrationGeneration += 1;
+          letGoWhenAskable(asked, () => names.delete(key));
         }
         return;
       }
@@ -1269,10 +1278,7 @@ export function ensureOfficeFontFaces(
         }
       }
     })
-    .catch(() => {
-      names.delete(key);
-      registrationGeneration += 1;
-    })
+    .catch(() => letGoWhenAskable(asked, () => names.delete(key)))
     .finally(() => afterFacesDeclared(settle)), `registry ${key}`);
 }
 

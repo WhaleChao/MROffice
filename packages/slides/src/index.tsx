@@ -9,6 +9,8 @@
 import { useEffect, useRef } from "react";
 import type { EditorDefinition, EditorProps } from "@mrnote/core";
 
+import { defaultSlide } from "@mrnote/core/web/lib/presentation/deck-model.ts";
+
 import PresentationWindow from "./web/components/notebook/contents/PresentationWindow";
 
 export const MRSLIDES_TYPE = "mrnote.presentation.v1";
@@ -23,8 +25,12 @@ function stem(name: string): string {
   return name.replace(/\.(mrslides)(\.json)?$|\.[^.]+$/i, "") || "Presentation";
 }
 
+// A new deck starts on PowerPoint's Title Slide, its placeholders placed (the
+// product's own new deck, deck-model defaultSlide): a slide with no blocks was
+// read as the old stacked title-and-body form, whose title field the first
+// placed object (a text box) turned into a canvas without it.
 export function emptyDeck(title = "Presentation"): Deck {
-  return { type: MRSLIDES_TYPE, title, slides: [{ id: "slide-1", title: "", backgroundColor: "#ffffff", blocks: [] }] };
+  return { type: MRSLIDES_TYPE, title, slides: [{ ...defaultSlide(), backgroundColor: "#ffffff" }] };
 }
 
 export function deckFromFile(name: string, bytes: Uint8Array): Deck {

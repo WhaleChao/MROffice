@@ -139,15 +139,22 @@ export function useSpreadsheetReviewCommentCommands({
           return;
         }
         const anchor = request.anchor as { sheet: string; cell: string };
-        applyMediatedReviewComment(
-          answer.result.sheet ?? anchor.sheet,
-          answer.result.cell ?? anchor.cell,
-          answer.result.comment,
-        );
+        const sheet = answer.result.sheet ?? anchor.sheet;
+        const cell = answer.result.cell ?? anchor.cell;
+        applyMediatedReviewComment(sheet, cell, answer.result.comment);
+        // The people the words mention hear of it (the host's
+        // onRequestSendNotify), as from a saved comment.
+        if (request.text && (request.op === "add" || request.op === "reply" || request.op === "edit")) {
+          commentMentions?.notifyPosted({
+            threadRef: `${sheet}:${cell}`,
+            ...(answer.result.message ? { messageRef: answer.result.message } : {}),
+            text: request.text,
+          });
+        }
         onDone?.();
       });
     },
-    [applyMediatedReviewComment, mediatedReviewCommentRefusedText],
+    [applyMediatedReviewComment, commentMentions, mediatedReviewCommentRefusedText],
   );
 
   const executeReviewCommentReceiptWriter = useCallback(

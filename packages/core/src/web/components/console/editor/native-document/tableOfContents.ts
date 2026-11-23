@@ -657,10 +657,16 @@ export function tocStyleLevelsOf(
   const known = styleLevelsByDefinitions.get(styles);
   if (known) return known;
   const byId = new Map<string, StyleOutlineEntry>();
+  // A paragraph naming no style is in the default paragraph style (the page
+  // gives it no docxStyleId), and Word's \o lists it at that style's outline
+  // level too (DQ-I 383 reads a Normal that states w:outlineLvl as the
+  // paragraphs' tocOutlineLevel, which only a \u TOC took).
+  let defaultId: string | null = null;
   for (const raw of styles.slice(0, 5_000)) {
     if (!raw || typeof raw !== "object") continue;
     const style = raw as Record<string, unknown>;
     if (style.type !== "paragraph" || typeof style.styleId !== "string") continue;
+    if (style.default === true && defaultId === null) defaultId = style.styleId;
     const pPr = style.pPr && typeof style.pPr === "object" ? (style.pPr as Record<string, unknown>) : null;
     const rawOutline = pPr?.outlineLvl;
     const outline =
@@ -682,8 +688,9 @@ export function tocStyleLevelsOf(
     if (entry.outline !== null) return entry.outline;
     return entry.basedOn ? resolve(entry.basedOn, depth + 1) : null;
   };
-  const levelOf: TocStyleLevelOf = (styleId) => {
-    if (typeof styleId !== "string" || !styleId) return null;
+  const levelOf: TocStyleLevelOf = (named) => {
+    const styleId = typeof named === "string" && named ? named : defaultId;
+    if (!styleId) return null;
     let level = levels.get(styleId);
     if (level === undefined) {
       const outline = resolve(styleId, 0);

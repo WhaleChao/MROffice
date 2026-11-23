@@ -1916,7 +1916,12 @@ function importedRevisionRestyle(
  * true or false) stays, and nothing is changed where a style's look is not
  * known.
  */
-function restyleInheritedToggles(tr: Transaction, nodePos: number, before: ProseMirrorNode): void {
+function restyleInheritedToggles(
+  tr: Transaction,
+  nodePos: number,
+  before: ProseMirrorNode,
+  limit = Number.POSITIVE_INFINITY,
+): void {
   const node = tr.doc.nodeAt(nodePos);
   if (!node) return;
   const docAttrs = tr.doc.attrs as Record<string, unknown>;
@@ -1930,9 +1935,9 @@ function restyleInheritedToggles(tr: Transaction, nodePos: number, before: Prose
     const type = tr.doc.type.schema.marks[name];
     if (!type) continue;
     node.forEach((child, offset) => {
-      if (!child.isText) return;
+      if (!child.isText || offset >= limit) return;
       const from = nodePos + 1 + offset;
-      const to = from + child.nodeSize;
+      const to = nodePos + 1 + Math.min(offset + child.nodeSize, limit);
       const mark = child.marks.find((entry) => entry.type === type) ?? null;
       const was = inherited(docAttrs, before, child.marks);
       const now = inherited(docAttrs, node, child.marks);
@@ -2159,6 +2164,15 @@ export function resolveParagraphMarkRevisions(
       // non-empty paragraph was kept and only the attribute cleared).
       tr.join(boundary);
       tr.setNodeMarkup(pos, next.type, next.attrs, tr.doc.nodeAt(pos)?.marks);
+      // Its words take the following paragraph's style, as in Word (its
+      // final view of a deleted mark draws the "ALPHA" of a bold Heading 1
+      // regular beside the Normal paragraph it joined, and "gamma" of a
+      // Normal paragraph bold in the Heading 1 after it; work-I/out34/truth/
+      // delmark): the bold and italic the old style gave them leave with it.
+      // The heading's own words kept the heading's inherited bold (value
+      // null) in a clause paragraph, where the writer wrote none (corpus
+      // R491-D27 E43: "Es wird die Anwendung deutschen Rechts").
+      restyleInheritedToggles(tr, pos, node, node.content.size);
     } else if (removes && node.content.size > 0 && followingListItemParagraph(tr.doc, pos, node)) {
       // The last paragraph of a list item: it runs on into the next item's
       // first paragraph, as Backspace there does in Word, and the merged
@@ -2166,6 +2180,7 @@ export function resolveParagraphMarkRevisions(
       const following = followingListItemParagraph(tr.doc, pos, node)!;
       tr.delete(pos + node.nodeSize - 1, following.pos + 1);
       tr.setNodeMarkup(pos, following.node.type, following.node.attrs, tr.doc.nodeAt(pos)?.marks);
+      restyleInheritedToggles(tr, pos, node, node.content.size);
     } else {
       tr.setNodeMarkup(pos, undefined, { ...node.attrs, [PARAGRAPH_MARK_REVISION_ATTR]: null });
     }

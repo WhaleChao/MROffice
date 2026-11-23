@@ -41,6 +41,7 @@ export const PDF_HOME_RIBBON_ICON_NAMES = [
   "singlePage",
   "doublePage",
   "continuousReading",
+  "reflow",
   "editContent",
   "translateDocument",
   "translateSelection",
@@ -623,6 +624,15 @@ function glyph(name: PdfHomeRibbonIconName) {
             className="docs-home-icon__accent"
             d="M10.9 5.6h2.2M10.9 18.4h2.2"
           />
+        </>
+      );
+    case "reflow":
+      // One column of text lines, the reading view's.
+      return (
+        <>
+          <path className="docs-home-icon__paper" d="M5 2.8h14v18.4H5z" />
+          <path className="docs-home-icon__ink" d="M5 2.8h14v18.4H5z" />
+          <path className="docs-home-icon__ink-soft" d="M8 7h8M8 10h8M8 13h8M8 16h5" />
         </>
       );
     case "continuousReading":

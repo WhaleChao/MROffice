@@ -19515,5 +19515,15 @@
  "presentation.animations.effectDialog.groupText.as-one-object": "作为一个对象",
  "presentation.animations.effectDialog.groupText.all-at-once": "所有段落同时",
  "presentation.animations.effectDialog.groupText.by-paragraph": "按第一级段落",
- "presentation.animations.effectDialog.openFromPane": "效果选项…"
+ "presentation.animations.effectDialog.openFromPane": "效果选项…",
+ "pdf.reflow.title": "重排阅读",
+ "pdf.reflow.smaller": "缩小文字",
+ "pdf.reflow.larger": "放大文字",
+ "pdf.reflow.close": "完成",
+ "pdf.reflow.page": "第 {page} 页",
+ "pdf.reflow.showPage": "查看原页",
+ "pdf.reflow.loading": "正在读取本页…",
+ "pdf.reflow.failed": "无法读取本页。",
+ "pdf.reflow.noText": "本页没有文字（扫描图像），请查看原页。",
+ "pdf.reflow.more": "更多页"
 }

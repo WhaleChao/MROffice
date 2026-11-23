@@ -45,7 +45,7 @@ export function PresentationNativeShapeGraphic({ drawing, id, fill, stroke, stro
   /** Draw a No Fill outline's hit band (`officeHitBandProps`): the host hit-tests by geometry. */
   outlineHitBand?: boolean;
   /** Effects > Fill Overlay: a paint blended over every filled path. */
-  overlay?: { fill: string; blend: CSSProperties["mixBlendMode"]; opacity: number };
+  overlay?: { fill: string; blend: CSSProperties["mixBlendMode"] };
   /** `a:ln@cmpd`: the outline drawn as the two or three parallel lines it is. */
   compound?: OfficeStrokeCompound;
   /** The line's own join (`a:round|a:bevel|a:miter`), over the drawing's. */
@@ -110,6 +110,8 @@ export function PresentationNativeShapeGraphic({ drawing, id, fill, stroke, stro
   const paintOpacity = drawing.paintOpacity && typeof drawing.paintOpacity === "object"
     ? drawing.paintOpacity as Record<string, unknown> : null;
   const opacity = (key: "fill" | "stroke") => nativePaintOpacity(paintOpacity, key, key === "fill" ? fill : stroke);
+  // The filled paths the fill overlay is blended onto, in a group of their own (below); null without one.
+  const overlayGroup = overlay && !maskShaft ? geometry.paths.filter((path) => path.fill !== "none") : null;
   const insetStrokeClips = isOfficeInsetStroke(strokeAlign) && lineWidth > 0 ? (
     <defs>
       {geometry.paths.map((path, index) => {
@@ -148,6 +150,26 @@ export function PresentationNativeShapeGraphic({ drawing, id, fill, stroke, stro
           </mask>
         </> : null}
       </defs> : null}
+      {overlayGroup ? (
+        // Effects > Fill Overlay: the overlay blended onto the shape's FILL
+        // alone, in a group of its own, as PowerPoint composes it -- the fill
+        // the backdrop (at its own alpha), the overlay over it at the
+        // overlay's own alpha (W3C compositing: (1 - ab) Cs + ab B(Cb, Cs)).
+        // Drawn at the fill's alpha over the slide, the Flow theme's
+        // translucent tile tinted by its theme gradient came out a pale wash
+        
+        // against PowerPoint's 53,142,167), and the overlay tinted the line.
+        <g style={{ isolation: "isolate" }} filter={shadowFilter} data-fill-overlay-group="true">
+          {overlayGroup.map((path, index) => (
+            <path key={`fill-${index}`} d={path.d} fill={nativePathFillColor(fill, path.fill)} stroke="none"
+              fillOpacity={opacity("fill")} />
+          ))}
+          {overlayGroup.map((path, index) => (
+            <path key={`overlay-${index}`} d={path.d} fill={overlay!.fill} stroke="none"
+              style={{ mixBlendMode: overlay!.blend }} pointerEvents="none" data-fill-overlay="true" />
+          ))}
+        </g>
+      ) : null}
       {maskShaft ? (
         // Build one coverage surface before coloring it. The shaft may overlap
         // the wide part of the triangle without an antialias seam or alpha buildup.
@@ -204,8 +226,10 @@ export function PresentationNativeShapeGraphic({ drawing, id, fill, stroke, stro
                   ))}
                 </mask>
               </defs>
-              <path d={path.d} fill={nativePathFillColor(fill, path.fill)} stroke="none"
-                fillOpacity={opacity("fill")} filter={shadowFilter} />
+              {overlayGroup ? null : (
+                <path d={path.d} fill={nativePathFillColor(fill, path.fill)} stroke="none"
+                  fillOpacity={opacity("fill")} filter={shadowFilter} />
+              )}
               <path d={path.d} fill="none" stroke={stroke} strokeWidth={lineWidth} mask={`url(#${maskId})`}
                 strokeDasharray={dashArray} strokeLinecap={dashArray ? dashCap : undefined}
                 strokeLinejoin={lineJoin?.join} strokeMiterlimit={lineJoin?.miterLimit}
@@ -214,7 +238,7 @@ export function PresentationNativeShapeGraphic({ drawing, id, fill, stroke, stro
           );
         }
         return (
-        <path key={index} d={path.d} fill={nativePathFillColor(fill, path.fill)}
+        <path key={index} d={path.d} fill={overlayGroup ? "none" : nativePathFillColor(fill, path.fill)}
           stroke={path.stroke && lineWidth > 0 ? stroke : "none"}
           strokeWidth={clipId ? officeStrokeAlignPaintWidth(lineWidth, strokeAlign) : lineWidth}
           clipPath={clipId ? `url(#${clipId})` : undefined}
@@ -263,14 +287,6 @@ export function PresentationNativeShapeGraphic({ drawing, id, fill, stroke, stro
               markerEnd={tail && placement.tail ? `url(#native-tail-${id})` : undefined}
               vectorEffect="non-scaling-stroke" filter={shadowFilter} />
           ))
-        : null}
-      {overlay && overlay.opacity > 0
-        ? geometry.paths
-            .filter((path) => path.fill !== "none")
-            .map((path, index) => (
-              <path key={`overlay-${index}`} d={path.d} fill={overlay.fill} stroke="none" opacity={overlay.opacity}
-                style={{ mixBlendMode: overlay.blend }} pointerEvents="none" data-fill-overlay="true" />
-            ))
         : null}
     </svg>
   );

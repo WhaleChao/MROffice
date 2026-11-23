@@ -208,6 +208,9 @@ export async function inviteNotebookMember(
   /** The file the invitation is made from: the new member is let into it
    * too (MR Office's Share). The caller must own the file. */
   pageId?: string | null,
+  /** The product invited from and the inviter's UI language: the mail to
+   * the invitee is that product's (MR Office's for "office"), in it. */
+  mail?: { readonly product?: NotebookInviteProduct; readonly locale?: string },
 ): Promise<NotebookMemberRecord> {
   try {
     const data = await runMemberRequest(
@@ -215,7 +218,13 @@ export async function inviteNotebookMember(
       (signal) =>
         apiPost<MemberWire>(
           `/api/v1/notebooks/${encodeURIComponent(notebookId)}/members`,
-          { email, role, ...(pageId ? { page_id: pageId } : {}) },
+          {
+            email,
+            role,
+            ...(pageId ? { page_id: pageId } : {}),
+            ...(mail?.product === "office" ? { product: "office" } : {}),
+            ...(mail?.locale ? { locale: mail.locale } : {}),
+          },
           memberInit(options, signal),
         ),
       "Notebook member invite timed out",
@@ -463,6 +472,10 @@ export async function listNotebookInvites(
   return (Array.isArray(data.items) ? data.items : []).map(inviteFromWire);
 }
 
+/** The product an invitation is made in: "office" makes its mail MR
+ * Office's own (logo, site, a workspace). */
+export type NotebookInviteProduct = "note" | "office";
+
 export async function createNotebookInviteLink(
   notebookId: string,
   settings: {
@@ -472,6 +485,7 @@ export async function createNotebookInviteLink(
     /** The file the link is made from: joining lets the person into it and
      * opens it (MR Office's Share). The caller must own the file. */
     pageId?: string | null;
+    product?: NotebookInviteProduct;
   },
   options?: MemberApiOptions,
 ): Promise<IssuedNotebookInvite> {
@@ -486,6 +500,7 @@ export async function createNotebookInviteLink(
           expires_in_days: settings.expiresInDays,
           max_uses: settings.maxUses,
           ...(settings.pageId ? { page_id: settings.pageId } : {}),
+          ...(settings.product === "office" ? { product: "office" } : {}),
         },
         memberInit(options, signal),
       ),
@@ -506,6 +521,7 @@ export async function createNotebookEmailInvite(
   locale?: string,
   /** The file the invitation is made from (see createNotebookInviteLink). */
   pageId?: string | null,
+  product?: NotebookInviteProduct,
 ): Promise<IssuedNotebookInvite> {
   const data = await runMemberRequest(
     options,
@@ -518,6 +534,7 @@ export async function createNotebookEmailInvite(
           role,
           ...(locale ? { locale } : {}),
           ...(pageId ? { page_id: pageId } : {}),
+          ...(product === "office" ? { product: "office" } : {}),
         },
         memberInit(options, signal),
       ),

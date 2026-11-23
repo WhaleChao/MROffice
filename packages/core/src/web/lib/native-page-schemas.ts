@@ -2385,9 +2385,18 @@ const presentationAnimationReceiptStepSchema = z
     effectOption: z.enum(PRESENTATION_ANIMATION_EFFECT_OPTIONS).optional(),
     effectColor: z.string().regex(/^#[0-9a-f]{6}$/).optional(),
     effectSettings: presentationAnimationEffectSettingsSchema.optional(),
+    // A By Paragraph build's step (zero-based, inclusive; row 1065).
+    paragraphs: z
+      .object({
+        start: z.number().int().min(0).max(9999),
+        end: z.number().int().min(0).max(9999),
+      })
+      .strict()
+      .refine((range) => range.start <= range.end)
+      .optional(),
     trigger: z.enum(TIMELINE_TRIGGERS),
     delayMs: z.number().refine(isEditableAnimationTimingMs),
-    durationMs: z.number().refine(isEditableAnimationDurationMs),
+    durationMs: z.number(),
   })
   .strict()
   .superRefine((step, context) => {
@@ -2423,6 +2432,18 @@ const presentationAnimationReceiptStepSchema = z
         code: z.ZodIssueCode.custom,
         path: ["effectColor"],
         message: "animation receipt color is not canonical for its effect",
+      });
+    }
+    // PowerPoint's own duration for a recipe effect (Color Typewriter's
+    // 80 ms a letter) is exact, on the editor's grid or not.
+    if (
+      !isEditableAnimationDurationMs(step.durationMs) &&
+      step.durationMs !== effect?.recipeDurationMs
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["durationMs"],
+        message: "animation receipt duration is not editable for its effect",
       });
     }
   });

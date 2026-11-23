@@ -374,6 +374,14 @@ ipcMain.handle("mrai:instant-done", (event, kind: unknown) => {
   cover.remove();
 });
 
+// The double-clicked document a window's cover shows the first page of: the
+// page takes the cover off when that document is drawn, not another one.
+ipcMain.handle("mrai:instant-document", (event) => {
+  if (!fromApp(event)) return null;
+  const cover = instantCovers.get(event.sender.id);
+  return cover?.kind === "deck" && cover.document ? path.basename(cover.document) : null;
+});
+
 // The home as the page shows it, kept for the next launch's instant view.
 ipcMain.handle("mrai:instant-save", (event, html: unknown) =>
   fromApp(event) && typeof html === "string" ? saveHomeSnapshot(html) : false,
@@ -1058,6 +1066,14 @@ ipcMain.handle("mrai:default-app-offer", async (event) => {
   };
   sender.once("did-navigate", onMove);
   sender.once("destroyed", onMove);
+  // A double-clicked document's first page covers the window until its
+  // editor shows it (./instant-view.ts): the question waits for that. Asked
+  // at once it was the page's first dialog, and a dialog takes the cover off
+  // (lib/desktop-instant.ts): the picture went 3-8 s before the document
+  // came, the launch showing the home and a question instead (MR Office
+  
+  const cover = instantCovers.get(sender.id);
+  if (cover?.kind === "deck") await cover.gone;
   const state = await defaultAppState().finally(() => {
     if (!sender.isDestroyed()) {
       sender.removeListener("did-navigate", onMove);

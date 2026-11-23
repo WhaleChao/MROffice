@@ -4156,6 +4156,9 @@ export default function PdfPageWindow({
    * PDF's writer refused a box of it for good (a glyph, a face, a script it
    * cannot draw) -- no write to repair or to wait for again. */
   const textBoxWritesRefusedForGoodRef = useRef(new WeakMap<Promise<PdfFormulaSourceSaveResult>, () => boolean>());
+  /** The mutation leases of writes of the page's text boxes that keep no
+   * step of their own and were saved (settleHistoryLessWrite bridges them). */
+  const nativeTextBoxHistoryLessWriteLeasesRef = useRef(new WeakSet<PdfNativeReceiptMutationLease>());
   const nativeFreeTextCommitQueueRef = useRef<Promise<void>>(
     Promise.resolve(),
   );
@@ -7439,6 +7442,28 @@ export default function PdfPageWindow({
     quarantinedRowCount === 0 && refusedHeldTextBoxLayoutKeys.length === heldTextBoxLayoutEntries.length &&
     stagedImageEdits.length === 0 && unwrittenTextBoxWork.changes <= failedTextDraftKeys.length &&
     unsavedCreatedTextBoxes.every((edit) => failedTextDraftKeys.includes(`${edit.page}:${edit.id}`));
+  // Development: why the face reads 未保存 rather than the text draft alone
+  // (pdf-walk-1000 ro0371: a refused Telugu box, every later step 未保存).
+  const unsavedFaceWhyRef = useRef("");
+  if (process.env.NODE_ENV !== "production" && windowShownSaveStatus === "unsaved" && !onlyTextDraftsUnwritten) {
+    const why = Object.entries({
+      drafts: failedTextDraftKeys.length, autosave: autosave.saveStatus, dirty: autosave.isDirty,
+      conflict: autosave.hasConflict, error: Boolean(autosave.error),
+      pending: nativeWorkingSnapshot?.pendingOperationIds.length ?? 0, failure: Boolean(nativeWorkingSnapshot?.failure),
+      coalescer: nativeCoalescerDirty, rejected: nativeRejectedDraftDirty, form: viewerNativeFormPending,
+      deferred: heldDeferredCommands.length, editor: Boolean(nativeListTextDraftState?.dirty), typing: nativeListTextUnsavedTyping,
+      formula: hasFormulaSourceDrafts, reader: readerHeldWork, boxes: textBoxChangesHeld, carried: carriedWordsHeld,
+      copy: copyWriteHeld, quarantined: quarantinedRowCount,
+      held: `${refusedHeldTextBoxLayoutKeys.length}/${heldTextBoxLayoutEntries.length}`, images: stagedImageEdits.length,
+      unwritten: unwrittenTextBoxWork.changes,
+      created: unsavedCreatedTextBoxes.filter((edit) => !failedTextDraftKeys.includes(`${edit.page}:${edit.id}`)).length,
+    }).filter(([, value]) => value !== false && value !== null && value !== 0 && value !== "saved" && value !== "0/0")
+      .map(([key, value]) => `${key}=${String(value)}`).join(" ");
+    if (why !== unsavedFaceWhyRef.current) {
+      unsavedFaceWhyRef.current = why;
+      try { console.debug("[pdf-unsaved-why] " + why); } catch { /* diagnostics never throw */ }
+    }
+  }
   const windowSaveStatusLabel = windowSyncedToServer
     ? t("pages.synced")
     : onlyTextDraftsUnwritten ? t("pdf.pageWindow.textDraftNotWritten")
@@ -35486,6 +35511,18 @@ export default function PdfPageWindow({
    * unless it is Save writing what AutoSave off held, whose steps stay the
    * window's own: the saved history then goes on from it (bridge). */
   const settleHistoryLessWrite = (lease: PdfNativeReceiptMutationLease): boolean => {
+    // A write of the page's text boxes with no step of its own (the window
+    // writing a box's frame again by itself, as the reader's layer measured
+    // it anew after a turn): the history goes on from it, every step kept.
+    // It retired the whole history -- 「journal cleared {entries 4}」 -- and
+    
+    // where the history can go on from it (bridge); else retired, as before.
+    if (nativeTextBoxHistoryLessWriteLeasesRef.current.has(lease)) {
+      const receipt = readCurrentNativeReceipt();
+      if (receipt && nativeReceiptJournal.bridge({ previousReceipt: nativeReceiptJournal.getSnapshot().receipt, receipt }, lease)) {
+        return true;
+      }
+    }
     if (savingHeldRef.current && !officeAutosaveEnabledRef.current()) {
       const receipt = readCurrentNativeReceipt();
       if (receipt && nativeReceiptJournal.bridge({ previousReceipt: nativeReceiptJournal.getSnapshot().receipt, receipt }, lease)) {
@@ -50128,6 +50165,17 @@ export default function PdfPageWindow({
         const thread = written.result.thread ?? request.thread ?? "";
         const row = written.result.comment?.row;
         const current = annotationsRef.current;
+        // The people the words mention hear of it (the host's onRequestSendNotify),
+        // as from a saved comment: only the newly mentioned on an edit.
+        if (request.text && thread && (request.op === "add" || request.op === "reply" || request.op === "edit")) {
+          const before = request.op === "edit" ? current.find((annotation) => annotation.id === thread)?.text : undefined;
+          commentMentions?.notifyPosted({
+            threadRef: thread,
+            messageRef: written.result.message ?? thread,
+            text: request.text,
+            ...(typeof before === "string" ? { previousText: before } : {}),
+          });
+        }
         let next: PdfAnnotation[];
         if (!row) {
           const gone = current.find((annotation) => annotation.id === thread);
@@ -50160,7 +50208,7 @@ export default function PdfPageWindow({
         setAnnotationMutationBusy(false);
       }
     },
-    [awaitAnnotationMutationIdle, t],
+    [awaitAnnotationMutationIdle, commentMentions, t],
   );
   /** What this person may do to a note in a comment session: edit only
    * their own words; resolve and delete another person's only with the
@@ -52018,7 +52066,10 @@ export default function PdfPageWindow({
       stage = await prepare({ dataItemId, url: nextUrl, documentRevision: version,
         sourceSha256: receipt.outputSha256, bytes: source.bytes });
       ordinaryPeerStageRef.current = stage;
-      if (!stage) { setOrdinaryPeerRefreshStatus("failed"); return; }
+      // Refused for now (a note or signature being placed, the reader not
+      // drawn yet): asked again later. Marked failed, it was never asked
+      // again, and the version stayed unseen until the PDF was reopened.
+      if (!stage) { deferPeer("stage-refused-for-now"); return; }
       if (!current() || !stage.isCurrent() || !pdfNativeListTextRiskProfileIsSafe(stage.snapshot.profile)) {
         deferPeer("stage-refused"); return;
       }
@@ -53090,6 +53141,7 @@ export default function PdfPageWindow({
             const refusedForGood = runsRefusal !== null &&
               (runsRefusal.kind === "glyph" || runsRefusal.kind === "font" || runsRefusal.kind === "script");
             refusedForGoodHere = refusedForGood;
+            if (refusedForGood && options?.sourceTextDiagnostic) options.sourceTextDiagnostic.refusedForGood = true;
             const repair = refusedForGood ? null : createPdfPendingPatchbackRepair({
               pageId,
               previousContent,
@@ -53352,6 +53404,17 @@ export default function PdfPageWindow({
           dropWrittenUnwrittenTextBoxes(proposedTextBoxEdits);
           noteRefusedTextDrafts(proposedTextBoxEdits.filter((edit) => !edit.deleted)
             .map((edit) => `${edit.page}:${edit.id}`), false);
+          if (!history) {
+            if (staged) {
+              // Staged on the working copy with no step: the copy's queue
+              // makes it a step of its own when it publishes it
+              // (enterNativeWorkingEngineHistory). Read as a history-less
+              // write now, it retired every step before it at once.
+              nativeReceiptMutationPublishedRef.current = true;
+            } else {
+              nativeTextBoxHistoryLessWriteLeasesRef.current.add(mutationLease);
+            }
+          }
           if (history && !unchanged) {
             let historySource = result?.kind === "saved" ? result.source : boundSource;
             // A box a text Delete takes away is one write of that Delete's
@@ -55349,6 +55412,16 @@ export default function PdfPageWindow({
           );
         } catch (error) {
           diagnostic.cause = error;
+          // Refused for good by the PDF's writer (a script its font cannot
+          // draw): the words are the page's text draft from here, kept in its
+          // record and said as such, with nothing more to carry back into
+          // the line. The typing draft kept for them was left: put back into
+          // the line on every load, waited for by its editor for 120 s and
+          // given up, and the face read 未保存 over every later edit (ro0371,
+          
+          if (diagnostic.refusedForGood) {
+            releaseCarriedTypingDraft(replacementText, lease.selection.pageNumber, pdfNativeListTextTargetKey(lease.selection));
+          }
           return false;
         }
         if (nativeListTextDialogLeaseRef.current === lease) closeNativeListTextDialog();

@@ -11330,6 +11330,16 @@ function SpreadsheetWindow({
         observer?.observe(anchor);
       }
       if (!current || !anchor || !popover.isConnected) return;
+      // A sheet not drawn (its window hidden behind another editor's tab, as
+      // the open-source playground hides it) has a cell with no box: placed
+      // from that empty rect, the comment, portalled to the page, stood at
+      // the page's top-left corner over the other editor. It is hidden until
+      // the cell is drawn again (the observer sees it come back). An engine
+      // without checkVisibility places it as before.
+      if (typeof anchor.checkVisibility === "function" && !anchor.checkVisibility()) {
+        setCommentPopoverPosition(null);
+        return;
+      }
       const anchorRect = anchor.getBoundingClientRect();
       if (commentEditorKind === "note") {
         setCommentPopoverPosition(

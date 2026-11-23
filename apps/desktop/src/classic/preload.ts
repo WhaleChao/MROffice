@@ -51,6 +51,10 @@ contextBridge.exposeInMainWorld("mraiDesktop", {
    * launch's. */
   instantDone: (kind: string) => ipcRenderer.invoke("mrai:instant-done", String(kind)),
   instantSave: (html: string) => ipcRenderer.invoke("mrai:instant-save", String(html)),
+  /** The file name of the double-clicked document whose first page covers
+   * this window (null when none does): its own window is what the cover
+   * stands for, not an earlier document's window brought back. */
+  instantDocument: () => ipcRenderer.invoke("mrai:instant-document"),
   /** The documents this window was opened for; ``keep`` leaves them for a
    * later take (the notebook the open page leads to imports them). */
   takeOpenFiles: (keep?: boolean) => ipcRenderer.invoke("mrai:take-open-files", keep === true),

@@ -595,17 +595,29 @@ function PresentationShapeGraphicBody({
       : "xMidYMid slice";
   // Effects > Fill Overlay (`fillOverlay`): a second fill blended over the
   
-  // corner swoosh: a translucent tile multiplied by a theme gradient).
+  // tile multiplied by a theme gradient), composed with the fill in a group
+  // of its own (`PresentationNativeShapeGraphic`). A path gradient radiates
+  // as the shape's own path fill does (`pathGradientCircle`, a rect path the
+  // rect pattern): a radial of 0.71 of the box about the focus rectangle's
+  
+  // from the bottom edge up.
   const fillOverlay = suppressFill ? null : shapeFillOverlayPaint(block);
   const fillOverlayId = `presentation-overlay-${block.id}-${pictureInstanceId}`;
   const fillOverlayDefs = fillOverlay?.gradient ? (
     <defs>
-      {fillOverlay.gradient.path ? (
-        <radialGradient id={fillOverlayId} {...overlayRadialCentre(fillOverlay.gradient)} r="0.71">
-          {officeGradientDrawnStops(fillOverlay.gradient.stops).map((stop, index) => (
-            <stop key={index} offset={stop.position} stopColor={stop.color} stopOpacity={stop.alpha} />
-          ))}
-        </radialGradient>
+      {fillOverlay.gradient.path?.kind === "rect" ? (
+        <RectPathGradientPattern id={fillOverlayId} gradient={fillOverlay.gradient} />
+      ) : fillOverlay.gradient.path ? (
+        (() => {
+          const circle = pathGradientCircle(fillOverlay.gradient, drawingWidth, drawingHeight);
+          return (
+            <radialGradient id={fillOverlayId} {...circle.attributes}>
+              {circle.stops.map((stop, index) => (
+                <stop key={`${index}-${stop.position}`} offset={stop.position} stopColor={stop.color} stopOpacity={(stop as { alpha?: number }).alpha} />
+              ))}
+            </radialGradient>
+          );
+        })()
       ) : (
         <linearGradient
           id={fillOverlayId}
@@ -622,7 +634,6 @@ function PresentationShapeGraphicBody({
     ? {
         fill: fillOverlay.gradient ? `url(#${fillOverlayId})` : (fillOverlay.color as string),
         blend: fillOverlay.blend,
-        opacity: shapeFillOpacity(block),
       }
     : undefined;
   const svgDefs =
@@ -1749,17 +1760,6 @@ function shapeFillOverlayPaint(
     : null;
 }
 
-/** The shape's fill opacity (a picture fill's or a solid fill's transparency), 0..1. */
-function shapeFillOpacity(block: unknown): number {
-  const record = block as { fillImage?: { transparency?: unknown }; fillTransparency?: unknown };
-  const transparency =
-    typeof record.fillImage?.transparency === "number"
-      ? record.fillImage.transparency
-      : typeof record.fillTransparency === "number"
-        ? record.fillTransparency
-        : 0;
-  return Math.max(0, Math.min(1, 1 - transparency / 100));
-}
 
 /**
  * A rectangular path gradient (`a:path path="rect"`) over the shape's box, as
@@ -1805,15 +1805,6 @@ function RectPathGradientPattern({ id, gradient }: { id: string; gradient: Offic
   );
 }
 
-/** A path gradient's centre: the middle of its focus rectangle (`a:fillToRect`). */
-function overlayRadialCentre(gradient: OfficeShapeGradient): { cx: number; cy: number } {
-  const rect = gradient.path?.fillToRect;
-  const l = (rect?.l ?? 50_000) / 100_000;
-  const t = (rect?.t ?? 50_000) / 100_000;
-  const r = (rect?.r ?? 50_000) / 100_000;
-  const b = (rect?.b ?? 50_000) / 100_000;
-  return { cx: (l + (1 - r)) / 2, cy: (t + (1 - b)) / 2 };
-}
 
 
 

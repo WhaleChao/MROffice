@@ -19515,5 +19515,15 @@
  "presentation.animations.effectDialog.groupText.as-one-object": "As One Object",
  "presentation.animations.effectDialog.groupText.all-at-once": "All Paragraphs At Once",
  "presentation.animations.effectDialog.groupText.by-paragraph": "By 1st Level Paragraphs",
- "presentation.animations.effectDialog.openFromPane": "Effect Options…"
+ "presentation.animations.effectDialog.openFromPane": "Effect Options…",
+ "pdf.reflow.title": "Reflow",
+ "pdf.reflow.smaller": "Smaller text",
+ "pdf.reflow.larger": "Larger text",
+ "pdf.reflow.close": "Done",
+ "pdf.reflow.page": "Page {page}",
+ "pdf.reflow.showPage": "Show page",
+ "pdf.reflow.loading": "Reading the page…",
+ "pdf.reflow.failed": "This page could not be read.",
+ "pdf.reflow.noText": "This page has no text (a scanned image). Show the page to see it.",
+ "pdf.reflow.more": "More pages"
 }

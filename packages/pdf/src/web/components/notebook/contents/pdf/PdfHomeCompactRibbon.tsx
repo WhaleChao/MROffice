@@ -26,6 +26,7 @@ import {
   DropdownMenu,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@mrnote/core/web/components/ui/dropdown-menu.tsx";
 
@@ -65,6 +66,7 @@ export const PDF_HOME_COMPACT_CONTROL_ORDER = [
   "singlePage",
   "doublePage",
   "continuousReading",
+  "reflow",
   "editContent",
   "fullTranslation",
   "selectionTranslation",
@@ -466,6 +468,7 @@ function LayoutMenu({
     ["doublePage", commands.doublePage, "doublePage"],
     ["continuousReading", commands.continuousReading, "continuousReading"],
   ] as const;
+  const reflow = commands.reflow;
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
@@ -505,6 +508,23 @@ function LayoutMenu({
             <span>{command.displayLabel ?? command.label}</span>
           </DropdownMenuItem>
         ))}
+        {/* Reflow: a reading view over the page layout, not one of them. */}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          role="menuitemcheckbox"
+          aria-checked={reflow.active}
+          aria-label={commandLabel(reflow)}
+          disabled={reflow.disabled || !reflow.onInvoke}
+          title={commandLabel(reflow)}
+          data-testid="pdf-home-layout-menu-reflow"
+          onSelect={() => reflow.onInvoke?.(null)}
+        >
+          <span aria-hidden="true">
+            {reflow.active ? <OfficeSemanticIcon semanticId="selection.check" size={12} /> : null}
+          </span>
+          <PdfHomeRibbonIcon name="reflow" size={16} />
+          <span>{reflow.displayLabel ?? reflow.label}</span>
+        </DropdownMenuItem>
       </RibbonDropdownMenuContent>
     </DropdownMenu>
   );

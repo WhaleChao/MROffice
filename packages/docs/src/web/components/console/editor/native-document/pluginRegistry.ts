@@ -26,6 +26,7 @@ import { DocumentInlineAtomCaret } from "./inlineAtomCaret";
 import { PasteParagraphFormat } from "./pasteParagraphFormat";
 import { JoinedParagraphStyleRuns } from "@mrnote/core/web/components/console/editor/native-document/joinedParagraphStyleRuns.ts";
 import { FloatAnchorsFollowParagraphs } from "./floatAnchorsFollowParagraphs";
+import { JoinedParagraphFieldSpans } from "./joinedParagraphFieldSpans";
 import { PasteSelectionEnd } from "./pasteSelectionEnd";
 import { PasteIntoList } from "./pasteIntoList";
 import { PlainTextBlankLines } from "./plainTextPaste";
@@ -2592,6 +2593,8 @@ export function createNativeDocumentPluginRegistry({
         // A floating object goes where its anchor paragraph goes (Word's anchor):
         // a whole paragraph deleted or cut takes it, a join or a part keeps it.
         FloatAnchorsFollowParagraphs,
+        // Two paragraphs joined: the field end (and next begin) at the second's end stay on the merged one.
+        JoinedParagraphFieldSpans,
         // A paste ends at what it put in, never on an object after it.
         PasteSelectionEnd,
         // A pasted document's headings and tables stay out of the list

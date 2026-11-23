@@ -118,7 +118,7 @@ function fileUnder(root: string, relative: string): string | null {
 
 /** The double-clicked document's first page: its own picture, or (macOS) Quick
  * Look's once drawn; `bytes` null meanwhile (the card shows its name alone). */
-let deckPicture: { bytes: Buffer | null; type: string; name: string } | null = null;
+let deckPicture: { bytes: Buffer | null; type: string; name: string; large?: boolean } | null = null;
 let served: Session | null = null;
 
 
@@ -131,19 +131,21 @@ let served: Session | null = null;
 
 
 
-function deckPage(name: string, picture: boolean): string {
+function deckPage(name: string, picture: boolean, large = false): string {
   const title = name.replace(/[<>&"]/g, "");
   const style = `<style>
 .mrai-instant-deck{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(243,247,246,.72);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
 .mrai-instant-deck .card{display:flex;flex-direction:column;align-items:center;gap:14px;padding:22px 22px 18px;background:#fff;border-radius:10px;box-shadow:0 18px 50px rgba(15,23,42,.18)}
 .mrai-instant-deck img{display:block;width:auto;height:auto;max-width:min(56vw,640px);max-height:56vh;min-width:min(40vw,420px);object-fit:contain;border:1px solid #e5e7eb;border-radius:3px;background:#fff}
+.mrai-instant-deck .card.page{gap:10px;padding:12px 12px 10px}
+.mrai-instant-deck .card.page img{max-width:min(80vw,1100px);max-height:calc(100vh - 96px);min-width:0}
 .mrai-instant-deck .name{max-width:min(56vw,640px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:#374151}
 .mrai-instant-deck .bar{position:relative;width:180px;height:3px;overflow:hidden;border-radius:2px;background:#e5e7eb}
 .mrai-instant-deck .bar::after{content:"";position:absolute;inset:0 auto 0 -40%;width:40%;background:#0f766e;animation:mrai-instant-bar 1.2s steps(12,end) infinite!important}
 @keyframes mrai-instant-bar{to{left:100%}}
 </style>`;
   const image = picture ? `<img src="/deck-picture?${Date.now()}" alt="">` : "";
-  const card = `<div class="mrai-instant-deck"><div class="card">${image}<div class="name">${title}</div><div class="bar"></div></div></div>`;
+  const card = `<div class="mrai-instant-deck"><div class="card${picture && large ? " page" : ""}">${image}<div class="name">${title}</div><div class="bar"></div></div></div>`;
   // The home's snapshot stills every animation (!important); the bar's own,
   // more specific and !important too, still runs.
   if (homePage) {
@@ -162,7 +164,7 @@ function instantSession(webDir: string): Session {
     const url = new URL(request.url);
     const html = (body: string) => new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
     if (url.pathname === "/home" && homePage) return html(homePage);
-    if (url.pathname === "/deck" && deckPicture) return html(deckPage(deckPicture.name, deckPicture.bytes !== null));
+    if (url.pathname === "/deck" && deckPicture) return html(deckPage(deckPicture.name, deckPicture.bytes !== null, deckPicture.large === true));
     if (url.pathname === "/deck-picture" && deckPicture?.bytes) {
       return new Response(new Uint8Array(deckPicture.bytes), { headers: { "content-type": deckPicture.type } });
     }
@@ -183,8 +185,12 @@ function instantSession(webDir: string): Session {
 
 export interface InstantCover {
   readonly kind: InstantKind;
+  /** The double-clicked document it shows the first page of (kind "deck"). */
+  readonly document?: string;
   /** Take the cover off (the live page shows the same now, or gave up). */
   remove(): void;
+  /** Settles once the cover is off, whatever took it off. */
+  readonly gone: Promise<void>;
 }
 
 /**
@@ -234,9 +240,18 @@ export function coverWindow(
   const contents = view.webContents;
   contents.on("will-navigate", (event) => event.preventDefault());
   contents.setWindowOpenHandler(() => ({ action: "deny" }));
-  contents.once("did-finish-load", () => options.onShown?.());
+  contents.once("did-finish-load", () => {
+    // A picture the file carries is part of the first load: the document's
+    // first page is on screen with it (Quick Look's comes with a later load).
+    if (kind === "deck" && deckPicture?.bytes) console.log("[classic] instant view: first page shown");
+    options.onShown?.();
+  });
   void contents.loadURL(`${INSTANT_SCHEME}://app/${kind}`).catch(() => undefined);
   let removed = false;
+  let settleGone: () => void = () => undefined;
+  const gone = new Promise<void>((resolve) => {
+    settleGone = resolve;
+  });
   // The page's CSS animations wait under the cover (./held-animations.ts).
   const releaseCovered = holdAnimations(window.webContents);
   const remove = (reason = "shown") => {
@@ -250,6 +265,7 @@ export function coverWindow(
     if (!contents.isDestroyed()) contents.close();
     deckPicture = null;
     homePage = null;
+    settleGone();
   };
   // The live page never said so (it failed, or this is an older one): gone anyway.
   const giveUp = setTimeout(() => remove("timed out"), options.giveUpMs ?? 45_000);
@@ -257,11 +273,16 @@ export function coverWindow(
     const shown = deckPicture;
     void quickLookThumbnail(options.deck, path.join(app.getPath("userData"), "instant", "quick-look")).then((picture) => {
       if (!picture || removed || deckPicture !== shown || contents.isDestroyed()) return;
-      deckPicture = { ...picture, name: shown!.name };
+      // Quick Look draws the page at 1400 px: shown at the size of a page
+      // on screen, as the document's window will, not a thumbnail's.
+      deckPicture = { ...picture, name: shown!.name, large: true };
       console.log("[classic] instant view: first page drawn");
+      contents.once("did-finish-load", () => {
+        if (!removed) console.log("[classic] instant view: first page shown");
+      });
       void contents.loadURL(`${INSTANT_SCHEME}://app/deck?page`).catch(() => undefined);
     });
   }
   window.once("closed", () => remove("closed"));
-  return { kind, remove: () => remove() };
+  return { kind, document: kind === "deck" ? options.deck : undefined, remove: () => remove(), gone };
 }

@@ -329,6 +329,28 @@ export function officeDataPartKnown(name: OfficeDataPartitionedName, key: string
   return partitioned.get(name)?.known.has(key.trim().toLowerCase()) ?? false;
 }
 
+
+
+
+
+
+
+
+
+
+export function officeDataPartsRetryDelay(name: OfficeDataPartitionedName, keys: readonly string[]): number {
+  if (fromSource(name) !== undefined) return 0;
+  const failedAt = partitioned.get(name)?.failedAt;
+  if (!failedAt?.size) return 0;
+  const now = Date.now();
+  let wait = 0;
+  for (const raw of keys) {
+    const at = failedAt.get(raw.trim().toLowerCase());
+    if (at !== undefined) wait = Math.max(wait, at + RETRY_AFTER_MS - now);
+  }
+  return wait;
+}
+
 /** Whether this page can ask the API at all (signed in, or a host that holds
  * the tables): a guest's readers settle for their fallback for good. With a
  * name, whether it can ask for that table (a guest can for

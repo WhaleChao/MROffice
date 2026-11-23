@@ -80,6 +80,7 @@ import {
   type PdfRasterPrintPage,
 } from "../../../lib/pdf/raster-print";
 import { pdfTaggedReadingOrderText } from "../../../lib/pdf/tagged-reading-order";
+import PdfReflowView, { type PdfReflowViewProps } from "./pdf/PdfReflowView";
 import type { PdfTaggedTextTarget } from "@/lib/pdf/native-tagged-text-roundtrip";
 import { createPdfNativePlanners } from "../../../lib/pdf/remote/pdf-native-planners";
 import { PDF_NATIVE_READER_PAGE, registerPdfNativeReaderHead } from "../../../lib/pdf/remote/pdf-native-sources";
@@ -5854,6 +5855,8 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
   // at a time. Ephemeral UI state — not persisted in the page schema, mirroring
   // scale / currentPage / thumbsOpen.
   const [viewMode, setViewMode] = useState<PdfViewMode>(PDF_DEFAULT_VIEW_MODE);
+  /** Reflow: the text as one column to read (PdfReflowView), over the pages. */
+  const [reflowOpen, setReflowOpen] = useState(false);
   // The layout a reopened document's view recovery put back: that change
   // restores its own position, so it is not re-anchored on the current page.
   const viewModeRestoredRef = useRef<PdfViewMode | null>(null);
@@ -9650,6 +9653,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     }
     return orderedPages;
   }, [deletedPageSet, normalizedPageMoves, pages]);
+  const reflowPageNumbers = useMemo(() => visiblePages.map((page) => page.pageNumber), [visiblePages]);
   const pageOrganizerPages = useMemo(
     () =>
       visiblePages.map((page) => ({
@@ -10378,6 +10382,55 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
           loaded: previousIdentity?.documentRevision ?? null, expected: expectedSourceDocumentRevision ?? null });
       } catch { /* diagnostics never throw */ }
     }
+    // A revision whose bytes are the document on screen under another name
+    // takes no reading of its own: the reader keeps the document it shows
+    // and takes the new name by its bytes (the load adopts the document it
+    // parks, adoptablePdfSessionRef).
+    const requestedSha = /^[0-9a-f]{64}$/i.test(request.sourceSha256) ? request.sourceSha256.toLowerCase() : null;
+    const sameBytesOnScreen = () => Boolean(previousDoc && requestedSha && typeof sourceSha256 === "string" &&
+      sourceSha256.toLowerCase() === requestedSha &&
+      pdfDocumentShaRef.current.get(previousDoc)?.toLowerCase() === requestedSha &&
+      latestSourceRiskSnapshotRef.current?.identity.sha256.toLowerCase() === requestedSha &&
+      latestSourceRiskSnapshotRef.current.identity.dataItemId === request.dataItemId);
+    const sameBytesStage = (): PdfOrdinaryNoteSourceStage => {
+      const base = latestSourceRiskSnapshotRef.current!;
+      const document = previousDoc!;
+      const snapshot = createPdfSourceRiskSnapshot({
+        identity: { ...base.identity, byteGenerationKey: request.url,
+          documentRevision: request.documentRevision, sha256: requestedSha! },
+        profile: base.profile,
+      });
+      const isCurrent = () => request.isWanted?.() !== false &&
+        ordinaryPrepareBoundaryRef.current === ordinaryPrepareBoundary && ordinaryReaderOwnerRef.current === owner &&
+        pdfDocRef.current === document && loadedPdfSourceIdentityRef.current === previousIdentity &&
+        !firstVisibleCanvasPaintPendingRef.current;
+      if (process.env.NODE_ENV !== "production") vectorRouteMark("source-stage-same-bytes", {
+        request: String(request.documentRevision).slice(-12), working });
+      return {
+        snapshot,
+        isCurrent,
+        // Nothing to install: the reader as rendered with the new name adopts
+        // the document on screen (see adoptablePdfSessionRef).
+        publish: isCurrent,
+        discard: async () => undefined,
+        // Its file's own pages, unless the reader reads it through a page map.
+        parsedDocument: structuredDocumentMap(document) ? null
+          : document as unknown as PdfOrdinaryNoteSourceStage["parsedDocument"],
+      };
+    };
+    // A saved revision on the bytes shown: notes written beside the file (a
+    // comment session's note the server wrote, a peer's note-only save).
+    // Nothing is read in, so what holds a reading of new bytes off -- a form
+    // being filled, a print, an export -- does not hold it off: refused for
+    // them, a fillable PDF never showed a co-editor's note until it was
+    
+    // signature being placed still holds it.
+    if (!working && !olderRevision && sameBytesOnScreen() && request.isWanted?.() !== false &&
+      ordinaryPrepareBoundaryRef.current === ordinaryPrepareBoundary && owner && previousIdentity &&
+      !(workingSource && !working) && !pendingNote && !activeNoteId && !pendingSignature &&
+      previousIdentity.dataItemId === request.dataItemId && request.dataItemId === dataItemId &&
+      previousIdentity.url === url && previousIdentity.byteGenerationKey === expectedSourceByteGenerationKey &&
+      previousIdentity.documentRevision === expectedSourceDocumentRevision && request.url) return sameBytesStage();
     if (ordinaryPrepareBoundaryRef.current !== ordinaryPrepareBoundary || !owner || !previousDoc || !previousIdentity ||
       (workingSource && !working) ||
       pendingNote || activeNoteId || formMode || pendingSignature || printing || pendingPrintPreflight ||
@@ -10396,36 +10449,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     // keeps the document it shows and takes the new name by its bytes (the
     // load adopts the document it parks). Read in, it was a second parse of
     
-    const requestedSha = request.sourceSha256.toLowerCase();
-    if (working && typeof sourceSha256 === "string" && sourceSha256.toLowerCase() === requestedSha &&
-      pdfDocumentShaRef.current.get(previousDoc)?.toLowerCase() === requestedSha &&
-      latestSourceRiskSnapshotRef.current?.identity.sha256.toLowerCase() === requestedSha &&
-      latestSourceRiskSnapshotRef.current.identity.dataItemId === request.dataItemId) {
-      const base = latestSourceRiskSnapshotRef.current;
-      const snapshot = createPdfSourceRiskSnapshot({
-        identity: { ...base.identity, byteGenerationKey: request.url,
-          documentRevision: request.documentRevision, sha256: requestedSha },
-        profile: base.profile,
-      });
-      const isCurrent = () => request.isWanted?.() !== false &&
-        ordinaryPrepareBoundaryRef.current === ordinaryPrepareBoundary && ordinaryReaderOwnerRef.current === owner &&
-        pdfDocRef.current === previousDoc && loadedPdfSourceIdentityRef.current === previousIdentity &&
-        !firstVisibleCanvasPaintPendingRef.current;
-      if (process.env.NODE_ENV !== "production") vectorRouteMark("source-stage-same-bytes", {
-        request: String(request.documentRevision).slice(-12) });
-      const sameBytes: PdfOrdinaryNoteSourceStage = {
-        snapshot,
-        isCurrent,
-        // Nothing to install: the reader as rendered with the new name adopts
-        // the document on screen (see adoptablePdfSessionRef).
-        publish: isCurrent,
-        discard: async () => undefined,
-        // Its file's own pages, unless the reader reads it through a page map.
-        parsedDocument: structuredDocumentMap(previousDoc) ? null
-          : previousDoc as unknown as PdfOrdinaryNoteSourceStage["parsedDocument"],
-      };
-      return sameBytes;
-    }
+    if (working && sameBytesOnScreen()) return sameBytesStage();
     let stagedDocument: PdfDocument | null = null;
     let stagedTask: ReturnType<PdfApi["getDocument"]> | null = null;
     const destroyStage = createPdfSessionDestroyer(() => ({ document: stagedDocument, loadingTask: stagedTask }));
@@ -52703,7 +52727,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         : null}
       <PdfViewerRibbon
         ribbon={{ pictureContextRibbon, formatPaneDock: pdfTaskPaneDocks.right, filename, downloadUrl, ribbonQuickActions, ribbonActionRail, ribbonQuickActionTail, ribbonQuickOverflowOnlyTail, onPageOrganizerApply, onDownload, preferAnnotatedDownload, annotatedDownloadEnabled, pageId, onRequestPageSummary, onManagedSignatureUpsert, onManagedStampUpsert, onManagedLinkUpsert, dataItemId, lossyCompressionSource, lossyCompressionWritable, nativePageLabelRanges, onNativePageLabelRangesApply, onNativeFileAttachmentUpsert, nativeFileAttachmentBusy, nativeFileAttachmentDisabledReason, onNativePageImport, nativePageImportBusy, nativePageImportDisabledReason, onEditContent, editContentDisabledReason, editContentBusy, contentEditModeActive: contentEditModeLive, contentEditModeDisabledReason: editContentModeDisabledReason, onEnterContentEditMode: enterContentEditMode, onInsertText, onOpenPageBackground, pageBackgroundOpen, pageBackgroundBusy, pageBackgroundDisabledReason, onCreateEditableVersion, onConvertToSpreadsheet, onConvertToPresentation, onOfficeConversionPrepare, officeProjectionDisabledReason, isCreatingEditableVersion, t, pdfHomeDisplayLabels, savePolicyV1, signatureProofLoading, matchedSourceRiskSnapshot, signatureProofPresentation, showSignatureProof, requestSignatureProofPanel, pageOrganizerLabel, pages, // The ribbon greys only for a document not shown yet (ribbonLoading).
-          loading: ribbonLoading, setPageOrganizerOpen, pageOrganizerDialogReturnFocusRef, scale, activeRibbonTab, ribbonInstanceId, currentPage, currentVisibleOrdinal, pageInput, setPageInput, armedTextOrigin: addTextMode ? addTextOrigin : null, armedTextKind: addTextKind, readerTextBoxes: Boolean(textBoxAuthoring?.writable), readerTables: Boolean(textBoxAuthoring?.writable && tableAuthoring?.writable), readerCharts: Boolean(textBoxAuthoring?.writable && chartAuthoring?.writable), attachMode, attachmentError, placedAttachments, ocgLayers, ocgOrder, setLayersPanelOpen, layersPanelOpen, handleToggleLayer, drawMode, signMode, signSaving, signatureComposerMode, stampPickerOpen, armedStamp, redactionHydrationStatusForCurrentDocument, shapesHydrationStatusForCurrentDocument, shapeMode, visualMaskActive, visualMaskWarning, shapeSaving, selectedPlaced, selectedPlacedRef, linkMode, linkSaving, snapshotMode, setSnapshotMode, snapshotIntentRef, snapshotShape, setSnapshotShape, captureScreenSnapshot, setDrawingSnapshot, snapshotDragRef, setSnapshotToast, setSnapshotLatex, pageLabelsOpen, pageLabelsDialogReturnFocusRef, pageLabelRanges, pageLabelReplacementStarted, setPageLabelReplacementStarted, pageLabelsApplying, pageLabelsError, nativePageLabelsControlled, nativePageLabelsSourceOwned, updatePageLabelRanges, printing, printPreflightTriggerRef, decorationDialogKind, effectiveDocumentDecorations, openDecorationDialog, removeDocumentDecoration, annotationsOpen, outline, userBookmarks, bookmarkSaving, flattening, formDataExportFormat, setFormDataExportFormat, compressPreset, setCompressPreset, openCompressSettings, mergeBusy, splitBusy, setSplitOpen, splitOpen, splitDialogReturnFocusRef, featuredLegacyToolsOpen, setFeaturedLegacyToolsOpen, setExportImageOpen, exportImageOpen, exportImageDialogReturnFocusRef, exportImageScope, setExportImageScope, exportImageRange, setExportImageRange, exportImageCombinePages, setExportImageCombinePages, exportImageResolution, setExportImageResolution, exportImageBusy, textExportBusy, translationDialog, translationWorking, cadExportBusy, documentEncryptBusy, verifiedPdfaExportTriggerRef, imageOnlyExportBusy, rasterOutputAuthorityBlocked, splitMode, setSplitMode, splitRangeSpec, splitRangeError, setSplitRangeSpec, splitEveryNValue, setSplitEveryNValue, setInsertOpen, insertOpen, selectInsertSourceKind, insertDialogReturnFocusRef, insertBusy, layersDialogReturnFocusRef, formImportInputRef, formImportReturnFocusRef, viewMode, setViewMode, readMode, cycleReadMode, lineNumbersVisible, toggleLineNumbers, fitMode, panMode, presentationActive, compareInputRef, compareFile, viewerRootRef, setSelectedNativeVectorSelection, nativeVectorUserSelectionEpochRef, setExtraNativeVectorSelections, ocrAnnotationHydrationReady, pdfOcrServerSourceAuthority, pageOrganizerPages, visiblePageCount, previousVisibleOrdinal, nextVisibleOrdinal, rotateDocumentDisabled, goToVisibleOrdinal, handleSummarizeCurrentPage, pageOpsEnabled, handleRotatePage, handleRotateCcwPage, handleRotateDocumentClockwise, handlePageInputCommit, handleSelectedManagedShapeStyle, handleSelectedManagedShapeArrange, handleSelectedManagedInkStyle, // Every placed object's 大小, not only a shape's.
+          loading: ribbonLoading, setPageOrganizerOpen, pageOrganizerDialogReturnFocusRef, scale, activeRibbonTab, ribbonInstanceId, currentPage, currentVisibleOrdinal, pageInput, setPageInput, armedTextOrigin: addTextMode ? addTextOrigin : null, armedTextKind: addTextKind, readerTextBoxes: Boolean(textBoxAuthoring?.writable), readerTables: Boolean(textBoxAuthoring?.writable && tableAuthoring?.writable), readerCharts: Boolean(textBoxAuthoring?.writable && chartAuthoring?.writable), attachMode, attachmentError, placedAttachments, ocgLayers, ocgOrder, setLayersPanelOpen, layersPanelOpen, handleToggleLayer, drawMode, signMode, signSaving, signatureComposerMode, stampPickerOpen, armedStamp, redactionHydrationStatusForCurrentDocument, shapesHydrationStatusForCurrentDocument, shapeMode, visualMaskActive, visualMaskWarning, shapeSaving, selectedPlaced, selectedPlacedRef, linkMode, linkSaving, snapshotMode, setSnapshotMode, snapshotIntentRef, snapshotShape, setSnapshotShape, captureScreenSnapshot, setDrawingSnapshot, snapshotDragRef, setSnapshotToast, setSnapshotLatex, pageLabelsOpen, pageLabelsDialogReturnFocusRef, pageLabelRanges, pageLabelReplacementStarted, setPageLabelReplacementStarted, pageLabelsApplying, pageLabelsError, nativePageLabelsControlled, nativePageLabelsSourceOwned, updatePageLabelRanges, printing, printPreflightTriggerRef, decorationDialogKind, effectiveDocumentDecorations, openDecorationDialog, removeDocumentDecoration, annotationsOpen, outline, userBookmarks, bookmarkSaving, flattening, formDataExportFormat, setFormDataExportFormat, compressPreset, setCompressPreset, openCompressSettings, mergeBusy, splitBusy, setSplitOpen, splitOpen, splitDialogReturnFocusRef, featuredLegacyToolsOpen, setFeaturedLegacyToolsOpen, setExportImageOpen, exportImageOpen, exportImageDialogReturnFocusRef, exportImageScope, setExportImageScope, exportImageRange, setExportImageRange, exportImageCombinePages, setExportImageCombinePages, exportImageResolution, setExportImageResolution, exportImageBusy, textExportBusy, translationDialog, translationWorking, cadExportBusy, documentEncryptBusy, verifiedPdfaExportTriggerRef, imageOnlyExportBusy, rasterOutputAuthorityBlocked, splitMode, setSplitMode, splitRangeSpec, splitRangeError, setSplitRangeSpec, splitEveryNValue, setSplitEveryNValue, setInsertOpen, insertOpen, selectInsertSourceKind, insertDialogReturnFocusRef, insertBusy, layersDialogReturnFocusRef, formImportInputRef, formImportReturnFocusRef, viewMode, setViewMode, reflowOpen, setReflowOpen, readMode, cycleReadMode, lineNumbersVisible, toggleLineNumbers, fitMode, panMode, presentationActive, compareInputRef, compareFile, viewerRootRef, setSelectedNativeVectorSelection, nativeVectorUserSelectionEpochRef, setExtraNativeVectorSelections, ocrAnnotationHydrationReady, pdfOcrServerSourceAuthority, pageOrganizerPages, visiblePageCount, previousVisibleOrdinal, nextVisibleOrdinal, rotateDocumentDisabled, goToVisibleOrdinal, handleSummarizeCurrentPage, pageOpsEnabled, handleRotatePage, handleRotateCcwPage, handleRotateDocumentClockwise, handlePageInputCommit, handleSelectedManagedShapeStyle, handleSelectedManagedShapeArrange, handleSelectedManagedInkStyle, // Every placed object's 大小, not only a shape's.
           handleSelectedShapeSizeChange: handleSelectedPlacedSizeChange, handleInsertBookmark, allFormFields, formFieldsUnavailable, formFieldsUnavailableReason, nativeFormMode, nativeFormDataMutationBlocked, nativeFormDataMutationBlockedReason, hasNativeFormEditsExcludedFromSource, hasFlattenableAnnotations, hasEffectivePdfOutputEdits, hasEditableXfdfAnnotations, handleCompressPdf, handleExportFormData, handleResetForm, fieldCandidates, detectBusy, detectedFieldsCommandRef, handleDetectFormFields, acceptedCandidates, handleCancelDetectedFields, handleCreateDetectedFields, handleExportPagesAsImages, exportImageOverLimit, exportImageCurrentPageSize, handleSplitDownload, handleOpenMergePicker, executeReaderCommand, executeEditContentActivation, originalDownloadRuntimeDecision, currentDownloadRuntimeDecision, annotatedDownloadRuntimeDecision, fillableDownloadRuntimeDecision, editableAnnotationsDownloadRuntimeDecision, archivalDownloadRuntimeDecision, printRuntimeDecision, originalDownloadCommand, handleSignatureProofOriginalDownload, currentDownloadCommand, annotatedDownloadCommand, fillableDownloadCommand, editableAnnotationsDownloadCommand, archivalDownloadCommand, printCommand, activeSplitCommand, zoomReset, fitWidth, fitPage, disarmPageTools, closePageLabelsDialog, togglePageLabelsDialog, applyPageLabelRanges, toggleVisualMaskTool, toggleVisualSignature, toggleLinkMode, selectRibbonTab, handleHandToolToggle, handleSelectTool, selectToolActive, executeFreeTextActivation, executeImageActivation, executeInkActivation, executeShapeActivation, executeStampActivation, executeLinkActivation, executeVisualSignatureActivation, executeFileAttachmentActivation, handlePresentationToggle, speechStatus, speechSupported, handleToggleReadAloud, handleStopReadAloud, handleExportDocumentText, openFullTranslation, openSelectionTranslation, openOfficeProjection, openCadExport, openDocumentEncrypt, openImageOnlyExport, toggleNavigationPanel, effectiveRibbonSaveStatus, effectiveRibbonSaveStatusLabel, currentNativeVectorSelection, runOrQueueNativeVectorCommand, annotationContextModel, effectiveAnnotationContextLabels, formFieldContextModel, linkContextModel, ribbonTabs, commentDrawMode: drawMode && !drawTabDrawing, readerDrawCollapse, readerPenCompact: readerPenFirst.compact, documentEncryptDisabled, documentEncryptDisabledReason, totalPagesLabel, currentPageDocumentLabel, insertPagesFromFileCommands, insertPageMenuBlankCommand, homeRotateLeftCommand, homeRotateRightCommand, pagePersistentStructureCommands, pageFileCommands, pageRotateCommands, loadingDisabledReason, outputAuthorityDisabledReason, sourceAuthorityDisabledReason, sourceAuthorityUnavailable, printCommandDisabledReason, pageNavigation, selectionTranslationDisabledReason, signatureCommandDisabledReason, legacyToolsHostRequired, globalLinkDisabled, globalLinkDisabledReason, globalLinkLabel }}
       />
       {pageGridActive && onPageOrganizerApply ? (
@@ -53739,6 +53763,19 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
             nativeVectorMarquee,
           }}
         />
+        {reflowOpen && pdfDoc ? (
+          <PdfReflowView
+            document={pdfDoc as unknown as PdfReflowViewProps["document"]}
+            pageNumbers={reflowPageNumbers}
+            startPage={currentPage}
+            onShowPage={(pageNumber) => {
+              setReflowOpen(false);
+              goToPage(pageNumber, { locate: true });
+            }}
+            onClose={() => setReflowOpen(false)}
+            t={t as PdfReflowViewProps["t"]}
+          />
+        ) : null}
         {compareFile ? (
           <PdfComparePanel
             file={compareFile}

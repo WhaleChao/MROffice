@@ -17,6 +17,9 @@ export interface PdfSourceTextPreparationDiagnostic {
   /** The server write was sent and no server answered it (a dropped
    * connection, a gateway's 5xx): the same write may be asked again. */
   unanswered?: boolean;
+  /** The PDF's writer refused the box for good (a glyph, a face, a script
+   * it cannot draw): asking again writes nothing more. */
+  refusedForGood?: boolean;
 }
 
 /** Preserve the existing rejection result; expose only a bounded local stage. */
