@@ -2677,6 +2677,74 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                   />,
                 ];
               });
+          // Right-aligned text spilling left out of a cell right of the page
+          // prints its head here, over the page's empty last columns (Windows
+          // Excel's print, lookwin p292-lw: J1's title over G on page 1; a
+          // value in F cuts it at G; R475-X80's title right-aligned in K).
+          // The mirror of continuationNodes; the API's draw_spill_from_right.
+          const headNodes = !printMode || rightToLeft || !ownColumns || pageLastCol === undefined || !getTextSpill
+            ? []
+            : page.rows.flatMap((row) => {
+                const sourceRow = sourceRowAt(row);
+                if (mergeAt(sourceRow, pageLastCol) || getCellDisplay(sourceRow, pageLastCol)) return [];
+                let source = pageLastCol + 1;
+                for (; source - pageLastCol <= 256; source += 1) {
+                  if (mergeAt(sourceRow, source)) return [];
+                  if (getCellDisplay(sourceRow, source)) break;
+                }
+                if (source - pageLastCol > 256 || unclippedAt(sourceRow, source)) return [];
+                const sourceWidth = printedColSizes[source] ?? geometry.colWidth;
+                const style = pageCellStyle(sourceRow, source);
+                if (style?.textAlign !== "right") return [];
+                const spill = getTextSpill(sourceRow, source, sourceWidth * paperScale, fontScale);
+                if (!spill || spill.centred || spill.across || spill.endCol !== source || spill.startCol > pageLastCol) return [];
+                const span = (from: number, to: number) => Array.from({ length: Math.max(0, to - from) }, (_, index) => from + index);
+                const clipStart = Math.max(spill.startCol, pageFirstCol ?? spill.startCol);
+                const before = sizeOf(span(clipStart, pageLastCol), geometry.colSizes, geometry.colWidth);
+                const lastWidth = geometry.colSizes[pageLastCol] ?? geometry.colWidth;
+                const between = sizeOf(span(pageLastCol + 1, source), printedColSizes, geometry.colWidth);
+                const runStart = sizeOf(span(spill.startCol, clipStart), geometry.colSizes, geometry.colWidth);
+                const height = sizeOf([row], geometry.rowSizes, geometry.rowHeight) * paperScale;
+                const display = getCellDisplay(sourceRow, source);
+                const nativeText = nativeTextDpi && hasNativeTextLayout?.(sourceRow, source, display);
+                const runWidth = (runStart + before + lastWidth + between + sourceWidth) * paperScale;
+                const nativeTextWidth = nativeText ? Math.max(1,
+                  runWidth / paperScale * PAPER_POINT_TO_CSS_PIXEL / Math.max(.001, geometry.contentScale) - 5 * 96 / nativeTextDpi) : undefined;
+                const occurrence = `${sheetId}-${rowPageIndex}.${colPageIndex}-head-${sourceRow}:${source}:${row}`;
+                return [
+                  <GridCell
+                    key={`head:${sourceRow}:${source}:${row}`}
+                    row={sourceRow}
+                    col={source}
+                    display={display}
+                    cellStyle={textOnlyStyle(style)}
+                    left={columnsLeft(pageLastCol, lastWidth) * paperScale}
+                    top={(rowOffsets.get(row) ?? 0) * paperScale}
+                    width={lastWidth * paperScale}
+                    height={height}
+                    fontScale={fontScale}
+                    nativeTextDpi={nativeText ? nativeTextDpi : undefined}
+                    nativeGridDpi={nativeTextDpi}
+                    showGridlines={false}
+                    active={false}
+                    selected={false}
+                    interactive
+                    editor={false}
+                    occurrence={occurrence}
+                    paintsDisplay={!renderCellContent}
+                    cellHandlers={cellHandlers}
+                    content={renderCellContent?.(sourceRow, source, fontScale, nativeTextWidth, {
+                      width: sourceWidth * paperScale,
+                      height,
+                      dotPx: paperScale * 72 / 600,
+                      ...(printMode ? { pageTop: dataTop + (rowOffsets.get(row) ?? 0) * paperScale } : {}),
+                    })}
+                    textOverPrintedBorders={Boolean(printMode && nativeTextDpi)}
+                    spillBox={{ left: -(runStart + before) * paperScale, width: runWidth }}
+                    spillClip={{ left: -before * paperScale, width: (before + lastWidth) * paperScale }}
+                  />,
+                ];
+              });
           const unclippedNodes = !unclippedIn || pageFirstCol === undefined || pageLastCol === undefined ? [] : page.rows.flatMap((row) => {
             const sourceRow = sourceRowAt(row);
             const entries = unclippedIn.get(sourceRow);
@@ -3366,6 +3434,7 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                   {printedFills.length ? <PrintedCellFills fills={printedFills} /> : null}
                   {cellNodes}
                   {continuationNodes}
+                  {headNodes}
                   {printedEdges.length ? (
                     <PrintedCellBorders edges={printedEdges} scale={geometry.contentScale} pxPerPt={paperScale} />
                   ) : null}

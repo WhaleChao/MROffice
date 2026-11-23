@@ -401,6 +401,7 @@ export const DocumentInlineAtomRunStyle = Extension.create({
     ];
   },
   addProseMirrorPlugins() {
+    const editor = this.editor;
     return [
       new Plugin({
         key: inlineAtomRunStyleKey,
@@ -411,7 +412,15 @@ export const DocumentInlineAtomRunStyle = Extension.create({
         // the reconcile cannot feed itself.
         appendTransaction: imeSafeAppendTransaction((transactions, _oldState, newState) => {
           if (!transactions.some((transaction) => transaction.docChanged)) return null;
-          return reconcileInlineAtomRunStyles(transactions, newState.tr);
+          const tr = reconcileInlineAtomRunStyles(transactions, newState.tr);
+          // A document loaded while the editor is read-only (a Word page's
+          // first layout settling, a viewer): the sync is a representation's,
+          // as onCreate's, and the read-only authority refused it untrusted --
+          // the atoms kept their runStyle but drew without its marks (a bold
+          // coloured REF field result drawn plain, its line measured
+          
+          if (tr && !editor.isEditable) trustReadOnlyDocumentMutation(tr, "layout-normalization");
+          return tr;
         }),
       }),
     ];

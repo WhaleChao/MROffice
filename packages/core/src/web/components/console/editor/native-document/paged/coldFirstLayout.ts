@@ -3,35 +3,41 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-/**
- * A Word document's first layout on opening, laid out once (docx-surgery).
- *
- * Opened as ONE sheet, a document of a few pages was laid out whole three
- * times before its first page showed: every line projection (engine lines,
- * Auto line spacing, CJK spacing, justified pulls, exact-line baselines) read
- * every paragraph once per wave of faces that came in while the first layout
- * waited for them, the first pass cut the one sheet into pages, and every
- * moved block was a new element the projections and the table autofit read
- * again (allometric.docx, 8 pages, load ~26: 6.6 s from the page read to
- * editable, the main thread busy all through).
- *
- * With this layout:
- * - a document opens on provisional sheets of about a page each whatever its
- *   length (provisionalPages), so the ledger lays it out progressively from
- *   its first pass: the reader's first pages are projected, measured and
- *   shown, the rest follow in the background (pageLedgerExtension);
- * - the line projections take no pass of their own while the first layout
- *   waits for the document's faces: they stay pending and the ledger's flush
- *   reads them once the faces are in (one reading, not one per wave).
- *
- * Nothing is decided differently: every page is still laid out by the ledger
- * from the content, whatever sheet it opened on.
- *
- * Off by default while it is compared. `window.__docsColdFirstLayout = true`
- * turns it on for a page (an object tunes it: { minBlocks, minSheets,
- * horizon, window, margin, fontsOnce, held, fontNews }), `false` keeps it
- * off.
- */
+import { IS_DESKTOP_CLASSIC } from "../../../../../lib/desktop-classic";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 export interface ColdFirstLayoutTuning {
   /** Fewest top-level blocks a document opens on provisional sheets with. */
@@ -57,8 +63,8 @@ export interface ColdFirstLayoutTuning {
   readonly fontNews: boolean;
 }
 
-/** The shipped default: off until the identity gate passes on the whole corpus. */
-const DEFAULT_ON = false;
+/** The shipped default: on in the desktop apps; off on the site until its own comparison. */
+const DEFAULT_ON = IS_DESKTOP_CLASSIC;
 
 const DEFAULTS: ColdFirstLayoutTuning = { minBlocks: 2, minSheets: 2, horizon: 3, window: 2, margin: 1, fontsOnce: true, held: ["auto-line-spacing", "cjk-spacing", "justified-shrink"], fontNews: true };
 

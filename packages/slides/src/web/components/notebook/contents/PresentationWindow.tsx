@@ -5,6 +5,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { useSaveSurfaceStallReport } from "@mrnote/core/web/lib/save-stall-report.ts";
 import { onlyofficeInitialZoom, onlyofficeNotesAtOpen, onlyofficeRulerAtOpen } from "@mrnote/core/web/lib/embed/onlyoffice-frame.ts";
 import { ONLYOFFICE_SPELLCHECK_EVENT, onlyofficeSpellcheckAtOpen } from "@mrnote/core/web/lib/embed/onlyoffice-layout.ts";
 import { registerLiveEditor, type LivePresentationEditor } from "@mrnote/core/web/lib/live-editor-registry.ts";
@@ -1527,7 +1528,7 @@ import {
   reconcileDeletedSlideRunLinks,
   reconcileSlideCommentAuthority,
 } from "@mrnote/core/web/lib/presentation-deck-commit.ts";
-import { copyTimelineStep, timelineTextSequenceOf, type TimelineTextSequence, partitionTimelineSteps, presentationAnimationEffect, resolvePresentationAnimationEffectColor, pruneSequence, computeStepStartOffsets, timelineClickCount, type PresentationAnimationEffectId, type PresentationAnimationEffectOption, type AnimationSequenceEditOperation, type AnimationTimingValue, type TimelineAnimation, type TimelinePreviewFrame, type TimelineStep } from "@mrnote/core/web/lib/presentation-anim-timeline.ts";
+import { copyTimelineStep, timelineTextSequenceOf, type TimelineTextSequence, partitionTimelineSteps, presentationAnimationEffect, presentationMediaCallCommand, resolvePresentationAnimationEffectColor, pruneSequence, computeStepStartOffsets, timelineClickCount, type PresentationAnimationEffectId, type PresentationAnimationEffectOption, type AnimationSequenceEditOperation, type AnimationTimingValue, type TimelineAnimation, type TimelinePreviewFrame, type TimelineStep } from "@mrnote/core/web/lib/presentation-anim-timeline.ts";
 import {
   applyAnimationSteps,
   copyAnimationSteps,
@@ -6258,6 +6259,9 @@ export default function PresentationWindow({
    * (useDeckSaveResilience, further down). */
   const deckEditKeptRef = useRef<() => void>(() => undefined);
   const noteDeckEditKept = useCallback(() => deckEditKeptRef.current(), []);
+  /** The deck's body as the editor holds it now (persistSlides' own build),
+   * for a refused body the server kept to be saved again from the page. */
+  const deckBodyNowRef = useRef<(() => Record<string, unknown>) | null>(null);
   const pageAutosave = useAutosavedPageDocument({
     prepareDraft: prepareDeckPartsDraft,
     onDraftAccepted: noteDeckEditKept,
@@ -6279,6 +6283,9 @@ export default function PresentationWindow({
     // moment is ridden out and a race read again and carried over, by the
     // hook itself (`saveGuarantee`).
     saveGuarantee: true,
+    // A body refused and kept as a recoverable copy (S2) is saved again by
+    // itself from the deck as it stands, never parked until the next edit.
+    rebuildRefusedDraft: () => deckBodyNowRef.current?.() ?? null,
     // Native packages can require a full deck reimport before their Save reply.
     // Keep the request alive through that work; CAS and native receipts still
     // determine success, including when the connection is actually lost.
@@ -10111,6 +10118,17 @@ export default function PresentationWindow({
     },
     [autosave, title],
   );
+  deckBodyNowRef.current = () => buildContent(
+    slidesRef.current,
+    themeRef.current,
+    mastersRef.current,
+    sectionsRef.current,
+    headerFooterRef.current,
+    printSettingsRef.current,
+    sensitivityRef.current,
+    slideShowSettingsRef.current,
+    customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current,
+  ) as Record<string, unknown>;
 
   // Theme controls render before the unified deck commit is declared below.
   // Keep a live adapter instead of giving theme mutations a second history /
@@ -12563,14 +12581,24 @@ export default function PresentationWindow({
       // last click started is the one still playing (each click the next
       // group of the object's sequence).
       const tree = triggerSlide ? slideNativeTimingTree(triggerSlide) : null;
+      // The group the last click started (each click plays the object's next
+      // group); a media call is done once it is made -- the clip plays on.
+      const ownGroups = partitionTimelineSteps(sequence).triggerGroups.filter(
+        (group) => group.triggerBlockId === blockId,
+      );
+      const lastGroup = ownGroups.length > 0 ? ownGroups[(clicks - 1 + ownGroups.length) % ownGroups.length] : undefined;
       const runMs = Math.max(
         0,
-        ...partitionTimelineSteps(sequence)
-          .triggerGroups.filter((group) => group.triggerBlockId === blockId)
-          .flatMap((group) => {
-            const offsets = computeStepStartOffsets(group, playOf);
-            return group.steps.map((step, index) => (offsets[index] ?? 0) + playOf(step));
-          }),
+        ...(lastGroup
+          ? (() => {
+              const offsets = computeStepStartOffsets(lastGroup, playOf);
+              return lastGroup.steps.map(
+                (step, index) =>
+                  (offsets[index] ?? 0) +
+                  (presentationMediaCallCommand(step.animation) !== null ? 0 : playOf(step)),
+              );
+            })()
+          : []),
         ...(tree ? nativeTimingTriggerRuns(tree, blockId, clicks).map((run) => run.length) : []),
       );
       if (now - firedAt < runMs) return;
@@ -19143,6 +19171,13 @@ export default function PresentationWindow({
     toast({ title: t("presentation.deckParts.structureRefused"), description: reason });
     noteDeckStructureRefused((count) => count + 1);
   }, [t]);
+  // Another member holds the deck's checkout: this member's slide change is
+  // kept and applied once it is free (useDeckPageParts), said once a wait.
+  const onDeckStructureWaiting = useCallback((holder: string | null) => {
+    toast({ title: holder
+      ? t("presentation.deckParts.structureWaiting", { name: holder })
+      : t("presentation.deckParts.structureWaitingSomeone") });
+  }, [t]);
   const selectedPictureSha = useMemo(() => {
     for (const block of activeSlide?.blocks ?? []) {
       if (block.type !== "image" || !selectedBlockIds.has(block.id)) continue;
@@ -19167,6 +19202,7 @@ export default function PresentationWindow({
     resave: resaveDeckParts,
     onStructureChanged: onDeckStructureChanged,
     onStructureRefused: onDeckStructureRefused,
+    onStructureWaiting: onDeckStructureWaiting,
     // An insert, delete or copy is this member's step of the room's history.
     roomStateVector: autosave.collaborationStateVector,
     applyRoomUpdate: autosave.applyOwnServerRoomUpdate,
@@ -19242,6 +19278,20 @@ export default function PresentationWindow({
   // A save this browser could not send: the server's live room holds every edit.
   const deckShowsSynced = deckGapFace === "synced" ||
     (deckGap === "none" && autosave.syncedToServer === true && autosave.saveStatus === "unsaved");
+  // A face saying "Saving..." or "Save" for 90 s with nothing on its way is
+  // a hang that shows no error: said to the server once, by its inputs
+  // (SaveSurfaceStalled; S6 acc4).
+  useSaveSurfaceStallReport({
+    pageId, pageType: "presentation", enabled: !guestMode && !embeddedPresentation && !autosave.readOnly,
+    face: deckShowsSynced || autosave.guaranteedRetrying === "held" || autosave.error ? "settled" : deckSaveStatus,
+    busy: Boolean(autosave.isSaving) || deckPartsView.whenStructureSettled() !== null,
+    inputs: () => ({
+      raw: autosave.saveStatus, gr: autosave.guaranteedRetrying || false, fb: autosave.roomFoldBehind === true,
+      su: deckPartsView.structureUnsaved(), sr: deckPartsView.structureRefused(),
+      ru: [...deckPartsView.rooms().values()].some((room) => room.unacknowledged), gap: deckGap,
+      dirty: Boolean(autosave.isDirty), nc: Boolean(autosave.notConnected),
+    }),
+  });
   // Slides whose save must write them into the PowerPoint file (a reused
   // slide, a native copy, a font resolution, a SmartArt structure) and the
   // saved page does not hold yet: the first such save after the deck's
@@ -19313,6 +19363,9 @@ export default function PresentationWindow({
           toast({ title: t("presentation.deckParts.structurePending", { count: Number.isFinite(pending) ? pending : 0 }) });
         } else if (result.code === "unsaved") {
           toast({ title: t("presentation.deckParts.duplicateUnsaved") });
+        } else if (result.code === "page_locked") {
+          // Waited five minutes for another member's checkout: said, the deck unchanged.
+          toast({ title: t("presentation.deckParts.duplicateLocked"), variant: "destructive" });
         } else if (result.code === "room_busy") {
           // Someone kept typing in a slide it copies through the wait.
           toast({ title: t("presentation.deckParts.duplicateRoomBusy") });
@@ -39489,6 +39542,8 @@ export default function PresentationWindow({
   const animationEffectOptionsDialogAvailable =
     selectedAnimationIndex !== null &&
     selectedAnimationTimingStep !== null &&
+    // A media call has no Effect Options of an animation.
+    presentationMediaCallCommand(selectedAnimationTimingStep.animation) === null &&
     animationEffectCommand.canExecute({
       operation: "set-effect-settings",
       slideModelId: activeSlide.id,
@@ -49816,8 +49871,22 @@ export default function PresentationWindow({
                       : autosave.notConnected ? t("pages.notConnectedKeptOnDevice")
                       // The server keeps a copy too (SAVE-GUARANTEE S2): said.
                       : autosave.guaranteedRetrying === "held"
-                        ? t(autosave.serverBackupHoldId ? "pages.savedOnDeviceServerBackup" : "pages.savedOnDeviceReconnecting")
+                        ? t(autosave.serverBackupHoldId ? "pages.heldRecoverableCopy" : "pages.savedOnDeviceReconnecting")
                       : t(`pages.${deckSaveStatus}` as "pages.saving"),
+                    // The server's recoverable copy, and the way to it: the
+                    // version history lists it, to open or download.
+                    note: !guestMode && autosave.guaranteedRetrying === "held" && autosave.serverBackupHoldId ? {
+                      label: t("pages.heldRecoverableCopyNote"),
+                      testId: "presentation-held-copy-note",
+                      action: {
+                        label: t("pages.heldRecoverableCopyView"),
+                        testId: "presentation-held-copy-view",
+                        onClick: () => {
+                          setVersionHistoryOpen(true);
+                          taskPaneDock.bringForward("versionHistory");
+                        },
+                      },
+                    } : undefined,
                     failureReason: !guestMode && autosave.error ? autosave.error : undefined,
                     failureTestId: "presentation-save-failure-reason",
                     statusDetail: packageWriteStatus ?? undefined,

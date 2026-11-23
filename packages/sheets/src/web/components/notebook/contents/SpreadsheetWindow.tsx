@@ -4,6 +4,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { sheetSaveStallFace, useSaveSurfaceStallReport } from "@mrnote/core/web/lib/save-stall-report.ts";
 import { onlyofficeInitialZoom } from "@mrnote/core/web/lib/embed/onlyoffice-frame.ts";
 import { stackPrimaryFamily } from "@mrnote/core/web/lib/office-fonts/hangul-em.ts";
 import { styleStatesAFormat } from "../../../lib/spreadsheet/style-source-xf";
@@ -2291,6 +2292,9 @@ function guestNeedsAccount(request: { readonly current: (() => void) | undefined
 /** The room a header's filter button takes at the cell's right edge: its
  * 18px, the 3px it stands in (`.tableFilterButton`) and 3px clear of it. */
 const SPREADSHEET_FILTER_BUTTON_ROOM_PX = 24;
+// The paper px (96 a paper inch) a printed run's text reaches past before it
+// starts on the next column (pageLayoutSpillReach; lookwin p303-lw).
+const PRINTED_RUN_REACH_ROOM_PX = 2;
 
 // A ghost cell's press, click and double click: its editor mounts and takes them.
 const ghostCellPointerDown = spreadsheetGhostCellHandler(spreadsheetInertCellHandlers.pointerDown);
@@ -7575,6 +7579,19 @@ function SpreadsheetWindow({
       return embeddedWorkbookRef.current ? sourceAutosave.saveNow(args[0]) : pageAutosave.saveNow(...args);
     },
   };
+  // A face saying "Saving..." or "Save" for 90 s with nothing on its way:
+  // said to the server once, by its inputs (SaveSurfaceStalled).
+  const sheetStall = sheetSaveStallFace({
+    saveStatus: autosave.saveStatus, hasConflict: Boolean(autosave.hasConflict),
+    syncedToServer: Boolean(autosave.syncedToServer), notConnected: Boolean(autosave.notConnected),
+    error: Boolean(autosave.error), saveSlow: Boolean(autosave.saveSlow), dirty: Boolean(autosave.isDirty),
+    catchingUp: Boolean(sourceAutosave.workbookCatchingUp), roomsAhead: sourceAutosave.workbookRoomsAheadOfSave === true,
+    retrying: autosave.guaranteedRetrying ?? false,
+  });
+  useSaveSurfaceStallReport({
+    pageId, pageType: "spreadsheet", enabled: !embeddedWorkbook && !autosave.readOnly && !autosave.loading,
+    face: sheetStall.face, busy: Boolean(autosave.isSaving), inputs: () => sheetStall.inputs,
+  });
   // The running stroke and the wet ones of its sheet, in stage content
   // pixels (where they land), as the others see them before they land.
   const liveInkAwareness = autosave.roomAwareness ?? null;
@@ -58549,8 +58566,17 @@ function SpreadsheetWindow({
     const columnScale = printing ? nativeGrid?.printScale?.x : undefined;
     const drawn = drawnPx !== undefined && columnScale !== undefined && columnScale > 0 ? (drawnPx + breaksPx) / columnScale
       : drawnPx !== undefined ? drawnPx + breaksPx : undefined;
+    // Printed, the run reaches on into the next column once its printer
+    // width and 2 paper px (1.5 pt) pass the cell's printed right edge, not
+    // the cell's two paddings (lookwin p303-lw, R475-X99's Arial 9 note in
+    // B:J: 588.8 px against J's edge at 590.86 prints one page, 591.5 two;
+    // J a pixel narrower or wider moves the edge by its printed 1.07 px and
+    // the bound lies in 1.48-2.06 px; a trailing no-break space counts). The
+    // two paddings ran a 2 px longer reach: X99 and R475-X58's wide B (a
+    // line 0.6 px past the cut) printed a blank band of the next column.
     const width = drawn !== undefined
-      ? drawn + 2 * displayCellPadding
+      ? printing && columnScale !== undefined && columnScale > 0 ? drawn + PRINTED_RUN_REACH_ROOM_PX / columnScale
+        : printing ? drawn + PRINTED_RUN_REACH_ROOM_PX : drawn + 2 * displayCellPadding
       : spillTextWidthPx(text, cell.style, workbookFontAssets.aliases, effective) + breaksPx + 2 * CELL_BASE_PADDING_X_PX;
     const centred = spill.startCol < col && spill.endCol > col;
     let need = centred ? (width - printedColumnWidthPx(col)) / 2 : width - printedColumnWidthPx(col);
@@ -59106,7 +59132,12 @@ function SpreadsheetWindow({
       return { align: align === "top" ? "top" as const : align === "middle" ? "middle" as const : "bottom" as const, height: frame.height - middleLift,
         rise, ascent: gdi && frame.dotPx !== undefined ? (gdi.top + OFFICE_PRINTED_GDI_TOP_DOTS) * frame.dotPx
           : printedTop !== undefined ? printedTop * scaledDot + drop : own.ascent * unit,
-        linePx: own.ascent + own.descent + 1, rowPx: frame.height / unit };
+        // The lines a row too low keeps, as the printer counts them: the
+        // face's printed line against the row's printed dots (p298-lw: an
+        // Arial 10 second line from a 17 px row under Normal Calibri 10, from
+        // 18 px under Calibri 11; the API's writer alike, R475-X37).
+        lineDots: officePrintedRowDots(face) ?? (own.ascent + own.descent + 1) * 6.25 * printedRow,
+        rowDots: frame.height / fontScale * 6.25 };
     })();
     // Wrapped lines taller than the row print their first lines, cut
     // below, at any vertical alignment (lookwin probe p22; the grid's

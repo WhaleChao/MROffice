@@ -3681,23 +3681,42 @@ const FINAL_STANDING_REFUSALS = new WeakSet<object>();
 
 
 
+
+
+
+
+
+
+
+
 function refuseLeanAmongOtherTextOnItsLines(
   paragraph: Pick<ReadParagraph, "allShows">,
   shearOf: ReadonlyMap<number, number>,
   /** The signs leaned with the lines they hang on (hangingSignLeans), by the
    * end of each one's span: neither the box's text nor a sign left upright. */
   leanedSigns: ReadonlySet<number> = new Set(),
+  advanceOf: (show: MraiNativeParagraphRewriteShow) => number | null = () => null,
 ): void {
-  type Placed = Readonly<{ at: readonly [number, number]; along: readonly [number, number]; size: number }>;
+  type Placed = Readonly<{ at: readonly [number, number]; along: readonly [number, number]; size: number; reach: number }>;
   const placed = (show: MraiNativeParagraphRewriteShow): Placed => {
     const matrix = composeMatrix(show.textMatrix, show.graphicsMatrix);
     const length = Math.hypot(matrix[0], matrix[1]) || 1;
+    const advance = advanceOf(show);
     return { at: applyMatrix(matrix, 0, show.textRise), along: [matrix[0] / length, matrix[1] / length],
-      size: Math.abs(show.fontSize) * Math.hypot(matrix[2], matrix[3]) };
+      size: Math.abs(show.fontSize) * Math.hypot(matrix[2], matrix[3]),
+      reach: advance === null ? Infinity : Math.max(0, advance * (show.horizontalScale / 100) * Math.hypot(matrix[0], matrix[1])) };
   };
   // How far off the baseline of `line` the point stands.
   const off = (line: Placed, point: readonly [number, number]) =>
     Math.abs((point[0] - line.at[0]) * line.along[1] - (point[1] - line.at[1]) * line.along[0]);
+  // How far along the line of `line` the point stands from its origin.
+  const alongOf = (line: Placed, point: readonly [number, number]) =>
+    (point[0] - line.at[0]) * line.along[0] + (point[1] - line.at[1]) * line.along[1];
+  // Whether the point stands along the line where the glyphs of the two shows, and the line between them, are.
+  const among = (first: Placed, last: Placed, point: readonly [number, number]) => {
+    const to = alongOf(first, last.at), at = alongOf(first, point), slack = 0.05 * first.size;
+    return at > Math.min(0, to) - slack && at < Math.max(first.reach, to + last.reach) + slack;
+  };
   let before: Placed | null = null;
   let between: Placed[] = [];
   for (const show of paragraph.allShows) {
@@ -3708,7 +3727,8 @@ function refuseLeanAmongOtherTextOnItsLines(
       continue;
     }
     if (before && between.length && off(before, here.at) <= 0.25 * before.size &&
-      between.some((other) => off(before!, other.at) > 0.25 * before!.size && off(before!, other.at) <= before!.size)) {
+      between.some((other) => off(before!, other.at) > 0.25 * before!.size && off(before!, other.at) <= before!.size &&
+        among(before!, here, other.at))) {
       const refusal = new PdfNativeTransactionError("unsupported-document", MRAI_NATIVE_PARAGRAPH_READ_BACK_REFUSAL);
       FINAL_STANDING_REFUSALS.add(refusal);
       throw refusal;
@@ -7909,7 +7929,16 @@ async function readParagraphWhereItStands(
     allShows.some((show) => show.codes.length > 0 && show.start > firstStart && show.start < lastStart && !ownShows.has(show))) {
     refuseStanding("other text is drawn between its shows");
   }
-  if (!inPlace && found.some((own, index) => index > 0 && own.line < found[index - 1].line)) {
+  // (For a caller that reads the page it wrote back, by the shows that draw
+  // ink: a blank a producer sets on each line ahead of the text -- a padded
+  // column's, drawn before any word of the box -- draws nothing wherever it
+  // comes in the block, and whether the page then reads as it read is that
+  // caller's to ask. A title of two lines with such blanks kept its bold
+  // for them alone once its second line was one box: 0979 p.1.)
+  const linesInOrder = (shows: readonly (typeof found)[number][]) =>
+    !shows.some((own, index) => index > 0 && own.line < shows[index - 1].line);
+  if (!inPlace && !linesInOrder(amongOtherText
+    ? found.filter((own) => own.glyphs.some((glyph) => !readsBlank(glyph))) : found)) {
     refuseStanding("its lines are not drawn one after another");
   }
   // (In place: the passes a page draws a glyph again by, a hair from the first.)
@@ -9300,7 +9329,15 @@ async function planFormatByStateWhereTextStands(
     if (lean.signs.size) carried = new Map([...signs].map(([end, sign]) => [end, sign.moved] as const));
     // (A lean taken off gives the page back as it was read before the lean: never refused for how it reads.)
     if (asked.slant !== 0 && resolveFormats.leanReadByReader !== true) {
-      refuseLeanAmongOtherTextOnItsLines({ allShows: leanedShows }, leanOf, leanedSigns);
+      refuseLeanAmongOtherTextOnItsLines({ allShows: leanedShows }, leanOf, leanedSigns, (show) => {
+        const font = paragraph.fonts.get(show.fontName);
+        if (!font) return null;
+        try {
+          return showGlyphs(kernel, show, font).at(-1)?.end ?? 0;
+        } catch {
+          return null;
+        }
+      });
     }
   }
   // A lean and the passes of a show do not go together (type3ShowPasses): a

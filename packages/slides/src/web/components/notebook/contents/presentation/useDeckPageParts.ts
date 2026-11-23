@@ -240,6 +240,10 @@ export interface UseDeckPagePartsOptions<S extends DeckSlideLike> {
   /** An insert or delete the server refused for its content (400/422): told
    * once; the editor keeps the slides, unsaved. */
   readonly onStructureRefused: (message: string) => void;
+  /** Another member holds the page's checkout (409 page_locked): this
+   * member's insert, delete or copy is kept and goes again when it is free.
+   * Told once a wait, with the holder's name when the server gave it. */
+  readonly onStructureWaiting?: (holder: string | null) => void;
   /** The room document's state vector (base64), or null without a room:
    * sent with an insert, delete or copy so the answer carries the room's
    * update for it. */
@@ -376,6 +380,11 @@ function windowHolds<S extends { id: string }>(handed: ReadonlyMap<string, S>, l
   }
   return true;
 }
+
+/** The longest a structural change waits between tries while another member holds the page. */
+const DECK_PART_LOCK_BACKOFF_MAX_MS = 30_000;
+/** How long a Duplicate waits for another member's checkout before it is said to have failed. */
+const DECK_PART_LOCK_WAIT_MAX_MS = 5 * 60_000;
 
 export function useDeckPageParts<S extends DeckSlideLike>(options: UseDeckPagePartsOptions<S>): DeckPageParts {
   const { session, pageId, enabled } = options;
@@ -710,6 +719,8 @@ export function useDeckPageParts<S extends DeckSlideLike>(options: UseDeckPagePa
   /** Send the editor's inserts and deletes; true when nothing of them is
    * left to send (sent, or found already done). */
   const refusedStructure = useRef<string | null>(null);
+  /** How long the next try of a change waits while another member holds the page (0: not waiting). */
+  const lockBackoff = useRef(0);
   /** The body of an insert, delete or copy: with the room's state vector
    * when there is a room, so its answer is the room's own update. */
   const withRoomState = useCallback((body: Record<string, unknown>): Record<string, unknown> => {
@@ -928,6 +939,21 @@ export function useDeckPageParts<S extends DeckSlideLike>(options: UseDeckPagePa
         scheduleFlush(DECK_PART_POLL_MS);
         return false;
       }
+      if (status === 409 && code === "page_locked") {
+        // Another member holds the page's checkout: the change stays here,
+        // kept as it was made, and goes again when the checkout is free --
+        // later and later (1 s, 2, 4 ... 30 s), never the fixed 3 s that
+        // sent one insert 33 times in a minute and a half (S6 acceptance,
+        // two people in one deck). The member is told once a wait.
+        const waited = lockBackoff.current;
+        lockBackoff.current = Math.min(DECK_PART_LOCK_BACKOFF_MAX_MS, waited === 0 ? 1_000 : waited * 2);
+        if (waited === 0) {
+          const holder = isApiRequestError(error) ? (error.details?.holder as { name?: unknown } | undefined)?.name : undefined;
+          optionsRef.current.onStructureWaiting?.(typeof holder === "string" && holder ? holder : null);
+        }
+        scheduleFlush(lockBackoff.current);
+        return false;
+      }
       if (status === 400 || status === 422 || (status === 409 && code === "deck_first_part_empty")) {
         console.warn("[deck-parts] insert or delete refused", { status, code,
           path: isApiRequestError(error) ? error.details?.path : undefined });
@@ -940,6 +966,7 @@ export function useDeckPageParts<S extends DeckSlideLike>(options: UseDeckPagePa
       return false;
     }
     refusedStructure.current = null;
+    lockBackoff.current = 0;
     if (ownWriteBase() === undefined) await optionsRef.current.settleOwnServerWrite?.().catch(() => undefined);
     await optionsRef.current.refreshBody().catch(() => undefined);
     session.structuralLanded();
@@ -1151,8 +1178,27 @@ export function useDeckPageParts<S extends DeckSlideLike>(options: UseDeckPagePa
           : withRoomState({ slide_ids: [...ids], ...(base === undefined ? {} : { expected: { content_version: base } }) }),
       );
       // A slide it copies being typed in, in its part's room: the copy goes
-      // again once that room has saved (untilRoomSaved).
-      const receipt = await untilRoomSaved(send, () => session.page === askedFor);
+      // again once that room has saved (untilRoomSaved). Another member
+      // holding the page's checkout (409 page_locked): the copy waits for it,
+      // asked again later and later (1 s, 2, 4 ... 30 s) for up to five
+      // minutes, the member told once -- refused at once, the press was lost.
+      let receipt: Awaited<ReturnType<typeof send>> | null = null;
+      for (let wait = 0, waited = 0; ; ) {
+        try {
+          receipt = await untilRoomSaved(send, () => session.page === askedFor);
+          break;
+        } catch (lockError) {
+          const locked = isApiRequestError(lockError) && lockError.status === 409 && lockError.code === "page_locked";
+          if (!locked || waited >= DECK_PART_LOCK_WAIT_MAX_MS || session.page !== askedFor) throw lockError;
+          if (wait === 0) {
+            const holder = (lockError.details?.holder as { name?: unknown } | undefined)?.name;
+            optionsRef.current.onStructureWaiting?.(typeof holder === "string" && holder ? holder : null);
+          }
+          wait = Math.min(DECK_PART_LOCK_BACKOFF_MAX_MS, wait === 0 ? 1_000 : wait * 2);
+          await new Promise((resolve) => window.setTimeout(resolve, wait));
+          waited += wait;
+        }
+      }
       if (session.page !== askedFor) return { ok: false, code: "unavailable", message: "" };
       adoptOwnWrite(base, receipt);
       takeRoomUpdate(receipt);

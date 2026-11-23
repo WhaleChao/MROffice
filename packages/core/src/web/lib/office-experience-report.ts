@@ -16,7 +16,8 @@
  */
 import { isDoNotTrackEnabled, sendErrorBeacon } from "./errors/report-beacon";
 
-export type OfficeExperienceKind = "save_failure" | "partial" | "smartart_kept" | "pdf_long_way" | "layout_twitch";
+export type OfficeExperienceKind = "save_failure" | "partial" | "smartart_kept" | "pdf_long_way" | "layout_twitch"
+  | "room_durable_stalled" | "save_surface_stalled";
 
 const NAMES: Readonly<Record<OfficeExperienceKind, string>> = {
   save_failure: "OfficeSaveFailureShown",
@@ -32,6 +33,13 @@ const NAMES: Readonly<Record<OfficeExperienceKind, string>> = {
   // two layouts alternating (paged/ledger/ledgerTwitch), by which: `returned`,
   // `held-cycle`, `held-repair`. The reader saw the page jump; the bar is zero.
   layout_twitch: "DocsLayoutTwitch",
+  // A deck room's updates the database has not confirmed for a minute while
+  // its socket is up (lib/save-stall-report): the window says "Save" though
+  // nothing is left to send (S6 acc4, a reconnect that lost the waiting ids).
+  room_durable_stalled: "PageRoomDurableStalled",
+  // A save face saying "Saving..." or "Save" for 90 s with no request on its
+  // way, by the inputs that make it so (lib/save-stall-report).
+  save_surface_stalled: "SaveSurfaceStalled",
 };
 
 const FORMATS: Readonly<Record<string, string>> = {

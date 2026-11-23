@@ -116,6 +116,14 @@
   transform-origin: 0 0;
 }
 
+/* While the zoom moves (WindowCanvas markZoomMoving): one compositor layer,
+   so each step scales what was already drawn instead of drawing every window
+   again at the new scale; the attribute goes once the zoom rests and the
+   desk is drawn sharp at the scale it settled on. */
+.wm-canvas-zoom-layer[data-zooming] {
+  will-change: transform;
+}
+
 .wm-canvas-zoom-chrome {
   position: absolute;
   right: 12px;
@@ -2853,6 +2861,17 @@ html[data-reduce-motion] .wm-empty-state-page {
   syntax: "<number>";
   inherits: false;
   initial-value: 0;
+}
+
+ 
+@property --wm-window-shadow {
+  syntax: "*";
+  inherits: false;
+}
+
+@property --wm-owner-halo {
+  syntax: "*";
+  inherits: false;
 }
 
 /* A viewer sees the owner's colour on somebody else's window; the owner

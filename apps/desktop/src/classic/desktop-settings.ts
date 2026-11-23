@@ -55,3 +55,40 @@ export function autoSaveToOriginalEnabled(): boolean {
 export function aiScreenEnabled(): boolean {
   return readSettings().aiScreen !== false;
 }
+
+// --- The notebook a launch's documents land in -------------------------------
+//
+// The page tells it (mraiDesktop.rememberLanding, ../../web/lib/desktop-landing.ts):
+// the notebook its window shows. Kept beside the settings (landing.json), read
+// at a launch started by a double-click (./main.ts openRouteFor).
+
+const NOTEBOOK_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const landingFile = () => path.join(app.getPath("userData"), "landing.json");
+let landing: string | null | undefined;
+
+/** The notebook the window last showed, or null. */
+export function readLanding(): string | null {
+  if (landing !== undefined) return landing;
+  try {
+    const value = (JSON.parse(fs.readFileSync(landingFile(), "utf8")) as { notebookId?: unknown }).notebookId;
+    landing = typeof value === "string" && NOTEBOOK_ID.test(value) ? value : null;
+  } catch {
+    landing = null;
+  }
+  return landing;
+}
+
+/** The notebook the window shows now (null: forgotten). False when not a notebook's id. */
+export function writeLanding(notebookId: string | null): boolean {
+  if (notebookId !== null && !NOTEBOOK_ID.test(notebookId)) return false;
+  if (readLanding() === notebookId) return true;
+  landing = notebookId;
+  try {
+    const partial = `${landingFile()}.partial`;
+    fs.writeFileSync(partial, JSON.stringify({ notebookId }));
+    fs.renameSync(partial, landingFile());
+  } catch {
+    // Not kept: the next launch goes through the open page.
+  }
+  return true;
+}

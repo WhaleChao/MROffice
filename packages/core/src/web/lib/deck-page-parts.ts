@@ -921,8 +921,13 @@ export class DeckPartsSession<S extends DeckSlideLike> {
     // the deck carries the same one, so its stubs do too.
     const authorities = body.map((slide) => (slide as unknown as Rec).commentAuthority);
     const authorityKey = authorities[0] === undefined ? null : JSON.stringify(authorities[0]);
+    // One receipt in two spellings (its keys in another order, as a server
+    // write may leave one slide) is one receipt: read as two, the stubs went
+    // without it and the next commit took it off every slide of the part
+    
+    const authorityText = authorities[0] === undefined ? null : commentAuthorityText(authorities[0]);
     const shared = authorityKey !== null &&
-      authorities.every((value) => value !== undefined && JSON.stringify(value) === authorityKey);
+      authorities.every((value) => value !== undefined && commentAuthorityText(value) === authorityText);
     this.commentAuthority = shared ? authorities[0] : undefined;
     this.commentAuthorityKey = shared ? authorityKey : null;
     // A later part's slide is the body's room's no more than the server's

@@ -26,6 +26,7 @@ import {
   deletePageVersion,
   listPageSaveHolds,
   listPageVersions,
+  downloadPageSaveHoldPptx,
   readPageSaveHold,
   restorePageVersion,
   type PageItem,
@@ -443,22 +444,41 @@ export default function VersionHistoryPanel({
     [locale],
   );
   const handleHeld = useCallback(
-    async (hold: PageSaveHoldItem, how: "open" | "download") => {
+    async (hold: PageSaveHoldItem, how: "open" | "download" | "json") => {
       if (busy) return;
       const scope = beginAction();
       if (!scope) return;
       setBusy(true);
       try {
-        const kept = await readPageSaveHold(scope.pageId, hold.id, scope.controller.signal);
-        if (!isCurrentAction(scope)) return;
         const host = changesToMergeRef.current;
-        if (!host || !kept?.content_json || typeof kept.content_json !== "object") throw new Error("");
-        if (how === "open") {
-          await host.onOpenAsPage(kept.content_json, kept.created_at ?? hold.created_at);
+        if (!host) throw new Error("");
+        const stamp = (hold.created_at ?? "").replace(/[:]/g, "-").slice(0, 16);
+        const fileName = (extension: string) =>
+          `${(host.fileTitle || "page").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "page"} ${stamp}.${extension}`;
+        // The changes as the deck they are: a .pptx written from the kept
+        // body (SAVE-GUARANTEE S2). The JSON copy stays a second choice.
+        const downloadDeck = async () => {
+          const deck = await downloadPageSaveHoldPptx(scope.pageId, hold.id, scope.controller.signal);
+          if (isCurrentAction(scope)) downloadBlobFile(fileName("pptx"), deck);
+        };
+        if (how === "download") {
+          await downloadDeck();
         } else {
-          const stamp = (kept.created_at ?? hold.created_at ?? "").replace(/[:]/g, "-").slice(0, 16);
-          const name = `${(host.fileTitle || "page").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "page"} ${stamp}.json`;
-          downloadBlobFile(name, new Blob([JSON.stringify(kept.content_json)], { type: "application/json" }));
+          const kept = await readPageSaveHold(scope.pageId, hold.id, scope.controller.signal);
+          if (!isCurrentAction(scope)) return;
+          if (!kept?.content_json || typeof kept.content_json !== "object") throw new Error("");
+          if (how === "open") {
+            try {
+              await host.onOpenAsPage(kept.content_json, kept.created_at ?? hold.created_at);
+            } catch {
+              // The same check that refused the body as a save refuses it as
+              // a new page: the deck file is offered instead, no failure said.
+              if (!isCurrentAction(scope)) return;
+              await downloadDeck();
+            }
+          } else {
+            downloadBlobFile(fileName("json"), new Blob([JSON.stringify(kept.content_json)], { type: "application/json" }));
+          }
         }
         if (isCurrentAction(scope)) setError(null);
       } catch (heldError) {
@@ -599,6 +619,18 @@ export default function VersionHistoryPanel({
               style={{ fontSize: 12, whiteSpace: "nowrap" }}
             >
               {t("versions.changesToMergeDownload")}
+            </button>
+            <button
+              className={officeTaskPaneParts.button}
+              type="button"
+              onClick={() => void handleHeld(hold, "json")}
+              disabled={busy || !canWrite}
+              data-testid="document-version-merge-download-json"
+              title={`${t("versions.changesToMergeDownload")} (JSON)`}
+              aria-label={`${t("versions.changesToMergeDownload")} (JSON)`}
+              style={{ fontSize: 12, whiteSpace: "nowrap" }}
+            >
+              JSON
             </button>
           </span>
         </div>

@@ -76,6 +76,9 @@ export const PRESENTATION_EFFECTS_WITHOUT_REWIND: ReadonlySet<string> = new Set(
   "flicker",
   "font",
   "font-style",
+  // A media call takes no Effect Options of an animation at all.
+  "media-pause",
+  "media-play",
   "style-emphasis",
   "transparency",
   "vertical-highlight",

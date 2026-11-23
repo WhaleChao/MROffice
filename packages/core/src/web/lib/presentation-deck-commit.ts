@@ -144,18 +144,21 @@ export function reconcileSlideCommentAuthority<S extends PresentationCommitSlide
   const canonical = previousAuthorities[0] ? commentAuthorityText(previousAuthorities[0]) : null;
   const sameReceipt = (value: Record<string, unknown>) =>
     JSON.stringify(value) === spelled || commentAuthorityText(value) === canonical;
-  const authority =
-    canonical &&
-    previousAuthorities.length === previousSlides.length &&
-    previousAuthorities.every(sameReceipt)
-      ? previousAuthorities[0]
-      : null;
+  // The deck's receipt is the one the slides that state one all state. A
+  // slide that states none (a stub read before its part, a slide another
+  // write left without it) takes it; it is never the reason to take it off
+  // every other slide -- that refused the part's save and its room's fold
+  
+  // receipt"). Slides stating different receipts are left as they are.
+  const authority = canonical && previousAuthorities.every(sameReceipt) ? previousAuthorities[0] : null;
+  const mixed = previousAuthorities.length > 0 && authority === null;
   // A slide that already carries exactly this authority (or, without one,
   // carries none) is kept as it is: every slide copied at every commit gave
   // every slide a new identity at every keystroke, and every slide's
   
   // 38-slide deck redrew all 38 miniatures at each letter typed).
   return nextSlides.map((slide) => {
+    if (mixed) return slide;
     if (authority) {
       const own = asRecord(slide.commentAuthority);
       if (own !== null && JSON.stringify(own) === spelled) return slide;

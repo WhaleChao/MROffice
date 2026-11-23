@@ -1447,6 +1447,12 @@ export function storedBlocksHoldFootnoteRef(blocks: readonly unknown[]): boolean
 const FIRST_SCREEN_LOOK_MS = 200;
 const FIRST_SCREEN_WAIT_MAX_MS = 20_000;
 
+/** Whether parts read ahead go in back to back (see loadNext's end). */
+export function partsBackToBack(): boolean {
+  return typeof window === "undefined"
+    || (window as Window & { __docsPartsBackToBack?: boolean }).__docsPartsBackToBack !== false;
+}
+
 export function loadsPartsAtOnce(count: number, touch: boolean): boolean {
   if (typeof window !== "undefined" && (window as Window & { __docsPartsAtOnce?: boolean }).__docsPartsAtOnce === false) return false;
   return !touch && count > 1 && count <= PART_EAGER_MAX;
@@ -1506,6 +1512,8 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
   const eagerRef = useRef(false);
   /** The later parts read ahead when they load at once, by index. */
   const prefetched = useRef(new Map<number, Promise<DocumentPartResponse | null>>());
+  /** Parts read ahead whose read came back ready (loadNext goes on to them). */
+  const readyAhead = useRef(new Set<number>());
   /** The hydration (generation) whose parts were all asked for at once. */
   const eagerStarted = useRef(-1);
   /** The hydration (generation) whose parts' reads went out. */
@@ -1759,6 +1767,7 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
     loadingRef.current = false;
     blockedRef.current = null;
     prefetched.current.clear();
+    readyAhead.current.clear();
     const stored = optionsRef.current.body;
     storedAnchors.current = new Map();
     if (isRecord(stored) && Array.isArray(stored.content)) {
@@ -2821,6 +2830,7 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
       // a read that failed there is made again here.
       const ahead = prefetched.current.get(index);
       prefetched.current.delete(index);
+      readyAhead.current.delete(index);
       const part = (ahead ? await ahead : null) ?? await readDocumentPart(pageId, index, { cache: "no-store" });
       if (generation.current !== started || !viewIsThisReading()) return;
       if (part.status === "pending" || part.status === "failed") {
@@ -3002,6 +3012,27 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
         // still look 300 ms apart, a book's 7 later parts took the 20 s after
         
         
+        // Since then the ledger holds the pages past the reader while parts are
+        // still coming in (holdForArrivingParts) and lays them out together, so a
+        // part read ahead goes in right after the one before while the reader is
+        // quiet (no key or scroll for PART_BACKGROUND_QUIET_MS; one holds the next
+        
+        // 42.3/41.6 s against 49.4/44.1 s at the paced rate, editable 4.4-4.6 s
+        // against 6.1-7.7 s, all parts in by 18-25 s instead of 37-45 s; the
+        // longest task 4.0-4.9 s against 2.9-3.3 s.
+        // `window.__docsPartsBackToBack = false`: the paced rate, as before.
+        if (
+          eagerRef.current
+          && partsBackToBack()
+          && prefetched.current.has(loadedRef.current + 1)
+          && readyAhead.current.has(loadedRef.current + 1)
+          && Date.now() - lastInputAt.current >= PART_BACKGROUND_QUIET_MS
+        ) {
+          const next = started;
+          window.setTimeout(() => {
+            if (generation.current === next && !loadingRef.current && !blockedRef.current) void loadNextRef.current?.();
+          }, 0);
+        }
       }
     }
   }, [block, pageId, partsReadRight, publish, refuseJump, roomRead, scheduleSaves, startRoom, viewIsThisReading]);
@@ -3115,7 +3146,11 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
     // not asked for twice.
     for (let index = 1; index < total; index += 1) {
       if (index <= loadedRef.current || (loadingRef.current && index === loadedRef.current + 1)) continue;
-      prefetched.current.set(index, readDocumentPart(id, index, { cache: "no-store", priority: "low" } as RequestInit).catch(() => null));
+      const read = readDocumentPart(id, index, { cache: "no-store", priority: "low" } as RequestInit).catch(() => null);
+      prefetched.current.set(index, read);
+      // Ready to go in back to back (loadNext's end): a part the import has
+      // yet to read waits for the look that finds it read.
+      void read.then((response) => { if (response?.status === "ready") readyAhead.current.add(index); });
     }
   }, [pageId]);
   // Every part read ahead at once (loadsPartsAtOnce) once the first is in the

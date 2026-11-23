@@ -48,10 +48,20 @@ const PT = 96 / 72;
 const SYNTHETIC_SKEW = 0.25;
 
 const STYLE_ID = "mrnote-office-text-outline";
+
+
+
+
+
+
+
+
+
+const FILL_HOST = "data-office-text-outline-fill-host";
 const STYLESHEET = `
 [style*="${OFFICE_TEXT_OUTLINE_IMAGE}"]{-webkit-text-stroke-width:0!important;${OFFICE_TEXT_OUTLINE_RINGS}:opacity(1)!important}
-[style*="${OFFICE_TEXT_OUTLINE_FILLED}"],[style*="${OFFICE_TEXT_OUTLINE_FILLED}"] *,textarea[data-office-text-outline-filled]{-webkit-text-fill-color:transparent!important}
-[style*="${OFFICE_TEXT_OUTLINE_FILLED}"][style*="background-clip"],[style*="${OFFICE_TEXT_OUTLINE_FILLED}"] [style*="background-clip"],textarea[data-office-text-outline-filled][style*="background-clip"]{background-image:none!important}
+[style*="${OFFICE_TEXT_OUTLINE_FILLED}"],[${FILL_HOST}],[${FILL_HOST}] *,textarea[data-office-text-outline-filled]{-webkit-text-fill-color:transparent!important}
+[style*="${OFFICE_TEXT_OUTLINE_FILLED}"][style*="background-clip"],[${FILL_HOST}] [style*="background-clip"],textarea[data-office-text-outline-filled][style*="background-clip"]{background-image:none!important}
 textarea[data-office-text-outline-mirrored]{-webkit-text-stroke-width:0!important;${OFFICE_TEXT_OUTLINE_RINGS}:opacity(1)!important}
 [data-office-text-warp-source][style*="${OFFICE_TEXT_OUTLINE_IMAGE}"]::after,[data-office-text-warp-source] [style*="${OFFICE_TEXT_OUTLINE_IMAGE}"]::after{visibility:hidden}
 [style*="${OFFICE_TEXT_OUTLINE_IMAGE}"]::after{content:"";position:absolute;pointer-events:none;user-select:none;-webkit-text-stroke:0;left:var(${BOX[0]});top:var(${BOX[1]});width:var(${BOX[2]});height:var(${BOX[3]});background:var(${OFFICE_TEXT_OUTLINE_IMAGE}) no-repeat 0 0/100% 100%}
@@ -310,6 +320,7 @@ function clear(element: HTMLElement): void {
   if (!element.style.getPropertyValue(OFFICE_TEXT_OUTLINE_IMAGE) && !state?.positioned && !element.style.getPropertyValue(OFFICE_TEXT_OUTLINE_FILLED)) return;
   element.style.removeProperty(OFFICE_TEXT_OUTLINE_IMAGE);
   element.style.removeProperty(OFFICE_TEXT_OUTLINE_FILLED);
+  element.removeAttribute(FILL_HOST);
   for (const name of BOX) element.style.removeProperty(name);
   if (state?.positioned && element.style.position === "relative") element.style.removeProperty("position");
   wrote(element);
@@ -729,11 +740,16 @@ function drawFlat(element: HTMLElement): void {
   // are its own.
   const wasFilled = element.style.getPropertyValue(OFFICE_TEXT_OUTLINE_FILLED) !== "";
   if (wasFilled) element.style.removeProperty(OFFICE_TEXT_OUTLINE_FILLED);
+  const wasHost = element.hasAttribute(FILL_HOST);
+  if (wasHost) element.removeAttribute(FILL_HOST);
   let filled = false;
   try {
     filled = drawElement(element);
   } finally {
-    if (filled) element.style.setProperty(OFFICE_TEXT_OUTLINE_FILLED, "1");
+    if (filled) {
+      element.style.setProperty(OFFICE_TEXT_OUTLINE_FILLED, "1");
+      element.setAttribute(FILL_HOST, "");
+    }
     if (filled || wasFilled) wrote(element);
   }
 }

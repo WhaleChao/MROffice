@@ -2842,6 +2842,18 @@ export function readMraiNativeRightToLeftLetterCodes(
   return letters.size ? Object.freeze({ letters, several }) : null;
 }
 
+/** What a font's ToUnicode reads each code as (the characters a show's codes
+ * stand for, in the order the show holds them); null where the table is one
+ * this engine does not read, or the reader reads no text from it. */
+export function readMraiNativeToUnicodeDecode(
+  toUnicodeBytes: Uint8Array,
+  codeUnitBytes: 1 | 2,
+): ReadonlyMap<number, string> | null {
+  if (!toUnicodeBytes.length || isReaderDiscardedIdentityToUnicode(toUnicodeBytes)) return null;
+  try { return parseToUnicode(toUnicodeBytes, codeUnitBytes).decode; }
+  catch { return null; }
+}
+
 /** What an Identity-encoded CIDFontType2's ToUnicode (Identity CIDToGIDMap)
  * reads each code as, and the codes among them it calls white space whose
  * glyphs draw: what a repair of the font's reading starts from, and is

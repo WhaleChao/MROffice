@@ -107,6 +107,7 @@ import {
   isPresentationAnimationEffectId,
   MAX_TIMELINE_STEPS,
   presentationAnimationEffect,
+  presentationMediaCallCommand,
   timelineAnimationAuthoringCapability,
   type AnimationSequenceEditOperation,
   type AnimationTimingValue,
@@ -122,6 +123,7 @@ import {
   type PresentationAnimationEffectSettings,
 } from "./presentation-anim-effect-settings";
 import { effectSettingsDefaults } from "./presentation-anim-effect-defaults";
+import { presentationClipDurationMs } from "./presentation-video-file";
 import { PRESENTATION_OBJECT_GEOMETRY_MAX_EMU } from "./presentation-geometry-limit";
 
 export const DUPLICATE_SLIDE_COMMAND_ID = "slides.duplicate" as const;
@@ -910,6 +912,8 @@ export function createPresentationSlideTransitionApplyAllCommandAdapter<
 export interface PresentationAnimationEffectBlock {
   readonly id: string;
   readonly type?: string;
+  /** An embed's kind (a video or audio clip takes the Media effects). */
+  readonly kind?: string;
   readonly text?: unknown;
   readonly source?: unknown;
   readonly locked?: boolean;
@@ -922,6 +926,17 @@ export function presentationAnimationEffectTargetEligible(
 ): boolean {
   const effect = presentationAnimationEffect(kind);
   if (!effect) return false;
+  // PowerPoint offers its Media effects (Play / Pause) for a video or audio
+  // clip only.
+  if (effect.nativeBehavior === "media") {
+    return (
+      block.type === "embed" &&
+      (block.kind === "video" || block.kind === "audio") &&
+      // Play states the clip's length, which only the clip's package knows.
+      (effect.nativeMediaCommand !== "playFrom(0.0)" ||
+        presentationClipDurationMs(block as unknown as Record<string, unknown>) !== null)
+    );
+  }
   if (effect.nativeBehavior !== "color") return true;
   if (
     effect.nativeColorAttribute === "fillcolor" ||
@@ -1083,6 +1098,8 @@ function editedAnimationOccurrence(
       let changed = false;
       const original = sequence[payload.index];
       if (!original || !timelineStepsEqual(original, payload.expectedStep)) return null;
+      // A media call has no Effect Options of an animation.
+      if (presentationMediaCallCommand(original.animation) !== null) return null;
       if (payload.effectOption !== undefined) {
         const withOption = editTimelineStepEffectOption(
           next,
@@ -1286,12 +1303,21 @@ export function createPresentationAnimationEffectCommandAdapter<
     ) {
       return false;
     }
+    const created = createStep(resolved.blockModelId, payload.kind);
+    if (presentationMediaCallCommand(payload.kind) === "playFrom(0.0)") {
+      // Play lasts the clip's length.
+      const clip = resolved.slide.blocks.find(
+        (candidate) => candidate.id === resolved.blockModelId,
+      );
+      const clipMs = clip
+        ? presentationClipDurationMs(clip as unknown as Record<string, unknown>)
+        : null;
+      if (clipMs === null) return false;
+      created.durationMs = clipMs;
+    }
     const nextSlide = {
       ...resolved.slide,
-      animationSequence: [
-        ...resolved.sequence,
-        createStep(resolved.blockModelId, payload.kind),
-      ],
+      animationSequence: [...resolved.sequence, created],
     } as T;
     accessors.commitSlides(
       resolved.slides.map((slide, index) =>

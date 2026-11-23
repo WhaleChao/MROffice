@@ -53,13 +53,15 @@ const alphabetIndex = new Map<string, number>([...table.alphabet].map((ch, index
 /**
  * The characters past Latin-1 whose widths office-wrap-advances-extra.json
  * holds (lookwin p257-lw: Latin Extended-A U+0100-013F, the Greek letters and
- * − ≤ ≥ ≠ ≈ ∞ wrap at FreeType's hinted widths as the Latin-1 table does). The
+ * − ≤ ≥ ≠ ≈ ∞ wrap at FreeType's hinted widths as the Latin-1 table does; p294-lw:
+ * the Cyrillic U+0400-045F too, 0 of 36 groups off; p299/p299b-lw: U+0140-017F
+ * but Ţ ţ ŵ, which GDI sets a pixel or two off FreeType). The
  * table is a chunk of its own, fetched the first time a cell's text holds one
  * of them: until it lands such text keeps the caller's own measure, and the
  * sheet is measured again when it has (officeWrapExtraEpoch). The API's
  * office_wrap_advances_extra.json is the same table, read whole.
  */
-const EXTRA_CHARS = /[Ā-ĿΑ-ΡΣ-Ωα-ω−≤≥≠≈∞]/u;
+const EXTRA_CHARS = /[Ā-ĿΑ-ΡΣ-Ωα-ω−≤≥≠≈∞Ѐ-џŀ-šŤ-ŴŶ-ſ]/u;
 
 interface ExtraWrapAdvanceTable {
   readonly chars: string;
@@ -360,10 +362,18 @@ function complexRoomScale(sizePt: number): number {
   return emPxOf(sizePt) / (sizePt * 96 / 72);
 }
 
-/** One rich-text run: its text and the face it is set in. */
+/** One rich-text run: its text and the face it is set in; `script`, a
+ * superscript or subscript run. */
 export interface OfficeHintedWrapRun extends OfficeHintedWrapFace {
   readonly text: string;
+  readonly script?: boolean;
 }
+
+/** A superscript or subscript run wraps at its face's advances two thirds its
+ * size (lookwin p295-lw: Arial, Calibri and Times New Roman 10 and 11 at 9 and
+ * 10 px per em, 35 of 36 groups to the pixel; R475-X12's "... кг P га⁻¹ за 6
+ * приёмов" one line in its 250 px column; the server's OFFICE_SCRIPT_WRAP_SCALE). */
+export const OFFICE_SCRIPT_WRAP_SCALE = 2 / 3;
 
 /**
  * officeHintedWrapLines over rich text: each character at its own run's
@@ -384,7 +394,7 @@ export function officeHintedWrapRunLines(runs: readonly OfficeHintedWrapRun[], c
   for (const run of runs) {
     const piece = String(run.text).replace(/\r\n?/g, "\n");
     if (!piece) continue;
-    const advance = advancesOf(run);
+    const advance = advancesOf(run.script === true ? { ...run, sizePt: run.sizePt * OFFICE_SCRIPT_WRAP_SCALE } : run);
     if (!advance) return undefined;
     text += piece;
     if (run.italic === true) slanted = true;

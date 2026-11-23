@@ -25,6 +25,7 @@ import { OverflowPunctuationHang } from "./overflowPunctuationHang";
 import { DocumentInlineAtomCaret } from "./inlineAtomCaret";
 import { PasteParagraphFormat } from "./pasteParagraphFormat";
 import { JoinedParagraphStyleRuns } from "@mrnote/core/web/components/console/editor/native-document/joinedParagraphStyleRuns.ts";
+import { linkMarkInclusive, linkRunsPastMarkPlugin } from "./linkRunsPastMark";
 import { FloatAnchorsFollowParagraphs } from "./floatAnchorsFollowParagraphs";
 import { JoinedParagraphFieldSpans } from "./joinedParagraphFieldSpans";
 import { PasteSelectionEnd } from "./pasteSelectionEnd";
@@ -45,6 +46,7 @@ import { Extension, InputRule, mergeAttributes } from "@tiptap/core";
 import { createDocumentPictureObjectsExtension } from "@mrnote/core/web/lib/document-picture-objects-upload.ts";
 import { installProseMirrorResilience, staleTransactionRebasePlugin } from "@mrnote/core/web/lib/editor/prosemirror-resilience.ts";
 import { ReactCommitSelectionGuard } from "@mrnote/core/web/lib/editor/react-commit-selection-guard.ts";
+import { PendingDomSelection } from "@mrnote/core/web/lib/editor/pending-dom-selection.ts";
 import { InkSheetLayer } from "@mrnote/core/web/components/console/editor/native-document/paged/inkSheetLayer.ts";
 import { InkLightLayer } from "@mrnote/core/web/components/console/editor/native-document/paged/inkLightLayer.ts";
 import { SaveTextWarmup } from "./paged/saveTextWarmup";
@@ -2775,8 +2777,14 @@ export function createNativeDocumentPluginRegistry({
           // As in Word, only what the person types is linked: a change that
           // arrives (the room, the pages filling in) or that the editor makes
           // for itself outside Undo is left as it is.
+          // As in Word, words typed at a link's end are not the link's; only a
+          // HYPERLINK field whose result runs past its paragraph's mark takes
+          // what is typed at that paragraph's end (linkRunsPastMark.ts).
+          inclusive() {
+            return linkMarkInclusive();
+          },
           addProseMirrorPlugins() {
-            return (this.parent?.() ?? []).map((plugin) => {
+            return [...(this.parent?.() ?? []).map((plugin) => {
               const append = plugin.spec.appendTransaction;
               if (!append || !String((plugin.spec.key as { key?: string } | undefined)?.key ?? "").startsWith("autolink")) {
                 return plugin;
@@ -2792,7 +2800,7 @@ export function createNativeDocumentPluginRegistry({
                     ? null
                     : append.call(plugin, transactions, oldState, newState),
               });
-            });
+            }), linkRunsPastMarkPlugin(this.name)];
           },
           // The stock exit (`exitable`) TYPED a space after a link that ends
           // its paragraph so Right could step out of it: one arrow press
@@ -2827,6 +2835,14 @@ export function createNativeDocumentPluginRegistry({
               // (document_link_policy.py).
               inertHref: {
                 default: null as string | null,
+                parseHTML: () => null,
+                renderHTML: () => ({}),
+              },
+              // A HYPERLINK field's result that runs past its paragraph's
+              // mark (the import's reading 416): typing at the paragraph's
+              // end types into the link. Never rendered, never pasted in.
+              runsPastMark: {
+                default: null as boolean | null,
                 parseHTML: () => null,
                 renderHTML: () => ({}),
               },
@@ -3676,6 +3692,9 @@ export function createNativeDocumentPluginRegistry({
         // React's pre-commit selection save counted every character of the
         // whole document on each commit of any root (lib/editor).
         ReactCommitSelectionGuard,
+        // A click the browser placed and ProseMirror had not read yet is kept
+        // when the page's own layout work redraws the view first (lib/editor).
+        PendingDomSelection,
         DocumentAutoHyphenation,
         DocumentHyphenationRules,
         // A header or footer object Word wraps the body around (R22-D30).

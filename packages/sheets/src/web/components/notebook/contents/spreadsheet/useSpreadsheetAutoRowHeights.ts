@@ -346,7 +346,8 @@ function hintedRunLines(item: AutoRowMeasurement, parts: readonly NativeTextPart
   for (const part of parts) {
     const face = officeStyleFace({ ...item.style, ...(part.style as CSSProperties | undefined) }, item.style);
     if (!face) return undefined;
-    runs.push({ text: part.text.replace(/\r\n?/g, "\n"), family: face.family, sizePt: face.sizePt, bold: face.bold === true, italic: face.italic });
+    runs.push({ text: part.text.replace(/\r\n?/g, "\n"), family: face.family, sizePt: face.sizePt, bold: face.bold === true, italic: face.italic,
+      ...(face.script ? { script: true } : {}) });
   }
   const lines = officeHintedWrapRunLines(runs, item.width, { normalDigitPx: item.normalDigitPx, spaced: item.spaced === true });
   if (!lines?.length) return undefined;

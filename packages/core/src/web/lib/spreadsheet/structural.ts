@@ -2321,6 +2321,29 @@ function anchorPointPlace(
   return [line, Number.isFinite(offset) ? offset : 0];
 }
 
+/**
+ * A two-cell anchor with no extent on `axis` (a vertical line's columns, a
+ * flat shape's rows) both of whose markers sit on the `count` lines deleted
+ * at `at`: every line it has goes, and the object with them, as Excel
+ * deletes it (Windows Excel 16, xlsx-rounds R476-X20 E7: column G deleted
+ * under a vertical connector drawn inside G removed the connector). Such an
+ * anchor is collapsed before the edit already, so the collapse test above
+ * never sees it go.
+ */
+function twoCellAnchorWithinDeletedLines(
+  anchor: StructuralObjectAnchor | undefined,
+  axis: StructuralAxis,
+  at: number,
+  count: number,
+): boolean {
+  if (anchor?.kind !== "twoCell" || !twoCellAnchorCollapsed(anchor, axis)) return false;
+  if ((anchor as { smartArtFrame?: unknown }).smartArtFrame) return false;
+  const from = anchorPointPlace(anchor.from, axis);
+  const to = anchorPointPlace(anchor.to, axis);
+  if (!from || !to) return false;
+  return [from[0], to[0]].every((line) => line >= at && line < at + count);
+}
+
 /** A two-cell anchor whose markers meet on `axis`: none of it is left there. */
 function sameCell(a: StructuralAnchorPoint, b: StructuralAnchorPoint): boolean {
   return a.row === b.row && (a.column ?? a.col) === (b.column ?? b.col);
@@ -2433,8 +2456,8 @@ function remapObjects<O extends StructuralObject>(
     if (
       moveAnchors &&
       delta < 0 &&
-      twoCellAnchorCollapsed(next.anchor, axis) &&
-      !twoCellAnchorCollapsed(object.anchor, axis)
+      ((twoCellAnchorCollapsed(next.anchor, axis) && !twoCellAnchorCollapsed(object.anchor, axis)) ||
+        twoCellAnchorWithinDeletedLines(object.anchor, axis, at, -delta))
     ) {
       collapsed.add(next);
     }

@@ -730,8 +730,8 @@ function nearestSlices(registry: Registry, substitute: string, weight: number, i
 
 /**
  * Whether a style-named family ("Poppins SemiBold", "Roboto Condensed
- * Light") is drawn bold by emboldening its regular. Named for a
- * weight other than regular or bold, it is a family of its own whose one
+ * Light", "Open Sans Bold") is drawn bold by emboldening its regular. Named
+ * for a weight other than regular, it is a family of its own whose one
  * style is that weight (its regular, and an italic): Windows lists every such
  * family it has with no bold face beside it (windows-family-styles.json: 163
  * of 163 on the truth machine), and Office emboldens the regular, at the
@@ -740,7 +740,11 @@ function nearestSlices(registry: Registry, substitute: string, weight: number, i
 export function styledFamilyEmboldensRegular(styled: Pick<StyledFamily, "weight">): boolean {
   // Heavier than bold (ExtraBold, Black, Heavy: 800 and up), Windows draws the face as it is: no bold run of one in
   // its PDFs is emboldened (Lato Black, Poppins ExtraBold, Roboto Black ...), and its bold stays the heavy cut.
-  return styled.weight !== 400 && styled.weight !== 700 && styled.weight < 800;
+  // A name for the bold itself ("Open Sans Bold", "Roboto Bold") is the full name of a family's bold face: Windows
+  // draws that face as a family of its one face, and its bold runs emboldened at the face's advances ("Open Sans
+  // Bold,Bold" in 46 fonts of the corpus's Windows truth PDFs, "Roboto Bold,Bold" 15, "Poppins Bold,Bold" 15, ...),
+  // not in the heavier cut.
+  return styled.weight !== 400 && styled.weight < 800;
 }
 
 /**

@@ -447,7 +447,12 @@ export function PresentationAnimationGallery({
           </button>
         </DropdownMenuItem>
       </div>
-      {PRESENTATION_ANIMATION_EFFECT_CATEGORIES.map((category) => (
+      {PRESENTATION_ANIMATION_EFFECT_CATEGORIES.filter(
+        // The Media section only for a clip, as PowerPoint shows it.
+        (category) =>
+          category !== "media" ||
+          presentationAnimationEffectsByCategory("media").some((entry) => canSelect(entry.id)),
+      ).map((category) => (
         <section key={category}>
           <DropdownMenuLabel
             className={officeGalleryMenuStyles.section}

@@ -622,6 +622,13 @@ export interface BandRichFrame {
   /** For a turned legacy VML box: Word turns the box, never its words
    * (`floatAnchor.rotation` places the box, its words stay upright). */
   textUpright?: true;
+  /** Where the box's words stand in it (Format Shape > Text Box > Vertical
+   * alignment, `a:bodyPr anchor` / VML `v-text-anchor`): `ctr` in its middle,
+   * `b` at its foot, inside its insets; at its top when not stated. */
+  wordsAnchor?: "ctr" | "b";
+  /** With `wordsAnchor`: the words' paragraph's space before and after, in
+   * points, which the block set in the box's middle or at its foot holds. */
+  wordsSpacePt?: [number, number];
   /** Insert > WordArt: the box's words bent by this warp (the one value the
    * editors share, as the body's `frameBody.warp`), painted by the shared
    * warp painter over the box (corpus R471-D27's letterhead). */
@@ -676,6 +683,8 @@ type BandFrameExtras = Pick<
   | "autoHeight"
   | "autoWidth"
   | "textUpright"
+  | "wordsAnchor"
+  | "wordsSpacePt"
   | "textWarp"
   | "runsBefore"
   | "floatAnchor"
@@ -708,6 +717,16 @@ function normalizeBandFrameExtras(
   if (frame.textUpright !== undefined) {
     if (frame.textUpright !== true) return null;
     out.textUpright = true;
+  }
+  if (frame.wordsAnchor !== undefined) {
+    if (frame.wordsAnchor !== "ctr" && frame.wordsAnchor !== "b") return null;
+    out.wordsAnchor = frame.wordsAnchor;
+  }
+  if (frame.wordsSpacePt !== undefined) {
+    const space = frame.wordsSpacePt;
+    if (out.wordsAnchor === undefined || !Array.isArray(space) || space.length !== 2 ||
+        space.some((value) => typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1584)) return null;
+    out.wordsSpacePt = [space[0] as number, space[1] as number];
   }
   if (frame.textWarp !== undefined) {
     // As the server's `_normalize_frames`: a warp the shared value refuses

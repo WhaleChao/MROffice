@@ -1499,6 +1499,11 @@ export function paragraphOwnIndentCss(
   if (paragraph.marL !== undefined) {
     style.paddingInlineStart = paragraph.marL / AUTOFIT_EMU_PER_PX;
   }
+  // The row's right indent (`a:pPr@marR`, readings row 1029): its lines end
+  // that far inside the text area, aligned between both indents.
+  if (paragraph.marR !== undefined && paragraph.marR > 0) {
+    style.paddingInlineEnd = paragraph.marR / AUTOFIT_EMU_PER_PX;
+  }
   if (paragraph.indent !== undefined && !hasMarker) {
     // PowerPoint never starts a first line left of the box: a hanging
     // `@indent` past the row's margin (marL + indent < 0) draws the first line

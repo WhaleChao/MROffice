@@ -625,6 +625,11 @@ const PRESENTATION_TIMELINE_EFFECT_KEYFRAME_BODIES = Object.freeze({
   "stretchy-out": "0%{opacity:1;transform:none}100%{opacity:0;transform:scaleX(1.3)}",
   "stretch-out": "0%{transform:none}100%{transform:scaleX(0)}",
   "strips-out": "0%{clip-path:polygon(0 0,100% 0,100% 100%,0 100%)}100%{clip-path:polygon(100% 0,100% 0,100% 100%,100% 100%)}",
+  // A media call plays or pauses its clip; nothing about the clip moves.
+  "media-play": "0%,100%{}",
+  "media-pause": "0%,100%{}",
+  // Blink: hidden for the first half, shown for the second.
+  blink: "0%,49.99%{visibility:hidden}50%,100%{visibility:visible}",
 } satisfies Record<PresentationHandDrawnAnimationEffectId, string>);
 
 /** The hand-written keyframe of an effect; `undefined` for one played from a recipe. */

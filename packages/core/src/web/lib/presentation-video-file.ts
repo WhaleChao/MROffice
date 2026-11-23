@@ -320,6 +320,21 @@ export function parseNativePresentationAudioAuthority(
   return receipt;
 }
 
+/**
+ * A clip's length as its package states it (an imported video or audio
+ * clip's `mediaDurationMs`), or null: the duration a Play media call states.
+ */
+export function presentationClipDurationMs(
+  block: Readonly<Record<string, unknown>>,
+): number | null {
+  const authority =
+    nativePresentationVideoAuthority(block) ?? nativePresentationAudioAuthority(block);
+  const duration = authority?.mediaDurationMs;
+  return typeof duration === "number" && Number.isInteger(duration) && duration > 0
+    ? duration
+    : null;
+}
+
 export function nativePresentationAudioAuthority(
   block: Readonly<Record<string, unknown>>,
 ): NativePresentationAudioAuthority | null {

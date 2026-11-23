@@ -5,6 +5,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { docsSaveStallFace, useSaveSurfaceStallReport } from "@mrnote/core/web/lib/save-stall-report.ts";
 import { onlyofficeInitialZoom, onlyofficeMakesActionLinks, onlyofficeOpensReflowed, requestOnlyofficeActionLink } from "@mrnote/core/web/lib/embed/onlyoffice-frame.ts";
 import { ONLYOFFICE_SPELLCHECK_EVENT, onlyofficeSpellcheckAtOpen } from "@mrnote/core/web/lib/embed/onlyoffice-layout.ts";
 import { reloadPage as reloadWebPage } from "@mrnote/core/web/lib/reload-reason.ts";
@@ -12333,6 +12334,19 @@ export default function NoteEditor({
   // A save on the wire for a while says it is still working, and how long.
   const longSaveElapsed = useSaveElapsed(saveStatus === "saving" ? autosave.saveSentAt : null);
   const documentPartsViewStopped = documentPartsPage && documentParts.state.blocked === "count-jump";
+  // A face saying "Saving..." or "Save" for 90 s with nothing on its way:
+  // said to the server once, by its inputs (SaveSurfaceStalled).
+  const docsStall = docsSaveStallFace({
+    saveStatus, partsViewStopped: Boolean(documentPartsViewStopped), hasConflict: Boolean(autosave.hasConflict),
+    syncedToServer: Boolean(autosave.syncedToServer), notConnected: Boolean(autosave.notConnected),
+    error: Boolean(autosave.error), raw: autosave.saveStatus, catchingUp: docsCatchingUp, settling: docsSettling,
+    closingEdits: Boolean(autosave.closingEditsPending), partsSaving: documentPartsSaving, local: localSaveStatus,
+    conflictCopy: conflictCopyUnmerged, dirty: Boolean(autosave.isDirty),
+  });
+  useSaveSurfaceStallReport({
+    pageId, pageType: "document", enabled: !guestMode && !autosave.readOnly, face: docsStall.face,
+    busy: Boolean(autosave.isSaving) || documentPartsSaving, inputs: () => docsStall.inputs,
+  });
   const toolbarQuickSave = useMemo<OfficeRailSave>(
     () => ({
       // A view stopped by the parts' save gate saves nothing, whatever the

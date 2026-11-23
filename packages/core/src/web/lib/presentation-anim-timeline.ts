@@ -101,6 +101,9 @@ export const PRESENTATION_ANIMATION_EFFECT_CATEGORIES = [
   "entrance",
   "emphasis",
   "exit",
+  // PowerPoint's Media effects (Play / Pause), offered for a video or audio
+  // clip only.
+  "media",
 ] as const;
 
 export type PresentationAnimationEffectCategory =
@@ -121,6 +124,20 @@ export type PresentationAnimationEffectCategory =
 // API's catalogue does the same for these three families; leaving them off
 // here made a deck dragged into the editor lose every Wipe, Split, Blinds,
 // Box, Checkerboard, Peek, Strips, Random Bars, Spin and Grow/Shrink.
+/**
+ * A media call on a clip (presetClass "mediacall", one `p:cmd`, no build):
+ * the server's `MEDIA_ANIMATION_SPECS`. Play lasts the clip's length, Pause
+ * a millisecond.
+ */
+const nativeMediaCall = (command: "playFrom(0.0)" | "togglePause") => ({
+  subtype: 0,
+  filter: null,
+  behavior: "media" as const,
+  mediaCommand: command,
+  effectGroupId: null,
+  shapeBuild: false,
+});
+
 const nativeEffect = (subtype: number, filter: string | null) => ({
   subtype,
   filter,
@@ -508,6 +525,34 @@ const PRESENTATION_HAND_DRAWN_EFFECT_IDENTITIES = [
     nativePresetId: 18,
     authoring: nativeEffect(12, "strips(downLeft)"),
   },
+  {
+    // PowerPoint's Blink (preset 35): hidden for the first half of each play,
+    // shown for the second. Read, played and written as PowerPoint wrote it;
+    // not offered as a new choice until its defaults are measured.
+    id: "blink",
+    category: "emphasis",
+    nativePresetId: 35,
+    authoring: {
+      subtype: 0,
+      filter: null,
+      behavior: "blink" as const,
+      effectGroupId: null,
+      shapeBuild: false,
+    },
+    galleryHidden: true,
+  },
+  {
+    id: "media-play",
+    category: "media",
+    nativePresetId: 1,
+    authoring: nativeMediaCall("playFrom(0.0)"),
+  },
+  {
+    id: "media-pause",
+    category: "media",
+    nativePresetId: 2,
+    authoring: nativeMediaCall("togglePause"),
+  },
 ] as const satisfies readonly {
   readonly id: string;
   readonly category: PresentationAnimationEffectCategory;
@@ -530,7 +575,10 @@ const PRESENTATION_HAND_DRAWN_EFFECT_IDENTITIES = [
       | "rise-up"
       | "opacity"
       | "color"
-      | "recipe";
+      | "recipe"
+      | "media"
+      | "blink";
+    readonly mediaCommand?: "playFrom(0.0)" | "togglePause";
     readonly rotationBy?: number;
     readonly scaleX?: number;
     readonly scaleY?: number;
@@ -620,6 +668,12 @@ export const HAND_DRAWN_EFFECT_POWERPOINT_DURATION_MS: Readonly<
   "stretchy-out": 1_000,
   "stretch-out": 500,
   "strips-out": 500,
+  // A media call lasts its clip's length (set from the clip when the step is
+  // added); Pause a millisecond.
+  "media-play": 0,
+  "media-pause": 1,
+  // The corpus's Blinks last 0.5 s and 1 s; not offered as a new choice.
+  blink: 500,
 };
 
 /** A new step's Duration when PowerPoint has nothing more specific: 0.5 s. */
@@ -1063,7 +1117,7 @@ const PRESENTATION_ANIMATION_EFFECT_OPTION_SPECS = new Map<
 export interface PresentationAnimationEffectCatalogEntry {
   readonly id: PresentationAnimationEffectId;
   readonly category: PresentationAnimationEffectCategory;
-  readonly nativePresetClass: "entr" | "emph" | "exit" | "path";
+  readonly nativePresetClass: "entr" | "emph" | "exit" | "path" | "mediacall";
   /** One of PowerPoint's motion paths (offered in their own gallery section). */
   readonly motionPath: boolean;
   readonly nativePresetId: number;
@@ -1084,7 +1138,11 @@ export interface PresentationAnimationEffectCatalogEntry {
     | "opacity"
     | "color"
     | "recipe"
+    | "media"
+    | "blink"
     | null;
+  /** A media call's command (`playFrom(0.0)`, `togglePause`); null for the rest. */
+  readonly nativeMediaCommand: "playFrom(0.0)" | "togglePause" | null;
   readonly nativeRotationBy: number | null;
   readonly nativeScaleX: number | null;
   readonly nativeScaleY: number | null;
@@ -1136,9 +1194,10 @@ const ANIMATION_PRESET_CLASS_BY_CATEGORY = Object.freeze({
   entrance: "entr",
   emphasis: "emph",
   exit: "exit",
+  media: "mediacall",
 } satisfies Record<
   PresentationAnimationEffectCategory,
-  "entr" | "emph" | "exit"
+  "entr" | "emph" | "exit" | "mediacall"
 >);
 
 function effectControlToken(value: string): string {
@@ -1165,6 +1224,8 @@ export const PRESENTATION_WEB_ANIMATION_EFFECTS = Object.freeze(
         nativePresetSubtype: entry.authoring?.subtype ?? 0,
         nativeFilter: entry.authoring?.filter ?? null,
         nativeBehavior: entry.authoring?.behavior ?? null,
+        nativeMediaCommand:
+          entry.authoring?.behavior === "media" ? entry.authoring.mediaCommand : null,
         nativeRotationBy:
           entry.authoring?.behavior === "rotation"
             ? entry.authoring.rotationBy
@@ -1591,6 +1652,22 @@ export function hasEditableSlideAnimationSource(source: unknown): boolean {
   return source.slideAnimationOriginalSequence.every((entry) => {
     if (!isRecord(entry)) return false;
     const entryKeys = Object.keys(entry);
+    if (entry.kind === "none") {
+      // A path as PowerPoint wrote it (row 1078): its timing and path only.
+      const allowed = new Set([
+        "kind", "nativeShapeId", "triggerNativeShapeId", "effectSettings",
+        "motionPathNative", "trigger", "delayMs", "durationMs",
+      ]);
+      return (
+        entryKeys.every((key) => allowed.has(key)) &&
+        normalizeMotionPathNative(entry.motionPathNative) !== null &&
+        typeof entry.nativeShapeId === "string" &&
+        /^shp[1-9][0-9]*$/.test(entry.nativeShapeId) &&
+        isTimelineTrigger(entry.trigger) &&
+        isEditableAnimationTimingMs(entry.delayMs) &&
+        isEditableAnimationDurationMs(entry.durationMs)
+      );
+    }
     const expectedKeys = new Set([
       "kind",
       "nativeShapeId",
@@ -1601,6 +1678,8 @@ export function hasEditableSlideAnimationSource(source: unknown): boolean {
       ...(entry.effectColor === undefined ? [] : ["effectColor"]),
       ...(entry.effectSettings === undefined ? [] : ["effectSettings"]),
       ...(entry.paragraphs === undefined ? [] : ["paragraphs"]),
+      // On the shape behind the text (row 1077): only ever `true`.
+      ...(entry.background === true ? ["background"] : []),
       ...(entry.triggerNativeShapeId === undefined
         ? []
         : ["triggerNativeShapeId"]),
@@ -1646,13 +1725,15 @@ export function hasEditableSlideAnimationSource(source: unknown): boolean {
       /^shp[1-9][0-9]*$/.test(entry.nativeShapeId) &&
       (entry.triggerNativeShapeId === undefined ||
         (typeof entry.triggerNativeShapeId === "string" &&
-          /^shp[1-9][0-9]*$/.test(entry.triggerNativeShapeId) &&
-          entry.triggerNativeShapeId !== entry.nativeShapeId)) &&
+          /^shp[1-9][0-9]*$/.test(entry.triggerNativeShapeId))) &&
       isTimelineTrigger(entry.trigger) &&
       isEditableAnimationTimingMs(entry.delayMs) &&
-      (isEditableAnimationDurationMs(entry.durationMs) ||
-        // PowerPoint's own duration for a recipe effect (80 ms a letter).
-        (typeof entry.durationMs === "number" && entry.durationMs === effect.recipeDurationMs))
+      (effect.nativeBehavior === "media"
+        ? // A media call lasts its clip's length (Pause a millisecond).
+          mediaCallDurationMs(entry.kind, entry.durationMs) !== null
+        : isEditableAnimationDurationMs(entry.durationMs) ||
+          // PowerPoint's own duration for a recipe effect (80 ms a letter).
+          (typeof entry.durationMs === "number" && entry.durationMs === effect.recipeDurationMs))
     );
   });
 }
@@ -1705,11 +1786,11 @@ export function timelineAnimationAuthoringCapability(
       "slideId",
       "slide_id",
     );
-    const shapeId = animationSourceValue(
-      request.blockSource,
-      "shapeId",
-      "shape_id",
-    );
+    // A group's carrier member (a SmartArt diagram's has no shape of its own)
+    // is addressed by the group's shape (`groupShapeId`, rows 1074 / 1075).
+    const shapeId =
+      animationSourceValue(request.blockSource, "shapeId", "shape_id") ??
+      animationSourceValue(request.blockSource, "groupShapeId", "group_shape_id");
     if (
       !slideId ||
       blockSlideId !== slideId ||
@@ -1827,6 +1908,27 @@ export interface TimelineStep {
    */
   triggerBlockId?: string;
   /**
+   * The step moves the whole group its block belongs to, as one object
+   * (PowerPoint's effect on a `p:grpSp`, row 1074): `blockId` names the
+   * group's first member, the show plays the effect on every member
+   * ({@link expandGroupTargetSteps}) and the save writes it on the group.
+   */
+  targetGroup?: true;
+  /**
+   * The step plays on the shape behind the text, not on its paragraphs
+   * (PowerPoint's "animate attached shape", `p:spTgt/p:bg`, row 1077). The
+   * show plays it as a step on the block: the paragraphs come in with their
+   * own steps.
+   */
+  background?: true;
+  /**
+   * A motion path as PowerPoint wrote it (row 1078): its preset, its path
+   * and its point types, rotation and rotation centre, carried exactly so an
+   * unedited path is written back as it was. `motionPath` holds the editor's
+   * polyline of it for playback; editing the path drops this.
+   */
+  motionPathNative?: MotionPathNative;
+  /**
    * A By Paragraph build read from an imported package: the step plays on
    * these paragraphs of the block's text only (PowerPoint's `p:txEl/p:pRg`,
    * zero-based and inclusive). Read-only: MRAI plays it in the show and never
@@ -1918,6 +2020,108 @@ export function clampDelayMs(value: unknown): number {
 }
 
 /** Clamp a duration (ms) into the allowed range, defaulting empty/invalid input. */
+/**
+ * The steps as the show plays them: a step on a whole group
+ * (`targetGroup`) plays on each member of the group, the first member taking
+ * the step's own start and every other playing with it (the same delay from
+ * the run's start), so the group moves as one. Every other step is as it is.
+ */
+export function expandGroupTargetSteps<T extends TimelineStep>(
+  sequence: readonly T[],
+  blocks: readonly { readonly id: string; readonly groupId?: unknown }[],
+): readonly T[] {
+  if (!sequence.some((step) => step.targetGroup === true)) return sequence;
+  const groupOf = new Map(blocks.map((block) => [block.id, block.groupId]));
+  const out: T[] = [];
+  for (const step of sequence) {
+    if (step.targetGroup !== true) {
+      out.push(step);
+      continue;
+    }
+    const { targetGroup: _whole, ...own } = step;
+    out.push(own as T);
+    const group = groupOf.get(step.blockId);
+    if (typeof group !== "string" || !group) continue;
+    for (const block of blocks) {
+      if (block.id === step.blockId || block.groupId !== group) continue;
+      const { triggerBlockId: _trigger, id: _id, ...member } = own as TimelineStep;
+      out.push({
+        ...member,
+        blockId: block.id,
+        trigger: "with-previous",
+        ...(step.id ? { id: `${step.id}:${block.id}` } : {}),
+      } as T);
+    }
+  }
+  return out;
+}
+
+/** A motion path as PowerPoint wrote it (`TimelineStep.motionPathNative`). */
+export interface MotionPathNative {
+  readonly presetId: number;
+  readonly presetSubtype: number;
+  readonly path: string;
+  readonly ptsTypes: string;
+  readonly rAng?: string;
+  readonly rCtr?: readonly [string, string];
+}
+
+/** A well-formed `motionPathNative` (exactly as the server reads it), else null. */
+export function normalizeMotionPathNative(value: unknown): MotionPathNative | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  const allowed = new Set(["presetId", "presetSubtype", "path", "ptsTypes", "rAng", "rCtr"]);
+  const whole = (raw: unknown) => typeof raw === "string" && /^-?\d+$/.test(raw);
+  if (
+    !keys.every((key) => allowed.has(key)) ||
+    !Number.isInteger(record.presetId) || (record.presetId as number) < 0 || (record.presetId as number) > 9999 ||
+    !Number.isInteger(record.presetSubtype) || (record.presetSubtype as number) < 0 || (record.presetSubtype as number) > 9999 ||
+    typeof record.path !== "string" || !record.path.trim() || record.path.length > 20_000 ||
+    typeof record.ptsTypes !== "string" || record.ptsTypes.length > 2_000 ||
+    (record.rAng !== undefined && !whole(record.rAng)) ||
+    (record.rCtr !== undefined &&
+      !(Array.isArray(record.rCtr) && record.rCtr.length === 2 && record.rCtr.every(whole)))
+  ) {
+    return null;
+  }
+  return {
+    presetId: record.presetId as number,
+    presetSubtype: record.presetSubtype as number,
+    path: record.path,
+    ptsTypes: record.ptsTypes,
+    ...(record.rAng !== undefined ? { rAng: record.rAng as string } : {}),
+    ...(record.rCtr !== undefined ? { rCtr: [String((record.rCtr as unknown[])[0]), String((record.rCtr as unknown[])[1])] as const } : {}),
+  };
+}
+
+/** The longest media call: its duration is the clip's own length. */
+export const MAX_MEDIA_CALL_DURATION_MS = 86_400_000;
+
+/** A media call's command, or null when the effect is no media call. */
+export function presentationMediaCallCommand(
+  animation: unknown,
+): "playFrom(0.0)" | "togglePause" | null {
+  return presentationAnimationEffect(animation)?.nativeMediaCommand ?? null;
+}
+
+/**
+ * A media call's duration as stated -- its clip's length (Pause's one
+ * millisecond) -- or null when the value is none. Never clamped: the step
+ * must stay the package's call.
+ */
+export function mediaCallDurationMs(animation: unknown, value: unknown): number | null {
+  const command = presentationMediaCallCommand(animation);
+  if (command === null) return null;
+  if (command === "togglePause") return value === 1 ? 1 : null;
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value > 0 &&
+    value <= MAX_MEDIA_CALL_DURATION_MS
+    ? value
+    : null;
+}
+
 export function clampDurationMs(value: unknown): number {
   return clampMs(
     value,
@@ -1992,9 +2196,9 @@ function asRecord(value: unknown): Record<string, unknown> | null {
  *  - `id` is preserved only when it is a short non-empty string.
  *  - The `blockId` is trimmed and length-bounded.
  *  - `triggerBlockId` (interactive "on click of") is preserved only when it is a
- *    short non-empty string that does NOT equal the step's own `blockId` (a
- *    self-triggering step is rejected) AND — when `validBlockIds` is supplied —
- *    names a block that EXISTS. A dropped value simply omits the field so the
+ *    short non-empty string AND — when `validBlockIds` is supplied — names a
+ *    block that EXISTS. It may be the step's own block (a video's
+ *    click-to-pause, as PowerPoint allows). A dropped value simply omits the field so the
  *    step falls back to the normal on-click sequence.
  *
  * `validBlockIds`, when supplied, is the set of block ids on the step's slide; it
@@ -2015,12 +2219,18 @@ export function validateStep(
   const blockId = blockIdRaw.trim();
   if (!blockId || blockId.length > MAX_BLOCK_ID_LENGTH) return null;
 
+  const animation = normalizeTimelineAnimation(record.animation);
   const step: TimelineStep = {
     blockId,
-    animation: normalizeTimelineAnimation(record.animation),
+    animation,
     trigger: normalizeTimelineTrigger(record.trigger),
     delayMs: clampDelayMs(record.delayMs),
-    durationMs: clampDurationMs(record.durationMs),
+    // A media call keeps its clip's length exactly (Pause a millisecond).
+    durationMs:
+      presentationMediaCallCommand(animation) !== null
+        ? (mediaCallDurationMs(animation, record.durationMs) ??
+          (animation === "media-pause" ? 1 : clampDurationMs(record.durationMs)))
+        : clampDurationMs(record.durationMs),
   };
 
   const effectOption = resolvePresentationAnimationEffectOption(
@@ -2058,6 +2268,16 @@ export function validateStep(
     if (motionPath) step.motionPath = motionPath;
   }
 
+  // An effect on the block's whole group (row 1074): kept only as `true`.
+  if (record.targetGroup === true) step.targetGroup = true;
+  // On the shape behind the text (row 1077): kept only as `true`.
+  if (record.background === true) step.background = true;
+  // A path as PowerPoint wrote it (row 1078), only beside the polyline of it.
+  const nativePath = normalizeMotionPathNative(record.motionPathNative);
+  if (nativePath && step.animation === "none" && record.motionPath !== undefined) {
+    step.motionPathNative = nativePath;
+  }
+
   // Optional paragraph range of an imported By Paragraph build. Kept exactly
   // as stated (the saved step must equal the imported one for the package to
   // stay the export authority); a malformed value is omitted.
@@ -2070,8 +2290,8 @@ export function validateStep(
   // when it is a sane reference that:
   //  - is a non-empty, length-bounded string (a hand-edited / stale value can
   //    never bloat the payload or crash present mode);
-  //  - is NOT the step's own block (a step can never trigger itself — the block
-  //    would have to look clicked to reveal itself, which is nonsensical);
+  //  - may be the step's own block (a video pauses on a click of itself; an
+  //    entrance on itself waits for a click it cannot get, as in PowerPoint);
   //  - names a block that EXISTS when the live block-id set is known (a deleted
   //    trigger block would otherwise leave the step permanently unreachable).
   // Any failure simply OMITS the field, so the step falls back to the normal
@@ -2082,7 +2302,8 @@ export function validateStep(
     if (
       triggerBlockId &&
       triggerBlockId.length <= MAX_TRIGGER_BLOCK_ID_LENGTH &&
-      triggerBlockId !== blockId &&
+      // A shape may trigger its own effect (PowerPoint allows it: every
+      // video pauses on a click of itself).
       (validBlockIds === undefined || validBlockIds.has(triggerBlockId))
     ) {
       step.triggerBlockId = triggerBlockId;
@@ -2175,7 +2396,9 @@ export interface TriggerGroup {
  *    group, so a background advance click can never fire it.
  *  - `triggerGroups`: the interactive groups, each keyed by the block whose click
  *    fires it. Multiple groups can share a `triggerBlockId` (two separate
- *    triggered runs on the same block) — clicking that block fires them all.
+ *    triggered runs on the same block) — each click on that block plays the
+ *    next of them, as PowerPoint's interactive sequence does (see
+ *    {@link resolveStepPlayStates}' `triggerClicks`).
  *  - `autoIndices` / `triggeredIndices`: the flat positions of every auto-flow vs
  *    triggered step, so the play-state resolver can reason in absolute indices.
  *
@@ -2697,9 +2920,12 @@ export function timelineStepsEqual(
     left.delayMs !== right.delayMs ||
     left.durationMs !== right.durationMs ||
     left.triggerBlockId !== right.triggerBlockId ||
+    left.targetGroup !== right.targetGroup ||
+    left.background !== right.background ||
     left.paragraphs?.start !== right.paragraphs?.start ||
     left.paragraphs?.end !== right.paragraphs?.end ||
-    left.motionPath?.preset !== right.motionPath?.preset
+    left.motionPath?.preset !== right.motionPath?.preset ||
+    JSON.stringify(left.motionPathNative ?? null) !== JSON.stringify(right.motionPathNative ?? null)
   ) {
     return false;
   }
@@ -3027,7 +3253,10 @@ export function editTimelineStepTiming(
     !timelineStepsEqual(current, expectedStep) ||
     !isTimelineTrigger(value.trigger) ||
     !isEditableAnimationTimingMs(value.delayMs) ||
-    !isEditableAnimationDurationMs(value.durationMs) ||
+    // A media call's duration is its clip's: it stays as it is.
+    (presentationMediaCallCommand(current.animation) !== null
+      ? value.durationMs !== current.durationMs
+      : !isEditableAnimationDurationMs(value.durationMs)) ||
     (current.trigger === value.trigger &&
       current.delayMs === value.delayMs &&
       current.durationMs === value.durationMs)
@@ -3211,6 +3440,13 @@ export function resolveStepPlayStates(
   settled = false,
   /** See {@link computeStepStartOffsets}: how long each step plays in full. */
   playDurationMs: StepPlayDurationMs = stepOwnDurationMs,
+  /**
+   * How many times each trigger block has been clicked. A block that starts
+   * more than one group plays them one click at a time, as PowerPoint's
+   * interactive sequence does, starting over after the last; without a count
+   * a fired block has been clicked once.
+   */
+  triggerClicks?: ReadonlyMap<string, number>,
 ): Map<number, StepPlayState> {
   const { autoGroups, triggerGroups, autoIndices } =
     partitionTimelineSteps(sequence);
@@ -3265,7 +3501,46 @@ export function resolveStepPlayStates(
   // Each group is gated solely on whether its trigger block has fired; it is
   // entirely independent of the stage advance count.
   const fired = firedTriggers ?? EMPTY_FIRED_TRIGGERS;
+  const groupsPerTrigger = new Map<string, number>();
   for (const group of triggerGroups) {
+    groupsPerTrigger.set(group.triggerBlockId, (groupsPerTrigger.get(group.triggerBlockId) ?? 0) + 1);
+  }
+  const ordinalPerTrigger = new Map<string, number>();
+  for (const group of triggerGroups) {
+    const ordinal = ordinalPerTrigger.get(group.triggerBlockId) ?? 0;
+    ordinalPerTrigger.set(group.triggerBlockId, ordinal + 1);
+    const count = groupsPerTrigger.get(group.triggerBlockId) ?? 1;
+    const clicks = fired.has(group.triggerBlockId)
+      ? Math.max(1, triggerClicks?.get(group.triggerBlockId) ?? 1)
+      : 0;
+    // The click now playing goes to this block's group (clicks - 1) mod its
+    // groups; the ones before it in the round have played and hold.
+    const current = clicks > 0 ? (clicks - 1) % count : -1;
+    if (count > 1 && clicks > 0 && ordinal !== current) {
+      const played = ordinal < current;
+      const offsets = computeStepStartOffsets({ steps: group.steps }, playDurationMs);
+      for (let i = 0; i < group.steps.length; i += 1) {
+        const step = group.steps[i];
+        const holds = step.effectSettings?.rewind !== true;
+        states.set(group.indices[i], {
+          visible: timelineStepVisibleAtGroup(step, played, false),
+          animate: false,
+          delayMs: offsets[i],
+          durationMs: step.durationMs,
+          motionPath: step.motionPath,
+          motionPathSettled: holds && played && step.motionPath !== undefined,
+          colorEffectSettled:
+            holds && played && presentationAnimationEffect(step.animation)?.nativeBehavior === "color",
+          emphasisSettled:
+            holds &&
+            played &&
+            presentationAnimationEffect(step.animation)?.category === "emphasis" &&
+            presentationAnimationEffect(step.animation)?.nativeBehavior !== "color",
+          ...settledAfterEffect(step, played),
+        });
+      }
+      continue;
+    }
     const groupVisible = fired.has(group.triggerBlockId);
     // The group always (re)animates on the mount where its trigger is fired; the
     // caller keys the present subtree so a fired group plays once. A group whose

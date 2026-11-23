@@ -55,9 +55,24 @@ contextBridge.exposeInMainWorld("mraiDesktop", {
    * this window (null when none does): its own window is what the cover
    * stands for, not an earlier document's window brought back. */
   instantDocument: () => ipcRenderer.invoke("mrai:instant-document"),
+  /** A document opened while the page is shown covers the window with its
+   * first page (src/classic/main.ts coverForDocument): ``listener`` hears it,
+   * so the page watches for that document again. Returns the unsubscribe. */
+  /** The page watches for the covered document (the cover then waits for it). */
+  instantWatching: () => ipcRenderer.invoke("mrai:instant-watching"),
+  onInstantWatch: (listener: () => void) => {
+    const handler = () => listener();
+    ipcRenderer.on("mrai:instant-watch", handler);
+    return () => ipcRenderer.removeListener("mrai:instant-watch", handler);
+  },
   /** The documents this window was opened for; ``keep`` leaves them for a
    * later take (the notebook the open page leads to imports them). */
   takeOpenFiles: (keep?: boolean) => ipcRenderer.invoke("mrai:take-open-files", keep === true),
+  /** The notebook the window shows (null: none to come back to): a document
+   * double-clicked to start the app is loaded straight into it
+   * (src/classic/main.ts openRouteFor). */
+  rememberLanding: (notebookId: string | null) =>
+    ipcRenderer.invoke("mrai:remember-landing", typeof notebookId === "string" ? notebookId : null),
   /** A notebook's page takes documents opened from the system where it is:
    * ``listener`` hears each time some are waiting (take them with
    * takeOpenFiles). Returns the unsubscribe. */

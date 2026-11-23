@@ -1755,13 +1755,18 @@ function parseNativeLayoutCatalogEntries(
       nativePlaceholderIdentity(placeholder, "layout"),
     );
     if (catalogPlaceholders.some((entry) => entry === null)) return null;
+    // A layout's placeholders are told apart by their type and index, as
+    // PowerPoint inherits by them. Not by the shape id: LibreOffice writes
+    // its layouts' band placeholders under the ids of its title and body
+    
+    // catalog for that made every slide's receipt malformed -- the whole page
+    // refused by every catalog command (the AI's edits, the Automation API).
+    // The writer still fails closed on an ambiguous layout part.
     const keys = new Set<string>();
-    const shapeIds = new Set<string>();
     for (const entry of catalogPlaceholders) {
       const key = `${entry!.placeholderType}:${Number(entry!.placeholderIndex)}`;
-      if (keys.has(key) || shapeIds.has(entry!.shapeId)) return null;
+      if (keys.has(key)) return null;
       keys.add(key);
-      shapeIds.add(entry!.shapeId);
     }
     catalogIds.add(catalogLayoutPart);
     layouts.push({

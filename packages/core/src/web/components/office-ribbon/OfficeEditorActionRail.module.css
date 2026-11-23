@@ -487,3 +487,15 @@
   padding: 0 12px;
   gap: 10px;
 }
+
+/* A note's way in (a deck's recoverable copy): a quiet link in the pill. */
+.noteAction {
+  margin-inline-start: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--office-accent, currentColor);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

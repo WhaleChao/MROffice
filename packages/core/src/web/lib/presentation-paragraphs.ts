@@ -168,6 +168,15 @@ export interface SlideParagraph {
    */
   nativeEastAsianLines?: ParagraphEastAsianLines;
   /**
+   * The row's right indent in EMU (`a:pPr@marR`, else its level's in the
+   * shape's own list style; readings row 1029): PowerPoint ends every line of
+   * the row that far inside the text area, centred and right-aligned lines
+   * between both indents. Carried with the row -- PowerPoint copies a row's
+   * `a:pPr` to both halves of an Enter, and has no control that sets it --
+   * and written back by a download rebuilt from the page; never authored.
+   */
+  marR?: number;
+  /**
    * The row ends at a line break of its paragraph (`a:br`), not at the
    * paragraph's mark: a row a one-paragraph flat body is split into at its
    * breaks (`paragraphBuildRows`). Built for drawing only, never stored.
@@ -202,6 +211,11 @@ export function normalizeParagraphEastAsianLines(value: unknown): ParagraphEastA
   if (raw.latinLnBrk === true) out.latinLnBrk = true;
   if (raw.eaLnBrk === false) out.eaLnBrk = false;
   return out;
+}
+
+/** A row's stated right indent (`marR`, EMU within ST_TextMargin, above 0), or undefined. */
+export function normalizeParagraphRightIndent(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 && value <= 51206400 ? value : undefined;
 }
 
 /** A stated mark Latin face (`endLatinFace`), or undefined. */
@@ -273,7 +287,8 @@ type CarriedParagraphKey =
   | "runDefaults"
   | "endLatinFace"
   | "nativeKerning"
-  | "nativeEastAsianLines";
+  | "nativeEastAsianLines"
+  | "marR";
 
 /** A row's own formatting the editor carries without drawing or authoring it. */
 export function paragraphCarriedFields(
@@ -288,6 +303,9 @@ export function paragraphCarriedFields(
   if (nativeKerning !== undefined) out.nativeKerning = nativeKerning;
   const nativeEastAsianLines = normalizeParagraphEastAsianLines(raw.nativeEastAsianLines);
   if (nativeEastAsianLines !== undefined) out.nativeEastAsianLines = nativeEastAsianLines;
+  // So does its right indent (readings row 1029).
+  const marR = normalizeParagraphRightIndent(raw.marR);
+  if (marR !== undefined) out.marR = marR;
   // The mark's Latin face goes with the row (readings row 899), as its mark does.
   const endLatinFace = normalizeParagraphEndLatinFace(raw.endLatinFace);
   if (endLatinFace !== undefined) out.endLatinFace = endLatinFace;
@@ -836,6 +854,8 @@ export function isFlatEquivalentParagraphs(
         // are the row's: a flat body keeps one set for all of its rows.
         p.nativeKerning === undefined &&
         p.nativeEastAsianLines === undefined &&
+        // So is its right indent (readings row 1029): a flat body has none.
+        p.marR === undefined &&
         !paragraphStatesIndent(p),
     )
   );

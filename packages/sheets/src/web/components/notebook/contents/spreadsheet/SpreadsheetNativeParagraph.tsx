@@ -106,10 +106,10 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
    * the browser prints it on to Excel's whole dot (officePrintedBaselineShiftPx). */
   officePrintedPage?:{top:number;dotPx:number};
   /** A Windows grid's wrapped lines placed as Excel prints them (the page's
-   * px; office-wrapped-bottom): the lines a row too low keeps (screen px
-   * `linePx` a line, `rowPx` the row), the first line `ascent` below the top,
+   * px; office-wrapped-bottom): the lines a row too low keeps (printed dots,
+   * `lineDots` a line, `rowDots` the row: p298-lw), the first line `ascent` below the top,
    * a block of whole lines in the middle, or the last `rise` above the bottom. */
-  officeWrap?:{align:"top"|"middle"|"bottom";height:number;rise:number;ascent:number;linePx:number;rowPx:number};
+  officeWrap?:{align:"top"|"middle"|"bottom";height:number;rise:number;ascent:number;lineDots:number;rowDots:number};
   
 
 
@@ -249,9 +249,9 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
   const shown=laidOutInRender?(awaitingBatch?null:renderLayout):layout?.signature===signature?layout:null;
   const laidLines=shown?.lines;
   // A row too low for all the wrapped lines keeps the first ones (lookwin p122b-lw).
-  const wrapLinePx=officeWrap?.linePx;
-  const keptLines=officeWrap&&wrapLinePx!==undefined&&laidLines&&lineHeight!==undefined&&!(Boolean(spread)&&laidLines.length>1)
-    ?Math.max(1,officeKeptWrappedLines(laidLines.map(()=>wrapLinePx),officeWrap.rowPx)):undefined;
+  const wrapLineDots=officeWrap?.lineDots;
+  const keptLines=officeWrap&&wrapLineDots!==undefined&&laidLines&&lineHeight!==undefined&&!(Boolean(spread)&&laidLines.length>1)
+    ?Math.max(1,officeKeptWrappedLines(laidLines.map(()=>wrapLineDots),officeWrap.rowDots)):undefined;
   const lines=keptLines!==undefined&&laidLines?laidLines.slice(0,keptLines):laidLines;
   const spreading=Boolean(spread)&&lines!==undefined&&lines.length>1;
   const fixedLines=lineHeight!==undefined&&lines!==undefined&&!spreading;

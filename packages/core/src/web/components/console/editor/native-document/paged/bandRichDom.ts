@@ -982,6 +982,32 @@ function paintBandFrame(box: HTMLElement, frame: BandRichFrame): void {
   if (border) box.style.border = border;
 }
 
+/** Harness switch (`window.__docsBandWordsAnchorOff = true`): a band box's
+ * words stand at its top whatever its vertical alignment, as before (A/B). */
+function bandWordsAnchorOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsBandWordsAnchorOff?: boolean }).__docsBandWordsAnchorOff === true;
+}
+
+/**
+ * Word's Format Shape > Text Box > Vertical alignment: the box's words, one
+ * block inside its insets, in its middle or at its foot (`wordsAnchor`). The
+ * box's own block alignment does it (`align-content`), so an in-line box
+ * keeps its bottom edge on the line's baseline (its baseline is its edge
+ * while it hides its overflow) and a box that grows with its words has
+ * nothing to share out.
+ */
+function anchorBandFrameWords(box: HTMLElement, frame: BandRichFrame): void {
+  if (!frame.wordsAnchor || frame.textWarp || bandWordsAnchorOff()) return;
+  box.style.alignContent = frame.wordsAnchor === "ctr" ? "center" : "end";
+  box.setAttribute("data-band-words-anchor", frame.wordsAnchor);
+  // The words' paragraph's space before and after is part of the block Word
+  // places (probes/wa: a 14 pt space after lifts foot-aligned words 13.9 pt).
+  const [before, after] = frame.wordsSpacePt ?? [0, 0];
+  const [, top, , bottom] = frame.insetsEmu;
+  if (before > 0) box.style.paddingTop = `calc(${pt(top)} + ${before}pt)`;
+  if (after > 0) box.style.paddingBottom = `calc(${pt(bottom)} + ${after}pt)`;
+}
+
 function buildBandFrame(
   doc: Document,
   frame: BandRichFrame,
@@ -1002,6 +1028,7 @@ function buildBandFrame(
   paintBandFrame(box, frame);
   const [left, top, right, bottom] = frame.insetsEmu;
   box.style.padding = `${pt(top)} ${pt(right)} ${pt(bottom)} ${pt(left)}`;
+  anchorBandFrameWords(box, frame);
   box.style.textAlign = frame.align;
   box.style.overflow = "visible";
   // Word's behindDoc frames paint under the text; the others above it, all in
@@ -1173,6 +1200,7 @@ function buildBandInlineFrame(
   box.style.minHeight = pt(frame.heightEmu);
   const [left, top, right, bottom] = frame.insetsEmu;
   box.style.padding = `${pt(top)} ${pt(right)} ${pt(bottom)} ${pt(left)}`;
+  anchorBandFrameWords(box, frame);
   // The box is its own block of text: the host line's indent, alignment and
   // tab handling stop at its edge.
   box.style.textAlign = frame.align;
@@ -1619,6 +1647,12 @@ export function buildBandShape(doc: Document, shape: BandRichShape, index: numbe
 
 /** A band line holding only empty typing slots: no words, field, list
  * marker, picture, drawing or box. */
+/** `window.__docsBandFrameOnlyLineOff = true` (A/B): a band line whose runs
+ * its anchored boxes all draw collapses to no height, as before. */
+function bandFrameOnlyLineOff(doc: Document): boolean {
+  return (doc.defaultView as (Window & { __docsBandFrameOnlyLineOff?: boolean }) | null)?.__docsBandFrameOnlyLineOff === true;
+}
+
 function isEmptySlotLine(block: BandRichBlock, context: BandTokenContext): boolean {
   return (
     block.type === "paragraph" &&
@@ -1877,6 +1911,15 @@ export function buildBandRichDom(
         // Word stands 46 pt tall, drawn as none, every page's body 12 pt
         // high); a box's own flow keeps its empty lines as it drew them.
         if (innerFlow !== true && isEmptySlotLine(block, context)) paragraph.appendChild(doc.createElement("br"));
+        // A line whose every run its anchored boxes draw is still the
+        // paragraph's line (its mark's): Word places a box anchored to it from
+        // that line's top and the band keeps the line's height (corpus
+        // R499-D01: a footer paragraph holding only its page-number box, the
+        // box 13 pt low and the footer a line short).
+        else if (innerFlow !== true && floated.size && !bandFrameOnlyLineOff(doc) && block.runs.length > 0 &&
+            block.runs.every((run) => run.frame !== undefined && floated.has(run.frame)) &&
+            !block.images?.some((image) => !image.floatAnchor) && !block.shapes?.some((shape) => !shape.floatAnchor) &&
+            !block.charts?.length && !block.wordArt?.length) paragraph.appendChild(doc.createElement("br"));
         applyBandRunLineHeights(paragraph, block, context);
         hangBandTrailingSpaces(paragraph);
       }

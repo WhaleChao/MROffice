@@ -22,6 +22,7 @@ import {
   nativeTimingTriggerRuns,
   playNativeTimingClick,
   playNativeTimingRun,
+  runNativeMediaCommand,
   slideNativeTimingTree,
 } from "../../../../lib/presentation-native-timing-player";
 import {
@@ -31,6 +32,7 @@ import {
 import {
   useCallback,
   useContext,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -70,6 +72,8 @@ import {
   isPresentationAnimationEffectId,
   partitionTimelineSteps,
   presentationAnimationEffect,
+  presentationMediaCallCommand,
+  expandGroupTargetSteps,
   resolveStepPlayStates,
 } from "@mrnote/core/web/lib/presentation-anim-timeline.ts";
 import {
@@ -120,6 +124,26 @@ import { captureTransitionLeadMs } from "../../../../lib/presentation-export-vid
 import { getApiHttpBaseUrl } from "@mrnote/core/web/lib/env.ts";
 import { inlineEffectSoundUrl } from "../../../../lib/presentation-package-sounds";
 import { PresentationPageIdContext } from "./PresentationMediaContent";
+
+/** One media call of the steps, due in the playing group. */
+interface SlideMediaCall {
+  readonly key: string;
+  readonly blockId: string;
+  readonly command: string;
+  readonly delayMs: number;
+}
+
+/** The clip of a block on the slide (not a morph's copy of it). */
+function slideMediaElement(root: ParentNode, blockId: string): HTMLMediaElement | null {
+  for (const element of Array.from(
+    root.querySelectorAll<HTMLElement>(`[data-presentation-block-id="${CSS.escape(blockId)}"]`),
+  )) {
+    if (element.closest(".presentation-present__morph")) continue;
+    const media = element.querySelector<HTMLMediaElement>("video, audio");
+    if (media) return media;
+  }
+  return null;
+}
 
 export function PresentationSlideView({
   slide,
@@ -546,12 +570,16 @@ export function PresentationSlideView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the slide's size, not the object
     [showAnimations, staticMedia, slide.blocks, bounds.width, bounds.height],
   );
-  const { blockPlay, motionPathCss } = useMemo<{
+  const { blockPlay, motionPathCss, mediaCalls } = useMemo<{
     blockPlay: Map<string, BlockPlayState>;
     motionPathCss: string;
+    /** The media calls (Play / Pause on a clip) starting in the playing group. */
+    mediaCalls: readonly SlideMediaCall[];
   }>(() => {
     const map = new Map<string, BlockPlayState>();
-    const sequence = slide.animationSequence ?? [];
+    const mediaCalls: SlideMediaCall[] = [];
+    // A step on a whole group plays on every member (row 1074).
+    const sequence = expandGroupTargetSteps(slide.animationSequence ?? [], slide.blocks);
     // A slide drawn still at a settled step (the slide a transition is leaving)
     // keeps what its build has brought in or taken away, with nothing playing.
     if (
@@ -559,7 +587,7 @@ export function PresentationSlideView({
       revealedGroups === undefined ||
       sequence.length === 0
     ) {
-      return { blockPlay: map, motionPathCss: "" };
+      return { blockPlay: map, motionPathCss: "", mediaCalls };
     }
     const states = resolveStepPlayStates(
       sequence,
@@ -569,6 +597,11 @@ export function PresentationSlideView({
       // An effect over a block's letters plays past its own duration; the
       
       (step) => effectPlayDurationMs(step, slide.blocks.find((block) => block.id === step.blockId)),
+      // Each click on a trigger plays its next group (PowerPoint's
+      // interactive sequence).
+      firedTriggers
+        ? new Map([...firedTriggers].map((id) => [id, 1 + (triggerReplays?.get(id) ?? 0)]))
+        : undefined,
     );
     // Which play group each step belongs to, so a block's play identity can name
     // the latest revealed group (or fired trigger) that started one of its
@@ -626,6 +659,20 @@ export function PresentationSlideView({
           ? { ...rawState, delayMs: rawState.delayMs + transitionRemainingMs }
           : rawState;
       if (!state) continue;
+      // A media call plays or pauses its clip at its start and changes
+      // nothing about how the clip is drawn.
+      const mediaCommand = presentationMediaCallCommand(step.animation);
+      if (mediaCommand !== null) {
+        if (state.animate) {
+          mediaCalls.push({
+            key: `${i}:${playKeyOf(step.blockId) ?? ""}:${revealedGroups}`,
+            blockId: step.blockId,
+            command: mediaCommand,
+            delayMs: state.delayMs,
+          });
+        }
+        continue;
+      }
       // The animating step's motion path (if any) → a stable keyframe name + its
       // CSS, collected for one-time injection. A non-animating step contributes
       // nothing (its block keeps the most-recent animating step's keyframe).
@@ -960,6 +1007,7 @@ export function PresentationSlideView({
     return {
       blockPlay: map,
       motionPathCss: [...keyframeByName.values()].join("\n"),
+      mediaCalls,
     };
   }, [
     revealedGroups,
@@ -977,6 +1025,36 @@ export function PresentationSlideView({
     slideTheme,
     background,
   ]);
+  // Media calls of the steps (Play / Pause on a clip): each call once, at its
+  // start in the group that plays it; one not yet due when the group changes
+  // is dropped with it.
+  const mediaCallsIssuedRef = useRef(new Set<string>());
+  const mediaCallsKey = mediaCalls.map((call) => call.key).join("|");
+  useEffect(() => {
+    const root = projectionFrameRef.current;
+    if (!root || mediaCalls.length === 0) return;
+    const issued = mediaCallsIssuedRef.current;
+    const pending = new Map<string, number>();
+    for (const call of mediaCalls) {
+      if (issued.has(call.key)) continue;
+      issued.add(call.key);
+      pending.set(
+        call.key,
+        window.setTimeout(() => {
+          pending.delete(call.key);
+          const media = slideMediaElement(root, call.blockId);
+          if (media) runNativeMediaCommand(media, call.command);
+        }, Math.max(0, call.delayMs)),
+      );
+    }
+    return () => {
+      for (const [key, timer] of pending) {
+        window.clearTimeout(timer);
+        issued.delete(key);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the calls
+  }, [mediaCallsKey]);
   return (
     <PresentationChartThemeAccentsContext.Provider value={slideChartAccents}>
     <PresentationChartThemeFontContext.Provider value={slideChartFont}>

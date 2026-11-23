@@ -1,5 +1,5 @@
 {
- "probe": "xlsx-rounds/lookwin/faces (fx-a, fx-*, fy-*), Windows Excel 16.0.20527 en-US, 2026-11-14; fresh-name class pass fresh-co 2026-11-14; PostScript names p234-lw 2026-11-20; Ariel Nova (R467-X40's own truth: every \"Ariel Nova\" cell printed in Arial) 2026-11-21",
+ "probe": "xlsx-rounds/lookwin/faces (fx-a, fx-*, fy-*), Windows Excel 16.0.20527 en-US, 2026-11-14; fresh-name class pass fresh-co 2026-11-14; PostScript names p234-lw 2026-11-20; Ariel Nova (R467-X40's own truth: every \"Ariel Nova\" cell printed in Arial) 2026-11-21; Doulos SIL (R475-X92's own truth: its Doulos SIL family 1 cells printed in Times New Roman) 2026-11-23",
  "drawn": {
   "&amp;quot": "Arial",
   "&quot;aptos narrow&quot;": "Arial",
@@ -191,6 +191,7 @@
   "dm sans semi bold": "Arial",
   "docs-calibri": "Arial",
   "docs-roboto": "Arial",
+  "doulos sil": "Times New Roman",
   "droid sans": "Arial",
   "droid sans fallback": "Arial",
   "droid serif": "Arial",
@@ -700,6 +701,7 @@
   "dm sans semi bold",
   "docs-calibri",
   "docs-roboto",
+  "doulos sil",
   "droid sans",
   "droid sans fallback",
   "droid serif",

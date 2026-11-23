@@ -49,7 +49,7 @@ import { LaunchOffer, readDefaultAppChoice, shouldOfferDefaultApp, writeDefaultA
 import { isOpenablePath, MAX_OPEN_FILE_PART_BYTES, openablePathsFromArgv, readOpenedFiles, readOpenFilePart } from "../files";
 import { loadBundledPage } from "../bundled-page";
 import { FocusOrder } from "../document-target";
-import { aiScreenEnabled, autoSaveToOriginalEnabled, writeSettings } from "./desktop-settings";
+import { aiScreenEnabled, autoSaveToOriginalEnabled, readLanding, writeLanding, writeSettings } from "./desktop-settings";
 import { registerAiScreen } from "./ai-screen";
 import {
   countOpened,
@@ -382,6 +382,16 @@ ipcMain.handle("mrai:instant-document", (event) => {
   return cover?.kind === "deck" && cover.document ? path.basename(cover.document) : null;
 });
 
+// The page watches for the document a cover shows (mrai:instant-watch): the
+// cover stays as long as at a launch, the page taking it off.
+ipcMain.handle("mrai:instant-watching", (event) => {
+  if (!fromApp(event)) return false;
+  const cover = instantCovers.get(event.sender.id);
+  if (!cover || cover.kind !== "deck") return false;
+  cover.keepFor(45_000);
+  return true;
+});
+
 // The home as the page shows it, kept for the next launch's instant view.
 ipcMain.handle("mrai:instant-save", (event, html: unknown) =>
   fromApp(event) && typeof html === "string" ? saveHomeSnapshot(html) : false,
@@ -683,6 +693,10 @@ function openDocuments(paths: string[], into?: BrowserWindow | null): void {
   // (will-prevent-unload, guardContents).
   const contents = target.webContents;
   originalsByContents.set(contents.id, [...(originalsByContents.get(contents.id) ?? []), ...documents]);
+  // The window comes up for these documents (the spare home of a start in
+  // the background, a window not on the screen): nothing of the person's is
+  // under a cover of the document's first page.
+  const comesUpForThem = target === spare || !target.isVisible();
   bringForward(target);
   // A file opened before and unchanged since opens as the page it became
   // (the open route finds it); one that cannot be read now counts as such.
@@ -714,14 +728,14 @@ function openDocuments(paths: string[], into?: BrowserWindow | null): void {
     });
     return;
   }
-  handDocumentsTo(target, documents, pages.some((page) => page !== null));
+  handDocumentsTo(target, documents, pages.some((page) => page !== null), comesUpForThem);
 }
 
 /** ``documents`` to the page ``target`` shows: imported there, where it is,
  * when it takes them in place and none of them is ``known`` (opened before
  * and unchanged since: the open route opens the page it became); else the
  * window goes to the open route, which takes them. */
-function handDocumentsTo(target: BrowserWindow, documents: string[], known: boolean): void {
+function handDocumentsTo(target: BrowserWindow, documents: string[], known: boolean, covered = false): void {
   const contents = target.webContents;
   pendingByContents.set(contents.id, [...(pendingByContents.get(contents.id) ?? []), ...documents]);
   if (!known && takesDocumentsInPlace.has(contents.id)) {
@@ -729,12 +743,41 @@ function handDocumentsTo(target: BrowserWindow, documents: string[], known: bool
     // not loaded again twice (the open route, then the notebook), which was
     // 1.5 s of every document opened before its import began (MR Office
     
+    if (covered) coverForDocument(target, documents);
     contents.send("mrai:documents-opened");
     return;
   }
   target.loadURL(appUrl(OPEN_ROUTE)).catch(() => {
     // Stayed on the page (unsaved changes) or the load was replaced.
   });
+}
+
+
+
+
+
+
+
+
+
+
+
+function coverForDocument(target: BrowserWindow, documents: readonly string[]): void {
+  const contents = target.webContents;
+  if (documents.length !== 1 || !instantDocument(documents[0]) || instantCovers.has(contents.id)) return;
+  if (!documentThumbnail(documents[0]) && process.platform !== "darwin") return;
+  const cover = coverWindow(target, where.webDir, "deck", {
+    deck: documents[0],
+    giveUpMs: 12_000,
+    plain: true,
+    onShown: () => console.log("[classic] instant view shown"),
+  });
+  if (!cover) return;
+  instantCovers.set(contents.id, cover);
+  void cover.gone.then(() => {
+    if (instantCovers.get(contents.id) === cover) instantCovers.delete(contents.id);
+  });
+  contents.send("mrai:instant-watch");
 }
 
 /** The documents of these that are imported when opened: not one opened
@@ -800,6 +843,39 @@ ipcMain.handle("mrai:take-open-files", async (event, keep: unknown) => {
     },
   );
 });
+
+ipcMain.handle("mrai:remember-landing", (event, notebookId: unknown) => {
+  if (!fromApp(event)) return false;
+  return writeLanding(typeof notebookId === "string" ? notebookId : null);
+});
+
+/** The kinds a launch's documents are loaded straight into a notebook with. */
+const DIRECT_LANDING_KINDS = new Set([".docx", ".xlsx", ".pptx", ".pdf"]);
+
+
+
+
+
+
+
+
+
+
+
+
+function openRouteFor(documents: readonly string[]): string {
+  const notebookId = readLanding();
+  if (!notebookId || documents.length === 0) return OPEN_ROUTE;
+  for (const document of documents) {
+    if (!DIRECT_LANDING_KINDS.has(path.extname(document).toLowerCase())) return OPEN_ROUTE;
+    try {
+      if (pageOfUnchangedFile(document, fs.statSync(document))) return OPEN_ROUTE;
+    } catch {
+      return OPEN_ROUTE;
+    }
+  }
+  return onSurface(`/app/notebooks/${notebookId}?openFiles=desktop&landing=desktop`);
+}
 
 // A notebook's page takes documents opened from the system where it is
 // (true), or no longer (false): openDocuments hands them to it.
@@ -1573,6 +1649,7 @@ function startServices(known: Promise<void>, early: boolean): { spawned: Promise
       // Signed out: the API is told so as it starts, and nothing is handed
       // over once it answers (apiEnv). A sign-in made later is pushed as always.
       const signedIn = account !== null;
+      const firstRoute = pendingAtLaunch.length ? openRouteFor(pendingAtLaunch) : HOME_ROUTE;
       return {
         signedIn,
         api: {
@@ -1588,7 +1665,7 @@ function startServices(known: Promise<void>, early: boolean): { spawned: Promise
           // notebook, ../../web/lib/desktop-landing.ts): its server code
           // loaded before the window asks for it. Any id: the page is drawn
           // in the window.
-          ...webEnv(where, at, pendingAtLaunch.length ? OPEN_ROUTE : HOME_ROUTE, [NOTEBOOK_WARM_ROUTE]),
+          ...webEnv(where, at, firstRoute, firstRoute === OPEN_ROUTE || firstRoute === HOME_ROUTE ? [NOTEBOOK_WARM_ROUTE] : []),
           ...(launchCache ? { MRAI_DESKTOP_LAUNCH_CACHE: launchCache } : {}),
         },
       };
@@ -2104,9 +2181,9 @@ function pinOfficeSurface(ses: Session): void {
         originalsByContents.set(id, [...(originalsByContents.get(id) ?? []), ...later]);
       }
       // The home's window now takes documents: it opens them (the open page).
-      const route = launchDocuments.length ? OPEN_ROUTE : made.route;
+      const route = launchDocuments.length ? openRouteFor(launchDocuments) : made.route;
       if (!made.window.isDestroyed()) void made.window.loadURL(appUrl(route));
-    } else if (launchDocuments.length) createWindow(OPEN_ROUTE, launchDocuments);
+    } else if (launchDocuments.length) createWindow(openRouteFor(launchDocuments), launchDocuments);
     else if (!background) createWindow(HOME_ROUTE);
     // Started in the background at login: the spare home window, made once
     // the API's start has settled, as after the last window has closed. The

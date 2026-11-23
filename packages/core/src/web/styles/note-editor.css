@@ -25356,7 +25356,8 @@ button.office-ribbon-group-launcher.office-ribbon-group-launcher[aria-pressed="t
   position: relative;
   top: calc(var(--doc-list-item-shift) - var(--doc-list-outer-shift, 0px));
 }
-.note-editor-content li[style*="--doc-list-item-shift"] > * {
+ 
+.note-editor-content li[style*="--doc-list-item-shift"] :is(ol, ul) {
   --doc-list-outer-shift: var(--doc-list-item-shift);
 }
 @property --doc-line-shift {

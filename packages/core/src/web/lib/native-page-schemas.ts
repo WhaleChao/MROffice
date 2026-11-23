@@ -295,6 +295,8 @@ import {
 } from "./presentation-anim-effect-settings";
 import {
   isEditableAnimationDurationMs,
+  mediaCallDurationMs,
+  normalizeMotionPathNative,
   isEditableAnimationTimingMs,
   PRESENTATION_ANIMATION_EFFECT_OPTIONS,
   PRESENTATION_SLIDE_ANIMATION_SCHEMA_VERSION,
@@ -305,6 +307,7 @@ import {
   TIMELINE_TRIGGERS,
   MAX_STEP_DELAY_MS,
   MAX_STEP_DURATION_MS,
+  MAX_MEDIA_CALL_DURATION_MS,
   MAX_TIMELINE_STEPS,
 } from "./presentation-anim-timeline";
 import {
@@ -2328,8 +2331,16 @@ const presentationAnimationStepSchema = z
     effectSettings: presentationAnimationEffectSettingsSchema.optional(),
     trigger: z.enum(TIMELINE_TRIGGERS),
     delayMs: z.number().min(0).max(MAX_STEP_DELAY_MS),
-    durationMs: z.number().min(0).max(MAX_STEP_DURATION_MS),
+    // A media call lasts its clip's length (checked below); every other step
+    // is bounded by the editor's timing.
+    durationMs: z.number().min(0).max(MAX_MEDIA_CALL_DURATION_MS),
     motionPath: presentationMotionPathSchema.optional(),
+    // An effect on the block's whole group (row 1074).
+    targetGroup: z.literal(true).optional(),
+    // On the shape behind the text (row 1077).
+    background: z.literal(true).optional(),
+    // A motion path as PowerPoint wrote it (row 1078), checked below.
+    motionPathNative: z.unknown().optional(),
     // Imported By Paragraph build (zero-based, inclusive). Read-only.
     paragraphs: z
       .object({
@@ -2342,6 +2353,29 @@ const presentationAnimationStepSchema = z
   })
   .passthrough()
   .superRefine((step, context) => {
+    if (
+      step.motionPathNative !== undefined &&
+      (step.animation !== "none" ||
+        step.motionPath === undefined ||
+        normalizeMotionPathNative(step.motionPathNative) === null)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["motionPathNative"],
+        message: "motionPathNative belongs to a path step beside its polyline",
+      });
+    }
+    if (
+      presentationAnimationEffect(step.animation)?.nativeBehavior === "media"
+        ? mediaCallDurationMs(step.animation, step.durationMs) === null
+        : step.durationMs > MAX_STEP_DURATION_MS
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["durationMs"],
+        message: "animation duration is out of range for its effect",
+      });
+    }
     if (step.effectOption !== undefined) {
       const resolution = resolvePresentationAnimationEffectOption(
         step.animation,
@@ -2378,10 +2412,15 @@ const presentationAnimationReceiptStepSchema = z
     kind: z
       .enum(TIMELINE_ANIMATIONS)
       .refine(
-        (kind) => presentationAnimationEffect(kind)?.authoring === "native",
+        // "none": a path as PowerPoint wrote it (row 1078, checked below).
+        (kind) => kind === "none" || presentationAnimationEffect(kind)?.authoring === "native",
       ),
     nativeShapeId: z.string().regex(/^shp[1-9][0-9]*$/),
     triggerNativeShapeId: z.string().regex(/^shp[1-9][0-9]*$/).optional(),
+    // On the shape behind the text (row 1077).
+    background: z.literal(true).optional(),
+    // A motion path as PowerPoint wrote it (row 1078).
+    motionPathNative: z.unknown().optional(),
     effectOption: z.enum(PRESENTATION_ANIMATION_EFFECT_OPTIONS).optional(),
     effectColor: z.string().regex(/^#[0-9a-f]{6}$/).optional(),
     effectSettings: presentationAnimationEffectSettingsSchema.optional(),
@@ -2400,12 +2439,24 @@ const presentationAnimationReceiptStepSchema = z
   })
   .strict()
   .superRefine((step, context) => {
-    if (step.triggerNativeShapeId === step.nativeShapeId) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["triggerNativeShapeId"],
-        message: "animation trigger target must differ from effect target",
-      });
+    if (step.kind === "none" || step.motionPathNative !== undefined) {
+      // A path as PowerPoint wrote it, its timing and nothing else (row 1078).
+      if (
+        step.kind !== "none" ||
+        normalizeMotionPathNative(step.motionPathNative) === null ||
+        step.effectOption !== undefined ||
+        step.effectColor !== undefined ||
+        step.paragraphs !== undefined ||
+        step.background !== undefined ||
+        !isEditableAnimationDurationMs(step.durationMs)
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["motionPathNative"],
+          message: "a path step is its PowerPoint path and timing only",
+        });
+      }
+      return;
     }
     const resolution = resolvePresentationAnimationEffectOption(
       step.kind,
@@ -2437,8 +2488,11 @@ const presentationAnimationReceiptStepSchema = z
     // PowerPoint's own duration for a recipe effect (Color Typewriter's
     // 80 ms a letter) is exact, on the editor's grid or not.
     if (
-      !isEditableAnimationDurationMs(step.durationMs) &&
-      step.durationMs !== effect?.recipeDurationMs
+      effect?.nativeBehavior === "media"
+        ? // A media call lasts its clip's length (Pause a millisecond).
+          mediaCallDurationMs(step.kind, step.durationMs) === null
+        : !isEditableAnimationDurationMs(step.durationMs) &&
+          step.durationMs !== effect?.recipeDurationMs
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,

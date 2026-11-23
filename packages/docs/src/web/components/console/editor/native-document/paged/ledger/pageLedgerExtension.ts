@@ -2538,10 +2538,16 @@ function screenFacesLoaded(view: EditorView, sheets: readonly HTMLElement[], ask
   const fonts = view.dom.ownerDocument.fonts as FontFaceSet | undefined;
   if (!fonts || typeof fonts.check !== "function" || sheets.length === 0) return true;
   // The sheets on screen (the first, where nothing is on screen yet), three
-  // at most.
-  const range = visibleSheetRange(view, sheets);
-  const first = range && range.first >= 0 && range.first < sheets.length ? range.first : 0;
-  const last = range && range.last >= first ? Math.min(range.last, first + 2, sheets.length - 1) : first;
+  // at most. Under the cold first layout every sheet: its document opens on
+  // provisional sheets of about a page, and a face only the later sheets'
+  // text draws with was never asked for -- those sheets were measured in
+  // the fallback and laid out otherwise than the document opened as one
+  // sheet, which asks for every face its text draws (float.docx, cold7
+  
+  const whole = coldFirstLayout(view.dom.ownerDocument.defaultView) !== null;
+  const range = whole ? null : visibleSheetRange(view, sheets);
+  const first = whole ? 0 : range && range.first >= 0 && range.first < sheets.length ? range.first : 0;
+  const last = whole ? sheets.length - 1 : range && range.last >= first ? Math.min(range.last, first + 2, sheets.length - 1) : first;
   let loaded = true;
   for (let index = first; index <= last; index += 1) {
     const sheet = sheets[index];

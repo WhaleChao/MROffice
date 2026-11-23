@@ -291,6 +291,12 @@ export function occupiedExtentWithValues(
   const importedRows = extent?.rows;
   const importedCols = extent?.cols;
   if (typeof importedRows !== "number" || typeof importedCols !== "number") return null;
+  const valued = valuedCellsExtent(cells);
+  return { rows: Math.max(importedRows, valued.rows), cols: Math.max(importedCols, valued.cols) };
+}
+
+/** The rows and columns down and across to the last cell holding a value or a formula (0 for none). */
+export function valuedCellsExtent(cells: Readonly<Record<string, unknown>>): { rows: number; cols: number } {
   let valued = VALUED_CELLS_EXTENT.get(cells);
   if (!valued) {
     let rows = 0;
@@ -310,7 +316,7 @@ export function occupiedExtentWithValues(
     valued = { rows, cols };
     VALUED_CELLS_EXTENT.set(cells, valued);
   }
-  return { rows: Math.max(importedRows, valued.rows), cols: Math.max(importedCols, valued.cols) };
+  return valued;
 }
 
 /**
@@ -330,13 +336,18 @@ export function printedOccupiedLineBlanks(
   own: Readonly<Record<string, unknown>>,
   occupied: unknown,
 ): string[] {
-  // Down to the last valued row (a tiled body's valued cells stay the
-  // tiles', occupiedExtentWithValues), across the import's own columns only:
-  // past them a column format's painted blanks kept a trailing page Windows
-  // Excel leaves out (R379-X18's survey, values in O:Q beside an extent of
-  // N: 24 pages for 23).
+  // Down to the last valued row only (a tiled body's valued cells are the
+  // tiles', in `cells` too): a blank the file holds below it, whatever it
+  // carries, widens the print across, never down (lookwin p291-lw: a blank
+  // stating only a number format or a font at P3 under columns filled or
+  // bordered prints their paint out to P, one at D200 or P200 no row past
+  // the values; R475-X05's date-formatted blanks D1025:D2009 below the
+  // bordered columns C, F, M: 304 pages, 511 here). Across the import's own
+  // columns only: past them a column format's painted blanks kept a trailing
+  // page Windows Excel leaves out (R379-X18's survey, values in O:Q beside
+  // an extent of N: 24 pages for 23).
   const extent = occupied && typeof occupied === "object" ? occupied as { rows?: unknown; cols?: unknown } : null;
-  const rows = occupiedExtentWithValues(cells, occupied)?.rows ?? 0;
+  const rows = typeof extent?.rows === "number" && typeof extent.cols === "number" ? valuedCellsExtent(cells).rows : 0;
   const cols = typeof extent?.cols === "number" ? extent.cols : 0;
   if (!(rows > 0) || !(cols > 0) || cells === own) return [];
   const keys: string[] = [];

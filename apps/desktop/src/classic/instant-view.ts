@@ -118,7 +118,7 @@ function fileUnder(root: string, relative: string): string | null {
 
 /** The double-clicked document's first page: its own picture, or (macOS) Quick
  * Look's once drawn; `bytes` null meanwhile (the card shows its name alone). */
-let deckPicture: { bytes: Buffer | null; type: string; name: string; large?: boolean } | null = null;
+let deckPicture: { bytes: Buffer | null; type: string; name: string; large?: boolean; plain?: boolean } | null = null;
 let served: Session | null = null;
 
 
@@ -131,7 +131,7 @@ let served: Session | null = null;
 
 
 
-function deckPage(name: string, picture: boolean, large = false): string {
+function deckPage(name: string, picture: boolean, large = false, plain = false): string {
   const title = name.replace(/[<>&"]/g, "");
   const style = `<style>
 .mrai-instant-deck{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(243,247,246,.72);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
@@ -148,7 +148,7 @@ function deckPage(name: string, picture: boolean, large = false): string {
   const card = `<div class="mrai-instant-deck"><div class="card${picture && large ? " page" : ""}">${image}<div class="name">${title}</div><div class="bar"></div></div></div>`;
   // The home's snapshot stills every animation (!important); the bar's own,
   // more specific and !important too, still runs.
-  if (homePage) {
+  if (homePage && !plain) {
     const at = homePage.lastIndexOf("</body>");
     if (at >= 0) return `${homePage.slice(0, at)}${style}${card}${homePage.slice(at)}`;
   }
@@ -164,7 +164,9 @@ function instantSession(webDir: string): Session {
     const url = new URL(request.url);
     const html = (body: string) => new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
     if (url.pathname === "/home" && homePage) return html(homePage);
-    if (url.pathname === "/deck" && deckPicture) return html(deckPage(deckPicture.name, deckPicture.bytes !== null, deckPicture.large === true));
+    if (url.pathname === "/deck" && deckPicture) {
+      return html(deckPage(deckPicture.name, deckPicture.bytes !== null, deckPicture.large === true, deckPicture.plain === true));
+    }
     if (url.pathname === "/deck-picture" && deckPicture?.bytes) {
       return new Response(new Uint8Array(deckPicture.bytes), { headers: { "content-type": deckPicture.type } });
     }
@@ -191,6 +193,8 @@ export interface InstantCover {
   remove(): void;
   /** Settles once the cover is off, whatever took it off. */
   readonly gone: Promise<void>;
+  /** The page watches for what it shows: the cover's own limit becomes ``ms`` from now. */
+  keepFor(ms: number): void;
 }
 
 /**
@@ -202,7 +206,7 @@ export function coverWindow(
   window: BrowserWindow,
   webDir: string,
   kind: InstantKind,
-  options: { deck?: string; onShown?: () => void; giveUpMs?: number } = {},
+  options: { deck?: string; onShown?: () => void; giveUpMs?: number; plain?: boolean } = {},
 ): InstantCover | null {
   if (kind === "home") {
     homePage ??= homeSnapshot(webDir);
@@ -214,10 +218,21 @@ export function coverWindow(
     // (macOS) Quick Look's, drawn meanwhile; the card shows its name at once.
     if (!options.deck || !instantDocument(options.deck)) return null;
     const picture = documentThumbnail(options.deck);
-    quickLook = !picture && process.platform === "darwin";
+    // Quick Look draws it at a page's size on screen (macOS): asked for even
+    // when the file carries a picture of its own, which is a thumbnail
+    // (PowerPoint's: 256 px wide) shown until Quick Look's is drawn.
+    quickLook = process.platform === "darwin";
     if (!picture && !quickLook) return null;
-    deckPicture = picture ? { ...picture, name: path.basename(options.deck) } : { bytes: null, type: "image/png", name: path.basename(options.deck) };
-    homePage ??= homeSnapshot(webDir);
+    // `plain`: the card alone, not over the home's snapshot -- a window that
+    // comes up for a document opened while the app runs shows its live home
+    // already, and the snapshot (every stylesheet of the app, the home laid
+    // out, twice: before and after Quick Look's picture) was a second
+    // renderer's work beside the import it covers.
+    const plain = options.plain === true;
+    deckPicture = picture
+      ? { ...picture, name: path.basename(options.deck), plain }
+      : { bytes: null, type: "image/png", name: path.basename(options.deck), plain };
+    if (!plain) homePage ??= homeSnapshot(webDir);
   }
   const view = new WebContentsView({
     webPreferences: {
@@ -268,14 +283,19 @@ export function coverWindow(
     settleGone();
   };
   // The live page never said so (it failed, or this is an older one): gone anyway.
-  const giveUp = setTimeout(() => remove("timed out"), options.giveUpMs ?? 45_000);
+  let giveUp = setTimeout(() => remove("timed out"), options.giveUpMs ?? 45_000);
+  const keepFor = (ms: number) => {
+    if (removed) return;
+    clearTimeout(giveUp);
+    giveUp = setTimeout(() => remove("timed out"), ms);
+  };
   if (quickLook && options.deck) {
     const shown = deckPicture;
     void quickLookThumbnail(options.deck, path.join(app.getPath("userData"), "instant", "quick-look")).then((picture) => {
       if (!picture || removed || deckPicture !== shown || contents.isDestroyed()) return;
       // Quick Look draws the page at 1400 px: shown at the size of a page
       // on screen, as the document's window will, not a thumbnail's.
-      deckPicture = { ...picture, name: shown!.name, large: true };
+      deckPicture = { ...picture, name: shown!.name, large: true, plain: shown!.plain };
       console.log("[classic] instant view: first page drawn");
       contents.once("did-finish-load", () => {
         if (!removed) console.log("[classic] instant view: first page shown");
@@ -284,5 +304,5 @@ export function coverWindow(
     });
   }
   window.once("closed", () => remove("closed"));
-  return { kind, document: kind === "deck" ? options.deck : undefined, remove: () => remove(), gone };
+  return { kind, document: kind === "deck" ? options.deck : undefined, remove: () => remove(), gone, keepFor };
 }

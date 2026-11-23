@@ -6,7 +6,8 @@
 import { pdfTextListMarkerOf } from "./text-list-marker";
 import { type PdfNativeListTextSelectionItemEvidence } from "./engine/native/list-text-fidelity";
 import { PDF_NATIVE_MAX_FIXED_FRAME_ITEM_INDEX_GAP, PDF_NATIVE_MAX_FIXED_FRAME_ITEMS, PDF_NATIVE_MAX_ITEM_TEXT_LENGTH } from "./engine/native/vocabulary";
-import { RAISED_LETTER_ABUT_EM, RAISED_LETTER_RISE_EM, selectionVisualLineIndexes, summarizePdfNativeSelectionItems } from "./engine/native/list-text-model";
+import { RAISED_LETTER_ABUT_EM, RAISED_LETTER_RISE_EM, exactSelectionItem, pdfNativeSelectionItemsInSourceStretch, pdfNativeSelectionItemsJoinInOneWord,
+  selectionVisualLineIndexes, summarizePdfNativeSelectionItems } from "./engine/native/list-text-model";
 import { multiplyMatrix, type PdfViewportLike } from "./text-boxes";
 import type { PdfNativeKeptTextBlock } from "./native-kept-text-blocks";
 import { nativeListTextItemEvidence } from "./native-list-text-item-evidence";
@@ -2250,6 +2251,7 @@ function paragraphOfItems(
 function sourceContiguousParagraphs(
   paragraph: MutableParagraph,
   pageItems: readonly ProjectedNativeItem[],
+  spacers: readonly ProjectedNativeItem[],
 ): readonly MutableParagraph[] {
   const ordered = paragraph.lines.flatMap((line) => line.items);
   if (
@@ -2355,10 +2357,119 @@ function sourceContiguousParagraphs(
     const run = runs[runIndex];
     runs.splice(runIndex, 1, run.slice(0, at), run.slice(at));
   }
+  // The runs that are pieces of one word are one run: joined once the runs
+  // are cut clear of other text, so what is joined is the boxes this would
+  // offer, and nothing a run carried only by the source's order. (Joined
+  // before the cuts, a run that reached on from a word's piece into the
+  // next cell of a table row took that cell into the word's box once the
+  // cells before it were set again elsewhere in the stream: the page then
+  // read with one box fewer than before that write, and the write was let
+  // go -- pdf-walk-1000 0979 p.79, a header row.) A run made so is a box a
+  // native edit may own that covers no other text, or the pieces stay the
+  // runs they were: nothing that could be opened is closed by being joined.
+  // A joined run is selected by its items (no one run of the source stands
+  // for it), so each of them has to be one an edit takes as a source-bound
+  // item (exactSelectionItem) -- and no zero-height blank of the reader's
+  // may stand between them in the source: the line such a run makes reads
+  // it back as an item of its own (singleRunLine), which only one synthetic
+  // item can carry. Joined over such a blank, «دراسة فيزيولوجية», a title
+  // turned on its side, was a box no edit opened, where each of its pieces
+  // had opened by its run (pdf-walk-1000 0979 pp.60, 71, 137). And the line
+  // is upright: a turned line leaned is a sheared one, on which several runs
+  // are no box the reader offers (paragraphReason: unsupported-geometry) --
+  // the word leaned read back as the pieces it was drawn in, and the window
+  // let the lean go, where each piece, one run, had leaned and read back as
+  // itself (0979 p.135, a table's turned heading «المورفولوجية»).
+  const selectable = (item: ProjectedNativeItem): boolean => {
+    try {
+      exactSelectionItem(item.evidence);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const ownedAsOne = (run: readonly ProjectedNativeItem[]): boolean => {
+    const indexes = run.map((item) => item.evidence.itemIndex);
+    const firstIndex = Math.min(...indexes), lastIndex = Math.max(...indexes);
+    if (
+      !run.every(selectable) ||
+      spacers.some((spacer) => spacer.evidence.itemIndex > firstIndex && spacer.evidence.itemIndex < lastIndex)
+    ) {
+      return false;
+    }
+    const owned = paragraphOfItems(paragraph.lines, new Set(run));
+    return owned !== null && Math.abs(owned.lines[0].angle) < UPRIGHT_ANGLE_EPSILON &&
+      paragraphReason(owned.lines, owned.lines[0].angle) === undefined;
+  };
+  joinRunsOfOneJoinedWord(runs, lineOfItem, readingIndex, (run) =>
+    ownedAsOne(run) && !exposed.some((item) => !run.includes(item) && covers(run, centre(item))));
   return runs.flatMap((run) => {
     const owned = paragraphOfItems(paragraph.lines, new Set(run));
     return owned ? [owned] : [];
   });
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function joinRunsOfOneJoinedWord(
+  runs: ProjectedNativeItem[][],
+  lineOfItem: ReadonlyMap<ProjectedNativeItem, NativeVisualLine>,
+  readingIndex: ReadonlyMap<ProjectedNativeItem, number>,
+  offered: (run: readonly ProjectedNativeItem[]) => boolean,
+): void {
+  const sourceSpan = (run: readonly ProjectedNativeItem[]) => {
+    const indexes = run.map((item) => item.evidence.itemIndex);
+    return [Math.min(...indexes), Math.max(...indexes)] as const;
+  };
+  /** Two items of one line that are pieces of one word (list-text-model). */
+  const joined = (left: ProjectedNativeItem, right: ProjectedNativeItem): boolean =>
+    lineOfItem.get(left) === lineOfItem.get(right) && pdfNativeSelectionItemsJoinInOneWord(left.evidence, right.evidence);
+  for (let merged = true; merged;) {
+    merged = false;
+    search: for (let first = 0; first < runs.length; first += 1) {
+      for (let second = first + 1; second < runs.length; second += 1) {
+        const a = runs[first], b = runs[second];
+        // (One stretch of the source between them: the two runs follow each other in it.)
+        const [aFirst, aLast] = sourceSpan(a), [bFirst, bLast] = sourceSpan(b);
+        const between = aLast < bFirst ? bFirst - aLast : bLast < aFirst ? aFirst - bLast : 0;
+        if (between < 1 || between > PDF_NATIVE_MAX_FIXED_FRAME_ITEM_INDEX_GAP) continue;
+        if (a.length + b.length > PDF_NATIVE_MAX_FIXED_FRAME_ITEMS) continue;
+        if (!a.some((left) => b.some((right) => joined(left, right) || joined(right, left)))) continue;
+        const one = [...a, ...b].sort((x, y) => (readingIndex.get(x) ?? 0) - (readingIndex.get(y) ?? 0));
+        if (!offered(one)) continue;
+        runs.splice(first, 1, one);
+        runs.splice(second, 1);
+        merged = true;
+        break search;
+      }
+    }
+  }
 }
 
 
@@ -2491,13 +2602,9 @@ function paragraphReason(
   if (items.some((item) => UNNAMED_CODE_CHARACTER.test(item.str))) {
     return "not-text";
   }
-  if (
-    items.some((item, index) => {
-      if (index === 0) return false;
-      const gap = item.itemIndex - items[index - 1].itemIndex;
-      return gap < 1 || gap > PDF_NATIVE_MAX_FIXED_FRAME_ITEM_INDEX_GAP;
-    })
-  ) {
+  // (In the order the source draws them -- or, along a right-to-left line,
+  // across the cut of a word whose pieces it draws in another order.)
+  if (!pdfNativeSelectionItemsInSourceStretch(items, PDF_NATIVE_MAX_FIXED_FRAME_ITEM_INDEX_GAP)) {
     return "noncontiguous-items";
   }
   if (projectedItems.some((item) => !item.visualFontKey)) {
@@ -2505,13 +2612,17 @@ function paragraphReason(
   }
   if (
     lines.slice(0, -1).some((line, lineIndex) => {
-      const last = line.items.at(-1)?.evidence;
-      const firstNext = lines[lineIndex + 1]?.items[0]?.evidence;
+      // (The item of the line the source draws last, and the one of the next
+      // line it draws first: the line's last and the next line's first,
+      // but for a line a joined word's pieces are drawn out of order in.)
+      const last = line.items.length ? Math.max(...line.items.map((item) => item.evidence.itemIndex)) : null;
+      const next = lines[lineIndex + 1]?.items ?? [];
+      const firstNext = next.length ? Math.min(...next.map((item) => item.evidence.itemIndex)) : null;
       return (
-        !last ||
-        !firstNext ||
-        firstNext.itemIndex <= last.itemIndex ||
-        firstNext.itemIndex - last.itemIndex >
+        last === null ||
+        firstNext === null ||
+        firstNext <= last ||
+        firstNext - last >
           PDF_NATIVE_MAX_FIXED_FRAME_ITEM_INDEX_GAP
       );
     })
@@ -3154,7 +3265,7 @@ export function nativeParagraphEditBoxes(
         if (stacked) return stacked;
       }
       return visualParagraphs(visualLines(part))
-        .flatMap((paragraph) => sourceContiguousParagraphs(paragraph, projected));
+        .flatMap((paragraph) => sourceContiguousParagraphs(paragraph, projected, spacers));
     }),
   ].flatMap((paragraph) => paragraphsWithinTextLimit(paragraph,
     (line) => lineWithReaderGapSpaces(line, spacers, input.viewport, input.emptyLineEnds)));
@@ -3168,6 +3279,13 @@ export function nativeParagraphEditBoxes(
     const turnedRun = Math.abs(grouped.lines[0].angle) >= UPRIGHT_ANGLE_EPSILON
       ? singleRunLine(grouped.lines, spacers, projected) : null;
     const reason = paragraphReason(grouped.lines, grouped.lines[0].angle, turnedRun !== null);
+    // (A line with a word drawn in pieces out of the source's order
+    // (joinRunsOfOneJoinedWord) is no one run of the source: read as a line
+    // of one face is, it is selected by its items, listed as they stand --
+    // which is also how its writers know it for a line whose words are not
+    // typed into (source-text-fallback: pdfRightToLeftLineWordsFixedReason).)
+    const drawnInPieces = grouped.lines.some((line) => line.items.some((item, index) =>
+      index > 0 && item.evidence.itemIndex < line.items[index - 1].evidence.itemIndex));
     const runLine =
       reason === undefined ? (turnedRun ?? singleRunLine(grouped.lines, spacers, projected)) : null;
     const paragraph = runLine
@@ -3194,7 +3312,7 @@ export function nativeParagraphEditBoxes(
     // had it carried the EOL itself, so the box says so: a paragraph
     // rewrite of the box then reads the gap after it as one its text does
     // not hold as a space (paragraph-rewrite's unreadGaps).
-    const items = ordered.map((item, index) => {
+    const drawn = ordered.map((item, index) => {
       const next = ordered[index + 1];
       const last = rawSourceItemIndexes(item).at(-1) ?? item.itemIndex;
       return next &&
@@ -3204,6 +3322,20 @@ export function nativeParagraphEditBoxes(
         ? Object.freeze({ ...item, hasEOL: true })
         : item;
     });
+    // A box's items are listed as the source draws them, which is how every
+    // line of it stands too (paragraphReason) -- but for a line with a word
+    // drawn in pieces out of the source's order (joinRunsOfOneJoinedWord).
+    // The text of a selection is read off its items as listed, each
+    // right-to-left line from its right (summarizePdfNativeSelectionItems):
+    // listed as it is drawn, such a line's words read in the order of its
+    // runs -- 0979 p.1's title «…العمليات الأيضـيـة و نمو…» as
+    // «ة و نمو…يـ العمليات الأيض» in the editor it opens. Such a box lists its
+    // lines as they stand.
+    const standing = paragraph.lines.flatMap((line) => line.items.map((item) => item.evidence));
+    const items = reason === undefined &&
+      standing.some((item, index) => index > 0 && item.itemIndex < standing[index - 1].itemIndex)
+      ? standing.map((item) => drawn[ordered.indexOf(item)])
+      : drawn;
     const sourceItemIndexes = Object.freeze(
       Array.from(
         new Set(items.flatMap((item) => rawSourceItemIndexes(item))),
@@ -3227,7 +3359,7 @@ export function nativeParagraphEditBoxes(
       ? Math.hypot(runStart.transform[0], runStart.transform[1])
       : 0;
     const selectionItem =
-      runLine && runStart && runEnd && runScale > 0
+      runLine && !drawnInPieces && runStart && runEnd && runScale > 0
         ? Object.freeze({
             ...runStart,
             str: runLine.text,
@@ -3241,8 +3373,8 @@ export function nativeParagraphEditBoxes(
             hasEOL: runEnd.hasEOL,
           })
         : undefined;
-    const first = items[0].itemIndex;
-    const last = items.at(-1)?.itemIndex ?? first;
+    const first = drawn[0].itemIndex;
+    const last = drawn.at(-1)?.itemIndex ?? first;
     return Object.freeze({
       id: `pdf-native-paragraph-${input.pageNumber}-${first}-${last}`,
       x: boxLeft / input.viewport.width,

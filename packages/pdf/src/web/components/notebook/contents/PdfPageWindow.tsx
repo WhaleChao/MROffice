@@ -23,6 +23,7 @@ import "@mrnote/core/web/styles/native-page-window.css";
 
 import { OfficeFormatPreviewProvider } from "@mrnote/core/web/components/office-ribbon/officeFormatPreview.tsx";
 import { pdfFormatPreviewAdapter } from "./pdf/pdfFormatPreview";
+import { pdfSaveStallFace, useSaveSurfaceStallReport } from "@mrnote/core/web/lib/save-stall-report.ts";
 import { reportOfficeExperience } from "@mrnote/core/web/lib/office-experience-report.ts";
 import { effectiveTextBoxKind } from "@mrnote/core/web/lib/pdf/text-box-kind.ts";
 import { pdfDevErrorText } from "../../../lib/pdf/dev-error-text";
@@ -7457,6 +7458,18 @@ export default function PdfPageWindow({
     reader: pdfHeldStatesTogether([readerHeldWork, textBoxChangesHeld, carriedWordsHeld, copyWriteHeld]),
     quarantinedRows: quarantinedRowCount,
   });
+  // A face saying "Saving..." or "Save" for 90 s with nothing on its way:
+  // said to the server once, by its inputs (SaveSurfaceStalled).
+  const pdfStall = pdfSaveStallFace({
+    shown: windowShownSaveStatus, raw: windowSaveStatus, textSaveFailed: failedTextBackgroundSaveCount > 0 && windowSaveStatus !== "saving" && windowSaveStatus !== "conflict",
+    syncedToServer: windowSyncedToServer, reader: readerHeldWork, textBoxes: textBoxChangesHeld,
+    carriedWords: carriedWordsHeld, copyWrites: copyWritesOnTheirWay, quarantinedRows: quarantinedRowCount,
+    dirty: Boolean(autosave.isDirty),
+  });
+  useSaveSurfaceStallReport({
+    pageId, pageType: "pdf", enabled: !guestMode && !autosave.readOnly, face: pdfStall.face,
+    busy: Boolean(autosave.isSaving) || copyWritesOnTheirWay > 0, inputs: () => pdfStall.inputs,
+  });
   // A text draft the PDF did not take is all that is unwritten: everything
   // else the reader did is saved, and the draft stays on the page, in the
   // page's record, to be written again (Save, or the notice's Retry) or
@@ -7507,6 +7520,14 @@ export default function PdfPageWindow({
       unsavedFaceWhyRef.current = why;
       try { console.debug("[pdf-unsaved-why] " + why); } catch { /* diagnostics never throw */ }
     }
+  } else if (process.env.NODE_ENV !== "production" && unsavedFaceWhyRef.current) {
+    // Said as it ends too: the last reason otherwise stood in the console as
+    // if it still held (te0371d read "copy=saving" for good while the face
+    // was already back to the draft alone).
+    unsavedFaceWhyRef.current = "";
+    try {
+      console.debug("[pdf-unsaved-why] (over) " + (onlyTextDraftsUnwritten ? "only text drafts" : windowShownSaveStatus));
+    } catch { /* diagnostics never throw */ }
   }
   const windowSaveStatusLabel = windowSyncedToServer
     ? t("pages.synced")
@@ -65488,7 +65509,12 @@ export default function PdfPageWindow({
       // face shows, with what happened beside it: once the failure toast
       // was gone the face read only "保存" for as long as the draft waited.
       status: textBackgroundSaveFailed ? "error" : windowSyncedToServer ? "synced" : windowShownSaveStatus,
-      statusLabel: textBackgroundSaveFailed ? t("pages.unsaved") : windowSaveStatusLabel,
+      // With nothing else unwritten the face says what is the case --
+      // 「有文字草稿未写入」 (onlyTextDraftsUnwritten) -- as the ribbon does;
+      // 未保存 here read for as long as the draft waited, whatever was saved
+      // after it (walks te0371c/d: a watermark and a blank page written,
+      // the face 未保存 throughout).
+      statusLabel: textBackgroundSaveFailed && !onlyTextDraftsUnwritten ? t("pages.unsaved") : windowSaveStatusLabel,
       failureReason: textBackgroundSaveFailed ? t("pdf.pageWindow.textBackgroundSaveFailed") : undefined,
       failureTestId: "pdf-save-failure-reason",
       actionLabel: t("pages.save"),

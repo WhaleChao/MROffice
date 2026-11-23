@@ -87,6 +87,8 @@ export interface OfficeRailNote {
   label: string;
   detail?: string;
   testId?: string;
+  /** A way into what the note is about (a deck's recoverable copy). */
+  action?: { label: string; onClick: () => void; testId?: string };
 }
 
 export interface OfficeRailSave {
@@ -351,6 +353,17 @@ function RailNote({ note }: { note: OfficeRailNote }) {
     >
       <CirclePause size={14} aria-hidden="true" />
       <span className={styles.verificationLabel}>{note.label}</span>
+      {note.action ? (
+        <button
+          type="button"
+          className={styles.noteAction}
+          data-testid={note.action.testId}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={note.action.onClick}
+        >
+          {note.action.label}
+        </button>
+      ) : null}
     </span>
   );
 }

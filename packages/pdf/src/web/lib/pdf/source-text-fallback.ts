@@ -364,6 +364,10 @@ interface FontInfo {
    * reads as several of them (readMraiNativeRightToLeftLetterCodes): the
    * reader turns the letters of such a glyph round. */
   readonly rightToLeftLetterCodes?: Readonly<{ letters: ReadonlySet<number>; several: ReadonlySet<number> }>;
+  /** What its ToUnicode reads each code as, for a font of right-to-left
+   * letters (pdfInvisibleRightToLeftLineText reads a line in the order its
+   * shows hold it). */
+  readonly decode?: ReadonlyMap<number, string>;
   /** Its /BaseFont (what a diagnosis names it by). */
   readonly name?: string;
 }
@@ -555,17 +559,22 @@ async function readFont(lib: PdfLib, doc: import("pdf-lib").PDFDocument, value: 
     const named = get(dict, "BaseFont");
     // (Two-byte codes: what the reader reads each as is asked by the code.)
     let rightToLeftLetterCodes: FontInfo["rightToLeftLetterCodes"] | null = null;
+    let decode: ReadonlyMap<number, string> | null = null;
     const table = get(dict, "ToUnicode");
     if (codeWidth === 2 && table instanceof lib.PDFRawStream) {
       try {
-        const { readMraiNativeRightToLeftLetterCodes } = await import("./engine/native/list-text-fidelity");
-        rightToLeftLetterCodes = readMraiNativeRightToLeftLetterCodes(lib.decodePDFRawStream(table).decode(), 2);
-      } catch { rightToLeftLetterCodes = null; }
+        const { readMraiNativeRightToLeftLetterCodes, readMraiNativeToUnicodeDecode } =
+          await import("./engine/native/list-text-fidelity");
+        const tableBytes = lib.decodePDFRawStream(table).decode();
+        rightToLeftLetterCodes = readMraiNativeRightToLeftLetterCodes(tableBytes, 2);
+        if (rightToLeftLetterCodes) decode = readMraiNativeToUnicodeDecode(tableBytes, 2);
+      } catch { rightToLeftLetterCodes = null; decode = null; }
     }
     return { kind: "type0", codeLength, vertical, codeWidth,
       width: (code) => (identity ? widths.get(code) ?? defaultWidth : defaultWidth),
       ...(inkedBlankCodes?.size ? { inkedBlankCodes } : {}),
       ...(rightToLeftLetterCodes ? { rightToLeftLetterCodes } : {}),
+      ...(decode ? { decode } : {}),
       ...(named instanceof lib.PDFName ? { name: named.decodeText() } : {}) };
   }
   const firstChar = numberOf(lib, get(dict, "FirstChar"), 0);
@@ -588,12 +597,16 @@ async function readFont(lib: PdfLib, doc: import("pdf-lib").PDFDocument, value: 
   // metrics (pdf-lib carries them), through its encoding and /Differences.
   const standard = widthList ? null : standardFontMetrics(lib, baseName, get(dict, "Encoding"), resolveEntry);
   let rightToLeftLetterCodes: FontInfo["rightToLeftLetterCodes"] | null = null;
+  let decode: ReadonlyMap<number, string> | null = null;
   const table = get(dict, "ToUnicode");
   if (table instanceof lib.PDFRawStream) {
     try {
-      const { readMraiNativeRightToLeftLetterCodes } = await import("./engine/native/list-text-fidelity");
-      rightToLeftLetterCodes = readMraiNativeRightToLeftLetterCodes(lib.decodePDFRawStream(table).decode(), 1);
-    } catch { rightToLeftLetterCodes = null; }
+      const { readMraiNativeRightToLeftLetterCodes, readMraiNativeToUnicodeDecode } =
+        await import("./engine/native/list-text-fidelity");
+      const tableBytes = lib.decodePDFRawStream(table).decode();
+      rightToLeftLetterCodes = readMraiNativeRightToLeftLetterCodes(tableBytes, 1);
+      if (rightToLeftLetterCodes) decode = readMraiNativeToUnicodeDecode(tableBytes, 1);
+    } catch { rightToLeftLetterCodes = null; decode = null; }
   }
   return { kind: "simple", codeLength: () => 1, vertical: false, codeWidth: 1,
     width: (code) => {
@@ -605,6 +618,7 @@ async function readFont(lib: PdfLib, doc: import("pdf-lib").PDFDocument, value: 
       return monospace ? 0.6 : code === 32 ? 0.25 : 0.52;
     },
     ...(rightToLeftLetterCodes ? { rightToLeftLetterCodes } : {}),
+    ...(decode ? { decode } : {}),
     ...(baseFont instanceof lib.PDFName ? { name: baseFont.decodeText() } : {}) };
 }
 
@@ -1222,8 +1236,83 @@ export async function pdfRightToLeftLineWordsFixedReason(input: {
   selection: PdfNativeListTextSelectionEvidence;
 }): Promise<PdfNativeTextWordsFixedReason | null> {
   if (!pdfTextHasRightToLeftRun(input.selection.item.str)) return null;
+  // A box that lists a line's items as they stand, not as the source draws
+  // them, holds a word the page draws in pieces of several runs (the
+  // reader's joinRunsOfOneJoinedWord: an elongation set as a run of its own
+  // inside a word). Its words are read in another order than they are
+  // drawn, by the reader's own joining of them: no writer places a typed
+  // letter among such pieces -- typed into one of them when each was a box,
+  // a letter was drawn alone, a size smaller, outside the word it was typed
+  
+  // written where its text stands, as every such line's.
   return await pdfTextLinesWordsFixedReason(input) ??
-    (await pdfRightToLeftLinesReadReordered(input) ? "letters-read-reordered" : null);
+    (selectionListsAWordDrawnInPieces(input.selection) || await pdfRightToLeftLinesReadReordered(input)
+      ? "letters-read-reordered" : null);
+}
+function selectionListsAWordDrawnInPieces(selection: PdfNativeListTextSelectionEvidence): boolean {
+  return selection.items?.some((item, index, items) => index > 0 && item.itemIndex < items[index - 1].itemIndex) ?? false;
+}
+
+/**
+ * A line of right-to-left text a scan's recognised layer draws in the
+ * invisible mode alone (GlyphLessFont, `3 Tr`), as the layer holds it: the
+ * characters its shows' codes stand for through the font's ToUnicode, in the
+ * order the shows hold them -- its reading order, as the recognition engine
+ * writes it. The reader reads each such word turned round (pdf-walk-1000
+ * 0480: the layer's "القرآن" read "نآرقلا", pdfRightToLeftLinesReadReordered),
+ * so this, not the reader's text, is what the line's box holds and writes.
+ *
+ * Null for anything else: a line any of whose glyphs paint (visible
+ * right-to-left text the reader reads in its visual order, and reads right),
+ * a code the table does not read, or a reading whose letters are not the
+ * reader's letters of the box (another order of the same characters is all
+ * this may change). Shows on another baseline are a line break where the
+ * reader's text has one, a space where it has none.
+ */
+export async function pdfInvisibleRightToLeftLineText(input: {
+  sourceBytes: Uint8Array;
+  selection: PdfNativeListTextSelectionEvidence;
+}): Promise<string | null> {
+  const read = input.selection.item.str;
+  if (!pdfTextHasRightToLeftRun(read)) return null;
+  const reading = await pageReading(input.sourceBytes, input.selection.pageNumber);
+  const items = boxItems(input.selection);
+  const regions = items.map((item) => itemRegion(item));
+  const sized = sizedLike(items);
+  const breaks = /\n/u.test(read);
+  let text = "";
+  let letters = 0;
+  let baseline: number | null = null;
+  for (const show of reading.shows) {
+    let part = "";
+    let firstY: number | null = null;
+    let size = 0;
+    for (const glyph of show.glyphs) {
+      if (!regions.some((inside, at) => Boolean(inside?.(glyph.x, glyph.y, glyph.ux, glyph.uy)) && sized(show, glyph, at))) continue;
+      // Every glyph of it drawn in the invisible mode, by a font whose table
+      // reads every code.
+      if (show.mode !== 3 && show.mode !== 7) return null;
+      const decoded = show.font.decode?.get(glyph.code);
+      if (decoded === undefined) return null;
+      if (show.font.rightToLeftLetterCodes?.letters.has(glyph.code)) letters += 1;
+      firstY ??= glyph.y;
+      size = Math.max(size, glyph.size);
+      part += decoded;
+    }
+    if (firstY === null) continue;
+    if (text) {
+      const newLine = baseline !== null && Math.abs(firstY - baseline) > Math.max(size, 1) * 0.5;
+      if (newLine) text = `${text.trimEnd()}${breaks ? "\n" : " "}`;
+      else if (!/\s$/u.test(text) && !/^\s/u.test(part)) text += " ";
+    }
+    baseline = firstY;
+    text += part;
+  }
+  if (!letters) return null;
+  const tidy = text.split("\n").map((line) => line.replace(/[^\S\n]+/gu, " ").trim()).join("\n").trim();
+  // The same characters as the reader's, in another order.
+  const counted = (value: string) => [...value.replace(/\s+/gu, "")].sort().join("");
+  return tidy && counted(tidy) === counted(read) ? tidy : null;
 }
 
 /** What the page content draws of a box, as pieces to hide by span. */
@@ -1612,7 +1701,20 @@ export async function preparePdfFallbackTextOpen(input: {
   }
   
   // words than the page shows: its box would be a line of other letters.)
-  if (await pdfRightToLeftLinesReadReordered(input)) {
+  // (And a line with a word the page draws in pieces of several runs:
+  // pdfRightToLeftLineWordsFixedReason.)
+  // (A line of a scan's invisible layer is opened in its reading order, as
+  // the layer holds it: pdfInvisibleRightToLeftLineText.)
+  const layerText = await pdfInvisibleRightToLeftLineText(input).catch(() => null);
+  if (layerText !== null) {
+    return {
+      proof: pdfFallbackTextProof({ ...data, displayText: layerText }, input.selection, layerText),
+      blankedSource: input.blank === false ? null
+        : await applyPdfFallbackTextHide(input.sourceBytes, data).catch(() => null),
+    };
+  }
+  if ((pdfTextHasRightToLeftRun(input.selection.item.str) && selectionListsAWordDrawnInPieces(input.selection)) ||
+    await pdfRightToLeftLinesReadReordered(input)) {
     try {
       return { proof: await pdfWordsFixedTextProof(input, "letters-read-reordered"), blankedSource: null };
     } catch (error) {
@@ -1634,11 +1736,13 @@ export async function preparePdfFallbackTextOpen(input: {
 export function pdfFallbackTextProof(
   data: PdfFallbackTextProofData,
   selection: PdfNativeListTextSelectionEvidence,
+  /** The box's text where it is not the reader's (pdfInvisibleRightToLeftLineText). */
+  text?: string,
 ): PdfNativeListTextSelectionProof {
   const first = data.pieces[0];
   return Object.freeze({
     ...proofOfNoRun(selection, { object: first.object, generation: first.generation, start: first.start, end: first.end,
-      sha256: first.sha256 }, data.fontSize, data.renderingMode),
+      sha256: first.sha256 }, data.fontSize, data.renderingMode, text),
     fallbackText: data,
   });
 }
@@ -1650,11 +1754,12 @@ function proofOfNoRun(
   first: Readonly<{ object: number; generation: number; start: number; end: number; sha256: string }>,
   fontSize: number,
   renderingMode?: number,
+  boxText?: string,
 ) {
   const items = selection.items?.length ? selection.items : [selection.item];
   const baselines = items.map((item) => item.transform[5]);
   const lineSpacing = baselines.length > 1 ? Math.abs(baselines[0] - baselines[1]) : fontSize * 1.2;
-  const text = selectionText(selection);
+  const text = boxText ?? selectionText(selection);
   return {
     target: Object.freeze({ objectNumber: first.object, generation: first.generation }),
     evidence: Object.freeze({

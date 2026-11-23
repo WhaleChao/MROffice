@@ -9,6 +9,7 @@ import { readMraiNativeParagraphRewriteEvidence } from "./paragraph-rewrite-evid
 import { isMraiNativePredefinedUnicodeCMapName } from "./predefined-cmap-names";
 import { PDF_EXISTING_RESOURCE_NAME } from "./embedded-image-model";
 import { PdfNativeTransactionError } from "./transaction-error";
+import { pdfRightToLeftTextJoins } from "../../right-to-left-joining";
 import { MRAI_NATIVE_ADAPTIVE_MULTI_RUN_LINE_PLAN_SCHEMA_VERSION, MRAI_NATIVE_LIST_TEXT_MISSING_GLYPH_MESSAGE, MRAI_NATIVE_LIST_TEXT_SCHEMA_VERSION, MRAI_NATIVE_PROJECTED_MULTI_RUN_LINE_PLAN_SCHEMA_VERSION, MRAI_NATIVE_TEXT_PROPERTIES_SCHEMA_VERSION, PDF_NATIVE_MAX_FIXED_FRAME_ITEMS, PDF_NATIVE_MAX_FIXED_FRAME_ITEM_INDEX_GAP, PDF_NATIVE_MAX_ITEM_TEXT_LENGTH } from "./vocabulary";
 import type { PdfMatrix, PdfNativeDeviceColor, PdfNativeFixedFrameLinePlan, PdfNativeFontEncoding, PdfNativeFontEncodingKind, PdfNativeIndirectObjectRef, PdfNativeListTextFidelityEvidence, PdfNativeListTextSelectionEvidence, PdfNativeListTextSelectionItemEvidence, PdfNativeListTextSourceRun, PdfNativeParagraphReflowLineEvidence, PdfNativeParagraphReflowMutationEvidence, PdfNativeStandard14EncodingKind, PdfNativeStandard14LatinBaseFont, PdfNativeTextFontOption, PdfNativeTextLayoutWitnessEvidence, PdfNativeTextPropertyMutationEvidence, PdfNativeTextPropertyState } from "./list-text-fidelity";
 
@@ -316,6 +317,87 @@ function raisedLettersOfLine(
   return true;
 }
 
+/**
+ * Whether two items of a line are pieces of one word: `left` ends where
+ * `right` begins along the line they share, on one baseline, in one face and
+ * size, both of right-to-left letters, and the letter read last of `right`
+ * (the text is read from the right) runs on into the letter read first of
+ * `left` -- joined by their forms (pdfRightToLeftTextJoins).
+ *
+ * A word processor writes a right-to-left line as its runs in the order
+ * they are read, each run's glyphs from left to right; where a run ends
+ * inside a word (an elongation set as a run of its own: «الأيضـيـة» as
+ * «…الأيض», «يـ», «ة…») the word's pieces stand side by side on the page and
+ * apart in the source. The page's reader keeps them in one box
+ * (native-paragraph-edit-boxes, joinRunsOfOneJoinedWord) and a selection
+ * lists them along their line (pdfNativeSelectionItemsInSourceStretch): by
+ * this one rule, here and there.
+ */
+export function pdfNativeSelectionItemsJoinInOneWord(
+  left: PdfNativeListTextSelectionItemEvidence,
+  right: PdfNativeListTextSelectionItemEvidence,
+): boolean {
+  const axis = Math.hypot(left.transform[0], left.transform[1]);
+  const other = Math.hypot(right.transform[0], right.transform[1]);
+  const size = Math.min(left.height, right.height);
+  if (!(axis > 0) || !(other > 0) || !(size > 0) || left.fontName !== right.fontName ||
+    Math.abs(left.height - right.height) > size * 0.05) return false;
+  const along = [left.transform[0] / axis, left.transform[1] / axis] as const;
+  // (One direction: the two are set along one line.)
+  if (Math.abs(right.transform[0] / other - along[0]) > 1e-3 || Math.abs(right.transform[1] / other - along[1]) > 1e-3) return false;
+  const deltaX = right.transform[4] - left.transform[4], deltaY = right.transform[5] - left.transform[5];
+  const apart = deltaX * along[0] + deltaY * along[1] - left.width;
+  const across = deltaY * along[0] - deltaX * along[1];
+  if (Math.abs(across) > size * JOINED_WORD_BASELINE_EM || Math.abs(apart) > size * RAISED_LETTER_ABUT_EM) return false;
+  const rightToLeft = (text: string) => RIGHT_TO_LEFT_LETTER.test(text) && !LEFT_TO_RIGHT_LETTER.test(text);
+  // (A blank the reader folded into an item stands at the end it was read
+  // at: one at the cut is a word's end, not a letter's join.)
+  return rightToLeft(left.str) && rightToLeft(right.str) && !/\s$/u.test(left.str) && !/^\s/u.test(right.str) &&
+    pdfRightToLeftTextJoins(right.str.trimEnd(), left.str.trimStart());
+}
+/** How far apart the baselines of two pieces of one word may stand (em):
+ * they are set on one line by one matrix, or by two that state the same. */
+const JOINED_WORD_BASELINE_EM = 0.02;
+
+/**
+ * Whether a selection's items, listed line by line as they stand along each
+ * line, are one stretch of the page's source that a native edit may own:
+ * listed in the order the source draws them, each at most `gap` items after
+ * the one before -- or, along one line, across the cut of a word whose
+ * pieces the source draws in another order
+ * (pdfNativeSelectionItemsJoinInOneWord). Then every line's items are still
+ * one stretch of the source, the lines follow one another in it, and the
+ * whole is one stretch.
+ *
+ * A selection's text is read off its items as listed, each line's from the
+ * side its script is read from (summarizePdfNativeSelectionItems): a line
+ * with such a word is listed as it stands, not as it is drawn, or its words
+ * would read in the order of its runs.
+ */
+export function pdfNativeSelectionItemsInSourceStretch(
+  items: readonly PdfNativeListTextSelectionItemEvidence[],
+  gap: number,
+): boolean {
+  const follows = (before: number, after: number) => after > before && after - before <= gap;
+  if (items.every((item, index) => index === 0 || follows(items[index - 1].itemIndex, item.itemIndex))) return true;
+  const lineIndexes = selectionVisualLineIndexes(items);
+  let lineStart = 0, lastOfLineBefore: number | null = null;
+  for (let index = 1; index <= items.length; index += 1) {
+    if (index < items.length && lineIndexes[index] === lineIndexes[lineStart]) continue;
+    const line = items.slice(lineStart, index);
+    const sorted = line.map((item) => item.itemIndex).sort((a, b) => a - b);
+    if (sorted.some((at, order) => order > 0 && !follows(sorted[order - 1], at))) return false;
+    if (lastOfLineBefore !== null && !follows(lastOfLineBefore, sorted[0])) return false;
+    for (let at = 1; at < line.length; at += 1) {
+      if (!follows(line[at - 1].itemIndex, line[at].itemIndex) &&
+        !pdfNativeSelectionItemsJoinInOneWord(line[at - 1], line[at])) return false;
+    }
+    lastOfLineBefore = sorted.at(-1)!;
+    lineStart = index;
+  }
+  return true;
+}
+
 export const CJK_VISUAL_LINE_BOUNDARY =
   /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 
@@ -561,13 +643,10 @@ export function exactSelection(
       item.width !== items.reduce((total, entry) => total + entry.width, 0) ||
       item.height !== first.height ||
       item.hasEOL !== last.hasEOL ||
-      items.some(
-        (entry, index) =>
-          index > 0 &&
-          (entry.itemIndex <= items[index - 1].itemIndex ||
-            entry.itemIndex - items[index - 1].itemIndex >
-              PDF_NATIVE_MAX_FIXED_FRAME_ITEM_INDEX_GAP),
-      )
+      // (Listed as the source draws them; or, along a right-to-left line,
+      // across the cut of a word whose pieces it draws in another order --
+      // listed there as they stand, which is how their text is read.)
+      !pdfNativeSelectionItemsInSourceStretch(items, PDF_NATIVE_MAX_FIXED_FRAME_ITEM_INDEX_GAP)
     ) {
       invalid(
         "Fixed-frame editing requires 2–64 ordered complete text items with stable line boundaries.",

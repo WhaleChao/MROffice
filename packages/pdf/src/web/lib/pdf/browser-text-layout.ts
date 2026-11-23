@@ -187,6 +187,9 @@ export function layoutBrowserPdfTextRuns<Run extends PdfTextLayoutRun>(
     if (!(origin.width > 0)) return null; // No layout engine: never fake evidence.
     const range = document.createRange();
     const lines: PdfBrowserTextLayoutLine<Run>[] = [];
+    // Each line's rightmost glyph edge: a line of right-to-left letters
+    // ends, in its characters' order, at its left (pdf-walk-1000 rk0979a).
+    const lineRight = new Map<PdfBrowserTextLayoutLine<Run>, number>();
     let previousTop = -Infinity;
     const referenceTop = reference.getBoundingClientRect().top;
     for (const [index, { run, node }] of nodes.entries()) {
@@ -240,12 +243,32 @@ export function layoutBrowserPdfTextRuns<Run extends PdfTextLayoutRun>(
           });
         }
         line.width = right;
-        // In page units: the line is drawn scaled by k.
-        if (/\S/u.test(character)) positioned.contentAdvance = right * scale;
+        lineRight.set(positioned, Math.max(lineRight.get(positioned) ?? 0, right));
+        // In page units: the line is drawn scaled by k. Its content ends at
+        // the rightmost edge of a glyph that draws: the last character's in
+        // text read left to right, the first's in a word of Arabic, Hebrew
+        // or Urdu, whose last letter stands at its left. Taken from the last
+        // character, a line of such words measured its content as the width
+        // of its last letter (5 pt of a 215 pt title): placed by it at the
+        // right of its box, the box's writer measured the line running 205 pt
+        // out of the frame and refused the save (pdf_portable_text_layout_invalid).
+        if (/\S/u.test(character)) positioned.contentAdvance = Math.max(positioned.contentAdvance, right * scale);
         line.height = Math.max(
           line.height,
           run.fontSize * lineHeightRatio,
         );
+      }
+    }
+    // A line whose last character does not stand at its right (right-to-left
+    // words, the paragraph's last line with no blank after them) is as wide
+    // as its rightmost glyph reaches: its last run takes the rest.
+    for (const positioned of lines) {
+      const right = lineRight.get(positioned) ?? 0;
+      const line = positioned.line;
+      if (right > line.width) {
+        const last = line.segments.at(-1);
+        if (last) last.width += right - line.width;
+        line.width = right;
       }
     }
     return lines;
