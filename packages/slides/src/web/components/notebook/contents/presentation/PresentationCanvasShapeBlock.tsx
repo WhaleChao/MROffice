@@ -16,6 +16,7 @@
  */
 
 import { PresentationTextEngineSurfaceContext } from "./PresentationEngineTextBody";
+import type { EditingHostHandover } from "./PresentationCanvasTextBlock";
 import { normalizeShapeKind } from "@mrnote/core/web/lib/presentation-shapes.ts";
 import { isTextEditTarget } from "../../../../lib/presentation-a11y";
 import { readZoomTileMarker } from "../../../../lib/presentation-zoom";
@@ -38,6 +39,7 @@ import {
 import { shapeLabelEditorTextCss, shapeLabelNeedsRichEditor, shapeTextFrameLayout, type PresentationFontSizeUnit } from "../../../../lib/presentation/text-layout-css";
 import {
   guardPresentationPreviewInput,
+  mapOffsetThroughTextChange,
   selectPresentationPreviewWordAtPress,
   presentationPreviewPlainText,
   presentationPreviewSelection,
@@ -125,6 +127,8 @@ export interface PresentationCanvasShapeBlockCtl {
   placeShapeTextCaret: (blockId: string, start: number, end: number) => void;
   /** The words of a label the window's typing burst holds and has not drawn, else null. */
   heldBlockWords: (blockId: string) => string | null;
+  /** The caret of a label being typed in, taken away with the focus (`EditingHostHandover`). */
+  editingHostHandover: EditingHostHandover;
   /** Ctrl/Cmd+B, I or U in the label's words: Home's own toggle. */
   toggleShapeWordsRunStyle: (
     key: "bold" | "italic" | "underline" | "subscript" | "superscript",
@@ -215,6 +219,7 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
     takeShapeRichSelection,
     placeShapeTextCaret,
     heldBlockWords,
+    editingHostHandover,
     toggleShapeWordsRunStyle,
     copyShapeText,
     pasteShapeTextRuns,
@@ -291,6 +296,7 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
   // The label's selection is followed however it was made (a drag released
   // past the shape included), so Home formats the highlighted words.
   const richHostRef = useRef<HTMLElement | null>(null);
+  const shapeFieldRef = useRef<HTMLTextAreaElement | null>(null);
   const richHost = useCallback(() => richHostRef.current, []);
   // The body keeps its key while its words change, the browser's own edits
   // put back before React draws the words (`usePresentationRichTypingKey`,
@@ -496,6 +502,15 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
                             // (usePresentationRichTypingKey).
                             key: richTypingKey ?? `shape-rich:${block.id}:${richEditorBlock.text ?? ""}`,
                             ref: (host: HTMLElement | null) => {
+                              const previous = richHostRef.current;
+                              if (!host && previous?.isConnected && previous.contains(previous.ownerDocument.activeElement)) {
+                                // The label going while it holds the caret (its
+                                // shape drawn again whole): the window keeps the
+                                // caret for the label that takes its place.
+                                const text = presentationPreviewPlainText(previous);
+                                const range = presentationPreviewSelection(previous, text.length) ?? { start: text.length, end: text.length };
+                                editingHostHandover.lost(block.id, { text, ...range });
+                              }
                               richHostRef.current = host;
                               // The browser's formatting, and a delete with
                               // no words to take (it removed the label's
@@ -520,6 +535,19 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
                               // by a caret a command left for it, not by the
                               // last recorded one on every redraw (this ref
                               // runs on each render).
+                              const back = host.dataset.caretPlaced ? null : editingHostHandover.take(block.id);
+                              if (back) {
+                                // Back where it was, through any change of the words since.
+                                const shown = presentationPreviewPlainText(host);
+                                host.dataset.caretPlaced = "true";
+                                host.focus({ preventScroll: true });
+                                setPresentationPreviewSelection(
+                                  host,
+                                  mapOffsetThroughTextChange(back.text, shown, back.start),
+                                  mapOffsetThroughTextChange(back.text, shown, back.end),
+                                );
+                                return;
+                              }
                               const restore = takeShapeRichSelection(block.id, !host.dataset.caretPlaced, presentationPreviewPlainText(host));
                               if (!restore && host.dataset.caretPlaced) return;
                               host.dataset.caretPlaced = "true";
@@ -726,7 +754,19 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
                           autoFocus
                           rows={1}
                           ref={(element) => {
-                            if (!element) return;
+                            if (!element) {
+                              const previous = shapeFieldRef.current;
+                              shapeFieldRef.current = null;
+                              if (previous?.isConnected && previous === previous.ownerDocument.activeElement) {
+                                // The field going while it holds the caret (its
+                                // shape drawn again whole): kept by the window.
+                                editingHostHandover.lost(block.id, {
+                                  text: previous.value, start: previous.selectionStart, end: previous.selectionEnd,
+                                });
+                              }
+                              return;
+                            }
+                            shapeFieldRef.current = element;
                             fitOfficeInlineTextEditor(element);
                             // After each commit of this box: a collaborator's
                             // delivery's caret, if this commit rewrote the
@@ -823,6 +863,17 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
                             const editorElement = event.currentTarget;
                             if (editorElement.dataset.caretPlaced) return;
                             editorElement.dataset.caretPlaced = "true";
+                            // A field taking the place of one that went with
+                            // the caret: back where it was.
+                            const back = editingHostHandover.take(block.id);
+                            if (back) {
+                              const value = editorElement.value;
+                              editorElement.setSelectionRange(
+                                mapOffsetThroughTextChange(back.text, value, back.start),
+                                mapOffsetThroughTextChange(back.text, value, back.end),
+                              );
+                              return;
+                            }
                             // Words a format command just made one format
                             // leave the drawn editor for this field: their
                             // selection comes with them.

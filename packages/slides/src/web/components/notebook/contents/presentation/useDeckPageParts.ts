@@ -1026,7 +1026,8 @@ export function useDeckPageParts<S extends DeckSlideLike>(options: UseDeckPagePa
     lockBackoff.current = 0;
     if (ownWriteBase() === undefined) await optionsRef.current.settleOwnServerWrite?.().catch(() => undefined);
     await optionsRef.current.refreshBody().catch(() => undefined);
-    session.structuralLanded();
+    // What was sent landed; anything the editor changed since goes next.
+    session.structuralLanded(structure);
     optionsRef.current.onStructureChanged();
     optionsRef.current.resave();
     return true;

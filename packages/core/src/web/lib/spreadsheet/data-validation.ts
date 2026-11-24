@@ -664,9 +664,12 @@ export function validationOperatorNeedsSecondValue(
 /** Trim a raw value to a bounded non-empty string, or undefined when blank. */
 function normalizeMessageText(raw: unknown, max: number): string | undefined {
   if (typeof raw !== "string") return undefined;
-  const trimmed = raw.trim();
-  if (trimmed === "") return undefined;
-  return trimmed.slice(0, max);
+  if (raw.trim() === "") return undefined;
+  // Kept as written: Excel stores a title or message as typed, and a file's
+  // prompt often leads with an ideographic space ("　○…その他テナントあり");
+  // trimming it made every rule a paste normalizes differ from the file's
+  // (xlsx-rounds R484-X05 E13/E14/WALK1 export.inventory).
+  return raw.slice(0, max);
 }
 
 /**

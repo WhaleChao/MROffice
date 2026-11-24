@@ -1,5 +1,5 @@
 {
- "probe": "xlsx-rounds/lookwin/faces (fx-a, fx-*, fy-*), Windows Excel 16.0.20527 en-US, 2026-11-14; fresh-name class pass fresh-co 2026-11-14; PostScript names p234-lw 2026-11-20; Ariel Nova (R467-X40's own truth: every \"Ariel Nova\" cell printed in Arial) 2026-11-21; Doulos SIL (R475-X92's own truth: its Doulos SIL family 1 cells printed in Times New Roman) 2026-11-23",
+ "probe": "xlsx-rounds/lookwin/faces (fx-a, fx-*, fy-*), Windows Excel 16.0.20527 en-US, 2026-11-14; fresh-name class pass fresh-co 2026-11-14; PostScript names p234-lw 2026-11-20; Ariel Nova (R467-X40's own truth: every \"Ariel Nova\" cell printed in Arial) 2026-11-21; Doulos SIL (R475-X92's own truth: its Doulos SIL family 1 cells printed in Times New Roman) 2026-11-23; Times-/Helvetica- PostScript style names (p312-lw: Times-Italic, Times-Bold, Times-BoldItalic print in Times New Roman, the record's own bold only; Helvetica-Bold, Helvetica-Oblique in Arial; R484-X79's own truth) 2026-11-24",
  "drawn": {
   "&amp;quot": "Arial",
   "&quot;aptos narrow&quot;": "Arial",
@@ -282,7 +282,9 @@
   "helvetica world": "Arial",
   "helvetica world bold": "Arial",
   "helvetica-black": "Arial",
+  "helvetica-bold": "Arial",
   "helvetica-narrow": "Arial",
+  "helvetica-oblique": "Arial",
   "helveticaneue": "Arial",
   "helveticaneue lt 55 roman": "Arial",
   "helveticaneuelt pro 35 th": "Arial",
@@ -470,6 +472,9 @@
   "times new roman ce": "Times New Roman",
   "times new roman regular": "Times New Roman",
   "times roman": "Times New Roman",
+  "times-bold": "Times New Roman",
+  "times-bolditalic": "Times New Roman",
+  "times-italic": "Times New Roman",
   "times-roman": "Times New Roman",
   "timesnewromanps-bolditalicmt": "Times New Roman",
   "timesnewromanps-boldmt": "Times New Roman",

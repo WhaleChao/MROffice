@@ -95,26 +95,34 @@ const FIT_EPSILON = 1;
 
 export type PdfRibbonFitStep =
   | { readonly kind: "collapse"; readonly id: string }
-  | { readonly kind: "expand" }
+  | { readonly kind: "expand"; readonly id: string }
   | { readonly kind: "stay" };
 
-/**
- * The next step of the band's fit, from what it measures now.
- *
- * `collapsed` are the ids collapsed so far, in the order they collapsed;
- * `needed[i]` is the width the band's content took with the first `i` of
- * them collapsed (recorded when that state overflowed, which is why the
- * next one collapsed). `candidates` are the collapsible groups on show,
- * in band order.
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export function nextPdfRibbonFitStep(input: {
   readonly available: number;
   readonly content: number;
   readonly collapsed: readonly string[];
-  readonly needed: readonly (number | undefined)[];
   readonly candidates: readonly string[];
+  readonly openWidths: Readonly<Record<string, number | undefined>>;
+  readonly foldedWidths: Readonly<Record<string, number | undefined>>;
 }): PdfRibbonFitStep {
-  const { available, content, collapsed, needed, candidates } = input;
+  const { available, content, collapsed, candidates, openWidths, foldedWidths } = input;
   if (available <= 0) return { kind: "stay" };
   if (content > available + FIT_EPSILON) {
     // The furthest group along that is still open.
@@ -124,11 +132,38 @@ export function nextPdfRibbonFitStep(input: {
     }
     return { kind: "stay" };
   }
-  const looser = needed[collapsed.length - 1];
-  if (collapsed.length > 0 && looser !== undefined && looser <= available + FIT_EPSILON) {
-    return { kind: "expand" };
+  const room = available - content;
+  for (let index = collapsed.length - 1; index >= 0; index -= 1) {
+    const id = collapsed[index]!;
+    if (!candidates.includes(id)) continue;
+    const open = openWidths[id];
+    const folded = foldedWidths[id];
+    if (open === undefined || folded === undefined) continue;
+    if (open - folded <= room + FIT_EPSILON) return { kind: "expand", id };
   }
   return { kind: "stay" };
+}
+
+/** The width the band's track takes with its content (the track is at
+ * least as wide as the band, so its own width does not say), in layout
+ * pixels: `scale` is the band's on-screen size over its layout size (the
+ * window may be scaled by the notebook canvas). */
+function trackContentWidth(track: HTMLElement, scale: number): number {
+  const left = track.getBoundingClientRect().left;
+  let right = left;
+  const visit = (element: Element) => {
+    for (const child of Array.from(element.children)) {
+      if (child.getClientRects().length === 0) {
+        // A wrapper drawn as its children (display: contents).
+        if (getComputedStyle(child).display === "contents") visit(child);
+        continue;
+      }
+      right = Math.max(right, child.getBoundingClientRect().right);
+    }
+  };
+  visit(track);
+  const paddingRight = Number.parseFloat(getComputedStyle(track).paddingRight) || 0;
+  return (right - left) / scale + paddingRight;
 }
 
 interface FitState {
@@ -152,7 +187,8 @@ export function usePdfRibbonFit(activeTab: string): {
     () => (state.tab === activeTab ? state : { tab: activeTab, collapsed: [] }),
     [activeTab, state],
   );
-  const neededRef = useRef<{ tab: string; widths: (number | undefined)[] }>({ tab: activeTab, widths: [] });
+  /** Each group's width when last seen open, on the tab being fitted. */
+  const openWidthsRef = useRef<{ tab: string; widths: Record<string, number> }>({ tab: activeTab, widths: {} });
   const stateRef = useRef(current);
   stateRef.current = current;
 
@@ -162,8 +198,10 @@ export function usePdfRibbonFit(activeTab: string): {
     const track = marker.parentElement;
     if (!scroller || !track) return;
     const { tab, collapsed } = stateRef.current;
-    if (neededRef.current.tab !== tab) neededRef.current = { tab, widths: [] };
-    const needed = neededRef.current.widths;
+    if (openWidthsRef.current.tab !== tab) openWidthsRef.current = { tab, widths: {} };
+    const openWidths = openWidthsRef.current.widths;
+    const scale = track.offsetWidth > 0 ? track.getBoundingClientRect().width / track.offsetWidth : 1;
+    const foldedWidths: Record<string, number> = {};
     const candidates: string[] = [];
     for (const group of Array.from(
       track.querySelectorAll<HTMLElement>(`[${PDF_RIBBON_COLLAPSIBLE_ATTRIBUTE}]`),
@@ -171,22 +209,28 @@ export function usePdfRibbonFit(activeTab: string): {
       // A group of another tab is hidden by the tab gating: no box.
       if (group.getClientRects().length === 0) continue;
       const id = group.getAttribute(PDF_RIBBON_COLLAPSIBLE_ATTRIBUTE);
-      if (id && !candidates.includes(id)) candidates.push(id);
+      if (!id || candidates.includes(id)) continue;
+      candidates.push(id);
+      const width = group.getBoundingClientRect().width / scale;
+      if (collapsed.includes(id)) foldedWidths[id] = width;
+      else openWidths[id] = width;
     }
-    const content = scroller.scrollWidth;
+    const available = scroller.clientWidth;
+    const content = scroller.scrollWidth > available + FIT_EPSILON
+      ? scroller.scrollWidth
+      : Math.min(available, trackContentWidth(track, scale));
     const step = nextPdfRibbonFitStep({
-      available: scroller.clientWidth,
+      available,
       content,
       collapsed,
-      needed,
       candidates,
+      openWidths,
+      foldedWidths,
     });
     if (step.kind === "collapse") {
-      needed[collapsed.length] = content;
       setState({ tab, collapsed: [...collapsed, step.id] });
     } else if (step.kind === "expand") {
-      needed.length = collapsed.length - 1;
-      setState({ tab, collapsed: collapsed.slice(0, -1) });
+      setState({ tab, collapsed: collapsed.filter((id) => id !== step.id) });
     }
   }, [marker]);
 

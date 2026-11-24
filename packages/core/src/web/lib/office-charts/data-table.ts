@@ -18,6 +18,7 @@ import {
 } from "../../components/console/editor/extensions/chartBlockShared";
 import { presentationChartAreaStyleCss } from "../presentation-chart-area-style";
 import { officeChartTextEChartsStyle } from "./chart-text";
+import { applyNumberFormat } from "../spreadsheet/number-format";
 
 export type OfficeChartDataTable = Readonly<{
   categories: readonly string[];
@@ -25,12 +26,97 @@ export type OfficeChartDataTable = Readonly<{
   legendKeys: boolean;
   /** Format Data Table ▸ Table Borders. */
   borders?: Readonly<{ horizontal: boolean; vertical: boolean; outline: boolean }>;
+  /**
+   * Each series' General values with decimals (null elsewhere), which a
+   * deck's table rounds to its columns' width
+   * (`officeDeckChartDataTableGeneralFitted`).
+   */
+  general?: readonly (readonly (number | null)[])[];
 }>;
 
-/** A value as the table prints it: the number itself, without float noise. */
-export function officeChartDataTableValue(value: unknown): string {
+
+
+
+
+
+
+
+
+function officeChartDataTableIsGeneral(numberFormat?: string): boolean {
+  const code = typeof numberFormat === "string" ? numberFormat.trim() : "";
+  return !code || code.toLowerCase() === "general";
+}
+
+export function officeChartDataTableValue(value: unknown, numberFormat?: string): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "";
-  return String(Number.isInteger(value) ? value : Number(value.toFixed(6)));
+  const code = typeof numberFormat === "string" ? numberFormat.trim() : "";
+  if (!officeChartDataTableIsGeneral(code)) {
+    try {
+      return applyNumberFormat(value, code);
+    } catch {
+      // A code the engine refuses prints the number as before.
+    }
+  }
+  return officeChartDataTableGeneral(value);
+}
+
+
+
+
+
+
+
+function officeChartDataTableGeneral(value: number, decimals?: number): string {
+  if (Number.isInteger(value)) return String(value);
+  const magnitude = Math.abs(value);
+  if (magnitude >= 1e10 || magnitude < 1e-4) return String(Number(value.toPrecision(6)));
+  const whole = magnitude < 1 ? 1 : Math.floor(Math.log10(magnitude)) + 1;
+  return String(Number(value.toFixed(Math.min(decimals ?? Infinity, Math.max(0, 10 - whole)))));
+}
+
+/** The decimals General writes `value` with (the eleven characters' share). */
+function officeChartDataTableGeneralDecimals(value: number): number {
+  const text = officeChartDataTableGeneral(value);
+  const point = text.indexOf(".");
+  return point < 0 || /e/i.test(text) ? 0 : text.length - point - 1;
+}
+
+
+
+
+
+
+
+
+
+export function officeDeckChartDataTableGeneralFitted(
+  look: OfficeDeckChartDataTableLook,
+  plotWidthPx: number,
+  measure: (text: string, font: string) => number,
+): void {
+  const { table } = look;
+  const count = table.categories.length;
+  if (!table.general || !(plotWidthPx > 0) || !count) return;
+  const room = Math.max(1, plotWidthPx / count - 2 * POWERPOINT_DATA_TABLE.categoryPadPt * PT_PX);
+  let changed = false;
+  const series = table.series.map((entry, index) => {
+    const general = table.general?.[index];
+    if (!general) return entry;
+    const values = entry.values.map((text, at) => {
+      const value = general[at];
+      if (typeof value !== "number") return text;
+      let decimals = officeChartDataTableGeneralDecimals(value);
+      let fitted = officeChartDataTableGeneral(value, decimals);
+      while (decimals > 0 && measure(fitted, look.font) > room) {
+        decimals -= 1;
+        fitted = officeChartDataTableGeneral(value, decimals);
+      }
+      if (fitted !== text) changed = true;
+      return fitted;
+    });
+    return { ...entry, values };
+  });
+  if (changed) look.table = { ...table, series };
 }
 
 /** The table a chart shows, or null when it shows none. */
@@ -49,14 +135,23 @@ export function officeChartDataTable(
   const hiddenSeries = new Set(attrs.format?.hiddenSeries ?? []);
   const hiddenCategories = new Set(attrs.format?.hiddenCategories ?? []);
   const shownCategory = (_category: unknown, index: number) => !hiddenCategories.has(index);
+  const shown = attrs.data.series.filter((_series, index) => !hiddenSeries.has(index));
+  const general = shown.map((series) =>
+    series.values
+      .filter(shownCategory)
+      .map((value) =>
+        typeof value === "number" && Number.isFinite(value) && !Number.isInteger(value) && officeChartDataTableIsGeneral(series.numberFormat)
+          ? value
+          : null,
+      ),
+  );
   return {
     categories: attrs.data.categories.filter(shownCategory),
-    series: attrs.data.series
-      .filter((_series, index) => !hiddenSeries.has(index))
-      .map((series) => ({
-        name: series.name,
-        values: series.values.filter(shownCategory).map(officeChartDataTableValue),
-      })),
+    series: shown.map((series) => ({
+      name: series.name,
+      values: series.values.filter(shownCategory).map((value) => officeChartDataTableValue(value, series.numberFormat)),
+    })),
+    ...(general.some((values) => values.some((value) => value !== null)) ? { general } : {}),
     legendKeys: attrs.format?.dataTableLegendKeys !== false,
     borders: {
       horizontal: attrs.format?.dataTableHorizontalBorder !== false,

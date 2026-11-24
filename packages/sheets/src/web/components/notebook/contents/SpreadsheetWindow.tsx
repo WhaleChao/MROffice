@@ -221,7 +221,7 @@ import {
 import { cellShiftedSheet, columnWidthsSheet, defaultColumnWidthSheet, deletedLinesSheet, insertedLinesSheet, lineFormatProtected as lineFormatProtectedFor, manualHiddenSpanSheet, pivotSourcesFollowLines, resolveSpreadsheetNativeGrid, sizeMapsEqual } from "../../../lib/spreadsheet/row-column-buttons";
 import { chartRecordFramePrintedReachPx } from "../../../lib/spreadsheet/chart-print-input";
 import { anchorBoxTurned } from "@mrnote/core/web/lib/spreadsheet/drawing-rotation-box.ts";
-import { OFFICE_PRINT_IDENTITY, officeEastAsianFamily, officeMarkedDrawingSize, officePrintAnchorKind, officePrintedDrawingFrame, officePrintedDrawingReach, officePrintedFontPx, officePrintedRowDots, officePrintedTextInsetDots, officePrintsInApplicationStandardFont, officeShapeOutlineReachPx } from "../../../lib/spreadsheet/office-print-metrics";
+import { OFFICE_PRINT_IDENTITY, officeEastAsianFamily, officeDrawingWidensPrint, officeMarkedDrawingSize, officePrintAnchorKind, officePrintedDrawingFrame, officePrintedDrawingReach, officePrintedFontPx, officePrintedRowDots, officePrintedTextInsetDots, officePrintsInApplicationStandardFont, officeShapeOutlineReachPx } from "../../../lib/spreadsheet/office-print-metrics";
 import { printedStripEdges } from "../../../lib/spreadsheet/printed-cell-borders";
 import { forecastOutputSheet, type ForecastOutputRequest } from "../../../lib/spreadsheet/forecast-sheet-output";
 import { activeSheetAfterDelete, copiedSheetWorkbook, deletedSheetWorkbook, MAX_SHEETS, movedSheetIndex, movedSheetWorkbook, newWorksheetFor, renamedSheetWorkbook, sheetHiddenWorkbook, sheetUnhideable, tabColoredWorkbook, unhiddenSheet, visibleSheetAfterHiding, workbookNameMirrorsForNewSheet } from "../../../lib/spreadsheet/sheet-buttons";
@@ -1460,6 +1460,7 @@ import { resolveSpreadsheetPageBreakPreviewRegions, resolveSpreadsheetPageLayout
 import {
   hasManualLineBreak,
   cellLineShown,
+  cellRunsOnOneLine,
   cellTextOnOneLine,
   excelOneLineBreaksReachEm,
   autoRowMeasuredText,
@@ -34956,6 +34957,9 @@ function SpreadsheetWindow({
           label,
           <div key={object.id} data-page-layout-object-paint={object.id} style={{ position: "absolute", left: (rotatedWidth - width) / 2, top: (rotatedHeight - height) / 2, width, height, transform: rotation ? `rotate(${rotation}deg)` : undefined, ...(object.type === "shape" ? (object.shapeEffects ? {} : officeShapeEffectStyle(object.effect, shadowFilterCss(object.shadow))) : { filter: shadowFilterCss(object.shadow) }) }}>{content}</div>,
           { frame: { left, top, width: sheetWidth, height: sheetHeight }, rotation, selectionType: object.type === "chart" || object.type === "shape" ? object.type : undefined, groupId: object.groupId, disabledReason: pageLayoutDrawingDisabledReason(object), aspectLocked: objectAspectLocked(object), printAnchor,
+            // An absolute anchor on a worksheet prints where it stands but does
+            // not widen what prints (officeDrawingWidensPrint).
+            ...(officeDrawingWidensPrint(printAnchor, Boolean(sheet.chartSheet)) ? {} : { printExtends: false as const }),
             ...(embeddedWorkbook?.presentation === "print" && object.type === "chart" ? { printLineReach: chartRecordFramePrintedReachPx(object) } : {}),
             ...(embeddedWorkbook?.presentation === "print" && object.type === "shape" ? { printLineReach: officeShapeOutlineReachPx(object.shape as { stroke?: unknown; strokeWidth?: unknown } | undefined) } : {}) },
         ] as const,
@@ -35010,7 +35014,7 @@ function SpreadsheetWindow({
   }, [chartViews, colWidth, rowHeight, sheet, sheetObjects, importedChartRenderData, t, hiddenRows, groupHiddenRows, groupHiddenCols, manualHiddenRows, manualHiddenCols, pageLayoutDrawingDisabledReason, pageLayoutRowMap,workbookThemeAccentColors,previewChart,selectedObjectId,selectedNativeChart?.id,webImageRevision,embeddedWorkbook?.presentation,nativeGrid?.printScale,printPresentation]);
   // On the unscaled grid, as the page view counts them (officePrintedDrawingReach).
   const pageLayoutDrawingBounds = useMemo(() => [
-    ...pageLayoutDrawings.map((drawing) => officePrintedDrawingReach(drawing[1], drawing[4]?.printAnchor, nativeGrid?.printScale, drawing[4]?.printLineReach)),
+    ...pageLayoutDrawings.filter((drawing) => (drawing[4] as { printExtends?: false } | undefined)?.printExtends !== false).map((drawing) => officePrintedDrawingReach(drawing[1], drawing[4]?.printAnchor, nativeGrid?.printScale, drawing[4]?.printLineReach)),
     ...slicers.map((slicer, index) => [slicer.x ?? 12 + index * 184, slicer.y ?? 12,
       slicer.width ?? DEFAULT_SLICER_WIDTH, slicer.height ?? DEFAULT_SLICER_HEIGHT] as const),
   ], [nativeGrid?.printScale, pageLayoutDrawings, slicers]);
@@ -58306,12 +58310,18 @@ function SpreadsheetWindow({
     // spill. Page layout draws the same run (B048).
     const cell = sheet.cells[`${row}:${col}`];
     if (!cell) return null;
+    // A cell of a hidden column shows nothing, and so runs over nothing:
+    // R483-X54's hidden E holds German notes, which printed on over the
+    // pages of F onwards where Windows Excel prints none of them.
+    if (groupHiddenCols.has(col) || manualHiddenCols.has(col)) return null;
     if (!ignoreEditing && editingCell?.sheetId === sheet.id && editingCell.row === row && editingCell.col === col) return null;
     if (!isCellContentHiddenRef.current(sheet, cell) && shouldShowFormulaText(cell.value, sheetShowsFormulas)) return null;
     if (activePivotOutputCells?.has(`${row}:${col}`) || isCheckboxCell(cell.style)) return null;
     // Fill repeats the text inside its own cell (B398); Justify and
-    // Distributed wrap (cellTextWraps).
-    if (cellTextWraps(cell.style) || cellHorizontalFill(cell.style)) return null;
+    // Distributed wrap (cellTextWraps), vertical ones too, as the page draws
+    // them (R474-X84: F55/G47, Vertical Distributed with no Wrap Text, wrap
+    // in Windows Excel's print; their tails ran on to a band of two pages).
+    if (cellTextWraps(cell.style) || cellVerticalSpreadJustifyContent(cell.style) || cellHorizontalFill(cell.style)) return null;
     let computed: CellValue;
     try {
       computed = formulaEvaluator.getComputed(row, col);
@@ -58724,7 +58734,7 @@ function SpreadsheetWindow({
     const pivot = activePivotOutputCells?.get(`${row}:${col}`);
     // A format whose text section writes the text (`_(@_)`) prints it as one
     // string in the cell's own font, its runs void (cellRunsVoidedByFormat).
-    const runs = !showFormula && !cellRunsVoidedByFormat(cell) ? normalizeCellRuns(cell?.runs, cell?.value ?? "") : undefined;
+    const runs = !showFormula && !cellRunsVoidedByFormat(cell) ? cellRunsOnOneLine(normalizeCellRuns(cell?.runs, cell?.value ?? ""), cellWrapTextSetting(cell)) : undefined;
     const sparkline = !showFormula ? sparklines[`${row}:${col}`] : undefined;
     // A picture placed in the cell draws on the page as on the
     // grid (Place in Cell), in place of its `#VALUE!` fallback.
@@ -73046,7 +73056,7 @@ function SpreadsheetWindow({
                         // Runs that set their own size are measured at it (X-321:
                         // 16 pt runs in an 11 pt cell were cut three columns short).
                         const spillRuns = spill && !editing && !showFormulaText
-                          ? normalizeCellRuns(cell?.runs, cell?.value ?? "")
+                          ? cellRunsOnOneLine(normalizeCellRuns(cell?.runs, cell?.value ?? ""), cellWrapTextSetting(cell))
                           : undefined;
                         const spillNeed = spill
                           ? Math.max(
@@ -73106,7 +73116,7 @@ function SpreadsheetWindow({
                         // the text is drawn once.
                         const displayRuns =
                           !editing && !showFormulaText
-                            ? normalizeCellRuns(cell?.runs, cell?.value ?? "")
+                            ? cellRunsOnOneLine(normalizeCellRuns(cell?.runs, cell?.value ?? ""), cellWrapTextSetting(cell))
                             : undefined;
                         const cellRichRuns =
                           !showMultiline && spill === null ? displayRuns : undefined;

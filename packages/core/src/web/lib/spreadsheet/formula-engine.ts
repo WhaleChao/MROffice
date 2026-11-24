@@ -1156,6 +1156,12 @@ function readSheetPrefix(src: string, i: number, digitFirst = false): SheetPrefi
   // Optional 3D span: a second name after a ":" (the colon must be BETWEEN two
   // names and BEFORE the "!", distinguishing it from a range colon like A1:B2).
   if (src[pos] === ":") {
+    // A bare first "name" that is a cell (`X33` in `S!X4:X33:'S'!Z4:Z33`) is
+    // the end of a range and the colon is the range operator: Excel quotes a
+    // sheet whose name reads as a cell ('X33'!A1), so a 3-D span never starts
+    // with one unquoted (xlsx-rounds R484-X26: the qualified operand after it
+    // was swallowed into a #NAME? token and missed by a rename or delete).
+    if (src[i] !== "'" && cellRefInGrid(first.name)) return null;
     const second = readSheetName(src, pos + 1);
     if (!second) return null;
     if ((src[i] === "'" || src[pos + 1] === "'") && src[second.next] === "!") {

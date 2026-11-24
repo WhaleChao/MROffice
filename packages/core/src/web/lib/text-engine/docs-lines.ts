@@ -26,6 +26,7 @@ import { lineBreakOpportunities, wordJoins } from "./line-break";
 import { measureText, type EngineFont } from "./measure";
 import { pageEngineFont } from "./page-adapter";
 import { wordKeepsJustifiedWord, wordTrailingPunctuationLength } from "./docs-word-rules";
+import { freshRangesKept, releaseFreshRange } from "../dom-range-release";
 import { WORD_DEFAULT_TAB_INTERVAL_TWIPS, wordTabAdvanceAt, wordTabStopAfter, type TabStop } from "../document-tabstops";
 
 export type DocsPieceKind = "text" | "space" | "box" | "tab" | "break";
@@ -2232,8 +2233,13 @@ export function docsBrowserAgreesQuickly(element: HTMLElement, paragraph: DocsPa
   const doc = element.ownerDocument;
   const r = doc.createRange();
   r.selectNodeContents(element);
+  const rects = Array.from(r.getClientRects());
+  // Read: out of the page's range registry. Left there, the 14,000 of an
+  // opening (R286) were visited by every node a page move took out, 1.6 ms a
+  // removal and 4.5 s of the opening.
+  if (!freshRangesKept()) releaseFreshRange(r);
   const rows: { top: number; bottom: number }[] = [];
-  for (const rect of Array.from(r.getClientRects())) {
+  for (const rect of rects) {
     if (!(rect.height > 0.5) || !(rect.width > 0.5)) continue;
     const row = rows.find((band) => Math.min(band.bottom, rect.bottom) - Math.max(band.top, rect.top) >= 0.4 * Math.min(band.bottom - band.top, rect.bottom - rect.top));
     if (row) { row.top = Math.min(row.top, rect.top); row.bottom = Math.max(row.bottom, rect.bottom); }

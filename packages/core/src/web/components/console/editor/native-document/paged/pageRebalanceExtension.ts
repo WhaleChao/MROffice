@@ -115,6 +115,7 @@ import {
   unequalColumnProjectionForSheet,
 } from "./unequalColumnProjection";
 import { measurementRange } from "./measurementRange";
+import { freshRangesKept, releaseFreshRange } from "../../../../../lib/dom-range-release";
 import { wordGridFontVerticals } from "../wordFontMetrics";
 
 export const REBALANCE_META = "structuralRebalance";
@@ -2775,6 +2776,9 @@ function cellLineBoxes(cell: HTMLElement): DOMRect[] {
     for (const rect of Array.from(range.getClientRects())) if (rect.width > 0 && rect.height > 0) boxes.push(rect);
   }
   range.detach?.();
+  // (detach() does nothing any more: the range stays in the page's registry,
+  // visited by every later node removal, until it is collected.)
+  if (!freshRangesKept()) releaseFreshRange(range);
   for (const picture of Array.from(cell.querySelectorAll("img, svg, canvas, video, object"))) {
     if (picture.parentElement?.closest("svg")) continue;
     const rect = picture.getBoundingClientRect();

@@ -53,7 +53,7 @@ import {
   sourceFontPlanIsReady,
   writeDocumentLayoutStatus,
 } from "@mrnote/core/web/components/console/editor/native-document/documentLayoutStatus.ts";
-import { collectDocumentFontCharacters } from "@mrnote/core/web/components/console/editor/native-document/documentFontCharacters.ts";
+import { collectDocumentFontCharacters, fontCharactersLoaded } from "@mrnote/core/web/components/console/editor/native-document/documentFontCharacters.ts";
 import { READ_ONLY_TRUSTED_MUTATION_META } from "@mrnote/core/web/components/console/editor/native-document/readOnlyTransactionAuthority.ts";
 import { isImeCompositionActive, onImeCompositionSettled } from "@mrnote/core/web/components/console/editor/native-document/imeCompositionGuard.ts";
 import {
@@ -437,6 +437,8 @@ const SLOW_PASS_MS = 120;
 /** Past this many pages a pass of a frame already is (the next key waits). */
 const LONG_DOCUMENT_PAGES = 30;
 const LONG_DOCUMENT_SLOW_PASS_MS = 16;
+/** The longest a long document's first layout waits for typing to pause. */
+const COLD_EDIT_MAX_HOLD_MS = 8_000;
 /** How often a ledger held by the bridge's chunked fill looks again. */
 const BULK_FILL_POLL_MS = 100;
 /**
@@ -464,6 +466,9 @@ const FLUSH_YIELD_MS = 50;
 
 
 export const LEDGER_STEP_BUDGET_MS = 32;
+function showAfterPassOff(win: Window | null): boolean {
+  return (win as (Window & { __docsShowAfterPassOff?: boolean }) | null)?.__docsShowAfterPassOff === true;
+}
 function stepBudgetOn(win: Window | null): boolean {
   return Boolean(win) && (win as Window & { __docsStepBudgetOff?: boolean }).__docsStepBudgetOff !== true;
 }
@@ -2709,7 +2714,10 @@ export function screenFacesLoaded(view: EditorView, sheets: readonly HTMLElement
   const first = whole ? 0 : range && range.first >= 0 && range.first < sheets.length ? range.first : 0;
   const last = whole ? sheets.length - 1 : range && range.last >= first ? Math.min(range.last, first + 2, sheets.length - 1) : first;
   let loaded = true;
-  const waitErrored = (view.dom.ownerDocument.defaultView as (Window & { __docsFacesWaitErrored?: boolean }) | null)?.__docsFacesWaitErrored === true;
+  const switches = view.dom.ownerDocument.defaultView as (Window & { __docsFacesWaitErrored?: boolean; __docsFaceCheckMemoOff?: boolean }) | null;
+  const waitErrored = switches?.__docsFacesWaitErrored === true;
+  // `window.__docsFaceCheckMemoOff = true`: every group checked at every look (fontCharactersLoaded).
+  const checkEveryTime = switches?.__docsFaceCheckMemoOff === true;
   for (let index = first; index <= last; index += 1) {
     const sheet = sheets[index];
     if (!sheet) continue;
@@ -2720,13 +2728,19 @@ export function screenFacesLoaded(view: EditorView, sheets: readonly HTMLElement
       return true;
     }
     for (const { font, characters } of groups) {
+      const key = `${font}\u0000${characters}`;
+      const answered = asked.get(key);
+      // A group whose load has answered is not waited for, whatever its check
+      // says (below): it is not checked again. Checked, a group whose face
+      // failed (a `local()` face the machine lacks) was found missing at every
+      // look of the first layout, its whole stack of fallback families matched
+      // against each of its characters every time (fn.docx: 2,800 checks, 1 s).
+      if (answered === true && !waitErrored && !checkEveryTime) continue;
       try {
-        if (fonts.check(font, characters)) continue;
+        if (fontCharactersLoaded(fonts, font, characters)) continue;
       } catch {
         continue;
       }
-      const key = `${font}\u0000${characters}`;
-      const answered = asked.get(key);
       if (answered === true && !waitErrored) continue;
       loaded = false;
       if (answered !== undefined) continue;
@@ -2983,6 +2997,12 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
           // an edit of a slow document (see scheduleAfterEdit).
           let lastPassMs = 0;
           let editTimer: number | undefined;
+          // Typing while a long document is still laid out for the first time
+          // (coldEditHoldMs): when the last edit came, the hold's timer and
+          // when the hold began.
+          let lastEditAt = Number.NEGATIVE_INFINITY;
+          let coldEditTimer: number | undefined;
+          let coldEditHoldSince: number | null = null;
           let fillPoll: number | undefined;
           // Sheets a scoped pass yielded at: the background goes on from
           // them (ledgerScope). A yield page whose sheet had not committed
@@ -4366,6 +4386,15 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
                 traceLedgerPass(editorView, { restoredTrusted: { spilling: pending.size } });
               }
             }
+            // The first page a pass has just laid out is shown now: looked at
+            // only at the top of the next compose (above), its showing waited
+            // behind whatever held that compose first -- a face landing for a
+            // later sheet, its line metrics read in turns, the projections
+            // ahead of the next pass (fn.docx under the cold first layout:
+            // laid out at 4.9 s, shown and editable at 5.9 s).
+            // `window.__docsShowAfterPassOff = true`: at the next compose, as before.
+            if (!settledOnce && !gateExpired && !showAfterPassOff(win) && firstPageStands(sheetsOf(editorView.dom)) &&
+                (!coldTuning || pagesLaidOut(editorView)(0))) showPagesBeforeSettled();
             // Pages the background has not reached yet may run over their
             // foot: their sheets grow under the overrun meanwhile.
             // (A pass that moved the pages leaves the mark up for the pass
@@ -4629,8 +4658,50 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
             dormancy?.scheduleSleep();
           };
           let turnAsked = false;
+          // While the pages are shown and editable but the first layout of a
+          // long document is still going on, a pass waits for the typing to
+          // pause, as a pass after an edit of a settled one does
+          // (scheduleAfterEdit). Each pass then was a task of 0.5-2 s between
+          // two keys and the next key waited for it (R286 typed into 60 s
+          // after opening: keys p90 2.9-3.6 s). The layout goes on from where
+          // it was once the typing pauses; a key held down, or typing that
+          // never pauses, holds it no longer than COLD_EDIT_MAX_HOLD_MS.
+          // `window.__docsColdEditHoldOff = true` runs every pass at once.
+          const coldEditHoldMs = (): number => {
+            if (settledOnce || !gateExpired || !editorView.editable || !win) return 0;
+            if ((win as Window & { __docsColdEditHoldOff?: boolean }).__docsColdEditHoldOff === true) return 0;
+            if (editorView.state.doc.childCount <= LONG_DOCUMENT_PAGES) return 0;
+            // Typing: a key or text the browser itself delivered (msSinceTyping)
+            // while this editor has the focus. The document's other changes
+            // of an opening (block ids, a room's content, a font plan) hold
+            // nothing: held, their passes went another way (R461: 162-163
+            // pages for 154).
+            if (!editorView.hasFocus()) return 0;
+            const now = performance.now();
+            const left = Math.min(lastEditAt, now - msSinceTyping()) + EDIT_IDLE_MS - now;
+            if (left <= 0) {
+              coldEditHoldSince = null;
+              return 0;
+            }
+            coldEditHoldSince ??= now;
+            if (now - coldEditHoldSince >= COLD_EDIT_MAX_HOLD_MS) {
+              coldEditHoldSince = now;
+              return 0;
+            }
+            return left;
+          };
           const run = () => {
             raf = 0;
+            const hold = destroyed ? 0 : coldEditHoldMs();
+            if (hold > 0) {
+              if (coldEditTimer === undefined) {
+                coldEditTimer = win!.setTimeout(() => {
+                  coldEditTimer = undefined;
+                  schedule();
+                }, hold);
+              }
+              return;
+            }
             if (destroyed || !win || ledgerLane.tryTurn()) {
               composeAndRest();
               return;
@@ -5128,7 +5199,10 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
                 // as an edit again (A/B).
                 const asEdit = !partArrived || (win as (Window & { __docsPartArrivalAsEdit?: boolean }) | null)?.__docsPartArrivalAsEdit === true;
                 if (asEdit) editedSinceLastPass = true;
-                if (!partArrived) readerEditedSinceLastPass = true;
+                if (!partArrived) {
+                  readerEditedSinceLastPass = true;
+                  lastEditAt = performance.now();
+                }
                 if (asEdit) {
                   // The edit's pass runs now; a far step waiting is asked anew after it.
                   idleStepper?.cancel();
@@ -5157,6 +5231,7 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
               if (gateTimer !== undefined) win?.clearTimeout(gateTimer);
               if (facesTimer !== undefined) win?.clearTimeout(facesTimer);
               if (editTimer !== undefined) win?.clearTimeout(editTimer);
+              if (coldEditTimer !== undefined) win?.clearTimeout(coldEditTimer);
               ledgerLane.dispose();
               idleStepper?.dispose();
               dormancy?.destroy();

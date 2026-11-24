@@ -41,6 +41,8 @@ const EAST_ASIAN_DESCENT_SHARE = 0.2;
 const NATURAL_EAST_ASIAN_LINE = 1.3;
 /** A table cell's spaced line ({@link OfficeTextBodyInput.cellLines}). */
 const CELL_BASELINE_SHARE = 0.7547;
+/** A table cell's line spaced above single: its baseline's share of the pitch (truth probe tp-cellspc, TRIAGE 137). */
+const CELL_ABOVE_SINGLE_BASELINE_SHARE = 0.75;
 /** Where PowerPoint's baseline stands in an exactly spaced line. */
 export const OFFICE_EXACT_BASELINE_SHARE = 0.75;
 
@@ -311,6 +313,8 @@ export interface OfficeLaidLine {
   readonly letterSpacing: number;
   /** The largest type size on the line. */
   readonly sizePt: number;
+  /** A table cell's line (`cellLines`): where it ends the cell when it is the cell's last, pt (`LineVerticals.restBelow`). */
+  readonly cellBottom?: number;
 }
 
 export interface OfficeLaidMarker {
@@ -642,6 +646,18 @@ interface LineVerticals {
   /** The face's own descent under the baseline (what the last line keeps). */
   readonly descent: number;
   readonly sizePt: number;
+  
+
+
+
+
+
+
+
+
+
+
+  readonly restBelow?: number;
 }
 
 function lineVerticals(
@@ -766,10 +782,13 @@ function lineVerticals(
   // (eight boxes 0.352-0.360), where Calibri's 0.269 em put it 0.016-0.033 em
   // high (look-fit 13th, lookfit ea13/center.py).
   if (ideographicLine) descent = Math.max(0, Math.min(descent, singleHeight - single));
+  // A cell's line ends the cell as its single spaced line does (`restBelow`).
+  const singlePitch = OFFICE_SINGLE_LINE * size;
+  const restBelow = cell && !natural ? singlePitch - Math.max(single, CELL_BASELINE_SHARE * singlePitch) : undefined;
   if (spacing.kind === "points") {
     const pitch = spacing.value;
     const above = OFFICE_EXACT_BASELINE_SHARE * pitch;
-    return { above, below: pitch - above, descent, sizePt: size };
+    return { above, below: pitch - above, descent, sizePt: size, ...(restBelow !== undefined ? { restBelow } : {}) };
   }
   const multiple = Math.max(0.01, spacing.value - (reduction > 0 && reduction < 1 ? reduction : 0));
   const pitch = multiple * (natural ? singleHeight : OFFICE_SINGLE_LINE * size);
@@ -781,7 +800,11 @@ function lineVerticals(
   
   // stands 9.52 under its top, so its lines step 12, 12, 13, 12 as there).
   const above = cell
-    ? multiple >= 1 - EPSILON
+    ? multiple > 1 + EPSILON
+      // Above single, three quarters of the pitch over the baseline (tp-cellspc: 21.60 / 24.85 / 27.01 / 36.01 pt at
+      // 120 / 138 / 150 / 200 % of 20 pt, 0.7500-0.7503 of the pitch, in Arial, Calibri and Times New Roman alike).
+      ? Math.max(single, CELL_ABOVE_SINGLE_BASELINE_SHARE * pitch)
+      : multiple >= 1 - EPSILON
       ? Math.max(single, CELL_BASELINE_SHARE * pitch)
       : Math.max(pitch - descent, CELL_BASELINE_SHARE * pitch)
     // At single spacing the single-line ascent alone, however short: P3-faces
@@ -793,7 +816,8 @@ function lineVerticals(
       : multiple > 1
         ? Math.max(single, OFFICE_BASELINE_SHARE * pitch)
         : Math.max(pitch - singleBelow, OFFICE_BASELINE_SHARE * pitch);
-  return { above, below: pitch - above, descent, sizePt: size };
+  // Below single spacing the cell keeps its line's own bottom (not measured).
+  return { above, below: pitch - above, descent, sizePt: size, ...(restBelow !== undefined && multiple >= 1 - EPSILON ? { restBelow } : {}) };
 }
 
 /** The Windows-measured first baseline (em) of the East Asian face leading `stack`, if it has one. */
@@ -916,7 +940,8 @@ function layoutBody(input: OfficeTextBodyInput, measurer: OfficeTextMeasurer): O
       if (Number.isNaN(paragraphTop)) paragraphTop = top;
       const placed = placeLine(list, range, paragraph, input.widthPt, baseline, top, bottom, verticals.sizePt, lineIndex === lineRanges.length - 1);
       const mode = paragraph.fontAlign;
-      lines.push(mode === "t" || mode === "ctr" || mode === "b" ? fontAlignedLine(placed, paragraph, mode, top, verticals, measurer) : placed);
+      const laidLine = mode === "t" || mode === "ctr" || mode === "b" ? fontAlignedLine(placed, paragraph, mode, top, verticals, measurer) : placed;
+      lines.push(verticals.restBelow !== undefined ? { ...laidLine, cellBottom: laidLine.baseline + verticals.restBelow } : laidLine);
       cursor = bottom;
       lastDescent = verticals.descent;
     }

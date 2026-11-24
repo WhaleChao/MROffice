@@ -59,6 +59,54 @@ export function collectDocumentFontCharacters(root: HTMLElement, keys: FontKeys=
   return [...groups].sort(([a],[b])=>a.localeCompare(b)).map(([font,characters])=>({font,characters:[...characters].sort().join("")}));
 }
 
+/** Characters a font was found loaded for, by face set, while the set holds as
+ * many faces as when they were found (a face once loaded stays loaded; a face
+ * added may be one that draws them and is not, so a new face forgets all). */
+const loadedCharacters=new WeakMap<FontFaceSet,{size:number;byFont:Map<string,Set<string>>}>();
+/** Characters checked in one FontFaceSet.check: a check matches each character
+ * against the faces of every family of the stack, so its cost is per character;
+ * a run of them is remembered once it checks. */
+const LOADED_CHECK_RUN=32;
+
+/**
+ * `fonts.check(font, characters)`, the characters already found loaded in that
+ * font not checked again. A check is per character (a character is loaded when
+ * the face of the stack that draws it is), so the answer is the same. Its cost
+ * is per character too, against every face of every family of the stack: under
+ * the cold first layout the opening screen's faces were checked across every
+ * sheet each time the first layout looked (allometric.docx: 0.3-0.4 ms a
+ * character with the Office fallback stacks, 280 ms a look, 1.9 s of the 4.8 s
+ * the main thread worked from mount to editable). Throws as the check does.
+ * `window.__docsFaceCheckMemoOff = true`: every character checked every time.
+ */
+export function fontCharactersLoaded(fonts: FontFaceSet, font: string, characters: string): boolean {
+  const win=typeof window==="undefined" ? null : window as Window & {__docsFaceCheckMemoOff?: boolean};
+  if(win?.__docsFaceCheckMemoOff===true || typeof fonts.size!=="number") return fonts.check(font,characters);
+  let memo=loadedCharacters.get(fonts);
+  if(!memo || memo.size!==fonts.size) {
+    memo={size:fonts.size,byFont:new Map()};
+    loadedCharacters.set(fonts,memo);
+  }
+  let known=memo.byFont.get(font);
+  const missing: string[]=[];
+  for(const character of characters) if(!known?.has(character)) missing.push(character);
+  if(!missing.length) return true;
+  let loaded=true;
+  for(let at=0;at<missing.length;at+=LOADED_CHECK_RUN) {
+    const run=missing.slice(at,at+LOADED_CHECK_RUN);
+    if(!fonts.check(font,run.join(""))) {
+      loaded=false;
+      continue;
+    }
+    if(!known) {
+      known=new Set();
+      memo.byFont.set(font,known);
+    }
+    for(const character of run) known.add(character);
+  }
+  return loaded;
+}
+
 /**
  * collectDocumentFontCharacters without the long task. Its cost is one
  * getComputedStyle per text-bearing element, and after a font load has

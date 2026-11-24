@@ -46,6 +46,8 @@ import {
   presentationTableCellTrailingParagraphStyle,
 } from "../../../../lib/presentation/table-cell-paragraphs";
 import { PresentationTypingCellEditor } from "./PresentationTypingCellEditor";
+import type { EditingHostHandover } from "./PresentationCanvasTextBlock";
+import { mapOffsetThroughTextChange } from "@mrnote/core/web/lib/presentation/text-selection.ts";
 import { OfficeTableTouchGrips } from "@mrnote/core/web/components/office-ribbon/OfficeTableTouchGrips.tsx";
 import { canManipulateBlock, isTextEditLocked } from "@mrnote/core/web/lib/presentation-text-case.ts";
 import { tableTabTarget, tableArrowTarget, type TableArrowKey } from "../../../../lib/presentation-table-keyboard";
@@ -85,6 +87,8 @@ export interface PresentationCanvasTableBlockCtl {
   setTableSelectionScope: Dispatch<SetStateAction<TableSelectionScope>>;
   tableGridlinesVisible: boolean;
   tableCellInputRefs: RefObject<Map<string, PresentationCellTextElement>>;
+  /** The caret of a cell being typed in, taken away with the focus (`EditingHostHandover`). */
+  editingHostHandover: EditingHostHandover;
   setTableCharacterSelectionVersion: Dispatch<SetStateAction<number>>;
   restoringTableScopeFocusRef: RefObject<boolean>;
   pendingTableKeyboardFocusRef: RefObject<{ blockId: string; row: number; col: number; } | null>;
@@ -492,12 +496,43 @@ const PresentationCanvasTableCell = memo(function PresentationCanvasTableCell({
       onPointerDown={() => { L().textSelectionIntentRef.current += 1; }}
       ref={(element) => {
         const key = `${blockId}:${rowIndex}:${cellIndex}`;
+        // The cell, kept by the window while its table is drawn again whole
+        // under the caret (a collaborator's object put before it, its part
+        // read again): the cell that takes its place takes the focus and
+        // the caret back (`EditingHostHandover`).
+        const handoverKey = `${blockId}\u0000${rowIndex}\u0000${cellIndex}`;
         if (element) {
           L().tableCellInputRefs.current.set(
             key,
             element,
           );
+          const back = L().editingHostHandover.take(handoverKey);
+          if (back) {
+            // Once the field says what it holds (its handle is set after
+            // this ref runs).
+            queueMicrotask(() => {
+              if (!element.isConnected || typeof element.value !== "string") return;
+              const active = element.ownerDocument.activeElement;
+              if (active && active !== element.ownerDocument.body && !L().editingHostHandover.isFallback(active)) return;
+              const value = element.value;
+              element.focus({ preventScroll: true });
+              element.setSelectionRange(
+                mapOffsetThroughTextChange(back.text, value, back.start),
+                mapOffsetThroughTextChange(back.text, value, back.end),
+              );
+            });
+          }
         } else {
+          const previous = L().tableCellInputRefs.current.get(key);
+          if (
+            previous?.isConnected &&
+            previous.contains(previous.ownerDocument.activeElement) &&
+            typeof previous.value === "string"
+          ) {
+            L().editingHostHandover.lost(handoverKey, {
+              text: previous.value, start: previous.selectionStart, end: previous.selectionEnd,
+            });
+          }
           L().tableCellInputRefs.current.delete(
             key,
           );

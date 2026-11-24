@@ -1347,10 +1347,16 @@ export class DeckPartsSession<S extends DeckSlideLike> {
     return this.structural;
   }
 
-  /** The server took (or no longer needs) the structural change: the next
-   * save works it out again from the order it now holds. */
-  structuralLanded(): void {
-    const change = this.structural;
+  
+
+
+
+
+
+
+
+  structuralLanded(sent?: DeckStructuralChange | null): void {
+    const change = sent === undefined ? this.structural : sent;
     if (change && this.baseIds) {
       const base = new Set(this.baseIds);
       for (const id of change.deletes) base.delete(id);

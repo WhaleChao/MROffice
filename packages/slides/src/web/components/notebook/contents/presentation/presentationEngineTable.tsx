@@ -249,10 +249,15 @@ export function presentationTableCellEastAsianLines(cell: PresentationTableCell)
   return raw.map((entry) => normalizeParagraphEastAsianLines(entry) ?? {});
 }
 
-/** Where a cell's last whole line ends (its last line's full pitch, not its descent), pt. */
-function cellLinesBottomPt(layout: Extract<OfficeTextBodyLayout, { status: "ok" }>): number {
+/**
+ * Where a cell's last whole line ends (its last line's full pitch, not its descent), pt. For a row's height (`sizing`), the
+ * last line's baseline and its single line's share under it, the spacing above single counted above it (TRIAGE 137,
+ * tp-cellspc: rows the words size). The cell's own drawn box -- what a centred or bottom-anchored cell places in a taller
+ * row -- and a vertical cell's columns keep the full pitch: not measured there (csab: centred rows moved away from Windows).
+ */
+function cellLinesBottomPt(layout: Extract<OfficeTextBodyLayout, { status: "ok" }>, sizing = false): number {
   const lastLines = layout.paragraphs.map((paragraph) => paragraph.lines[paragraph.lines.length - 1]).filter(Boolean);
-  return lastLines.length ? Math.max(...lastLines.map((line) => line.bottom)) : layout.height;
+  return lastLines.length ? Math.max(...lastLines.map((line) => (sizing ? line.cellBottom ?? line.bottom : line.bottom))) : layout.height;
 }
 
 
@@ -361,7 +366,7 @@ export function layoutPresentationEngineTable(table: PresentationTableBlock): En
         
         
         // 8 pt header row 67.2 pt and its margin.
-        const linesHeight = cellLinesBottomPt(layout);
+        const linesHeight = cellLinesBottomPt(layout, true);
         const need = marginTop + linesHeight * PX_PER_PT + marginBottom;
         const span = Math.max(1, Math.floor(Number(cell.rowspan) || 1));
         if (span === 1) heights[position.row] = Math.max(heights[position.row], need);

@@ -285,7 +285,11 @@ export type SpreadsheetPageLayoutDrawing = readonly [
     /** Printed px its line reaches past the frame's right and bottom: a
      *  chart's area line is printed on the frame's edge, its outer half
      *  counted as the chart's (R457-X21). */
-    printLineReach?: number }?,
+    printLineReach?: number;
+    /** False for a drawing that prints where it stands but does not widen
+     *  the printed range: an absolute anchor on a worksheet
+     *  (officeDrawingWidensPrint). */
+    printExtends?: false }?,
 ];
 
 export interface PageLayoutDrawingTransaction {
@@ -1536,7 +1540,7 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
       ? { ...(rowHeights ?? {}), [keyboardResize.index]: keyboardResize.size }
       : rowHeights;
   const laidOutGeometry = resolveSpreadsheetPageLayoutGeometry({
-    drawingBounds: drawings.map((drawing) => officePrintedDrawingReach(drawing[1], drawing[4]?.printAnchor, printScale, drawing[4]?.printLineReach)),
+    drawingBounds: drawings.filter((drawing) => drawing[4]?.printExtends !== false).map((drawing) => officePrintedDrawingReach(drawing[1], drawing[4]?.printAnchor, printScale, drawing[4]?.printLineReach)),
     totalRows: rowCount,
     nativeGridDpi: nativeTextDpi,
     nativeDigitWidth,

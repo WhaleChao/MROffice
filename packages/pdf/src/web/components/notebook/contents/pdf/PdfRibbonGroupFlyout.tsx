@@ -134,17 +134,27 @@ export function PdfRibbonGroupFlyout({
       if (target instanceof Element && target.closest(NESTED_SURFACE_SELECTOR)) return;
       close(false);
     };
+    // Escape closes the panel and nothing else. Taken first, on the window
+    
+    // the key went on to the page, where the selected shape's own Escape
+    // deselected it -- closing 形状样式's panel took the Shape Format tab
+    // away with it.
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      // A menu of the panel's own closes first (it takes the key itself).
-      if (document.activeElement?.closest(NESTED_SURFACE_SELECTOR)) return;
+      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing) return;
+      // A menu, picker or dialog a command of the panel opened closes first
+      // (it takes the key itself). The panel is a dialog too: a control in
+      // it, focused, is no such surface.
+      const nested = document.activeElement?.closest(NESTED_SURFACE_SELECTOR);
+      if (nested && nested !== panelRef.current) return;
+      event.preventDefault();
+      event.stopPropagation();
       close(true);
     };
     document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
     return () => {
       document.removeEventListener("pointerdown", onPointerDown, true);
-      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown, true);
     };
   }, [close, open]);
 

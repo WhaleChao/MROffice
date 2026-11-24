@@ -271,7 +271,7 @@ import { mergePresentationFontFace, normalizePresentationFontFaces,
   readPresentationLayoutUpdateState, presentationFontRefreshedSnapshot, presentationServedBodyFontStyle } from "@mrnote/core/web/lib/presentation-font-faces.ts";
 import { readPresentationSettledSave } from "../../../lib/presentation-settled-save";
 import { PresentationFontAliasesContext, usePresentationFontFaces } from "./presentation/usePresentationFontFaces";
-import { announceFirstSlidePainted } from "../../../lib/presentation/first-slide-painted";
+import { announceFirstSlidePainted } from "@mrnote/core/web/lib/presentation/first-slide-painted.ts";
 import { PresentationAutofitMeasurer } from "./presentation/PresentationAutofitMeasurer";
 const PresentationVideoExportDialog = lazyNamed(() => import("./presentation/PresentationVideoExportDialog"), "PresentationVideoExportDialog");
 import {
@@ -22772,7 +22772,8 @@ export default function PresentationWindow({
       if (
         performance.now() - lost.at > EDITING_HOST_HANDOVER_MS ||
         slidesRef.current[activeIndexRef.current]?.id !== lost.slideId ||
-        selectedBlockIdRef.current !== blockId
+        // A table cell's key names its table first (`<table>\u0000<row>\u0000<col>`).
+        selectedBlockIdRef.current !== blockId.split("\u0000")[0]
       ) return null;
       if (coeditTraceOn()) coeditTrace("editing-host-back", { blockId, start: lost.caret.start, end: lost.caret.end });
       return lost.caret;
@@ -53540,6 +53541,7 @@ export default function PresentationWindow({
                         setTableSelectionScope,
                         tableGridlinesVisible: false,
                         tableCellInputRefs,
+                        editingHostHandover,
                         setTableCharacterSelectionVersion,
                         restoringTableScopeFocusRef,
                         pendingTableKeyboardFocusRef,
@@ -53617,6 +53619,7 @@ export default function PresentationWindow({
                         takeShapeRichSelection,
                         placeShapeTextCaret,
                         heldBlockWords,
+                        editingHostHandover,
                         toggleShapeWordsRunStyle: (key) => {
                           toggleLiveRibbonRunStyle(key);
                         },

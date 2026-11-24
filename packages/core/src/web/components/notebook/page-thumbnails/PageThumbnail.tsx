@@ -35,6 +35,7 @@ import {
   type HandwritingDocumentSetting,
 } from "../../../lib/handwriting-paper";
 import { fetchWorkspaceScoped } from "../../../lib/api";
+import { whileDocumentOpens } from "../../../lib/desktop-launch-priority";
 import { getApiHttpBaseUrl } from "../../../lib/env";
 import { getPage, type PageItem } from "../../../lib/notebook-sdk";
 import { pagePictureUrl, pictureObjectTokenSha } from "../../../lib/page-picture-objects";
@@ -86,6 +87,11 @@ function remember(key: string, value: ThumbnailSource | null) {
 }
 
 async function scheduled<T>(task: () => Promise<T>): Promise<T> {
+  // MR Office / Classic: a document opened from the system first (its new
+  // page's thumbnail in the home's list behind its window was read whole,
+  // with its search indexes, beside the editor's own read of it, and a PDF's
+  
+  await whileDocumentOpens();
   if (running >= CONCURRENCY) {
     await new Promise<void>((resolve) => waiting.push(resolve));
   }
@@ -111,7 +117,9 @@ async function readPage(page: PageThumbnailPage): Promise<PageItem> {
   ) {
     return cached;
   }
-  return getPage(page.id);
+  // A thumbnail draws the body only: never its search indexes (megabytes for
+  // a long imported document).
+  return getPage(page.id, undefined, { omitIndexes: true });
 }
 
 /** The PDF's first page as a JPEG, about 360px wide. */

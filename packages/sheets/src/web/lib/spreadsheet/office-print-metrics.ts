@@ -295,6 +295,23 @@ export function officePrintAnchorKind(
   return kind;
 }
 
+/** Whether a drawing widens the range Windows Excel prints when the sheet
+ * sets no print area. A drawing the file places by cells (a two-cell or
+ * one-cell anchor) does: the rows and columns it reaches print, blank or not.
+ * One placed by a position on the worksheet (`xdr:absoluteAnchor`, which no
+ * cell holds) does not: it prints where it stands on the pages the cells and
+ * the other drawings make, cut at their edge (lookwin p310-lw: R480-X27's
+ * scatter chart at 8.6 in x 8 in, 9.45 x 6.85 in, below and right of
+ * A1:Q44, printed 3 pages with the chart's top cut off by the first page
+ * band; the same chart by two cell markers 6 pages). A chartsheet's chart
+ * is the page itself and keeps its own. */
+export function officeDrawingWidensPrint(
+  kind: "twoCell" | "oneCell" | "absolute" | undefined,
+  chartSheet: boolean,
+): boolean {
+  return chartSheet || kind !== "absolute";
+}
+
 /** The size a one-cell drawing the file places by two cell markers spans on
  * the grid the page lays out (`layout*`, hidden lines 0), in that grid's px.
  * Its extent is the one its markers span on the sheet's own grid (`file*`:

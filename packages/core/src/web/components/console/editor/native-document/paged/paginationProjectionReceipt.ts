@@ -453,13 +453,58 @@ function* candidatesInOrder(
     sameId = items;
   }
   const carriesId = (item: Indexed) => item.node.attrs?.block_id === blockId;
-  const within = (item: Indexed) => preferred !== undefined && startsWithPath(item.path, preferred);
-  if (preferred) {
-    for (const item of sameId) if (within(item) && (byIdList || carriesId(item))) yield item;
-    for (const item of items) if (within(item) && !carriesId(item)) yield item;
+  if (prefixRangesOff()) {
+    const within = (item: Indexed) => preferred !== undefined && startsWithPath(item.path, preferred);
+    if (preferred) {
+      for (const item of sameId) if (within(item) && (byIdList || carriesId(item))) yield item;
+      for (const item of items) if (within(item) && !carriesId(item)) yield item;
+    }
+    for (const item of sameId) if (!within(item) && (byIdList || carriesId(item))) yield item;
+    for (const item of items) if (!within(item) && !carriesId(item)) yield item;
+    return;
   }
-  for (const item of sameId) if (!within(item) && (byIdList || carriesId(item))) yield item;
-  for (const item of items) if (!within(item) && !carriesId(item)) yield item;
+  // The same four ranks, the items under the preferred anchor found by their
+  // place instead of by reading every item of the bucket: a bucket is in
+  // document order, which is the order of the paths, so the items under one
+  // path are one run of it. Read item by item, every text of a 124-page
+  // document scanned the whole bucket of texts (R286: a 4-9 s task when its
+  // settled layout was kept).
+  const [sameFrom, sameTo] = preferred ? prefixRange(sameId, preferred) : [0, 0];
+  const [itemsFrom, itemsTo] = preferred ? prefixRange(items, preferred) : [0, 0];
+  for (let i = sameFrom; i < sameTo; i += 1) if (byIdList || carriesId(sameId[i]!)) yield sameId[i]!;
+  for (let i = itemsFrom; i < itemsTo; i += 1) if (!carriesId(items[i]!)) yield items[i]!;
+  for (let i = 0; i < sameId.length; i += 1) {
+    if (i === sameFrom && sameTo > sameFrom) i = sameTo;
+    if (i >= sameId.length) break;
+    if (byIdList || carriesId(sameId[i]!)) yield sameId[i]!;
+  }
+  for (let i = 0; i < items.length; i += 1) {
+    if (i === itemsFrom && itemsTo > itemsFrom) i = itemsTo;
+    if (i >= items.length) break;
+    if (!carriesId(items[i]!)) yield items[i]!;
+  }
+}
+/** `window.__docsRecipePrefixRangesOff = true`: the items under the preferred
+ * anchor are found by reading the whole bucket again (A/B). */
+function prefixRangesOff(): boolean {
+  return (globalThis as { __docsRecipePrefixRangesOff?: boolean }).__docsRecipePrefixRangesOff === true;
+}
+function comparePaths(a: number[], b: number[]): number {
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i += 1) if (a[i] !== b[i]) return a[i]! - b[i]!;
+  return a.length - b.length;
+}
+/** The run of `list` (in document order) whose paths start with `prefix`. */
+function prefixRange(list: Indexed[], prefix: number[]): [number, number] {
+  let lo = 0, hi = list.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (comparePaths(list[mid]!.path, prefix) < 0) lo = mid + 1;
+    else hi = mid;
+  }
+  let end = lo;
+  while (end < list.length && startsWithPath(list[end]!.path, prefix)) end += 1;
+  return [lo, end];
 }
 function startsWithPath(path: number[], prefix: number[]): boolean {
   if (prefix.length > path.length) return false;

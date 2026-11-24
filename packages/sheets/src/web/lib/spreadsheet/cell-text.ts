@@ -133,6 +133,22 @@ export function cellTextOnOneLine<T>(text: T, wrapText: boolean | undefined): T 
 }
 
 /**
+ * A rich text's runs as a cell whose Wrap Text is stated off draws them: its
+ * line breaks as nothing, on one line, as {@link cellTextOnOneLine} draws a
+ * plain text (R483-X67: a Google Sheets export's "MK 10, MRPS I, nr 181\n
+ * Casimirus rex …" link runs, no Wrap Text, print as one line in Excel; the
+ * page drew their breaks and showed the first line only). The runs keep
+ * their count and order.
+ */
+export function cellRunsOnOneLine<R extends { text: string }>(
+  runs: R[] | undefined,
+  wrapText: boolean | undefined,
+): R[] | undefined {
+  if (!runs || wrapText !== false || !runs.some((run) => /[\r\n]/.test(run.text))) return runs;
+  return runs.map((run) => (/[\r\n]/.test(run.text) ? { ...run, text: run.text.replace(/[\r\n]/g, "") } : run));
+}
+
+/**
  * How one line of cell text wider than its cell is anchored where it cannot
  * spill: centred text stays centred and is cut at both edges (S20's
  * "IGITEM_NU" of CONFIGITEM_NUMBER, X-154); right-aligned text keeps its end
