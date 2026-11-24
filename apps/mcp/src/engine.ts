@@ -23,8 +23,52 @@ export interface ImportedFile {
   readonly losses: readonly string[];
 }
 
+/** One of the spreadsheet calculation's calls (the editors'
+ * remote-calculation-worker: soft sessions of the `sheet-calc` engine and its
+ * stateless methods), as the editor view sends it: a path under
+ * /api/v1/engine/sheet-calc/ and its JSON body. */
+export interface CalculationCall {
+  readonly method: "POST" | "DELETE";
+  readonly path: string;
+  readonly body?: string;
+}
+
+/** MR Office's answer, passed back as it came: the editors read its status,
+ * error code and Retry-After as they read the service's own. */
+export interface CalculationAnswer {
+  readonly status: number;
+  readonly body: string;
+  readonly contentType: string;
+  readonly retryAfter?: string;
+}
+
+/** `sessions`, `sessions/<id>`, `sessions/<id>/<method>` or `<method>`, with
+ * an optional query (`?busy=soft`, `?scope=`): nothing else of the API. */
+const CALCULATION_PATH = /^(?:sessions(?:\/[A-Za-z0-9_-]{16,64}(?:\/[A-Za-z][A-Za-z0-9_.]{0,63})?)?|[A-Za-z][A-Za-z0-9_.]{0,63})(?:\?[A-Za-z0-9:._=&-]{0,300})?$/;
+/** The largest calculation request forwarded (the API's own bound is lower). */
+export const MAX_CALCULATION_BODY = 40 * 1024 * 1024;
+
+/** The call, checked: a path of the calculation engine only. */
+export function calculationCall(input: { method?: unknown; path?: unknown; body?: unknown }): CalculationCall {
+  const method = input.method === "DELETE" ? "DELETE" : input.method === "POST" || input.method === undefined ? "POST" : null;
+  if (!method) throw new Error("A calculation call is POST or DELETE.");
+  const path = typeof input.path === "string" ? input.path.replace(/^\/?api\/v1\/engine\/sheet-calc\//, "") : "";
+  if (!CALCULATION_PATH.test(path) || (method === "DELETE" && !/^sessions\/[A-Za-z0-9_-]+(?:\?|$)/.test(path))) throw new Error("Not a calculation call.");
+  if (input.body !== undefined && typeof input.body !== "string") throw new Error("A calculation call's body is JSON text.");
+  if (typeof input.body === "string" && input.body.length > MAX_CALCULATION_BODY) throw new Error("The calculation request is too large.");
+  return { method, path, ...(typeof input.body === "string" ? { body: input.body } : {}) };
+}
+
+/** An answer this server writes itself, in the API's error envelope. */
+export function calculationRefusal(status: number, code: string, message: string): CalculationAnswer {
+  return { status, body: JSON.stringify({ error: { code, message } }), contentType: "application/json" };
+}
+
 export interface Engine {
   readonly available: boolean;
+  /** Forward one spreadsheet calculation call as the account (absent: this
+   * server calculates nothing, and the editors show their last results). */
+  calculate?(call: CalculationCall): Promise<CalculationAnswer>;
   importOffice(name: string, bytes: Uint8Array): Promise<ImportedFile>;
   exportDocx(title: string, content: DocNode): Promise<Uint8Array>;
   /** A workbook (.mrsheet content) as .xlsx, or a deck (.mrslides) as .pptx. */
@@ -102,6 +146,46 @@ abstract class ApiEngine implements Engine {
     return response;
   }
 
+  /** The credentials a calculation goes with: by default the conversions'
+   * own; null when there are none and none should be asked for now. */
+  protected calculationCredentials(refresh: boolean): Promise<Record<string, string> | null> {
+    return this.credentials(refresh);
+  }
+
+  async calculate(call: CalculationCall, retry = true): Promise<CalculationAnswer> {
+    let auth: Record<string, string> | null;
+    try {
+      auth = await this.calculationCredentials(!retry);
+    } catch (error) {
+      if (error instanceof NotSignedIn) auth = null;
+      else throw error;
+    }
+    if (!auth) return calculationRefusal(401, "unauthorized", "Sign in to MR Office to calculate.");
+    let response: Response;
+    try {
+      response = await fetch(`${this.apiUrl}/api/v1/engine/sheet-calc/${call.path}`, {
+        method: call.method,
+        headers: { ...(call.body !== undefined ? { "content-type": "application/json" } : {}), ...auth },
+        ...(call.body !== undefined ? { body: call.body } : {}),
+        signal: AbortSignal.timeout(60_000),
+      });
+    } catch {
+      return calculationRefusal(503, "engine_unavailable", "MR Office could not be reached.");
+    }
+    if ((response.status === 401 || response.status === 403) && retry) {
+      // a session this server keeps (local development) may have lapsed
+      const code = ((await response.clone().json().catch(() => null)) as { error?: { code?: string } } | null)?.error?.code ?? "";
+      if (response.status === 401 || /csrf/i.test(code)) return this.calculate(call, false);
+    }
+    const retryAfter = response.headers.get("retry-after");
+    return {
+      status: response.status,
+      body: await response.text(),
+      contentType: response.headers.get("content-type") ?? "application/json",
+      ...(retryAfter ? { retryAfter } : {}),
+    };
+  }
+
   async importOffice(name: string, bytes: Uint8Array): Promise<ImportedFile> {
     const extension = name.toLowerCase().split(".").pop() ?? "";
     const target = extension === "docx" ? "document" : extension === "xlsx" ? "spreadsheet" : extension === "pptx" ? "presentation" : null;
@@ -174,6 +258,13 @@ class AccountEngine extends ApiEngine {
     // the first Office file signs the person in: the browser opens by itself
     const token = await this.account.accessTokenOrSignIn("Word, Excel and PowerPoint files", undefined, refresh);
     return { authorization: `Bearer ${token}` };
+  }
+
+  // A workbook calculating as it opens never opens a sign-in by itself: the
+  // person who has not signed in sees the last results, as before.
+  protected override async calculationCredentials(refresh: boolean): Promise<Record<string, string> | null> {
+    const token = await this.account.accessToken(refresh);
+    return token ? { authorization: `Bearer ${token}` } : null;
   }
 }
 

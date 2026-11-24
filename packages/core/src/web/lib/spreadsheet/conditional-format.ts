@@ -72,7 +72,9 @@ import {
 import {
   isSpreadsheetFillPatternType,
   normalizeSpreadsheetGradientFill,
+  SHEET_CF_PATTERN_PRINT_INK,
   spreadsheetFillPatternCss,
+  spreadsheetFillPatternPrintInk,
   spreadsheetGradientFillCss,
   type SpreadsheetFillPatternType,
   type SpreadsheetGradientFill,
@@ -843,6 +845,9 @@ export interface ConditionalStyle {
   backgroundImage?: string;
   /** The tile of a pattern-fill rule's image (the dotted grays). */
   backgroundSize?: string;
+  /** A pattern-fill rule's marks colour and tile share, which the printed
+   * page sets as one colour in place of the tile (SHEET_CF_PATTERN_PRINT_INK). */
+  [SHEET_CF_PATTERN_PRINT_INK]?: string;
   /** Applied by the grid on top of the cell's own borders (not a CSS key). */
   borderEdges?: CellBorderEdges;
   /** Overrides the cell's number format while the rule matches (not CSS). */
@@ -910,6 +915,7 @@ export function applyDifferentialCss(
     if (gradient) {
       style.backgroundImage = gradient.backgroundImage;
       style.backgroundColor = gradient.backgroundColor;
+      delete style[SHEET_CF_PATTERN_PRINT_INK];
     }
   } else if (rule.fillPattern) {
     const pattern = spreadsheetFillPatternCss({
@@ -922,6 +928,9 @@ export function applyDifferentialCss(
       // fill shows between them.
       style.backgroundImage = pattern.backgroundImage;
       if (pattern.backgroundSize) style.backgroundSize = pattern.backgroundSize;
+      const printInk = spreadsheetFillPatternPrintInk(rule.fillPattern.type, rule.fillPattern.foregroundColor ?? "#000000");
+      if (printInk) style[SHEET_CF_PATTERN_PRINT_INK] = printInk;
+      else delete style[SHEET_CF_PATTERN_PRINT_INK];
     }
   }
   if (rule.borderEdges) style.borderEdges = rule.borderEdges;

@@ -25,6 +25,12 @@ export interface TwitchWatch {
   /** A plan was dispatched: the first page whose opening came back to one
    * it had, and left, since the last authored edit; or null. */
   dispatched(before: readonly string[], after: readonly string[], editSeq: number): number | null;
+  /** Before a plan is dispatched: the first page it would move to an opening
+   * that page has had, when the page has already come back once since the
+   * last authored edit (A -> B -> A, now -> B again); or null. Such a page is
+   * held where it stands: a cut that goes round twice goes round for ever
+   * (R461-D71 at rest: page 99 90 times in 150 s). */
+  wouldGoRoundAgain(before: readonly string[], after: readonly string[], editSeq: number): number | null;
 }
 
 /** Openings kept per page for one authored edit (a pass budget's worth). */
@@ -40,18 +46,32 @@ export function createTwitchWatch(): TwitchWatch {
   let seq: number | null = null;
   /** By page: the openings it has had since the edit, in order. */
   let seen: string[][] = [];
+  /** The pages that came back to an opening since the edit. */
+  let returned = new Set<number>();
   return {
+    wouldGoRoundAgain(before, after, editSeq) {
+      if (seq !== editSeq) return null;
+      for (let page = 0; page < after.length; page += 1) {
+        if (after[page] === before[page] || !returned.has(page)) continue;
+        if ((seen[page] ?? []).includes(after[page])) return page;
+      }
+      return null;
+    },
     dispatched(before, after, editSeq) {
       if (seq !== editSeq) {
         seq = editSeq;
         seen = before.map((opening) => [opening]);
+        returned = new Set();
       }
       let twitched: number | null = null;
       for (let page = 0; page < after.length; page += 1) {
         const had = seen[page] ?? (seen[page] = before[page] === undefined ? [] : [before[page]]);
         const opening = after[page];
         if (had[had.length - 1] === opening) continue;
-        if (twitched === null && had.includes(opening)) twitched = page;
+        if (had.includes(opening)) {
+          returned.add(page);
+          if (twitched === null) twitched = page;
+        }
         had.push(opening);
         if (had.length > MAX_OPENINGS) had.splice(0, had.length - MAX_OPENINGS);
       }

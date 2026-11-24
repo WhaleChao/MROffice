@@ -35,6 +35,8 @@ import { readDocumentNumberingMarkerFact, type DocumentNumberingMarkerFact } fro
 import { bulletStyleForGlyph, DEFAULT_BULLET_STYLE, isNativeListMarkerHost, LIST_MARKER_HOST_SELECTOR, normalizeBulletStyle } from "./bulletListStyle";
 import { PAGE_BLOCK_NODE, PAGE_LEDGER_CONVERGED_EVENT, SPLIT_CONTINUES_ATTR } from "./paged/paginationProjectionKeys";
 import { REBALANCE_META } from "./paged/pageRebalanceExtension";
+import { MRNOTE_BLOCK_IDENTITY_META } from "./blockIds";
+import { ReplaceAroundStep } from "@tiptap/pm/transform";
 import { DOCUMENT_FIELD_NODE_NAME } from "./documentFieldValues";
 import { newFontFacesOf } from "../../../../lib/font-face-news";
 import { cssFontFamilyList } from "../../../../lib/css-font-family";
@@ -2505,13 +2507,93 @@ function sameDecorations(published: readonly Decoration[], drawn: readonly Decor
 /** The signature a published patch leaves: no whole pass's is equal to it. */
 const PATCHED_SIGNATURE = "\u0000patched";
 
-
-
 /** `window.__docsAutoLineBlockTextOff = true`: each run's text read with doc.textBetween (A/B). */
 function autoLineBlockTextOff(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsAutoLineBlockTextOff?: boolean }).__docsAutoLineBlockTextOff === true;
 }
 
+/** `window.__docsAutoLineSplitCarryOff = true` (A/B): a paragraph the ledger
+ * cut again loses its intermediates witness until the next pass, as before. */
+function splitCarryOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsAutoLineSplitCarryOff?: boolean }).__docsAutoLineSplitCarryOff === true;
+}
+
+/** `window.__docsAutoLineSplitBoxOff = true` (A/B): the pieces of a paragraph
+ * the ledger cut again keep the witness only, not the paragraph's line box. */
+function splitBoxOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsAutoLineSplitBoxOff?: boolean }).__docsAutoLineSplitBoxOff === true;
+}
+
+/** The paragraph's own box (its line box, its multiple): a node decoration over a whole text block. */
+const isParagraphBox = (spec: {autoLinePixels?: unknown; autoLineLeaf?: unknown; autoLineMultiple?: unknown}) =>
+  (spec.autoLinePixels !== undefined && spec.autoLineLeaf !== true) || spec.autoLineMultiple !== undefined;
+
+/**
+ * A page-ledger step that cut a paragraph again (or joined its pieces) drops
+ * the paragraph's own box with its node: each text block now where a dropped
+ * box stood, with none of that kind of its own, takes a copy -- when it is the
+ * same text in the same faces as far as this plugin can tell: its line
+ * multiplier stands and its mapped leaves (and native line boxes) still cover
+ * it, as for the witness carried beside it.
+ */
+function carrySplitParagraphBoxes(
+  transaction: Transaction,
+  previous: DecorationSet,
+  next: DecorationSet,
+  state: EditorState,
+): DecorationSet {
+  const kept = new Set(next.find(undefined, undefined, isParagraphBox).map((item) => item.spec));
+  const lost = previous.find(undefined, undefined, isParagraphBox).filter((item) => !kept.has(item.spec));
+  if (!lost.length) return next;
+  const carried: Decoration[] = [];
+  const seen = new Set<string>();
+  const doc = state.doc;
+  for (const item of lost) {
+    const multiple = item.spec.autoLineMultiple !== undefined;
+    const from = transaction.mapping.map(item.from, 1), to = transaction.mapping.map(item.to, -1);
+    if (!(to > from)) continue;
+    doc.nodesBetween(Math.max(0, from), Math.min(doc.content.size, to), (node, position) => {
+      if (!node.isTextblock) return true;
+      const key = `${multiple ? "m" : "b"}${position}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      const end = position + node.nodeSize;
+      if (next.find(position, end, isParagraphBox).some((own) => own.from === position && own.to === end &&
+          (own.spec.autoLineMultiple !== undefined) === multiple)) return false;
+      if (documentAutoLineMultiplier(state, node, position) === null) return false;
+      const leaves = next.find(position + 1, end - 1, (spec) => spec.autoLineLeaf === true);
+      if (!leaves.length || !coversParagraph(node, position, [...leaves, ...nativeLineCoverage(state, position + 1, end - 1)])) return false;
+      carried.push((item as unknown as { copy(from: number, to: number): Decoration }).copy(position, end));
+      return false;
+    });
+  }
+  return carried.length ? next.add(doc, carried) : next;
+}
+
+/** `window.__docsAutoLineIdentityCarryOff = true` (A/B): a block the
+ * identities re-mark loses its box and witness until the next pass, as before. */
+function identityCarryOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsAutoLineIdentityCarryOff?: boolean }).__docsAutoLineIdentityCarryOff === true;
+}
+
+/** Whether every step of `transaction` only gave a block new attributes:
+ * its own two tokens replaced around its content, the same type, the same
+ * content (setNodeMarkup). Positions then map to themselves. */
+function onlyRemarksBlocks(transaction: Transaction): boolean {
+  if (transaction.before.content.size !== transaction.doc.content.size) return false;
+  return transaction.steps.every((step, index) => {
+    if (!(step instanceof ReplaceAroundStep)) return false;
+    const raw = step as unknown as { from: number; to: number; gapFrom: number; gapTo: number; insert: number; structure: boolean; slice: { size: number; openStart: number; openEnd: number } };
+    if (!raw.structure || raw.gapFrom !== raw.from + 1 || raw.gapTo !== raw.to - 1 || raw.insert !== 1 || raw.slice.size !== 2 || raw.slice.openStart || raw.slice.openEnd) return false;
+    const was = transaction.docs[index]?.nodeAt(raw.from);
+    const now = (transaction.docs[index + 1] ?? transaction.doc).nodeAt(raw.from);
+    return Boolean(was && now && was.type === now.type && was.content.eq(now.content));
+  });
+}
+
+/** `window.__docsAutoLineCarryMoved = true` (trial, off: with the pieces'
+ * own boxes carried it pushed a Crossmark cover's tail over page 2's body,
+ * R494-D36): the ledger's moves keep the line boxes of the blocks they move. */
 function autoLineCarryMoved(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsAutoLineCarryMoved?: boolean }).__docsAutoLineCarryMoved === true;
 }
@@ -2623,6 +2705,19 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
           const supplied = transaction.getMeta(documentAutoLineSpacingKey) as DecorationSet | undefined;
           if (supplied) return supplied;
           if (!transaction.docChanged && !transaction.getMeta(documentDisplayFontPluginKey)) return previous;
+          // A transaction that only re-marked blocks (the block identities giving
+          // a page split's tail piece its own id with setNodeMarkup): every
+          // position and every block's content stands, so all that was drawn
+          // stands where it was. Mapped through the markup step, a node
+          // decoration of the re-marked block came out one token inside it --
+          // kept in the set but no longer drawn -- and the piece drew bare
+          // until the next pass (R461-D71 at rest: 610 of 760 re-marked pieces
+          // in 150 s, page 47 flipping 32 times).
+          if (transaction.docChanged && transaction.getMeta(MRNOTE_BLOCK_IDENTITY_META) && !identityCarryOff() &&
+              !transaction.getMeta(documentDisplayFontPluginKey) && oldState.doc.attrs === newState.doc.attrs &&
+              onlyRemarksBlocks(transaction)) {
+            return DecorationSet.create(newState.doc, previous.find());
+          }
           // An edit of anyone's hand: what a restored layout drew no longer
           // stands for the blocks around it (engineLinesKept).
           if (transaction.docChanged && transaction.getMeta("addToHistory") !== false) retireSeededLines();
@@ -2751,7 +2846,53 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
           // finds in the array it is given.
           const revoked = stale.filter(item => item.spec.autoLineIntermediates === true).map(item => [item.from, item.to] as const);
           const withdrawn = keptBlockWithdrawn || withdrawnProjections.has(previous);
-          const next = removeDecorationList(mapped, stale);
+          let next = removeDecorationList(mapped, stale);
+          // A paragraph the page ledger cut again (or joined) is the same text in
+          // the same faces: its runs' leaves mapped with it and still cover each
+          // piece. Withdrawn until the next projection pass, its pieces drew the
+          // paragraph's own line strut meanwhile, the ledger read them taller and
+          // cut them elsewhere, the pass put the witness back and the ledger cut
+          // them back (R461-D71: a 78-page code paragraph's openings on pages
+          // 24-33 and 46-55 went back and forth every 6-16 s at rest).
+          // ...and a block the identities re-marked in a transaction that did
+          // more than re-mark (MRNOTE_BLOCK_IDENTITY_META): its runs' leaves map,
+          // its box and witness are carried the same way.
+          if (transaction.docChanged && (transaction.getMeta(REBALANCE_META) || (transaction.getMeta(MRNOTE_BLOCK_IDENTITY_META) && !identityCarryOff())) && !splitCarryOff() &&
+              !transaction.getMeta(documentDisplayFontPluginKey) && oldState.doc.attrs === newState.doc.attrs) {
+            // Where each witness the step dropped (its paragraph split or
+            // joined: the mapping drops a node decoration whose node is no
+            // longer one) or this check withdrew now stands.
+            const keptSpecs = new Set(mapped.find(undefined, undefined, spec => spec.autoLineIntermediates === true).map(item => item.spec));
+            const lostRanges = previous.find(undefined, undefined, spec => spec.autoLineIntermediates === true)
+              .filter(item => !keptSpecs.has(item.spec))
+              .map(item => [transaction.mapping.map(item.from, 1), transaction.mapping.map(item.to, -1)] as const);
+            const carried: Decoration[] = [];
+            const seen = new Set<number>();
+            for (const [from, to] of [...revoked, ...lostRanges]) {
+              if (!(to > from)) continue;
+              newState.doc.nodesBetween(Math.max(0, from), Math.min(newState.doc.content.size, to), (node, position) => {
+                if (!node.isTextblock) return true;
+                if (seen.has(position)) return false;
+                seen.add(position);
+                const end = position + node.nodeSize;
+                if (next.find(position, end, spec => spec.autoLineIntermediates === true).some(item => item.from === position && item.to === end)) return false;
+                if (documentAutoLineMultiplier(newState, node, position) === null) return false;
+                const leaves = next.find(position + 1, end - 1, spec => spec.autoLineLeaf === true);
+                if (!leaves.length || !coversParagraph(node, position, [...leaves, ...nativeLineCoverage(newState, position + 1, end - 1)])) return false;
+                carried.push(Decoration.node(position, end, {[AUTO_LINE_INTERMEDIATES_ATTR]: "true"}, {autoLineIntermediates: true}));
+                return false;
+              });
+            }
+            if (carried.length) next = next.add(newState.doc, carried);
+            // The paragraph's own box goes with the witness: its line box
+            // (`document-auto-linebox`, the line height and the baseline shift
+            // its lines are drawn with) and its multiple. Dropped with the
+            // node, each piece drew without them until the pass that reached
+            // its sheet, the ledger read it so and cut again (R461-D71 at
+            // rest: the class came off dozens of code paragraphs on sheets
+            // 87-110 after each re-cut and came back a pass later).
+            if (!splitBoxOff()) next = carrySplitParagraphBoxes(transaction, previous, next, newState);
+          }
           const result = revoked.length ? withoutOrphanStruts(next, reached ? revoked : undefined) : next;
           if (withdrawn) withdrawnProjections.add(result);
           return result;

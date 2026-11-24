@@ -4,16 +4,16 @@
 // page and assets at the root.
 
 import { randomUUID } from "node:crypto";
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { extname, normalize, resolve, sep } from "node:path";
+import { extname, join, normalize, resolve, sep } from "node:path";
 
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 
-import { BearerEngine } from "./engine.ts";
+import { BearerEngine, type Engine } from "./engine.ts";
 import { safeFileName } from "./formats.ts";
-import { createServer, exportFile, type Services } from "./server.ts";
+import { calculateFor, createServer, exportFile, type Services } from "./server.ts";
 import { RevisionConflict } from "./store.ts";
 import { tokenGate } from "./token-gate.ts";
 import { editorPage } from "./widget.ts";
@@ -188,6 +188,35 @@ export function startHttp(services: Services): Promise<Server> {
     return send(response, 405, { error: "method not allowed" });
   }
 
+  /** The engine a link page's calculation goes with: on a server people
+   * sign in to, the document owner's own token from a connection of theirs
+   * that is open now (none open: not calculated, as before); on one
+   * person's machine, this server's own. */
+  function linkEngine(ownerOfDoc: string | undefined): Engine | null {
+    if (!gate) return services.engine;
+    if (!ownerOfDoc || config.engine.kind !== "account") return null;
+    let token: string | undefined;
+    for (const [sessionId, sessionOwner] of sessionOwners) if (sessionOwner === ownerOfDoc) token = sessionTokens.get(sessionId) ?? token;
+    return token ? new BearerEngine(config.engine.apiUrl, () => token ?? null) : null;
+  }
+
+  async function handleCalculation(request: IncomingMessage, response: ServerResponse, id: string, token: string | null): Promise<void> {
+    if (!store.authorize(id, token)) return send(response, 404, { error: "No such document, or the link is not valid." });
+    if (request.method !== "POST") return send(response, 405, { error: "method not allowed" });
+    const origin = request.headers.origin;
+    if (origin && origin !== config.publicUrl) return send(response, 403, { error: "Calculating is allowed from the editor page only." });
+    const input = JSON.parse((await readBody(request)).toString("utf8") || "{}") as { method?: unknown; path?: unknown; body?: unknown };
+    const engine = linkEngine(store.get(id).owner);
+    let answer: Awaited<ReturnType<typeof calculateFor>>;
+    try {
+      answer = await calculateFor(engine, input);
+    } catch (error) {
+      return send(response, 400, { error: { code: "invalid_input", message: error instanceof Error ? error.message : String(error) } });
+    }
+    response.writeHead(answer.status, { "content-type": answer.contentType, "cache-control": "no-store", ...(answer.retryAfter ? { "retry-after": answer.retryAfter } : {}) });
+    response.end(answer.body);
+  }
+
   function serveStatic(request: IncomingMessage, response: ServerResponse, pathname: string): boolean {
     if (!distRoot || (request.method !== "GET" && request.method !== "HEAD")) return false;
     const relative = normalize(decodeURIComponent(pathname)).replace(/^([/\\])+/, "");
@@ -219,7 +248,19 @@ export function startHttp(services: Services): Promise<Server> {
       if (gate && url.pathname === "/.well-known/oauth-authorization-server") {
         return send(response, 200, await gate.authorizationServer(), { "access-control-allow-origin": "*", "cache-control": "public, max-age=300" });
       }
-      let match = url.pathname.match(/^\/_mcp\/view\/([a-z0-9]{12})$/);
+      // A directory that checks who runs this address asks for a token at
+      // /.well-known/<name>: whoever operates the server writes it to
+      // <data dir>/well-known/<name> (no restart), and it is served as the
+      // plain text it is. Nothing else in the data directory is reachable.
+      let match = url.pathname.match(/^\/\.well-known\/([a-z0-9][a-z0-9._-]{0,63})$/);
+      if (match && !local && (request.method === "GET" || request.method === "HEAD")) {
+        const path = join(config.dataDir, "well-known", match[1]);
+        if (!match[1].includes("..") && existsSync(path) && statSync(path).isFile() && statSync(path).size <= 4096) {
+          response.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
+          return response.end(request.method === "HEAD" ? undefined : readFileSync(path, "utf8").trim());
+        }
+      }
+      match = url.pathname.match(/^\/_mcp\/view\/([a-z0-9]{12})$/);
       if (match) {
         const token = url.searchParams.get("t");
         if (!store.authorize(match[1], token)) return send(response, 404, "No such document, or the link is not valid.");
@@ -229,6 +270,8 @@ export function startHttp(services: Services): Promise<Server> {
       }
       match = url.pathname.match(/^\/_mcp\/api\/doc\/([a-z0-9]{12})$/);
       if (match) return await handleDocApi(request, response, match[1], url.searchParams.get("t"));
+      match = url.pathname.match(/^\/_mcp\/api\/doc\/([a-z0-9]{12})\/calculate$/);
+      if (match) return await handleCalculation(request, response, match[1], url.searchParams.get("t"));
       match = url.pathname.match(/^\/_mcp\/file\/([a-z0-9]{12})$/);
       if (match) {
         if (!store.authorize(match[1], url.searchParams.get("t"))) return send(response, 404, "No such document, or the link is not valid.");

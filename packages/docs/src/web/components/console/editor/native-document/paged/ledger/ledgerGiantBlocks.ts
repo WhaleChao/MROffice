@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { splitTailIdAttrs } from "@mrnote/core/web/components/console/editor/native-document/blockIds.ts";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
 
@@ -139,8 +140,9 @@ export function splitGiantTextBlocks(tr: Transaction): boolean {
     if (cuts.length === 0) continue;
     const root = splitPieceRoot(block.attrs);
     if (root !== null) giantRoots.add(root);
-    const tailAttrs = (continues: boolean) => ({
+    const tailAttrs = (continues: boolean, offset: number) => ({
       ...block.attrs,
+      ...splitTailIdAttrs(block.attrs, offset),
       ...(block.type.name === "heading" ? { anchor_id: null, toc_anchor_id: null } : {}),
       [SPLIT_CONTINUATION_ATTR]: true,
       [SPLIT_CONTINUES_ATTR]: continues,
@@ -150,7 +152,7 @@ export function splitGiantTextBlocks(tr: Transaction): boolean {
       const continues = cut < cuts.length - 1 || block.attrs[SPLIT_CONTINUES_ATTR] === true;
       tr.split(pos + 1 + cuts[cut], 2, [
         { type: sheet.type, attrs: sheet.attrs },
-        { type: block.type, attrs: tailAttrs(continues) },
+        { type: block.type, attrs: tailAttrs(continues, cuts[cut]) },
       ]);
     }
     tr.setNodeMarkup(pos, undefined, { ...block.attrs, [SPLIT_CONTINUES_ATTR]: true });

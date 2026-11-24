@@ -13,7 +13,7 @@ import * as z from "zod";
 
 import type { Account } from "./auth.ts";
 import type { Config } from "./config.ts";
-import type { Engine } from "./engine.ts";
+import { calculationCall, calculationRefusal, type CalculationAnswer, type Engine } from "./engine.ts";
 import { FORMATS, csvWorkbook, documentMarkdown, extensionOf, htmlToMarkdown, markdownToHtml, parseMrdoc, safeFileName, stem, workbookCsv } from "./formats.ts";
 import { fetchDocumentUrl } from "./fetch-url.ts";
 import type { Renderer } from "./render.ts";
@@ -103,6 +103,12 @@ function summary(doc: StoredDocument): Record<string, unknown> {
   };
 }
 
+/** A tool's annotations, every hint stated: directories and hosts read a
+ * missing hint as unknown, and the hints decide when the host asks first. */
+function hints(title: string, readOnly: boolean, destructive: boolean, openWorld: boolean) {
+  return { title, readOnlyHint: readOnly, destructiveHint: destructive, openWorldHint: openWorld };
+}
+
 function errorResult(error: unknown): CallToolResult {
   const message = error instanceof Error ? error.message : String(error);
   return { isError: true, content: [{ type: "text", text: message }] };
@@ -149,6 +155,7 @@ export function createServer(services: Services, options: ServerOptions = {}): M
 
   // ------------------------------------------------------------ the view
   const resourceMeta = () => ({
+    ...config.viewMeta,
     ui: {
       csp: editorCsp(config),
       prefersBorder: true,
@@ -207,7 +214,7 @@ export function createServer(services: Services, options: ServerOptions = {}): M
         content: z.string().max(2_000_000).describe("Markdown for a document, CSV for a spreadsheet"),
         format: z.enum(["docx", "md", "csv"]).optional().describe("Default export format"),
       },
-      annotations: { title: "Create a document", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+      annotations: hints("Create a document", false, false, false),
       _meta: viewMeta,
     },
     async ({ title, kind, content, format }) => {
@@ -246,7 +253,7 @@ export function createServer(services: Services, options: ServerOptions = {}): M
         text: z.string().max(5_000_000).optional(),
         url: z.string().url().optional(),
       },
-      annotations: { title: "Open a file", readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      annotations: hints("Open a file", false, false, true),
       _meta: viewMeta,
     },
     async ({ name, content_base64, text, url }) => {
@@ -294,7 +301,7 @@ export function createServer(services: Services, options: ServerOptions = {}): M
         content: z.string().max(2_000_000),
         expected_revision: z.number().int().optional().describe("The revision you read; the change is refused if the document moved on"),
       },
-      annotations: { title: "Replace a document's content", readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+      annotations: hints("Replace a document's content", false, true, false),
       _meta: viewMeta,
     },
     async ({ id, content, expected_revision }) => {
@@ -321,13 +328,13 @@ export function createServer(services: Services, options: ServerOptions = {}): M
         "Read a document's current content, including the person's edits in the editor: Markdown for documents, CSV per sheet for spreadsheets. " +
         "Set include_file to also get the editor's file.",
       inputSchema: { id: z.string(), include_file: z.boolean().default(false) },
-      annotations: { title: "Read a document", readOnlyHint: true, openWorldHint: false },
+      annotations: hints("Read a document", true, false, false),
     },
     async ({ id, include_file }) => {
       try {
         const doc = own(id);
         const { text, kind } = documentText(doc);
-        const header = `"${doc.title}" (document ${doc.id}, ${kind}), revision ${doc.current.rev}, last saved by ${doc.current.by === "person" ? "the person in the editor" : "you"} at ${doc.current.at}.`;
+        const header = `"${doc.title}" (document ${doc.id}, ${kind}), revision ${doc.current.rev}, last saved by ${doc.current.by === "person" ? "the person in the editor" : "you"}.`;
         const content: ContentBlock[] = [{ type: "text", text: `${header}\n\n${text}` }];
         if (include_file) {
           content.push({
@@ -345,10 +352,10 @@ export function createServer(services: Services, options: ServerOptions = {}): M
   server.registerTool(
     "render_page",
     {
-      title: "Picture a page",
+      title: "Render a page as an image",
       description: "A picture (PNG) of one page of a document as the MR Office editor draws it, to check the layout of your work.",
       inputSchema: { id: z.string(), page: z.number().int().min(1).default(1) },
-      annotations: { title: "Picture a page", readOnlyHint: true, openWorldHint: false },
+      annotations: hints("Render a page as an image", true, false, false),
     },
     async ({ id, page }) => {
       try {
@@ -371,11 +378,13 @@ export function createServer(services: Services, options: ServerOptions = {}): M
     {
       title: "Export a document",
       description:
-        "The document as a file: docx (Word), md, html or mrdoc for documents; xlsx (Excel), csv or mrsheet for spreadsheets; pptx (PowerPoint) or mrslides for presentations. " +
-        "Word, Excel and PowerPoint files are written by MR Office's engine and need the person signed in (sign_in). " +
+        "The document as a file: docx (Word), md, html or mrdoc for documents; xlsx (Excel), csv or mrsheet for spreadsheets; pptx (PowerPoint) or mrslides for presentations; pdf for a PDF. " +
+        (services.account
+          ? "Word, Excel and PowerPoint files are written by MR Office's engine and need the person signed in (sign_in). "
+          : "Word, Excel and PowerPoint files are written by MR Office's engine as the signed-in person. ") +
         "Returns the file and a download link for the person.",
       inputSchema: { id: z.string(), format: z.enum(["docx", "xlsx", "pptx", "md", "html", "mrdoc", "csv", "mrsheet", "mrslides", "pdf"]).optional() },
-      annotations: { title: "Export a document", readOnlyHint: true, openWorldHint: false },
+      annotations: hints("Export a document", true, false, false),
     },
     async ({ id, format }) => {
       try {
@@ -403,7 +412,7 @@ export function createServer(services: Services, options: ServerOptions = {}): M
         `The documents created or opened with this server${owner ? " with your MR Office account" : ""}, newest first.` +
         (config.retentionDays ? ` Each is kept ${config.retentionDays} days after its last save; export what you keep.` : ""),
       inputSchema: {},
-      annotations: { title: "List documents", readOnlyHint: true, openWorldHint: false },
+      annotations: hints("List documents", true, false, false),
     },
     async () => {
       const documents = store.list().filter((meta) => listAll || (owner ? meta.owner === owner : made.has(meta.id))).map((meta) => ({ id: meta.id, title: meta.title, format: meta.format, revisions: meta.revisions.length, lastEditedBy: meta.revisions.at(-1)?.by }));
@@ -426,7 +435,7 @@ export function createServer(services: Services, options: ServerOptions = {}): M
           "Opens MR Office's sign-in page in the person's browser and returns its link; the person signs in and allows it there, then the Office tools work. " +
           "Says who is signed in when that is already done.",
         inputSchema: {},
-        annotations: { title: "Sign in to MR Office", readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+        annotations: hints("Sign in to MR Office", false, false, true),
       },
       async () => {
         try {
@@ -455,7 +464,7 @@ export function createServer(services: Services, options: ServerOptions = {}): M
         title: "Sign out of MR Office",
         description: "Sign this app out of the person's MR Office account and revoke its access.",
         inputSchema: {},
-        annotations: { title: "Sign out of MR Office", readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+        annotations: hints("Sign out of MR Office", false, true, true),
       },
       async () => {
         try {
@@ -476,7 +485,7 @@ export function createServer(services: Services, options: ServerOptions = {}): M
       title: "Load the editor's file",
       description: "The editor view reads the document it shows.",
       inputSchema: { id: z.string() },
-      annotations: { readOnlyHint: true },
+      annotations: hints("Load the editor's file", true, false, false),
       _meta: { ui: { resourceUri: VIEW_URI, visibility: ["app"] } },
     },
     async ({ id }) => {
@@ -499,7 +508,8 @@ export function createServer(services: Services, options: ServerOptions = {}): M
       title: "Save the person's edits",
       description: "The editor view saves what the person changed, as a new revision.",
       inputSchema: { id: z.string(), name: z.string().max(255), base64: z.string(), baseRev: z.number().int().optional() },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      // a new revision on top of the others, refused if the document moved on
+      annotations: hints("Save the person's edits", false, false, false),
       _meta: { ui: { resourceUri: VIEW_URI, visibility: ["app"] } },
     },
     async ({ id, name, base64, baseRev }) => {
@@ -515,7 +525,39 @@ export function createServer(services: Services, options: ServerOptions = {}): M
     },
   );
 
+  registerAppTool(
+    server,
+    "widget_calculate",
+    {
+      title: "Calculate the workbook's formulas",
+      description:
+        "The editor view recalculates the formulas of the spreadsheet it shows: one call of MR Office's calculation engine (a path under " +
+        "/api/v1/engine/sheet-calc/ and its JSON body), made as the signed-in person. Nothing is stored and the document is not changed.",
+      inputSchema: { id: z.string(), method: z.enum(["POST", "DELETE"]).optional(), path: z.string().max(400), body: z.string().optional() },
+      annotations: hints("Calculate the workbook's formulas", true, false, false),
+      _meta: { ui: { resourceUri: VIEW_URI, visibility: ["app"] } },
+    },
+    async ({ id, method, path, body }) => {
+      try {
+        own(id);
+        const answer = await calculateFor(engine, { method, path, body });
+        return { content: [{ type: "text", text: `Calculation answered ${answer.status}` }], structuredContent: { ...answer } };
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
   return server;
+}
+
+/** One calculation call of the editor view, checked and forwarded with the
+ * engine's account; an engine that cannot calculate answers as MR Office
+ * does when it is not there, which the editors show as "not calculated". */
+export async function calculateFor(engine: Pick<Engine, "calculate"> | null, input: { method?: unknown; path?: unknown; body?: unknown }): Promise<CalculationAnswer> {
+  const call = calculationCall(input);
+  if (!engine?.calculate) return calculationRefusal(503, "engine_unavailable", "This server is not connected to MR Office's calculation.");
+  return engine.calculate(call);
 }
 
 export interface ExportedFile {

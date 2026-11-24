@@ -17,8 +17,22 @@ import { startResilientWorker } from "../worker-start";
 
 type Response = { ready?: true; id?: number; metrics?: SfntMetrics; error?: string };
 
-/** A worker that has not said it loaded by then is taken for one that never will. */
-const WORKER_START_MS = 4_000;
+/**
+ * A worker that has not said it loaded by then is taken for one that never
+ * will. Long: on a cold cache over a slow link its module (fontkit and the
+ * WOFF2 decoder) takes more than a few seconds, and a start given up at 4 s
+ * was terminated mid-load, made again and given up again (production
+ * WorkerStartFailed "face-metrics ... no word by its start deadline", about
+ * three a day, mostly a try-it notebook's first load): every face of the
+ * session was then read on the page's thread.
+ */
+const WORKER_START_MS = 30_000;
+/**
+ * How long a read waits for a worker still loading before it is read on the
+ * page instead (the caller's fallback). The worker goes on loading and takes
+ * the reads after it.
+ */
+export const FACE_METRICS_READ_WAIT_MS = 4_000;
 let worker: Worker | null = null;
 let ready: Promise<boolean> | null = null;
 let broken = false;
@@ -83,6 +97,23 @@ function startWorker(): Promise<boolean> {
   return ready;
 }
 
+/** The start's answer, or false when it has not come by `ms` (the start goes on). */
+function startedWithin(start: Promise<boolean>, ms: number): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => resolve(false), ms);
+    start.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(false);
+      },
+    );
+  });
+}
+
 /** Whether faces can be read off the page's thread here (a browser with workers). */
 export function faceMetricsOffThreadAvailable(): boolean {
   return !broken && typeof Worker !== "undefined" && typeof window !== "undefined";
@@ -92,7 +123,7 @@ export function readFaceMetricsOffThread(url: string): Promise<SfntMetrics> {
   const known = inFlight.get(url);
   if (known) return known;
   const absolute = typeof document === "undefined" ? url : new URL(url, document.baseURI).href;
-  const read = startWorker().then((started) => {
+  const read = startedWithin(startWorker(), FACE_METRICS_READ_WAIT_MS).then((started) => {
     if (!started || !worker) throw new Error("no face metrics worker");
     const id = ++sequence;
     const answer = new Promise<SfntMetrics>((resolve, reject) => waiting.set(id, { resolve, reject }));

@@ -28,6 +28,7 @@ import { checkerSha256, vibeCheckerEnabled } from "./vibe-checker";
 import { openServiceLog } from "./service-log";
 import { portsAvoiding } from "./web-port";
 import { componentRoot } from "../component";
+import { markStopAsked } from "./service-stops";
 
 export interface Layout {
   /** The Python interpreter. */
@@ -521,6 +522,7 @@ export function markApiUp(): void {
 export function stopService(service: Service): void {
   const { child } = service;
   if (child.exitCode !== null || child.signalCode !== null) return;
+  markStopAsked(service);
   if (process.platform === "win32") {
     // The whole tree: the API starts engine workers of its own.
     spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { windowsHide: true });
@@ -550,6 +552,8 @@ export async function stopServiceGracefully(service: Service, ask: () => Promise
   const { child } = service;
   if (child.exitCode !== null || child.signalCode !== null) return true;
   const ended = new Promise<boolean>((resolve) => child.once("exit", () => resolve(true)));
+  // Asked before the request goes: its exit is the answer, not a crash.
+  markStopAsked(service);
   try {
     await ask();
   } catch {

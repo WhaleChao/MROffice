@@ -118,8 +118,59 @@ function isPlainUrl(path: string): boolean {
   return !path.startsWith("/api/") && !/^https?:\/\/[^/]+\/api\//.test(path);
 }
 
+/** The page's host bridge (globalThis.mrofficeEditorsDesktop), when it can
+ * reach some of the service itself: the MCP editor view forwards the
+ * spreadsheet's calculation calls to MR Office through its MCP server, as the
+ * signed-in person. It answers a request with a Response, or undefined for
+ * one it does not take. */
+interface HostApiBridge {
+  answerApiRequest?(request: { readonly method: string; readonly path: string; readonly body: unknown }): Promise<Response> | undefined;
+}
+
+function hostAnswer(path: string, method: string, body: unknown): Promise<Response> | undefined {
+  const host = (globalThis as { mrofficeEditorsDesktop?: HostApiBridge }).mrofficeEditorsDesktop;
+  if (typeof host?.answerApiRequest !== "function") return undefined;
+  try {
+    return host.answerApiRequest({ method: method.toUpperCase(), path, body }) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A host's refusal, read as the service's own (its error envelope and
+ * Retry-After), so the editors treat it as they treat the service's. */
+async function hostRefusal(response: Response): Promise<ApiRequestError> {
+  const data = (await response.json().catch(() => null)) as { error?: { code?: unknown; message?: unknown; details?: unknown } } | null;
+  const error = data?.error;
+  const seconds = Number(response.headers.get("retry-after"));
+  const details = error?.details && typeof error.details === "object" && !Array.isArray(error.details) ? (error.details as Record<string, unknown>) : undefined;
+  return new ApiRequestError(typeof error?.message === "string" ? error.message : `HTTP ${response.status}`, {
+    status: response.status,
+    ...(typeof error?.code === "string" ? { code: error.code } : {}),
+    ...(details ? { details } : {}),
+    ...(response.headers.has("retry-after") && Number.isFinite(seconds) && seconds >= 0 ? { retryAfterMs: seconds * 1000 } : {}),
+  });
+}
+
+async function hostResponse(answered: Promise<Response>): Promise<Response> {
+  let response: Response;
+  try {
+    response = await answered;
+  } catch (error) {
+    // the host could not be reached: what the editors read as no connection
+    throw new ApiRequestError(error instanceof Error ? error.message : String(error), { status: 0, code: "network_unreachable" });
+  }
+  if (!response.ok) throw await hostRefusal(response);
+  return response;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const local = answer(path, init.method || "GET", init.body);
+  const hosted = local || isPlainUrl(path) ? undefined : hostAnswer(path, init.method || "GET", init.body);
+  if (hosted) {
+    const response = await hostResponse(hosted);
+    return ((response.headers.get("content-type") ?? "").includes("json") ? await response.json() : await response.arrayBuffer()) as T;
+  }
   if (!local && isPlainUrl(path)) {
     const response = await fetch(path, { ...init, credentials: "omit" });
     if (!response.ok) throw new ApiRequestError(`HTTP ${response.status}`, { status: response.status });
@@ -162,6 +213,8 @@ export function apiPostFormData<T>(path: string, body: FormData, init?: RequestI
 export async function apiFetchRaw(path: string, init: RequestInit = {}): Promise<Response> {
   const local = answer(path, init.method || "GET", init.body);
   if (!local && isPlainUrl(path)) return fetch(path, { ...init, credentials: "omit" });
+  const hosted = local ? undefined : hostAnswer(path, init.method || "GET", init.body);
+  if (hosted) return hostResponse(hosted);
   if (!local) throw unavailable(path);
   const value = await local;
   return value instanceof Response

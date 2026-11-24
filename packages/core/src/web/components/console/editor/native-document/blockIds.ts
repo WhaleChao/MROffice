@@ -394,6 +394,67 @@ export function landsWithFreshIds(transactions: readonly Transaction[]): boolean
 /** Documents every block of which holds a unique id (see the plugin). */
 const completeBlockIdDocuments = new WeakSet<ProseMirrorNode>();
 
+/**
+ * The id of a page split's tail (the same paragraph as its head, drawn on the
+ * next sheet), derived from the head's id and the tail's own words instead of
+ * drawn at random. The ledger cuts a paragraph again on most passes: drawn
+ * at random, every cut gave the tail a new block, whose line box and witness
+ * a new node does not have (`setNodeMarkup` here re-creates it) and whose
+ * measurements no memo keyed by id knew; measured bare, the tail cut two
+ * characters further, and the next pass cut it back (R461, page 47: the tail
+ * re-minted 896b90d3 -> 7d3524ac -> fe8a1ebd..., 36-55 reversals in 150 s at
+ * rest). The same cut now gives the same id, a cut that moved a new one.
+ * Never stored: a split merges back into one block at every serialization.
+ * `window.__docsSplitTailDerivedId = false`: drawn at random, as before.
+ */
+function splitTailBlockId(node: ProseMirrorNode, headId: unknown, seen: ReadonlySet<string>): string | null {
+  if (node.attrs[SPLIT_CONTINUATION_ATTR] !== true || typeof headId !== "string" || !headId) return null;
+  if (typeof window !== "undefined" && (window as Window & { __docsSplitTailDerivedId?: boolean }).__docsSplitTailDerivedId === false) {
+    return null;
+  }
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const id = derivedBlockId(`${headId}\u0000${attempt}\u0000${node.textContent}`);
+    if (!seen.has(id)) return id;
+  }
+  return null;
+}
+
+/**
+ * The id a page split gives its tail piece in the very step that cuts it:
+ * derived from the head's id and where the cut falls in the head, so the same
+ * cut made again gives the same id, and the identities' back-fill finds it
+ * unique and has nothing to re-mark (re-marked with setNodeMarkup, the piece
+ * was rebuilt and drew without its line box until the next pass: R461-D71's
+ * page 47 cut back and forth at rest). `window.__docsSplitTailIdAtCut =
+ * false`: the tail keeps the head's id and the back-fill gives it one, as
+ * before.
+ */
+export function splitTailIdAttrs(headAttrs: Record<string, unknown> | null | undefined, offset: number): Record<string, unknown> {
+  const headId = headAttrs?.[MRNOTE_BLOCK_ID_ATTR];
+  if (typeof headId !== "string" || !headId) return {};
+  if (typeof window !== "undefined" && (window as Window & { __docsSplitTailIdAtCut?: boolean }).__docsSplitTailIdAtCut === false) return {};
+  return { [MRNOTE_BLOCK_ID_ATTR]: derivedBlockId(`${headId}\u0000cut\u0000${offset}`) };
+}
+
+/** A UUID-shaped id from 128 bits of a string's hash (cyrb128). */
+function derivedBlockId(text: string): string {
+  let h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    h1 = h2 ^ Math.imul(h1 ^ code, 597399067);
+    h2 = h3 ^ Math.imul(h2 ^ code, 2869860233);
+    h3 = h4 ^ Math.imul(h3 ^ code, 951274213);
+    h4 = h1 ^ Math.imul(h4 ^ code, 2716044179);
+  }
+  h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067);
+  h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
+  h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213);
+  h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
+  h1 ^= h2 ^ h3 ^ h4; h2 ^= h1; h3 ^= h1; h4 ^= h1;
+  const hex = [h1, h2, h3, h4].map((part) => (part >>> 0).toString(16).padStart(8, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-${((parseInt(hex[16], 16) & 3) | 8).toString(16)}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
 function assignMissingBlockIds(tr: Transaction, doc: ProseMirrorNode): boolean {
   let changed = false;
   // block_id is the identity key AI edits and traces target, so it must be
@@ -414,7 +475,8 @@ function assignMissingBlockIds(tr: Transaction, doc: ProseMirrorNode): boolean {
     if (typeof blockId === "string" && blockId && !seen.has(blockId)) {
       seen.add(blockId);
     } else {
-      const freshId = generateNativeBlockId();
+      let freshId = splitTailBlockId(node, blockId, seen) ?? generateNativeBlockId();
+      if (seen.has(freshId)) freshId = generateNativeBlockId();
       nextAttrs = {
         ...nextAttrs,
         [MRNOTE_BLOCK_ID_ATTR]: freshId,

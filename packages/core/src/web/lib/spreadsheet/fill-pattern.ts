@@ -111,6 +111,33 @@ export function spreadsheetFillPatternPrintColor(raw: unknown): string | undefin
     .join("")}`;
 }
 
+/** The style property a conditional rule's pattern fill carries its marks'
+ * colour and share of the tile in ("#rrggbb n", n of 64): the printed page
+ * mixes them over the colour the cell shows between the marks -- the rule's
+ * own background or the cell's fill -- as Excel prints the tile (R480-X41:
+ * 2,582 gray0625 rule cells, each its own page-wide tiling pattern, one page
+ * 4.5 GB to draw). */
+export const SHEET_CF_PATTERN_PRINT_INK = "--sheet-cf-pattern-print-ink";
+
+export function spreadsheetFillPatternPrintInk(type: unknown, foregroundColor: unknown): string | undefined {
+  const ink = typeof type === "string" ? PATTERN_PRINT_INK[type] : undefined;
+  if (ink === undefined || typeof foregroundColor !== "string" || !SAFE_HEX_COLOR.test(foregroundColor)) return undefined;
+  return `${foregroundColor.toLowerCase()} ${ink}`;
+}
+
+/** The colour a printed tile reads as: `printInk` ("#rrggbb n") over `under`
+ * (rgb channels), n of 64 in the marks' colour. */
+export function spreadsheetFillPatternMixedPrintColor(printInk: string, under: readonly [number, number, number]): string | undefined {
+  const match = /^(#[0-9a-f]{6}) (\d{1,2})$/i.exec(printInk.trim());
+  if (!match?.[1] || !match[2]) return undefined;
+  const marks = match[1];
+  const ink = Number(match[2]);
+  if (!(ink >= 0 && ink <= 64)) return undefined;
+  return `#${[0, 1, 2]
+    .map((at) => Math.round((parseInt(marks.slice(1 + at * 2, 3 + at * 2), 16) * ink + (under[at] ?? 255) * (64 - ink)) / 64).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
 function stripes(
   backgroundColor: string,
   foregroundColor: string,

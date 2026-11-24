@@ -15,12 +15,13 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
 import { loadConfig } from "../src/config.ts";
-import type { Engine } from "../src/engine.ts";
+import type { CalculationCall, Engine } from "../src/engine.ts";
 import { fetchDocumentUrl } from "../src/fetch-url.ts";
 import { mrdocBytes } from "../src/formats.ts";
 import type { Renderer } from "../src/render.ts";
 import { createServer, VIEW_URI, type Services } from "../src/server.ts";
 import { DocumentStore } from "../src/store.ts";
+import { editorPage } from "../src/widget.ts";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
 
@@ -67,10 +68,32 @@ test("the view's tools name it, the view-only tools are hidden from the model, r
   for (const name of ["create_document", "open_document", "update_document"]) {
     assert.equal((byName.get(name)?._meta as { ui?: { resourceUri?: string } })?.ui?.resourceUri, VIEW_URI, name);
   }
-  for (const name of ["widget_load", "widget_save"]) {
+  for (const name of ["widget_load", "widget_save", "widget_calculate"]) {
     assert.deepEqual((byName.get(name)?._meta as { ui?: { visibility?: string[] } })?.ui?.visibility, ["app"], name);
   }
-  for (const name of ["get_document", "render_page", "export_document", "list_documents"]) assert.equal(byName.get(name)?.annotations?.readOnlyHint, true, name);
+  for (const name of ["get_document", "render_page", "export_document", "list_documents", "widget_calculate"]) assert.equal(byName.get(name)?.annotations?.readOnlyHint, true, name);
+  // directories reject a tool without a title or with a hint left unstated
+  for (const tool of tools) {
+    const annotations = tool.annotations ?? {};
+    assert.ok(annotations.title && annotations.title === tool.title, `${tool.name} title`);
+    for (const hint of ["readOnlyHint", "destructiveHint", "openWorldHint"] as const) assert.equal(typeof annotations[hint], "boolean", `${tool.name} ${hint}`);
+    if (annotations.readOnlyHint) assert.equal(annotations.destructiveHint, false, tool.name);
+  }
+  assert.equal(byName.get("update_document")?.annotations?.destructiveHint, true);
+  assert.equal(byName.get("open_document")?.annotations?.openWorldHint, true);
+  // a server people sign in to has no sign_in tool, and its descriptions do not send the model to one
+  for (const tool of tools) assert.doesNotMatch(tool.description ?? "", /sign_in/, tool.name);
+});
+
+test("a deployment's own view metadata is added to the view resource, never replacing its ui", async () => {
+  const svc = services();
+  const config = { ...svc.config, viewMeta: loadConfig({ MROFFICE_MCP_VIEW_META: JSON.stringify({ "host/widgetDomain": "https://mcp.example.com", ui: { domain: "x" } }) }).viewMeta };
+  const client = await connect({ ...svc, config }, true);
+  const content = (await client.readResource({ uri: VIEW_URI })).contents[0] as { _meta?: Record<string, unknown> & { ui?: { domain?: string; csp?: unknown } } };
+  assert.equal(content._meta?.["host/widgetDomain"], "https://mcp.example.com");
+  assert.ok(content._meta?.ui?.csp);
+  assert.equal(content._meta?.ui?.domain, undefined);
+  assert.throws(() => loadConfig({ MROFFICE_MCP_VIEW_META: "[1]" }), /JSON object/);
 });
 
 test("the view resource is an MCP App page that loads the editor from the declared origin", async () => {
@@ -162,6 +185,48 @@ test("a signed-in server keeps each account's documents to that account, across 
   // documents nobody saved for the retention time go
   assert.equal(svc.store.prune(24 * 3600_000, Date.now() + 2 * 24 * 3600_000), 1);
   assert.equal(text(await alice.callTool({ name: "list_documents", arguments: {} })), "No documents yet.");
+});
+
+test("the view's formulas are calculated through this server, as the account, on the calculation engine's paths only", async () => {
+  const calls: CalculationCall[] = [];
+  const engine: Partial<Engine> = {
+    calculate: async (call) => {
+      calls.push(call);
+      return { status: 200, body: '{"result":{"session":"s"}}', contentType: "application/json" };
+    },
+  };
+  const svc = services(engine);
+  const alice = await connect(svc, true, false, "user-a");
+  const made = await alice.callTool({ name: "create_document", arguments: { title: "Budget", content: "a,b\n1,=A2*2", format: "csv" } });
+  const id = (made.structuredContent as { document: { id: string } }).document.id;
+  const opened = await alice.callTool({ name: "widget_calculate", arguments: { id, path: "/api/v1/engine/sheet-calc/sessions?busy=soft", body: '{"snapshot":{}}' } });
+  assert.deepEqual(opened.structuredContent, { status: 200, body: '{"result":{"session":"s"}}', contentType: "application/json" });
+  await alice.callTool({ name: "widget_calculate", arguments: { id, method: "DELETE", path: "sessions/abcdefghijklmnop0123" } });
+  assert.deepEqual(calls, [{ method: "POST", path: "sessions?busy=soft", body: '{"snapshot":{}}' }, { method: "DELETE", path: "sessions/abcdefghijklmnop0123" }]);
+  // nothing else of the API, and not for another account's document
+  for (const path of ["../office/export", "/api/v1/engine/smartart/presentation.convert", "sessions/x/../../y", "https://elsewhere.example/a"]) {
+    const refused = await alice.callTool({ name: "widget_calculate", arguments: { id, path } });
+    assert.equal(refused.isError, true, path);
+  }
+  const bob = await connect(svc, true, false, "user-b");
+  assert.equal((await bob.callTool({ name: "widget_calculate", arguments: { id, path: "plan", body: "{}" } })).isError, true);
+  assert.equal(calls.length, 2);
+  // a server with no calculation answers as MR Office does when it is not there
+  const none = await connect(services(), true);
+  const plain = await none.callTool({ name: "create_document", arguments: { title: "B", content: "a\n1", format: "csv" } });
+  const unanswered = await none.callTool({ name: "widget_calculate", arguments: { id: (plain.structuredContent as { document: { id: string } }).document.id, path: "plan", body: "{}" } });
+  assert.equal((unanswered.structuredContent as { status: number }).status, 503);
+});
+
+test("the view's own scripts are valid and answer the calculation's requests only", async () => {
+  const svc = services();
+  for (const mode of [{ kind: "app" } as const, { kind: "page", id: "abcdefabcdef", token: "t", api: "http://127.0.0.1:3999/_mcp/api", render: false } as const]) {
+    const html = await editorPage(svc.config, mode);
+    const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1]);
+    assert.ok(inline.length >= 2);
+    for (const source of inline) assert.doesNotThrow(() => new Function(source), mode.kind);
+    assert.match(html, /answerApiRequest: function/);
+  }
 });
 
 test("open_document never fetches from this machine or a private network", async () => {

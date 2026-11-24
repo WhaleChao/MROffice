@@ -5,6 +5,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { Pilcrow, Plus, Shapes, Type } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
+import { PdfFoldingRibbonGroup } from "./PdfSurfaceRibbon";
 import { PdfInsertRibbonIcon } from "./PdfInsertRibbonIcons";
 import { OfficeWordArtPreview } from "@mrnote/core/web/components/office-ribbon/OfficeWordArtStyleGallery.tsx";
 import { OFFICE_WORDART_GALLERY_RECIPES, officeWordArtRecipeName } from "@mrnote/core/web/lib/office-wordart-gallery.ts";
@@ -881,7 +883,8 @@ export function PdfTextEditingContextRibbon({
         </OfficeHomeCommandRow>
       </OfficeHomeRibbonGroup>
 
-      <OfficeHomeRibbonGroup
+      <PdfFoldingRibbonGroup
+        collapsedIcon={<Plus size={24} aria-hidden />}
         label={labels.insert}
         ribbon="context text-format"
         testId="pdf-text-context-insert-group"
@@ -906,9 +909,10 @@ export function PdfTextEditingContextRibbon({
             variant="large"
           />
         </OfficeHomeCommandRow>
-      </OfficeHomeRibbonGroup>
+      </PdfFoldingRibbonGroup>
 
-      <OfficeHomeRibbonGroup
+      <PdfFoldingRibbonGroup
+        collapsedIcon={<Type size={24} aria-hidden />}
         label={labels.font}
         ribbon="context text-format"
         testId="pdf-text-context-font-group"
@@ -1185,9 +1189,10 @@ export function PdfTextEditingContextRibbon({
             />
           </OfficeHomeCommandRow>
         </OfficeHomeCommandStack>
-      </OfficeHomeRibbonGroup>
+      </PdfFoldingRibbonGroup>
 
-      <OfficeHomeRibbonGroup
+      <PdfFoldingRibbonGroup
+        collapsedIcon={<Pilcrow size={24} aria-hidden />}
         className={styles.statusHost}
         label={labels.paragraph}
         ribbon="context text-format"
@@ -1609,12 +1614,13 @@ export function PdfTextEditingContextRibbon({
           </OfficeHomeCommandRow>
         </OfficeHomeCommandStack>
         {status ? <div className={styles.status}>{status}</div> : null}
-      </OfficeHomeRibbonGroup>
+      </PdfFoldingRibbonGroup>
 
       {/* WPS 文本编辑: rotate and delete act on the whole text object, so they
           sit in their own group after the character/paragraph groups, not
           among the font controls. */}
-      <OfficeHomeRibbonGroup
+      <PdfFoldingRibbonGroup
+        collapsedIcon={<Shapes size={24} aria-hidden />}
         label={labels.object}
         ribbon="context text-format"
         testId="pdf-text-context-object-group"
@@ -1665,7 +1671,7 @@ export function PdfTextEditingContextRibbon({
             variant="icon"
           />
         </OfficeHomeCommandRow>
-      </OfficeHomeRibbonGroup>
+      </PdfFoldingRibbonGroup>
 
       {/* WPS: every contextual tab ends with 退出编辑. */}
       <OfficeHomeRibbonGroup

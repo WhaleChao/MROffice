@@ -5,7 +5,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-import { type ReactNode, type Ref } from "react";
+import { type ComponentProps, type ReactNode, type Ref } from "react";
 import { usePdfRibbonGroupCommands } from "./PdfOfficeRibbon";
 import { PdfRibbonGroupFlyout } from "./PdfRibbonGroupFlyout";
 import {
@@ -122,6 +122,80 @@ export function PdfSurfaceRibbonGroup({
     );
   }
   return group(commands);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+export function PdfFoldingRibbonGroup({
+  children,
+  collapsedIcon,
+  ...group
+}: ComponentProps<typeof OfficeHomeRibbonGroup> & {
+  /** The 24px glyph of the group's one button when it folds. */
+  collapsedIcon: ReactNode;
+}) {
+  const collapseId = group.testId ?? group.label;
+  const collapsed = usePdfRibbonGroupCollapsed(collapseId);
+  const dataAttributes = {
+    ...group.dataAttributes,
+    ...(group.label !== undefined && group.dataAttributes?.["data-pdf-ribbon-label"] === undefined
+      ? { "data-pdf-ribbon-label": group.label }
+      : {}),
+    ...(collapseId !== undefined ? { [PDF_RIBBON_COLLAPSIBLE_ATTRIBUTE]: collapseId } : {}),
+    ...(collapsed ? { "data-pdf-ribbon-collapsed": "true" } : {}),
+  };
+  if (!collapsed || collapseId === undefined) {
+    return (
+      <OfficeHomeRibbonGroup {...group} dataAttributes={dataAttributes}>
+        {children}
+      </OfficeHomeRibbonGroup>
+    );
+  }
+  const label = group.label ?? collapseId;
+  return (
+    // Folded: no launcher on the band (the panel's copy carries it).
+    <OfficeHomeRibbonGroup {...group} dataAttributes={dataAttributes} launcher={undefined}>
+      <OfficeHomeCommandRow className={styles.lane}>
+        <PdfRibbonGroupFlyout
+          icon={collapsedIcon}
+          label={label}
+          renderGroup={(content) => (
+            <OfficeHomeRibbonGroup
+              {...group}
+              controlId={undefined}
+              testId={group.testId ? `${group.testId}-flyout-group` : undefined}
+            >
+              {content}
+            </OfficeHomeRibbonGroup>
+          )}
+          renderTrigger={(trigger) => (
+            <PdfSurfaceRibbonCommand
+              active={trigger.active}
+              ariaExpanded={trigger.ariaExpanded}
+              ariaHasPopup="dialog"
+              buttonRef={trigger.buttonRef}
+              icon={trigger.icon}
+              label={trigger.label}
+              onClick={trigger.onClick}
+              testId={trigger.testId}
+            />
+          )}
+          testId={group.testId}
+        >
+          {children}
+        </PdfRibbonGroupFlyout>
+      </OfficeHomeCommandRow>
+    </OfficeHomeRibbonGroup>
+  );
 }
 
 export interface PdfSurfaceRibbonCommandProps {

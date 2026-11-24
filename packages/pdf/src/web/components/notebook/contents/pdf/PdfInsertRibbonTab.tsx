@@ -26,6 +26,16 @@ import PresentationTableInsertPicker from "@mrnote/slides/web/lib/presentation/T
 import { PdfInsertChartCommand } from "./PdfInsertChartCommand";
 import { PdfInsertSmartArtCommand } from "./PdfInsertSmartArtCommand";
 import PdfRibbonButton from "./PdfRibbonButton";
+import {
+  Ellipsis,
+  FilePlus,
+  Files,
+  FileStack,
+  LayoutGrid,
+  MessageSquarePlus,
+  RotateCw,
+  Shapes,
+} from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import { PdfSurfaceRibbonGroup } from "./PdfSurfaceRibbon";
 import styles from "./PdfInsertRibbonTab.module.css";
 import ribbonLayout from "./pdfRibbonLayout.module.css";
@@ -432,17 +442,20 @@ function LargeWordArtCommand({
 
 function InsertGroup({
   children,
+  collapsedIcon,
   label,
   tabs = "insert",
   testId,
 }: {
   children: ReactNode;
+  /** The group's one button on a band too narrow for it (pdfRibbonFit). */
+  collapsedIcon: ReactNode;
   label: string;
   tabs?: string;
   testId: string;
 }) {
   return (
-    <PdfSurfaceRibbonGroup label={label} tab={tabs} testId={testId}>
+    <PdfSurfaceRibbonGroup collapsedIcon={collapsedIcon} label={label} tab={tabs} testId={testId}>
       {children}
     </PdfSurfaceRibbonGroup>
   );
@@ -478,6 +491,7 @@ export default function PdfInsertRibbonTab({
       {pointerTools}
 
       <InsertGroup
+        collapsedIcon={<FilePlus size={24} aria-hidden />}
         label={groupLabels.pages}
         tabs="insert"
         testId="pdf-insert-page-decoration-group"
@@ -514,6 +528,7 @@ export default function PdfInsertRibbonTab({
 
       {pageTab ? (
         <InsertGroup
+          collapsedIcon={<Files size={24} aria-hidden />}
           label={groupLabels.pages}
           tabs="page"
           testId="pdf-page-structure-group"
@@ -531,6 +546,7 @@ export default function PdfInsertRibbonTab({
       {pageTab ? (
         <>
           <InsertGroup
+            collapsedIcon={<FileStack size={24} aria-hidden />}
             label={groupLabels.pageFiles ?? groupLabels.pages}
             tabs="page"
             testId="pdf-page-files-group"
@@ -544,6 +560,7 @@ export default function PdfInsertRibbonTab({
             ))}
           </InsertGroup>
           <InsertGroup
+            collapsedIcon={<LayoutGrid size={24} aria-hidden />}
             label={groupLabels.pageNavigation ?? groupLabels.pages}
             tabs="page"
             testId="pdf-page-navigation-group"
@@ -551,6 +568,7 @@ export default function PdfInsertRibbonTab({
             {pageTab.navigation}
           </InsertGroup>
           <InsertGroup
+            collapsedIcon={<RotateCw size={24} aria-hidden />}
             label={groupLabels.pageRotate ?? groupLabels.pages}
             tabs="page"
             testId="pdf-page-rotate-group"
@@ -565,6 +583,7 @@ export default function PdfInsertRibbonTab({
           </InsertGroup>
           {pageTab.extra ? (
             <InsertGroup
+              collapsedIcon={<Ellipsis size={24} aria-hidden />}
               label={pageTab.extra.label}
               tabs="page"
               testId="pdf-page-extra-tools-group"
@@ -580,6 +599,7 @@ export default function PdfInsertRibbonTab({
 
       {content.table || content.chart || content.text || content.equation || content.wordArt || content.image || signatureDraw.signature || content.stamp ? (
         <InsertGroup
+          collapsedIcon={<Shapes size={24} aria-hidden />}
           label={groupLabels.content}
           testId="pdf-insert-content-group"
         >
@@ -636,6 +656,7 @@ export default function PdfInsertRibbonTab({
 
       {/* WPS CT_Insertion RB_InsertTextMarks: Graffiti, Text Comment, More. */}
       <InsertGroup
+        collapsedIcon={<MessageSquarePlus size={24} aria-hidden />}
         label={groupLabels.comments}
         testId="pdf-insert-comments-group"
       >

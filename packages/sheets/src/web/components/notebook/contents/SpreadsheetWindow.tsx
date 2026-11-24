@@ -1691,6 +1691,7 @@ import {
   type SeriesType,
 } from "../../../lib/spreadsheet/fill-series";
 import {
+  SHEET_PATTERN_PRINT_FILL,
   spreadsheetFillPatternCss,
 } from "@mrnote/core/web/lib/spreadsheet/fill-pattern.ts";
 import { type CellTransformChange, type CellTransformId } from "@/lib/spreadsheet/cell-transforms";
@@ -17687,6 +17688,12 @@ function SpreadsheetWindow({
         ...conditionalStyleOverCellCss(conditional),
         ...(conditional.backgroundColor || pivotStyle.backgroundColor
           ? { backgroundImage: conditional.backgroundImage ?? "none" }
+          : {}),
+        // A rule's or the pivot's fill covers the cell's own pattern, so its
+        // printed colour goes with it (a rule's pattern prints by its own
+        // SHEET_CF_PATTERN_PRINT_INK).
+        ...(conditional.backgroundColor || conditional.backgroundImage || pivotStyle.backgroundColor
+          ? { [SHEET_PATTERN_PRINT_FILL]: undefined }
           : {}),
       });
     },

@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+- Spreadsheet formulas recalculate in the editor view, as the signed-in
+  person: the view's calculation calls go through this server (the view-only
+  tool `widget_calculate`, or `/_mcp/api/doc/<id>/calculate` for the link
+  page) to MR Office's calculation engine with the person's own token
+  (`office.convert`). On a server people sign in to, the link page calculates
+  while one of the owner's AI app connections is open. Without MR Office, the
+  view keeps showing the file's last results, as before. Needs the open
+  editors built with the host bridge's `answerApiRequest`.
+- Every tool states all three hints (`readOnlyHint`, `destructiveHint`,
+  `openWorldHint`) and a title, the view's own tools included, as connector
+  directories require; `render_page` is titled "Render a page as an image".
+- `export_document` no longer points a signed-in server's model at a
+  `sign_in` tool it does not have; `get_document` no longer reports the save
+  time.
+- `MROFFICE_MCP_VIEW_META`: a JSON object of extra `_meta` for the editor view
+  (an app's own keys, such as the origin it serves views from).
+- A server reached over the network serves `/.well-known/<name>` from
+  `<data dir>/well-known/<name>`, so a directory's ownership token can be put
+  in place without a restart.
+
 ## 0.2.0 — 2026-11-21
 
 - **MR Office as your AI's screen.** With the MR Office desktop app (Mac,

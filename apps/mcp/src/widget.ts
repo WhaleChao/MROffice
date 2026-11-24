@@ -167,7 +167,7 @@ function bridgeScript(origin: string, mode: PageMode): string {
   var waiting = [];
   var fileListeners = [];
   var commandListeners = [];
-  var transport = null; // set by the app or page script: { save(name, bytes, baseRev), edited(flag) }
+  var transport = null; // set by the app or page script: { save(name, bytes, baseRev), calculate(call), edited(flag) }
   var doc = null; // { id, rev, title, name }
   var saveTimer = null;
   var MRO = (globalThis.__mro = {
@@ -204,6 +204,35 @@ function bridgeScript(origin: string, mode: PageMode): string {
         throw error;
       });
     },
+    // The spreadsheet's formulas are calculated by MR Office's calculation
+    // engine; the editors ask the service for it (lib/api), and this page
+    // forwards those calls through this server, which makes them as the
+    // signed-in person. Anything else of the service is not here.
+    answerApiRequest: function (request) {
+      var path = String((request && request.path) || "");
+      var prefix = "/api/v1/engine/sheet-calc/";
+      var at = path.indexOf(prefix);
+      // a root-relative path, or one on an origin (scheme://host, no path of its own)
+      var before = path.slice(0, at);
+      var scheme = before.indexOf("https://") === 0 ? 8 : before.indexOf("http://") === 0 ? 7 : -1;
+      if (at < 0 || (at > 0 && (scheme < 0 || before.indexOf("/", scheme) >= 0))) return undefined;
+      if (!transport || !transport.calculate || !doc) return undefined;
+      var body = request.body;
+      if (body != null && typeof body !== "string") return undefined;
+      var call = { method: request.method === "DELETE" ? "DELETE" : "POST", path: path.slice(at + prefix.length) };
+      if (typeof body === "string") call.body = body;
+      function answer(status, text, type, retryAfter) {
+        var headers = { "content-type": type || "application/json" };
+        if (retryAfter) headers["retry-after"] = String(retryAfter);
+        return new Response(status === 204 || status === 205 || status === 304 ? null : text, { status: status, headers: headers });
+      }
+      return transport.calculate(call).then(function (data) {
+        return answer(Number(data.status) || 502, typeof data.body === "string" ? data.body : "", data.contentType, data.retryAfter);
+      }, function (error) {
+        // what the editors show as "not calculated": the last results stay
+        return answer(503, JSON.stringify({ error: { code: "engine_unavailable", message: error && error.message ? error.message : String(error) } }), "application/json", "30");
+      });
+    },
     setEdited: function (edited) {
       if (transport && transport.edited) transport.edited(edited);
       if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
@@ -224,7 +253,15 @@ function pageScript(): string {
   var base = mode.api + "/doc/" + encodeURIComponent(mode.id) + "?t=" + encodeURIComponent(mode.token);
   function toBase64(bytes) { var s = ""; for (var i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); }
   function fromBase64(text) { var s = atob(text); var out = new Uint8Array(s.length); for (var i = 0; i < s.length; i += 1) out[i] = s.charCodeAt(i); return out; }
+  var calculation = mode.api + "/doc/" + encodeURIComponent(mode.id) + "/calculate?t=" + encodeURIComponent(mode.token);
   MRO.setTransport({
+    calculate: function (call) {
+      return fetch(calculation, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(call) }).then(function (response) {
+        return response.text().then(function (text) {
+          return { status: response.status, body: text, contentType: response.headers.get("content-type"), retryAfter: response.headers.get("retry-after") || undefined };
+        });
+      });
+    },
     save: function (name, bytes, baseRev) {
       return fetch(base, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: name, base64: toBase64(bytes), baseRev: baseRev }) })
         .then(function (response) { return response.json().then(function (body) { if (!response.ok) throw new Error(body.error || ("Saving failed (" + response.status + ")")); return body; }); });
@@ -267,6 +304,14 @@ function appScript(): string {
     }).catch(function (error) { loadedId = null; MRO.status(error.message || String(error)); });
   }
   MRO.setTransport({
+    calculate: function (call) {
+      var doc = MRO.doc();
+      return app.callServerTool({ name: "widget_calculate", arguments: { id: doc.id, method: call.method, path: call.path, body: call.body } }).then(function (result) {
+        var data = result.structuredContent;
+        if (result.isError || !data) throw new Error((result.content && result.content[0] && result.content[0].text) || "The calculation could not be reached.");
+        return data;
+      });
+    },
     save: function (name, bytes, baseRev) {
       var doc = MRO.doc();
       return app.callServerTool({ name: "widget_save", arguments: { id: doc.id, name: name, base64: toBase64(bytes), baseRev: baseRev } }).then(function (result) {

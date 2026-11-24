@@ -30,6 +30,10 @@ export interface Config {
     | { readonly kind: "local-dev"; readonly apiUrl: string; readonly email: string; readonly webOrigin: string };
   /** `_meta.ui.domain` for the editor resource, when a host asks for a stable one. */
   readonly uiDomain: string | null;
+  /** More `_meta` for the editor resource (a host's own keys, such as the
+   * origin it should serve the view from), from MROFFICE_MCP_VIEW_META: a
+   * JSON object; its `ui` key, if any, is ignored (that one is this server's). */
+  readonly viewMeta: Readonly<Record<string, unknown>>;
   /** Largest file a tool takes, in bytes. */
   readonly maxFileBytes: number;
   /** `oauth`: the HTTP side's MCP endpoint takes only callers signed in to MR
@@ -50,6 +54,19 @@ export interface Config {
 
 function trimSlash(value: string): string {
   return value.replace(/\/+$/, "");
+}
+
+function jsonObject(name: string, value: string | undefined): Record<string, unknown> {
+  if (!value) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error(`${name} is not JSON`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(`${name} must be a JSON object`);
+  const { ui: _ignored, ...rest } = parsed as Record<string, unknown>;
+  return rest;
 }
 
 function positive(value: string | undefined): number | undefined {
@@ -90,6 +107,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     webAppUrl: trimSlash(env.MROFFICE_MCP_WEB_APP_URL || "https://mroffice.ai"),
     engine,
     uiDomain: env.MROFFICE_MCP_UI_DOMAIN || null,
+    viewMeta: jsonObject("MROFFICE_MCP_VIEW_META", env.MROFFICE_MCP_VIEW_META),
     maxFileBytes: Number(env.MROFFICE_MCP_MAX_FILE_BYTES || 20 * 1024 * 1024),
     allowPrivateUrls: env.MROFFICE_MCP_ALLOW_PRIVATE_URLS === "1",
     auth,

@@ -26,6 +26,11 @@ export interface DesktopBridge {
   openDropped(files: File[]): Promise<number>;
   saveFile(request: { handle?: string | null; name: string; bytes: Uint8Array; saveAs?: boolean }): Promise<{ handle: string; name: string; written: boolean } | null>;
   setEdited(edited: boolean): void;
+  /** Optional: a host that reaches part of MR Office's service answers the
+   * editors' requests for it (lib/api, before refusing them): the MCP editor
+   * view forwards a spreadsheet's calculation. A Response, or undefined for
+   * a request it does not take. */
+  answerApiRequest?(request: { readonly method: string; readonly path: string; readonly body: unknown }): Promise<Response> | undefined;
 }
 
 export function desktopBridge(): DesktopBridge | null {

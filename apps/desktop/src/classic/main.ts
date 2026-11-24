@@ -143,6 +143,7 @@ import {
   WEB_LATE_ENV,
   webEnv,
 } from "./services";
+import { stopWasAsked } from "./service-stops";
 import { printerEnabled, startPrinter } from "./printer";
 import { PRODUCT, productDisplayName, productWords } from "./product";
 import { officeSurfaceRedirect, withOfficeSurface } from "./surface";
@@ -1779,7 +1780,9 @@ function startServices(known: Promise<void>, early: boolean): { spawned: Promise
 
 function watchService(service: Service): void {
   service.child.once("exit", (code) => {
-    if (quitting) return;
+    // A stop this app asked for (a Windows quit asks the API first, before
+    // it is marked quitting: ./service-stops.ts) is not a crash.
+    if (quitting || stopWasAsked(service)) return;
     countUsage("service_crashes");
     void serviceStopped(service.name, code);
   });

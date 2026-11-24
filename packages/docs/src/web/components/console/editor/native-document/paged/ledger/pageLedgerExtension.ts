@@ -324,6 +324,12 @@ export function seamWanderStops(view: EditorView): boolean {
 /** `window.__docsSeamRecutPutBackHeld = true`: the pass after a seam was cut
  * again is held like any plan that puts the last one's pages back, as before
  * (an A/B of one build). */
+/** `window.__docsLedgerPinReturnsOff = true` (A/B): a page that came back is
+ * moved again whenever a plan says so, as before. */
+function pinReturnsOff(view: EditorView): boolean {
+  return (view.dom.ownerDocument.defaultView as (Window & { __docsLedgerPinReturnsOff?: boolean }) | null)?.__docsLedgerPinReturnsOff === true;
+}
+
 function seamRecutPutBackHeld(view: EditorView): boolean {
   return (view.dom.ownerDocument.defaultView as (Window & { __docsSeamRecutPutBackHeld?: boolean }) | null)?.__docsSeamRecutPutBackHeld === true;
 }
@@ -1851,7 +1857,19 @@ function finishLedgerPass(
     traceLedgerPass(view, { putBack: { held: putsBack, sameDoc, editSeq: [last.editSeq, authoredEditSeq(view)], afterIsCurrent: last.after.join("/") === currentStarts.join("/"), capacitiesHeld, flips: last.capacityFlips, docDiff } });
   }
   const alternates = putsBack && (capacitiesHeld || last!.capacityFlips >= 1);
-  const cycle = alternates ? earlierOpening(plannedStarts, currentStarts) : null;
+  // A page that came back once and would now go round again is held where it
+  // stands, whatever else the inputs did (ledgerTwitch.wouldGoRoundAgain): the
+  // put-back reading above needs the last dispatch to be that page's, and on
+  // a document whose pages alternate out of step it never was.
+  // Only while the pages have the room they had (a header measured late, a
+  // face arriving, changes what fits: that is no alternation).
+  // A plan with fewer pages is not held: a cycle between a layout and the
+  // same with one more page keeps the shorter one (as below), and holding the
+  // longer one froze R494-D36 at 9 pages in 2 of 8 runs (Word 8).
+  const goesRound = !alternates && capacitiesHeld && plannedStarts.length >= currentStarts.length && !pinReturnsOff(view)
+    ? twitchWatches.get(view)?.wouldGoRoundAgain(currentStarts, plannedStarts, authoredEditSeq(view)) ?? null
+    : null;
+  const cycle = alternates ? earlierOpening(plannedStarts, currentStarts) : goesRound !== null ? { page: goesRound, aEarlier: false } : null;
   // A cycle between two layouts of as many pages keeps the one that opens
   // the page where they differ earlier (the block moved whole to the next
   // page, as Word moves a list item that does not fit). A cycle between a

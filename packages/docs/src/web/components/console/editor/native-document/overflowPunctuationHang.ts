@@ -59,6 +59,25 @@ function eastAsianHangOff(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsEastAsianHangOff?: boolean }).__docsEastAsianHangOff === true;
 }
 
+/**
+ * Whether the mark at `index` may end a line: a stop or a comma with a letter
+ * or a digit right after it is inside its word ("0.01004", "3,5", "e.g"), and
+ * no line ends there in Word or in the engine (docs-lines breaks at a word's
+ * end; in mode 14 its `closesWord`). Hung there, the decimal point of a number
+ * opening a line pulled the number up onto the line above, the engine's line
+ * breaks took it back down, the hang came off and the next measure hung it
+ * again: R461-D71's R output listings ("## theta:  4.82994 -0.08837 ...")
+ * rewrote their lines every 50-100 ms in a still document.
+ * `window.__docsHangInsideWordOff = true` hangs such marks as before (A/B).
+ */
+export function hangingMarkEndsWord(texts: readonly string[], index: number): boolean {
+  if (typeof window !== "undefined" && (window as Window & { __docsHangInsideWordOff?: boolean }).__docsHangInsideWordOff === true) return true;
+  const mark = texts[index];
+  if (mark !== "." && mark !== ",") return true;
+  const next = texts[index + 1];
+  return !next || !/^[\p{L}\p{N}]$/u.test(next) || KINSOKU_EAST_ASIAN.test(next);
+}
+
 /** Paragraphs per frame, so a long document does not stall on first measure. */
 const BLOCKS_PER_SLICE = 60;
 
@@ -235,6 +254,7 @@ function measureBlock(
     const at = chars[index];
     if (at < 0 || !(HANGING.has(texts[index]!) || (eastAsianMarks && EAST_ASIAN_HANGING.has(texts[index]!) &&
       (FULL_WIDTH.test(texts[index]!) || KINSOKU_EAST_ASIAN.test(texts[index - 1] ?? ""))))) continue;
+    if (!hangingMarkEndsWord(texts, index)) continue;
     const mark = charBox(view, at, locate);
     if (!mark) continue;
     const width = mark.right - mark.left;

@@ -1,5 +1,4 @@
 "use client";
-
 /*!
  * MR Office - https://mroffice.ai
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only

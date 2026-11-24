@@ -31,6 +31,7 @@
  * the pages on its own — pagination is derived structure, never history.
  */
 
+import { splitTailIdAttrs } from "../blockIds";
 import { paragraphKeepFlag } from "../paragraphPagination";
 import { Fragment } from "@tiptap/pm/model";
 import { joinPieces } from "./pieceJoin";
@@ -1697,6 +1698,7 @@ export function applyCodeBlockSplit(
       type: block.type,
       attrs: {
         ...block.attrs,
+        ...splitTailIdAttrs(block.attrs, cutPos - blockPos - 1),
         [SPLIT_CONTINUATION_ATTR]: true,
         // Re-cutting a fragment that already continues (the middle of a
         // paragraph three or more pages cut) keeps its successor: the new
@@ -1751,6 +1753,7 @@ export function applyOverflowSplit(
       type: block.type,
       attrs: {
         ...block.attrs,
+        ...splitTailIdAttrs(block.attrs, cutPos - blockPos - 1),
         [SPLIT_CONTINUATION_ATTR]: true,
         // Re-cutting a fragment that already continues (the middle of a
         // paragraph three or more pages cut) keeps its successor: the new
@@ -1808,6 +1811,7 @@ export function applyCodeBlockColumnSplit(
       type: block.type,
       attrs: {
         ...block.attrs,
+        ...splitTailIdAttrs(block.attrs, cutPos - blockPos - 1),
         [SPLIT_CONTINUATION_ATTR]: true,
         // Re-cutting a fragment that already continues (the middle of a
         // paragraph three or more pages cut) keeps its successor: the new
@@ -1941,6 +1945,7 @@ export function applyTextBlockSplit(
       type: block.type,
       attrs: {
         ...block.attrs,
+        ...splitTailIdAttrs(block.attrs, cutPos - blockPos - 1),
         // The tail is a runtime projection of the same logical heading, not a
         // second navigation target. The head retains the stable identities;
         // serialization merges the tail content back into it.
@@ -2000,6 +2005,7 @@ export function applyTextBlockOverflowSplit(
       type: block.type,
       attrs: {
         ...block.attrs,
+        ...splitTailIdAttrs(block.attrs, cutPos - blockPos - 1),
         ...(block.type.name === "heading"
           ? { anchor_id: null, toc_anchor_id: null }
           : {}),
@@ -2050,6 +2056,7 @@ export function applyTextBlockColumnSplit(
       type: block.type,
       attrs: {
         ...block.attrs,
+        ...splitTailIdAttrs(block.attrs, cutPos - blockPos - 1),
         ...(block.type.name === "heading"
           ? { anchor_id: null, toc_anchor_id: null }
           : {}),

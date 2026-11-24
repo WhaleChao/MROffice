@@ -6,7 +6,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { Loader2 } from "lucide-react";
-import { Languages, ShieldCheck } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
+import { BookOpen, FolderOpen, Languages, ShieldCheck } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import { type ReactNode, useRef } from "react";
 
 import {
@@ -658,7 +658,11 @@ export default function PdfHomeCompactRibbon({
     <>
       {pointerTools}
 
-      <HomeGroup label={groupLabels.file} testId="pdf-home-file-tools">
+      <HomeGroup
+        collapsedIcon={<FolderOpen size={24} aria-hidden />}
+        label={groupLabels.file}
+        testId="pdf-home-file-tools"
+      >
         <>
           <div
             className={`pdf-home-segment-item ${styles.segment}`}
@@ -721,7 +725,11 @@ export default function PdfHomeCompactRibbon({
         </>
       </HomeGroup>
 
-      <HomeGroup label={groupLabels.view} testId="pdf-home-reader-tools">
+      <HomeGroup
+        collapsedIcon={<BookOpen size={24} aria-hidden />}
+        label={groupLabels.view}
+        testId="pdf-home-reader-tools"
+      >
         <>
           <CommandSlot controlId="play" command={commands.play} icon="play" />
           <div
