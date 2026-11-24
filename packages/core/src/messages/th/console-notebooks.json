@@ -5697,6 +5697,7 @@
  "presentation.deleteSlideKeepOne": "งานนำเสนอต้องมีสไลด์อย่างน้อยหนึ่งสไลด์",
  "presentation.duplicateSlide": "ทำสำเนาสไลด์",
  "presentation.slideCopyUnavailable": "ยังทำสำเนาสไลด์นี้ไม่ได้ในขณะนี้ โปรดลองอีกครั้งในอีกสักครู่",
+ "presentation.newSlideNoPackageSlide": "ไม่มีสไลด์จากไฟล์ต้นฉบับเหลืออยู่เพื่อให้เค้าโครงแก่สไลด์ใหม่",
  "presentation.slideCopyRebuilt": "สำเนานี้สร้างใหม่จากเนื้อหาในหน้า ภาพเคลื่อนไหวและรายละเอียดอื่นอาจไม่ครบ",
  "presentation.undo": "เลิกทำ",
  "presentation.formatPainter": "ตัวคัดวางรูปแบบ (ดับเบิลคลิกเพื่อให้ทำงานต่อเนื่อง)",

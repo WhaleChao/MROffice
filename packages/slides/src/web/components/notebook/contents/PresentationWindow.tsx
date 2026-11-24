@@ -1003,6 +1003,7 @@ import {
   type Point,
 } from "@mrnote/core/web/lib/presentation-polygon-points.ts";
 import { toast } from "@mrnote/core/web/hooks/use-toast.ts";
+import { ToastAction } from "@mrnote/core/web/components/ui/toast.tsx";
 import { reportClientError } from "@mrnote/core/web/lib/errors/report-beacon.ts";
 import { LibreOfficeNeededText, libreOfficeToastAction } from "@mrnote/core/web/components/console/LibreOfficeEnableAction.tsx";
 import { canEnableLibreOfficeFor } from "@mrnote/core/web/lib/desktop-libreoffice.ts";
@@ -1383,7 +1384,7 @@ import {
   distributeBlocksToSlideOrSelection,
   distributeMinimumTargets,
 } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
-import { presentationDefaultNewSlideLayout, presentationDeckHasNativePptxSource, presentationDuplicateSlideIsWritable, presentationNewSlideFromLayoutIsWritable, presentationSlideHasNativePptxSource, presentationSlideLayoutCommandsAreWritable, presentationSlideNativeLayoutReceipt, presentationSlideResetIsWritable, headerFooterAfterDialog, slideWithNotes, SPEAKER_NOTES_MAX_LENGTH, type PresentationHeaderFooterDialogDraft, slideAfterReset, slideWithLayout, slidesWithNewSlideFromLayout } from "@mrnote/core/web/lib/presentation-slide-buttons.ts";
+import { presentationDefaultNewSlideLayout, presentationDeckHasNativePptxSource, presentationDuplicateSlideIsWritable, presentationNewSlideVouchingSlide, presentationNewSlideFromLayoutIsWritable, presentationSlideHasNativePptxSource, presentationSlideLayoutCommandsAreWritable, presentationSlideNativeLayoutReceipt, presentationSlideResetIsWritable, headerFooterAfterDialog, slideWithNotes, SPEAKER_NOTES_MAX_LENGTH, type PresentationHeaderFooterDialogDraft, slideAfterReset, slideWithLayout, slidesWithNewSlideFromLayout } from "@mrnote/core/web/lib/presentation-slide-buttons.ts";
 import {
   formatTextBlockRunSelection,
   type LiveTextSelection,
@@ -2262,7 +2263,7 @@ import {
   usePresentationNormalViewPanes,
   writePresentationCommentsPaneOpen,
 } from "./presentation/PresentationNormalViewPanes";
-import { PresentationCanvasTextBlock } from "./presentation/PresentationCanvasTextBlock";
+import { PresentationCanvasTextBlock, type EditingHostHandover } from "./presentation/PresentationCanvasTextBlock";
 import { PresentationCanvasEmbedBlock } from "./presentation/PresentationCanvasEmbedBlock";
 import { PresentationCanvasShapeBlock } from "./presentation/PresentationCanvasShapeBlock";
 import { PresentationCanvasTableBlock } from "./presentation/PresentationCanvasTableBlock";
@@ -2580,6 +2581,9 @@ interface PresentationTypingBurst {
 
 /** The window draws typed letters when the typing pauses this long… */
 const TYPING_RENDER_AFTER_PAUSE_MS = 260;
+/** How long a body taken away under the caret keeps it for the box that takes
+ * its place (`EditingHostHandover`): a part read again can take seconds. */
+const EDITING_HOST_HANDOVER_MS = 30_000;
 /** …and at the latest this long after the first of them. */
 const TYPING_RENDER_AT_LEAST_EVERY_MS = 4_000;
 /** The letters go to the rooms and the save this often meanwhile. */
@@ -19154,8 +19158,42 @@ export default function PresentationWindow({
     if (deckRoomsUndoRef.current) deckRoomHistory.step(apply);
     else apply();
   }, [deckRoomHistory]);
+  // A part room whose typing a write of the server's could not take in
+  // (`part_room_write_conflict`): its save is refused, and the face says
+  // "unsaved" while the room still holds that typing -- never "Saved" over
+  
+  const [deckRoomWriteConflict, setDeckRoomWriteConflict] = useState(false);
   const onDeckRoomRefused = useCallback((code: string) => {
+    if (code === "part_room_write_conflict") {
+      // Settled at once (useDeckPageParts); said when it is, or when it fails.
+      setDeckRoomWriteConflict(true);
+      return;
+    }
     toast({ title: t("presentation.deckParts.roomRefused"), description: code });
+  }, [t]);
+  // The settlement of a held room: the member's version of a slide the
+  // server's write changed too is kept as a copy after it (keepDeckPartCopies
+  // says so, "Your version"); failed or unanswered, the words stay in the
+  // room and on this device, the face says "unsaved" and the member can try
+  // again -- never left waiting on nothing.
+  const onDeckRoomWriteConflict = useCallback((
+    outcome: { readonly state: "resolved"; readonly copies: number } | { readonly state: "failed"; readonly retry: () => void },
+  ) => {
+    if (outcome.state === "resolved") {
+      setDeckRoomWriteConflict(false);
+      return;
+    }
+    setDeckRoomWriteConflict(true);
+    toast({
+      variant: "destructive",
+      title: t("presentation.deckParts.roomRefused"),
+      action: (
+        <ToastAction altText={t("presentation.deckParts.retry")} data-testid="presentation-room-conflict-retry"
+          onClick={() => outcome.retry()}>
+          {t("presentation.deckParts.retry")}
+        </ToastAction>
+      ),
+    });
   }, [t]);
   deckRoomHistoryPartialRef.current = () => {
     toast({ title: t("presentation.deckParts.undoPartial") });
@@ -19247,6 +19285,7 @@ export default function PresentationWindow({
     onRoomsChanged: touchDeckRoomHistory,
     ownRoomStep: deckOwnRoomStep,
     onRoomRefused: onDeckRoomRefused,
+    onRoomWriteConflict: onDeckRoomWriteConflict,
     // A part's text that could not be merged without a guess: a conflict (TRIAGE 47).
     onTextMergeRefused: () => autosave.noteTextMergeRefused?.(),
   });
@@ -19271,6 +19310,7 @@ export default function PresentationWindow({
   const deckSaveStatusPlain = autosave.saveStatus === "unsaved" && autosave.guaranteedRetrying ? "saving"
     : autosave.saveStatus !== "saved" ? autosave.saveStatus
     : deckPartsView.structureRefused() ? "unsaved"
+    : deckRoomWriteConflict && [...deckPartsView.rooms().values()].some((room) => room.unsaved) ? "unsaved"
       // The server's write of the room into the page has not come (or failed).
       : deckRoomsAwaitingServer || autosave.roomFoldBehind === true ? "saving" : autosave.saveStatus;
   const deckGapFace = gapSaveFace(deckGap, deckSaveStatusPlain);
@@ -22708,6 +22748,37 @@ export default function PresentationWindow({
     }
     return null;
   }, []);
+  // The caret of a body being typed in, taken away with the focus
+  // (`EditingHostHandover`): kept for the box that takes its place on the
+  // same slide while the member has not put the focus anywhere since (a
+  // press clears it), for as long as a part's read may keep the box away.
+  const lostEditingHostRef = useRef<{
+    blockId: string;
+    slideId: string | undefined;
+    caret: { text: string; start: number; end: number };
+    at: number;
+  } | null>(null);
+  const editingHostHandover = useMemo<EditingHostHandover>(() => ({
+    lost: (blockId, caret) => {
+      lostEditingHostRef.current = {
+        blockId, caret, slideId: slidesRef.current[activeIndexRef.current]?.id, at: performance.now(),
+      };
+      if (coeditTraceOn()) coeditTrace("editing-host-lost", { blockId, start: caret.start, end: caret.end });
+    },
+    take: (blockId) => {
+      const lost = lostEditingHostRef.current;
+      if (!lost || lost.blockId !== blockId) return null;
+      lostEditingHostRef.current = null;
+      if (
+        performance.now() - lost.at > EDITING_HOST_HANDOVER_MS ||
+        slidesRef.current[activeIndexRef.current]?.id !== lost.slideId ||
+        selectedBlockIdRef.current !== blockId
+      ) return null;
+      if (coeditTraceOn()) coeditTrace("editing-host-back", { blockId, start: lost.caret.start, end: lost.caret.end });
+      return lost.caret;
+    },
+    isFallback: (element) => element === slideCanvasRef.current,
+  }), []);
   const pendingImportedPreviewCaret = useCallback((blockId: string) => {
     const pending = pendingPreviewCaretRef.current;
     return pending &&
@@ -22906,6 +22977,8 @@ export default function PresentationWindow({
     };
     const onPointer = () => {
       deliveredBodyCaretRef.current = null;
+      // The member puts the focus somewhere: a box taken away gives it no caret back.
+      lostEditingHostRef.current = null;
       draw();
     };
     const onHidden = () => {
@@ -48257,6 +48330,15 @@ export default function PresentationWindow({
         "title-content",
       ),
   );
+  // Why New Slide is off on an imported deck with no slide of the file left
+  // to give it its layout (`presentationNewSlideVouchingSlide`).
+  const slideRailMenuAddSlideReason =
+    !slideRailMenuCanAddSlide &&
+    slideRailMenuTargetSlide &&
+    presentationDeckHasNativePptxSource(slides) &&
+    !presentationNewSlideVouchingSlide(slides, slideRailMenuTargetSlide)
+      ? t("presentation.newSlideNoPackageSlide")
+      : undefined;
   const slideRailMenuSelectedIds =
     slideRailMenu?.kind === "slide" && slideRailMenu.slideIds && slideRailMenu.slideIds.length > 1
       ? slideRailMenu.slideIds
@@ -53596,6 +53678,7 @@ export default function PresentationWindow({
                         restoreImportedPreviewSelectionAfterCommit,
                         pendingImportedPreviewCaret,
                         heldBlockWords,
+                        editingHostHandover,
                         commitImportedPreviewText,
                         replaceImportedPreviewSelection,
                         clearLiveRibbonList,
@@ -53955,6 +54038,7 @@ export default function PresentationWindow({
                   slideRailMenuTargetSlide,
                   slideRailMenuSectionIndex,
                   slideRailMenuCanAddSlide,
+                  slideRailMenuAddSlideReason,
                   slideRailMenuSelectedIds,
                   slideRailMenuCanDuplicate,
                   slideRailMenuCanCut,

@@ -5697,6 +5697,7 @@
  "presentation.deleteSlideKeepOne": "Bản trình bày phải giữ lại ít nhất một trang chiếu.",
  "presentation.duplicateSlide": "Nhân bản trang chiếu",
  "presentation.slideCopyUnavailable": "Hiện không thể nhân bản trang chiếu này. Hãy thử lại sau giây lát.",
+ "presentation.newSlideNoPackageSlide": "Không còn trang chiếu nào từ tệp gốc để cung cấp bố cục cho trang chiếu mới.",
  "presentation.slideCopyRebuilt": "Bản sao này được tạo lại từ nội dung trang nên hoạt ảnh và các chi tiết tương tự có thể bị thiếu.",
  "presentation.undo": "Hoàn tác",
  "presentation.formatPainter": "Sao chép định dạng (bấm đúp để giữ bật)",

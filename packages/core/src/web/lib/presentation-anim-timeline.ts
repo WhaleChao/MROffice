@@ -1686,6 +1686,10 @@ export function hasEditableSlideAnimationSource(source: unknown): boolean {
         : []),
       // On one element of a chart (row 1080).
       ...(entry.chartElement !== undefined && normalizeChartElement(entry.chartElement) ? ["chartElement"] : []),
+      // An Appear shown at the end of its duration (row 1088).
+      ...(entry.appearAtEnd === true ? ["appearAtEnd"] : []),
+      // A placeholder effect node (row 1091).
+      ...(entry.placeholderNode === true ? ["placeholderNode"] : []),
       ...(entry.triggerNativeShapeId === undefined
         ? []
         : ["triggerNativeShapeId"]),
@@ -1943,6 +1947,20 @@ export interface TimelineStep {
    * brings the chart in with its first element's step.
    */
   chartElement?: TimelineChartElement;
+  /**
+   * An Appear shown at the END of its duration, not at its start (row 1088:
+   * PowerPoint's Appear whose visibility set starts a millisecond before the
+   * effect's end; PowerPoint reports it as lasting that long). Only ever
+   * `true`, only on an Appear.
+   */
+  appearAtEnd?: true;
+  /**
+   * PowerPoint's placeholder effect node (`nodePh="1"`, ending at its own
+   * begin) inside a click group with other effects, which PowerPoint plays
+   * as any other (row 1091): kept so the step is written back so. Only ever
+   * `true`; the show plays the step as it is.
+   */
+  placeholderNode?: true;
   /**
    * A motion path as PowerPoint wrote it (row 1078): its preset, its path
    * and its point types, rotation and rotation centre, carried exactly so an
@@ -2378,6 +2396,8 @@ export function validateStep(
     step.diagramElement = record.diagramElement;
   }
   // On one element of a chart (row 1080): exactly as PowerPoint wrote it.
+  if (record.appearAtEnd === true && step.animation === "appear") step.appearAtEnd = true;
+  if (record.placeholderNode === true) step.placeholderNode = true;
   const chartElement = normalizeChartElement(record.chartElement);
   if (chartElement && record.targetGroup !== true && step.diagramElement === undefined) {
     step.chartElement = chartElement;
@@ -3034,6 +3054,8 @@ export function timelineStepsEqual(
     left.background !== right.background ||
     left.diagramElement !== right.diagramElement ||
     JSON.stringify(left.chartElement ?? null) !== JSON.stringify(right.chartElement ?? null) ||
+    left.appearAtEnd !== right.appearAtEnd ||
+    left.placeholderNode !== right.placeholderNode ||
     left.paragraphs?.start !== right.paragraphs?.start ||
     left.paragraphs?.end !== right.paragraphs?.end ||
     left.motionPath?.preset !== right.motionPath?.preset ||

@@ -2381,14 +2381,18 @@ function shiftChartObjectA1(
   return isErasedA1Range(next) ? "#REF!" : next;
 }
 
-/** The areas of a reference union a chart series names, `(Sheet1!$A$1,Sheet1!$A$5)`;
- *  null for any other reference. Commas inside a quoted sheet name are its own. */
+/** The areas of a reference union a chart series names, `(Sheet1!$A$1,Sheet1!$A$5)`,
+ *  or written without the brackets (`'Raw Bulk composition '!$S$14:$S$18,'Raw Bulk
+ *  composition '!$S$19:$S$20`, R483-X01); null for any other reference. Commas
+ *  inside a quoted sheet name are its own. */
 function chartReferenceUnionAreas(ref: string): string[] | null {
-  if (!ref.startsWith("(") || !ref.endsWith(")")) return null;
+  const wrapped = ref.startsWith("(") && ref.endsWith(")");
+  const first = wrapped ? 1 : 0;
+  const end = wrapped ? ref.length - 1 : ref.length;
   const areas: string[] = [];
   let quoted = false;
-  let start = 1;
-  for (let index = 1; index < ref.length - 1; index += 1) {
+  let start = first;
+  for (let index = first; index < end; index += 1) {
     const char = ref[index];
     if (char === "'") quoted = !quoted;
     else if (char === "," && !quoted) {
@@ -2396,8 +2400,8 @@ function chartReferenceUnionAreas(ref: string): string[] | null {
       start = index + 1;
     }
   }
-  areas.push(ref.slice(start, ref.length - 1));
-  return areas.length > 1 && areas.every((area) => area.length > 0) ? areas : null;
+  areas.push(ref.slice(start, end));
+  return areas.length > 1 && areas.every((area) => area.length > 0 && !area.includes("(")) ? areas : null;
 }
 
 
@@ -2414,7 +2418,8 @@ function shiftChartSeriesA1(
   const areas = chartReferenceUnionAreas(ref);
   if (areas) {
     const moved = areas.map((area) => shiftChartSeriesA1(area, axis, at, delta, scope));
-    return moved.every((area, index) => area === areas[index]) ? ref : `(${moved.join(",")})`;
+    if (moved.every((area, index) => area === areas[index])) return ref;
+    return ref.startsWith("(") ? `(${moved.join(",")})` : moved.join(",");
   }
   const next = shiftChartObjectA1(ref, axis, at, delta, scope);
   if (next !== "#REF!" || ref.startsWith("(")) return next;

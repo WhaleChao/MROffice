@@ -6220,6 +6220,7 @@
  "presentation.deleteSlideKeepOne": "演示文稿至少要保留一张幻灯片。",
  "presentation.duplicateSlide": "复制幻灯片",
  "presentation.slideCopyUnavailable": "暂时无法复制这张幻灯片，请稍后再试",
+ "presentation.newSlideNoPackageSlide": "原文件里的幻灯片都已不在，新幻灯片无法取得版式。",
  "presentation.slideCopyRebuilt": "这张副本是按页面内容重建的，动画等可能不全。",
  "presentation.undo": "撤消",
  "presentation.formatPainter": "格式刷（双击可连续使用）",

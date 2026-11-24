@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "O prezentare păstrează cel puțin un diapozitiv.",
  "presentation.duplicateSlide": "Duplicare diapozitiv",
  "presentation.slideCopyUnavailable": "Acest diapozitiv nu poate fi duplicat acum. Încercați din nou peste un moment.",
+ "presentation.newSlideNoPackageSlide": "Nu a mai rămas niciun diapozitiv din fișierul original de la care un diapozitiv nou să preia aspectul.",
  "presentation.slideCopyRebuilt": "Această copie a fost reconstruită din pagină, astfel încât animațiile și alte detalii similare pot lipsi.",
  "presentation.undo": "Anulare",
  "presentation.formatPainter": "Descriptor de formate (dublu clic pentru a rămâne activ)",

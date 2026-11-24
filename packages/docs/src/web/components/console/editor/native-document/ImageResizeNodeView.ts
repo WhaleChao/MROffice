@@ -558,6 +558,14 @@ function inlineImagePageFrame(
  * measurement. The authored node attrs and inline image styles are untouched;
  * CSS variables win only while the runtime marker is present.
  */
+/** Writes the page fit of inline pictures made (refreshInlineImagePageProjection):
+ * the page ledger projects a sheet's column tracks a second time only when its
+ * pictures' fit changed in between. */
+let inlineImageProjectionWriteCount = 0;
+export function inlineImageProjectionWrites(): number {
+  return inlineImageProjectionWriteCount;
+}
+
 export function refreshInlineImagePageProjection(
   node: ProseMirrorNode,
   wrapper: HTMLElement,
@@ -575,16 +583,24 @@ export function refreshInlineImagePageProjection(
   const pastLine = lineExtent !== null && lineExtent > contentBoxWidth(inlinePictureHost(node, wrapper)!);
   const apply = (name: string, value: string | null) => {
     if (value === null) {
-      if (wrapper.hasAttribute(name)) wrapper.removeAttribute(name);
+      if (wrapper.hasAttribute(name)) {
+        wrapper.removeAttribute(name);
+        inlineImageProjectionWriteCount += 1;
+      }
     } else if (wrapper.getAttribute(name) !== value) {
       wrapper.setAttribute(name, value);
+      inlineImageProjectionWriteCount += 1;
     }
   };
   const applyVar = (name: string, value: string | null) => {
     if (value === null) {
-      if (wrapper.style.getPropertyValue(name)) wrapper.style.removeProperty(name);
+      if (wrapper.style.getPropertyValue(name)) {
+        wrapper.style.removeProperty(name);
+        inlineImageProjectionWriteCount += 1;
+      }
     } else if (wrapper.style.getPropertyValue(name) !== value) {
       wrapper.style.setProperty(name, value);
+      inlineImageProjectionWriteCount += 1;
     }
   };
   apply("data-page-fit-inline-image", fit ? "true" : null);

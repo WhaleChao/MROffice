@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "يحتفظ العرض التقديمي بشريحة واحدة على الأقل.",
  "presentation.duplicateSlide": "تكرار الشريحة",
  "presentation.slideCopyUnavailable": "لا يمكن تكرار هذه الشريحة حاليًا. حاول مرة أخرى بعد قليل.",
+ "presentation.newSlideNoPackageSlide": "لم تبقَ أي شريحة من الملف الأصلي لتمنح الشريحة الجديدة تخطيطها.",
  "presentation.slideCopyRebuilt": "أُعيد إنشاء هذه النسخة من الصفحة، لذا قد تكون الحركات والتفاصيل المشابهة مفقودة.",
  "presentation.undo": "تراجع",
  "presentation.formatPainter": "نسخ التنسيق (انقر نقرًا مزدوجًا لإبقائه قيد التشغيل)",

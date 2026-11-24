@@ -222,16 +222,63 @@ export function presentationDeckNativeNewSlideGraphIsWritable(
   );
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function presentationNewSlideVouchingSlide<S extends PresentationButtonSlide>(
+  slides: readonly S[],
+  anchor: S | undefined,
+): S | undefined {
+  if (!anchor) return undefined;
+  if (presentationSlideNativeLayoutReceipt(anchor)) return anchor;
+  const insertion = parseNativeSlideInsertionReceipt(asRecord(anchor.source)?.nativeSlideInsertion);
+  const master =
+    insertion?.masterPart ?? (typeof anchor.masterId === "string" && anchor.masterId ? anchor.masterId : undefined);
+  const vouches = (slide: S) => {
+    const receipt = presentationSlideNativeLayoutReceipt(slide);
+    return Boolean(receipt && (master === undefined || receipt.masterPart === master));
+  };
+  if (insertion) {
+    const own = slides.find((slide) => asRecord(slide.source)?.slideId === insertion.anchorSlideId);
+    if (own && vouches(own)) return own;
+  }
+  const at = slides.indexOf(anchor);
+  let best: S | undefined;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  slides.forEach((slide, index) => {
+    if (slide === anchor || !vouches(slide)) return;
+    // Nearest; of two as near, the one before.
+    const distance = at < 0 ? index : Math.abs(index - at) * 2 + (index > at ? 1 : 0);
+    if (distance < bestDistance) {
+      best = slide;
+      bestDistance = distance;
+    }
+  });
+  return best;
+}
+
 export function presentationNewSlideFromLayoutIsWritable(
   slides: readonly PresentationButtonSlide[],
   activeSlide: PresentationButtonSlide | undefined,
   layoutValue: unknown,
 ): boolean {
   if (!presentationDeckHasNativePptxSource(slides)) return true;
+  const vouching = presentationNewSlideVouchingSlide(slides, activeSlide);
   return Boolean(
-    activeSlide &&
+    vouching &&
     presentationDeckNativeNewSlideGraphIsWritable(slides) &&
-    nativeSlideCanInsertLayout(activeSlide, layoutValue),
+    nativeSlideCanInsertLayout(vouching, layoutValue),
   );
 }
 
@@ -256,7 +303,9 @@ export function presentationDefaultNewSlideLayout(
   ) {
     return "title-content";
   }
-  const receipt = presentationSlideNativeLayoutReceipt(activeSlide);
+  const receipt = presentationSlideNativeLayoutReceipt(
+    presentationNewSlideVouchingSlide(slides, activeSlide),
+  );
   const currentLayoutPart =
     typeof activeSlide?.layoutId === "string"
       ? activeSlide.layoutId
@@ -297,8 +346,17 @@ export function presentationDuplicateSlideIsWritable(
   activeSlide: PresentationButtonSlide | undefined,
 ): boolean {
   if (!presentationDeckHasNativePptxSource(slides)) return Boolean(activeSlide);
+  if (!activeSlide) return false;
+  if (canRequestNativeSlideCopy(activeSlide)) return true;
+  // A slide New Slide or Duplicate made (its own insertion receipt): its copy
+  // is another such slide, on the same layout, under the same receipt
+  // (`duplicatePresentationSlideAt`), as PowerPoint duplicates any slide.
+  const insertion = parseNativeSlideInsertionReceipt(asRecord(activeSlide.source)?.nativeSlideInsertion);
   return Boolean(
-    activeSlide && canRequestNativeSlideCopy(activeSlide),
+    insertion &&
+      insertion.modelSlideId === activeSlide.id &&
+      !presentationSlideHasNativePptxSource(activeSlide) &&
+      presentationDeckNativeNewSlideGraphIsWritable(slides),
   );
 }
 
@@ -373,6 +431,9 @@ export function slidesWithNewSlideFromLayout<S extends PresentationButtonSlide>(
   // A non-empty deck with no exact live insertion anchor is stale. Never
   // append or fall back to another slide because that can cross sections.
   if (liveSlides.length > 0 && !liveSource) return null;
+  // The package slide whose layouts the new slide takes (the anchor, or the
+  // one vouching for a slide New Slide made); it is placed after the anchor.
+  const layoutSource = presentationNewSlideVouchingSlide(liveSlides, liveSource) ?? liveSource;
   const requestedLayout =
     layoutValue ??
     presentationDefaultNewSlideLayout(liveSlides, liveSource);
@@ -382,9 +443,9 @@ export function slidesWithNewSlideFromLayout<S extends PresentationButtonSlide>(
   // part; the slide model still reads the built-in layout it amounts to.
   const nativeLayoutValue = parseNativeLayoutRef(requestedLayout) ? requestedLayout : null;
   const nativeTarget =
-    nativeLayoutValue && liveSource
+    nativeLayoutValue && layoutSource
       ? (() => {
-          const receipt = presentationSlideNativeLayoutReceipt(liveSource);
+          const receipt = presentationSlideNativeLayoutReceipt(layoutSource);
           return receipt ? nativeLayoutCatalogEntryForValue(receipt, nativeLayoutValue) : null;
         })()
       : null;
@@ -407,17 +468,17 @@ export function slidesWithNewSlideFromLayout<S extends PresentationButtonSlide>(
   const bounds = slideBounds(liveSource);
   const modelSlideId = makeId();
   const nativeInsertionReceipt =
-    nativeDeck && liveSource
+    nativeDeck && layoutSource
       ? createNativeSlideInsertionReceipt(
-          liveSource,
+          layoutSource,
           modelSlideId,
           "new",
           insertionLayout,
         )
       : null;
   const blocks =
-    nativeDeck && liveSource
-      ? nativeLayoutInsertionBlocks(liveSource, insertionLayout, makeId, masters)
+    nativeDeck && layoutSource
+      ? nativeLayoutInsertionBlocks(layoutSource, insertionLayout, makeId, masters)
       : layoutBlocks(layout, bounds, source);
   if (nativeDeck && (!nativeInsertionReceipt || blocks === null)) return null;
   const sourceSize = deckSlideSizeFields(liveSource);

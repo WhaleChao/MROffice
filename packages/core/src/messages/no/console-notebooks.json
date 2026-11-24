@@ -5697,6 +5697,7 @@
  "presentation.deleteSlideKeepOne": "En presentasjon beholder minst ett lysbilde.",
  "presentation.duplicateSlide": "Dupliser lysbilde",
  "presentation.slideCopyUnavailable": "Lysbildet kan ikke dupliseres akkurat nå. Prøv igjen om litt.",
+ "presentation.newSlideNoPackageSlide": "Det er ingen lysbilder igjen fra originalfilen som kan gi et nytt lysbilde oppsettet sitt.",
  "presentation.slideCopyRebuilt": "Denne kopien er bygd opp på nytt fra siden, så animasjoner og lignende kan mangle.",
  "presentation.undo": "Angre",
  "presentation.formatPainter": "Kopier format (dobbeltklikk for å holde det aktivt)",

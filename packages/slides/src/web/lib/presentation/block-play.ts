@@ -344,7 +344,7 @@ export function paragraphPlayRowProps(
     style: {
       ...(value.flyVars as CSSProperties | null),
       animationName: effectName,
-      animationTimingFunction: playTimingFunction(row.recipeKeyframe),
+      animationTimingFunction: playTimingFunction(row.recipeKeyframe, row.animation, row.effectOption),
       animationFillMode: entrance ? "backwards" : "both",
       animationDelay: `${row.delayMs ?? 0}ms`,
       animationDuration: `${row.durationMs ?? DEFAULT_STEP_DURATION_MS}ms`,
@@ -541,9 +541,22 @@ export function playKeyframeName(
   return recipeKeyframe ?? timelineAnimationKeyframeName(animation, effectOption);
 }
 
-/** A recipe bakes its own acceleration into its samples. */
-export function playTimingFunction(recipeKeyframe: string | undefined): "linear" | "ease-out" {
-  return recipeKeyframe ? "linear" : "ease-out";
+
+
+
+
+
+
+
+
+export function playTimingFunction(
+  recipeKeyframe: string | undefined,
+  animation?: TimelineAnimation,
+  effectOption?: PresentationAnimationEffectOption,
+): string {
+  if (recipeKeyframe || !animation) return "linear";
+  const defaults = effectSettingsDefaults(animation, effectOption);
+  return effectSmoothEasing(defaults.accel, defaults.decel) ?? "linear";
 }
 
 /**

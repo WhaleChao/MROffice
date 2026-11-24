@@ -2345,6 +2345,10 @@ const presentationAnimationStepSchema = z
       .string()
       .regex(/^\{[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\}$/)
       .optional(),
+    // An Appear shown at the end of its duration (row 1088).
+    appearAtEnd: z.literal(true).optional(),
+    // A placeholder effect node (row 1091).
+    placeholderNode: z.literal(true).optional(),
     // On one element of a chart (row 1080), checked below.
     chartElement: z.unknown().optional(),
     // A motion path as PowerPoint wrote it (row 1078), checked below.

@@ -5697,6 +5697,7 @@
  "presentation.deleteSlideKeepOne": "Presentasi menyimpan setidaknya satu slide.",
  "presentation.duplicateSlide": "Duplikat slide",
  "presentation.slideCopyUnavailable": "Slide ini tidak dapat diduplikasi sekarang. Coba lagi sebentar lagi.",
+ "presentation.newSlideNoPackageSlide": "Tidak ada slide dari file asli yang tersisa untuk memberi tata letak pada slide baru.",
  "presentation.slideCopyRebuilt": "Salinan ini dibuat ulang dari halaman, sehingga animasi dan sejenisnya mungkin tidak lengkap.",
  "presentation.undo": "Urungkan",
  "presentation.formatPainter": "Pewarna format (klik dua kali agar tetap aktif)",

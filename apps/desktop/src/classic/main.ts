@@ -36,6 +36,8 @@ import {
   dialog,
   ipcMain,
   Menu,
+  net as electronNet,
+  powerMonitor,
   session,
   shell,
   type BrowserWindowConstructorOptions,
@@ -122,6 +124,7 @@ import {
   removeLocalModelFiles,
   startLocalModelDownload,
 } from "./local-model";
+import { OndemandAssets } from "./ondemand-assets";
 import { chooseWebPort, lastWebServerHolds, parseLastWebServer, usablePort } from "./web-port";
 import {
   apiEnv,
@@ -146,6 +149,7 @@ import {
 import { stopWasAsked } from "./service-stops";
 import { printerEnabled, startPrinter } from "./printer";
 import { PRODUCT, productDisplayName, productWords } from "./product";
+import { integrateLinuxDesktop, linuxDesktopId } from "./linux-desktop";
 import { officeSurfaceRedirect, withOfficeSurface } from "./surface";
 import { registerAgentComputer } from "./agent-computer";
 import { registerPlaces } from "./places-ipc";
@@ -160,6 +164,7 @@ import {
   prelaunchAvailable,
   prelaunchEnabled,
 } from "./prelaunch";
+import { backgroundRestartAllowed, backgroundRestartArgs } from "./prelaunch-agent";
 import { keepInTrayOnClose, setKeepInTrayOnClose, showTray, trayAvailable } from "./tray";
 import { launchCacheKey, usableLaunchCache } from "./launch-cache";
 import {
@@ -1112,7 +1117,11 @@ ipcMain.handle("mrai:read-open-file", async (event, token: unknown, start: unkno
 
 // The installer registers this build's types under these ProgIDs
 // (electron-builder.classic.config.cjs fileAssociations).
-configureDefaultApp({ windowsProgIdPrefix: PRODUCT.progIdPrefix, ...(PRODUCT.registeredApp ? { windowsRegisteredApp: PRODUCT.registeredApp } : {}) });
+configureDefaultApp({
+  windowsProgIdPrefix: PRODUCT.progIdPrefix,
+  ...(PRODUCT.registeredApp ? { windowsRegisteredApp: PRODUCT.registeredApp } : {}),
+  linuxDesktopId: linuxDesktopId(),
+});
 const defaultAppChoiceFile = () => path.join(app.getPath("userData"), "default-app-choice.json");
 /** The launch question: once per run, held by the page that shows it until
  * the person answers (../default-app-offer.ts LaunchOffer). */
@@ -1394,6 +1403,75 @@ ipcMain.handle("mrai:libreoffice-install", async (event) => {
 ipcMain.handle("mrai:libreoffice-remove", async (event) => {
   if (!fromApp(event)) return { ok: false };
   return removeLibreOffice(libreOfficeContext, BrowserWindow.fromWebContents(event.sender));
+});
+
+// --- the parts fetched after installing: Python, the ink readers (ondemand-assets.ts) ---
+
+let ondemand: OndemandAssets | null = null;
+let ondemandTimer: NodeJS.Timeout | null = null;
+
+function ondemandNotify(): void {
+  if (!ondemand) return;
+  const statuses = ondemand.groups().map((group) => ondemand!.status(group));
+  const shown = statuses.filter((status) => status.downloading === "foreground");
+  const have = shown.reduce((sum, status) => sum + status.have, 0);
+  const bytes = shown.reduce((sum, status) => sum + status.bytes, 0);
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (window.isDestroyed() || window === splash) continue;
+    window.webContents.send("mrai:ondemand-changed");
+    // Someone waits for it: the Dock / taskbar shows how far it is.
+    window.setProgressBar(shown.length && bytes ? have / bytes : -1);
+  }
+}
+
+/** After a launch: what is missing, in the background, once the app has run a while, the computer is online and idle. */
+function scheduleOndemandPrefetch(delayMs: number): void {
+  if (!ondemand || ondemandTimer) return;
+  ondemandTimer = setTimeout(() => {
+    ondemandTimer = null;
+    if (!ondemand || ondemand.groups().every((group) => ondemand!.ready(group))) return;
+    const idleSeconds = powerMonitor.getSystemIdleTime();
+    if (!electronNet.isOnline() || (idleSeconds < 20 && delayMs < 10 * 60_000)) {
+      // Not now: try again in a while (the wait grows to ten minutes, then any time).
+      scheduleOndemandPrefetch(Math.min(delayMs * 2, 10 * 60_000));
+      return;
+    }
+    void ondemand.prefetch().then((ok) => {
+      // A failure (offline after all, the host unreachable) is tried again in half an hour, and on the next launch.
+      if (!ok) scheduleOndemandPrefetch(30 * 60_000);
+    });
+  }, delayMs);
+  ondemandTimer.unref?.();
+}
+
+function startOndemand(): void {
+  if (!where.ondemand || ondemand) return;
+  ondemand = new OndemandAssets({
+    manifestFile: where.ondemand.manifestFile,
+    root: where.ondemand.root,
+    log: (line) => console.log(`[classic] ${line}`),
+    onChange: ondemandNotify,
+  });
+  if (!ondemand.manifest) {
+    console.error("[classic] on-demand list unreadable: Python and the ink readers cannot be fetched");
+    return;
+  }
+  scheduleOndemandPrefetch(Number(process.env.MRAI_CLASSIC_ONDEMAND_DELAY_MS) || 90_000);
+}
+
+ipcMain.handle("mrai:ondemand-status", async (event) => {
+  if (!fromApp(event) || !ondemand) return null;
+  return ondemand.groups().map((group) => ondemand!.status(group));
+});
+
+ipcMain.handle("mrai:ondemand-ensure", async (event, group: unknown) => {
+  if (!fromApp(event) || !ondemand || typeof group !== "string" || !ondemand.has(group)) return { ok: true };
+  try {
+    await ondemand.ensure(group, true);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 });
 
 // --- the model on this computer, downloaded when the person asks (local-model.ts) -------
@@ -1794,6 +1872,11 @@ async function serviceStopped(name: string, code: number | null): Promise<void> 
     app.quit();
     return;
   }
+  // Nothing of the app on screen (started in the background at login, or
+  // every window closed): started again quietly, in the background, so the
+  // next file opened finds the services ready instead of a dialog nobody
+  
+  if (!somethingShown() && restartQuietly()) return;
   const choice = await dialog.showMessageBox({
     type: "error",
     buttons: [say("重新启动", "Restart"), say("退出", "Quit")],
@@ -1808,6 +1891,40 @@ async function serviceStopped(name: string, code: number | null): Promise<void> 
     app.relaunch();
   }
   app.quit();
+}
+
+/** Whether any window of the app is on screen (not the spare, which waits
+ * hidden, nor a splash). */
+function somethingShown(): boolean {
+  return BrowserWindow.getAllWindows().some(
+    (window) => !window.isDestroyed() && window !== spare && window !== splash && window.isVisible(),
+  );
+}
+
+/** The app relaunched in the background (the login's start) unless it was
+ * restarted so three times in the last half hour; whether it was. */
+function restartQuietly(): boolean {
+  const file = path.join(app.getPath("userData"), "background-restarts.json");
+  let history: number[] = [];
+  try {
+    const value: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (Array.isArray(value)) history = value.filter((item): item is number => typeof item === "number");
+  } catch {
+    // None yet.
+  }
+  const answer = backgroundRestartAllowed(history, Date.now());
+  if (!answer.allowed) return false;
+  try {
+    fs.writeFileSync(file, JSON.stringify(answer.history));
+  } catch (error) {
+    // Unrecorded, it could restart for ever: the dialog asks instead.
+    console.error(`[classic] restart not recorded: ${error instanceof Error ? error.message : error}`);
+    return false;
+  }
+  console.error("[classic] restarting in the background");
+  app.relaunch({ args: backgroundRestartArgs(process.argv, Boolean(process.defaultApp)) });
+  app.quit();
+  return true;
 }
 
 /** Windows: the API was asked to stop at this quit (will-quit). */
@@ -2057,6 +2174,10 @@ function pinOfficeSurface(ses: Session): void {
       return;
     }
     if (!services) where = layout();
+    // Linux: the AppImage's desktop entry and icons, the sign-in link scheme
+    // (./linux-desktop.ts); off the launch's path.
+    void integrateLinuxDesktop();
+    startOndemand();
     console.log(`[classic] starting ${PRODUCT.id} (${where.development ? "development" : "packaged layout"}, data in ${app.getPath("userData")})`);
     // The AI screen's endpoint at once (an AI app started with the app waits
     // for it, some only 10 s): its tools wait for the windows.

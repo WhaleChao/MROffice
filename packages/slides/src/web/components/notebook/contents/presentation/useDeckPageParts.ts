@@ -298,6 +298,14 @@ export interface UseDeckPagePartsOptions<S extends DeckSlideLike> {
   readonly ownRoomStep?: (apply: () => void) => void;
   /** A part room refused an input or a save of this member's. */
   readonly onRoomRefused?: (code: string) => void;
+  /** A part room's save held for a write it could not take in
+   * (`part_room_write_conflict`) was settled: `resolved` with the copies of
+   * this member's slides kept after the server's (`onMerged` has put them
+   * in), or `failed` -- the room's typing kept on this device and in the
+   * room, `retry` to ask again. */
+  readonly onRoomWriteConflict?: (
+    outcome: { readonly state: "resolved"; readonly copies: number } | { readonly state: "failed"; readonly retry: () => void },
+  ) => void;
   /** A part's room could not merge a text of this member's without a guess
    * (TRIAGE 47): the deck goes into conflict. */
   readonly onTextMergeRefused?: () => void;
@@ -307,6 +315,9 @@ export type DeckPartRetryResult = "retrying" | "not-failed" | "unavailable";
 
 /** What re-importing a part (the member's edits replaced) came to. */
 /** Between one part room's opening and the next, the import done. */
+/** How long a held part room's settlement is waited for before the member is
+ * told it failed (and offered to try again). */
+const ROOM_CONFLICT_RESOLVE_TIMEOUT_MS = 30_000;
 const ROOM_OPEN_GAP_MS = 300;
 /** ... once the person has given no input for this long. */
 const ROOM_OPEN_INPUT_QUIET_MS = 800;
@@ -395,6 +406,16 @@ export function useDeckPageParts<S extends DeckSlideLike>(options: UseDeckPagePa
   );
   const active = enabled && snapshot.active && session.page === pageId;
   const optionsRef = useRef(options);
+  // ---- A part room's save held for a server write it could not take in
+  
+  // device, the server settles the part (the write's version of the slides
+  // both changed, the room's of the rest, the room started again from it),
+  // and this window keeps its own version of those slides as copies after
+  // them (keepDeckPartCopies), as for a part saved elsewhere first. Failed or
+  // unanswered, the typing stays in the room and on this device, and the
+  // member is offered to try again.
+  const resolvingRoomConflicts = useRef(new Set<number>());
+  const resolveRoomWriteConflictRef = useRef<(index: number, partKey: string) => Promise<void>>(async () => undefined);
   optionsRef.current = options;
   const inflight = useRef(new Set<number>());
   /** A part whose read failed is not asked again before this time. */
@@ -420,6 +441,42 @@ export function useDeckPageParts<S extends DeckSlideLike>(options: UseDeckPagePa
 
   // The parts the import is still writing, asked after (`pollPending`, below).
   const pollPendingRef = useRef<() => void>(() => undefined);
+  resolveRoomWriteConflictRef.current = async (index: number, partKey: string): Promise<void> => {
+    if (resolvingRoomConflicts.current.has(index)) return;
+    resolvingRoomConflicts.current.add(index);
+    const savingFor = session.page;
+    const liveBefore = optionsRef.current.liveSlides();
+    session.keepRoomAsRecoverable(index);
+    try {
+      const answer = await apiPost<{ resolved?: boolean; heldSlideIds?: string[] }>(
+        `/api/v1/pages/${encodeURIComponent(pageId)}/document-parts/${encodeURIComponent(partKey)}/write-conflict/resolve`,
+        {},
+        { signal: AbortSignal.timeout(ROOM_CONFLICT_RESOLVE_TIMEOUT_MS) },
+      );
+      if (session.page !== savingFor) return;
+      if (answer?.resolved !== true) {
+        // Not held (any more): its next save goes as any other.
+        optionsRef.current.onRoomWriteConflict?.({ state: "resolved", copies: 0 });
+        return;
+      }
+      const fresh = await readDocumentPart(pageId, index, { cache: "no-store" });
+      if (session.page !== savingFor) return;
+      const merge = session.settleRoomWriteConflict(index, fresh, optionsRef.current.liveSlides(), liveBefore,
+        Array.isArray(answer.heldSlideIds) ? answer.heldSlideIds : []);
+      if (!merge) throw new Error("part_not_settled");
+      optionsRef.current.onMerged(merge, index);
+      optionsRef.current.resave();
+      optionsRef.current.onRoomWriteConflict?.({ state: "resolved", copies: merge.copiesAfter.size });
+    } catch (error) {
+      console.warn("[deck-parts] a held part room could not be settled", { partIndex: index, error: String(error) });
+      optionsRef.current.onRoomWriteConflict?.({
+        state: "failed",
+        retry: () => void resolveRoomWriteConflictRef.current(index, partKey),
+      });
+    } finally {
+      resolvingRoomConflicts.current.delete(index);
+    }
+  };
   const read = useCallback(async (index: number): Promise<void> => {
     if (inflight.current.has(index) || session.isHeld(index)) return;
     inflight.current.add(index);
@@ -1491,7 +1548,12 @@ export function useDeckPageParts<S extends DeckSlideLike>(options: UseDeckPagePa
         onHistory: () => optionsRef.current.onRoomsChanged?.(),
         onStatus: () => optionsRef.current.onRoomsChanged?.(),
         onAcknowledged: () => optionsRef.current.onRoomsChanged?.(),
-        onRefused: (code) => optionsRef.current.onRoomRefused?.(code),
+        onRefused: (code) => {
+          // Held for a write of the server's it could not take in: settled
+          
+          if (code === "part_room_write_conflict") void resolveRoomWriteConflictRef.current(index, partId);
+          optionsRef.current.onRoomRefused?.(code);
+        },
         onTextMergeRefused: () => optionsRef.current.onTextMergeRefused?.(),
       });
       rooms.set(index, { partId, room });

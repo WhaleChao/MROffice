@@ -5697,6 +5697,7 @@
  "presentation.deleteSlideKeepOne": "プレゼンテーションには少なくとも 1 枚のスライドが必要です。",
  "presentation.duplicateSlide": "スライドの複製",
  "presentation.slideCopyUnavailable": "このスライドは今は複製できません。しばらくしてからもう一度お試しください。",
+ "presentation.newSlideNoPackageSlide": "元のファイルのスライドが残っていないため、新しいスライドのレイアウトを取得できません。",
  "presentation.slideCopyRebuilt": "このコピーはページの内容から作り直されたため、アニメーションなどが欠けている場合があります。",
  "presentation.undo": "元に戻す",
  "presentation.formatPainter": "書式のコピー/貼り付け（ダブルクリックで連続使用）",

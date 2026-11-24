@@ -11,7 +11,7 @@ import { editsStayInsideTextblocks, plainTextEdits } from "./textblockOnlyEdits"
 import { msSinceTyping, TYPING_IDLE_MS } from "../../../../lib/typing-session";
 import { touchedRanges } from "./touchedTextblocks";
 import { decorationMapping, removeDecorationList } from "./fastRangeMapping";
-import { LAYOUT_METRICS_FLUSH_EVENT, sourceFontPlanIsReady, writeDocumentLayoutStatus, DOCUMENT_AUTO_LINE_SPACING_PENDING } from "./documentLayoutStatus";
+import { LAYOUT_METRICS_FLUSH_EVENT, layoutMetricsFlushDeadline, noteLayoutMetricsFlushPartial, sourceFontPlanIsReady, writeDocumentLayoutStatus, DOCUMENT_AUTO_LINE_SPACING_PENDING } from "./documentLayoutStatus";
 import { blockDomLocator, type BlockDomLocator } from "./blockDomLocator";
 import { blockTextReader, type BlockTextReader } from "./blockTextReader";
 import { OFFICE_FONT_ASSETS_EVENT } from "../../../office-ribbon/officeFontAssets";
@@ -2934,8 +2934,8 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
           label: "docs-auto-line-spacing",
           owner: () => view.dom.closest(".wm-window") ?? view.dom,
         });
-        let pendingMeasure: (() => void) | null = null;
-        const onMetricsFlush = () => {
+        let pendingMeasure: ((deadline: number | null, event?: Event) => void) | null = null;
+        const onMetricsFlush = (event?: Event) => {
           // The ledger moved its horizon on to sheets this projection has not
           // measured: they are measured now, before the ledger reads them.
           if ((frame === null || !pendingMeasure) &&
@@ -2945,7 +2945,9 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
           frame = null;
           const measure = pendingMeasure;
           pendingMeasure = null;
-          measure();
+          // A flush taken in steps measures on to its deadline; the rest
+          
+          measure(layoutMetricsFlushDeadline(event), event);
         };
         let topDecorations=view.props.decorations;
         let externalLayout = true, heldForSourceFonts = false, awaitingFonts = false;
@@ -2991,7 +2993,9 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
           // composes already has these line boxes.
           // `finish`: measure everything left now (the ledger's flush, which
           // composes with these line boxes in the same frame).
-          const measure = (finish = false) => {
+          // `until`: a flush taken in steps measures on to its deadline, and
+          // says so (`flushEvent`) when paragraphs are left.
+          const measure = (finish = false, until: number | null = null, flushEvent?: Event) => {
             frame = null;
             // Line boxes read while the window glides are drawn, not laid-out,
             // pixels (surfaceGlide.ts): measure once it has arrived, the
@@ -3026,7 +3030,9 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
               const sliced = !finish && runRestarts < AUTO_LINE_RESTARTS && autoLineSliced();
               const stepStart = autoLineNow();
               runSteps += 1;
-              const projected = run.step(sliced ? () => autoLineNow() - stepStart >= AUTO_LINE_SLICE_MS : undefined);
+              const projected = run.step(until !== null && runRestarts < AUTO_LINE_RESTARTS
+                ? () => autoLineNow() >= until
+                : sliced ? () => autoLineNow() - stepStart >= AUTO_LINE_SLICE_MS : undefined);
               if (!projected) { more = true; return; }
               noteAutoLineRun({steps: runSteps, restarts: runRestarts, ms: autoLineNow() - runStarted, finish, sliced});
               run = null;
@@ -3068,12 +3074,14 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
             } finally {
               
               
-              if (more && !destroyed) request();
-              else writeDocumentLayoutStatus(view.dom, DOCUMENT_AUTO_LINE_SPACING_PENDING, null, view);
+              if (more && !destroyed) {
+                request();
+                if (flushEvent) noteLayoutMetricsFlushPartial(flushEvent);
+              } else writeDocumentLayoutStatus(view.dom, DOCUMENT_AUTO_LINE_SPACING_PENDING, null, view);
             }
           };
           const request = () => {
-            pendingMeasure = () => measure(true);
+            pendingMeasure = (deadline, event) => (deadline === null ? measure(true) : measure(false, deadline, event));
             frame = requestLaneFrame(measureLane, () => {
               pendingMeasure = null;
               if (firstLayoutHoldsFaces(view.dom, () => { frame = null; schedule(); }, "auto-line-spacing")) return;

@@ -783,7 +783,9 @@ function pastedSparklines(
 /** Whether a position with no cell shows a line format other than the
  *  default (its row's, else its column's; {@link lineBlankAt}). */
 function lineFormatDiffersFromDefault(sheet: object, row: number, col: number): boolean {
-  const { rowCount, columnCount, columnStyles } = sheet as { rowCount?: number; columnCount?: number; columnStyles?: Record<string, object> };
+  const { rowCount, columnCount, columnStyles, rowStyles } = sheet as {
+    rowCount?: number; columnCount?: number; columnStyles?: Record<string, object>; rowStyles?: Record<string, object>;
+  };
   if (row >= (rowCount ?? 0) && col < (columnCount ?? 0)) {
     // Below the sheet's last row a column's format still stands (Excel formats
     // the whole column): a paste that grows the sheet lands on it (xlsx-rounds
@@ -791,6 +793,16 @@ function lineFormatDiffersFromDefault(sheet: object, row: number, col: number): 
     // and saved, column B's 10 pt wrapped top-left).
     const column = columnStyles?.[String(col)];
     return Boolean(column && Object.keys(column).length > 0);
+  }
+  if (col >= (columnCount ?? 0)) {
+    // Right of the sheet's last column a row's format, else a column's, still
+    // stands (a `<col min="16" max="16384" style>` formats every column to
+    // XFD): R482-X88 E13 pasted A6:A8 (A6:A8 merged, A7 in Normal) at R3 of a
+    // 15-column sheet, and R4 showed, and saved, column R's Mincho centred
+    
+    const ownRow = row < (rowCount ?? 0) ? rowStyles?.[String(row)] : undefined;
+    const line = ownRow ?? columnStyles?.[String(col)];
+    return Boolean(line && Object.keys(line).length > 0);
   }
   const line = lineBlankAt(sheet, row, col);
   return Boolean(line?.style && Object.keys(line.style).length > 0);

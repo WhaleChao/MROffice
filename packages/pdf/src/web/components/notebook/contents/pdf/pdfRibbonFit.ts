@@ -13,6 +13,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 
@@ -41,6 +42,53 @@ export function usePdfRibbonGroupCollapsed(id: string | undefined): boolean {
 }
 
 export const PDF_RIBBON_COLLAPSIBLE_ATTRIBUTE = "data-pdf-ribbon-collapsible";
+
+const NO_GROUPS: ReadonlySet<string> = new Set();
+
+/** Each band's collapsed set, by its track: for a group drawn into the band
+ * from another React tree (a portal from outside the ribbon -- the native
+ * text editor's Text Editing tab), which the context does not reach. */
+const bandFits = new WeakMap<
+  Element,
+  { value: ReadonlySet<string>; listeners: Set<() => void> }
+>();
+
+function bandFitOf(track: Element) {
+  let fit = bandFits.get(track);
+  if (!fit) {
+    fit = { value: NO_GROUPS, listeners: new Set() };
+    bandFits.set(track, fit);
+  }
+  return fit;
+}
+
+
+
+
+
+
+
+
+
+export function usePdfRibbonFitOfElement(element: Element | null): ReadonlySet<string> {
+  const track = element?.closest(".note-editor-ribbon-track") ?? null;
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      if (!track) return () => {};
+      const fit = bandFitOf(track);
+      fit.listeners.add(listener);
+      return () => {
+        fit.listeners.delete(listener);
+      };
+    },
+    [track],
+  );
+  return useSyncExternalStore(
+    subscribe,
+    () => (track ? bandFitOf(track).value : NO_GROUPS),
+    () => NO_GROUPS,
+  );
+}
 
 /** A pixel of rounding is not an overflow. */
 const FIT_EPSILON = 1;
@@ -170,5 +218,16 @@ export function usePdfRibbonFit(activeTab: string): {
     () => new Set(current.collapsed),
     [current.collapsed],
   );
+  // Published on the band's track for groups drawn into it from another
+  // tree (usePdfRibbonFitOfElement).
+  useLayoutEffect(() => {
+    const track = marker?.parentElement;
+    if (!track) return;
+    const fit = bandFitOf(track);
+    if (fit.value === collapsedSet) return;
+    fit.value = collapsedSet;
+    for (const listener of Array.from(fit.listeners)) listener();
+  }, [collapsedSet, marker]);
+
   return { markerRef: setMarker, collapsed: collapsedSet };
 }

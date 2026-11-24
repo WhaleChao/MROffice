@@ -53,11 +53,18 @@ const say = (zhText: string, enText: string) => (zh() ? zhText : enText);
 /**
  * Where the copy lives. macOS: <userData>/runtime. Windows: under Local
  * AppData (a roaming profile must not carry a gigabyte of program files).
+ * Linux: under the person's data folder (XDG_DATA_HOME, ~/.local/share),
+ * not with the settings in ~/.config.
  */
 export function libreOfficeRoot(): string {
   if (process.platform === "win32") {
     const local = process.env.LOCALAPPDATA || path.join(app.getPath("home"), "AppData", "Local");
     return path.join(local, app.getName(), "runtime");
+  }
+  if (process.platform === "linux") {
+    const configured = process.env.XDG_DATA_HOME;
+    const data = configured && path.isAbsolute(configured) ? configured : path.join(app.getPath("home"), ".local", "share");
+    return path.join(data, app.getName(), "runtime");
   }
   return path.join(app.getPath("userData"), "runtime");
 }
@@ -349,7 +356,9 @@ function systemLibreOffice(): boolean {
         ? [process.env.ProgramFiles, process.env["ProgramFiles(x86)"], process.env.ProgramW6432]
             .filter((root): root is string => Boolean(root))
             .map((root) => path.join(root, "LibreOffice", "program", "soffice.exe"))
-        : [];
+        : process.platform === "linux"
+          ? ["/usr/bin/soffice", "/usr/bin/libreoffice", "/usr/lib/libreoffice/program/soffice", "/snap/bin/libreoffice", "/opt/libreoffice/program/soffice"]
+          : [];
   return candidates.some((candidate) => fs.existsSync(candidate));
 }
 

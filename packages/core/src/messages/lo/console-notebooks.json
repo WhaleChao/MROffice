@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "ການນຳສະເໜີຕ້ອງມີຢ່າງໜ້ອຍໜຶ່ງສະໄລ້.",
  "presentation.duplicateSlide": "ສຳເນົາສະໄລ້",
  "presentation.slideCopyUnavailable": "ບໍ່ສາມາດສຳເນົາສະໄລ້ນີ້ໄດ້ໃນຕອນນີ້. ລອງອີກຄັ້ງໃນຈັກໜ່ອຍ.",
+ "presentation.newSlideNoPackageSlide": "ບໍ່ມີສະໄລດ໌ຈາກໄຟລ໌ຕົ້ນສະບັບເຫຼືອຢູ່ເພື່ອໃຫ້ໂຄງຮ່າງແກ່ສະໄລດ໌ໃໝ່.",
  "presentation.slideCopyRebuilt": "ສຳເນົານີ້ຖືກສ້າງຄືນຈາກໜ້າ ດັ່ງນັ້ນການເຄື່ອນໄຫວ ແລະ ລາຍລະອຽດທີ່ຄ້າຍຄືກັນອາດຂາດຫາຍໄປ.",
  "presentation.undo": "ຍົກເລີກການກະທຳ",
  "presentation.formatPainter": "ຕົວແຕ້ມຮູບແບບ (ດັບເບິ້ນຄລິກເພື່ອເປີດຄ້າງໄວ້)",

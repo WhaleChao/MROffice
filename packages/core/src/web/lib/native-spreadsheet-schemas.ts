@@ -575,15 +575,12 @@ export const spreadsheetImageObjectSchema = z
     shadow: spreadsheetObjectShadowSchema.optional(),
     // Picture Effects beyond the Shadow (Reflection, Glow, Soft Edges, Bevel,
     // 3-D Format, 3-D Rotation): the deck's picture model
-    // (`lib/office-picture-effects`, the server's `office_picture_effects`);
-    // the Shadow stays `shadow`, and a Preset is not the sheet's.
+    // (`lib/office-picture-effects`, the server's `office_picture_effects`).
+    // The Shadow and a Preset are the picture's Picture Effects only where the
+    // server read them so (readings row 570, below); else the Shadow is `shadow`.
     pictureEffects: z
       .record(z.string(), z.unknown())
-      .refine(
-        (value) =>
-          normalizeOfficePictureEffects(value) !== null && !("preset" in value) && !("shadow" in value),
-        "Unsupported picture effects",
-      )
+      .refine((value) => normalizeOfficePictureEffects(value) !== null, "Unsupported picture effects")
       .optional(),
     cropRect: spreadsheetPictureCropRectSchema.optional(),
     nativeImageCropBlocker: z.string().max(200).optional(),
@@ -597,7 +594,21 @@ export const spreadsheetImageObjectSchema = z
     nativePictureStyleBlocker: z.string().max(200).optional(),
     nativeImageContentBlocker: z.literal("shared-media-part").optional(),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((picture, context) => {
+    // A picture whose Shadow and Preset the server read into its Picture
+    // Effects (`source.pictureShadowInEffects`, readings row 570, with no
+    // sheet `shadow` beside them: lib/spreadsheet/picture-effects
+    // `spreadsheetPictureShadowInEffects`) keeps them there. Refused, every
+    // such picture -- any Excel picture with a gallery shadow -- was left out
+    // of the sheet as it opened (TRIAGE 100b probe lf13-xlsx-picshscale: 8 of
+    // its 9 pictures not drawn).
+    const effects = picture.pictureEffects;
+    if (!effects || (!("preset" in effects) && !("shadow" in effects))) return;
+    const source = picture.source as Record<string, unknown> | undefined;
+    if (source?.pictureShadowInEffects === true && !picture.shadow) return;
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["pictureEffects"], message: "Unsupported picture effects" });
+  });
 
 export const spreadsheetChartDataSchema = z
   .object({

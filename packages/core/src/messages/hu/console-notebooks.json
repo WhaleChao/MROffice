@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "A bemutató legalább egy diát tartalmaz.",
  "presentation.duplicateSlide": "Dia másolása",
  "presentation.slideCopyUnavailable": "Ez a dia jelenleg nem másolható. Próbálja újra egy pillanat múlva.",
+ "presentation.newSlideNoPackageSlide": "Nem maradt dia az eredeti fájlból, amelytől egy új dia átvehetné az elrendezést.",
  "presentation.slideCopyRebuilt": "Ez a másolat az oldalból lett újraépítve, ezért hiányozhatnak róla az animációk és hasonló részletek.",
  "presentation.undo": "Visszavonás",
  "presentation.formatPainter": "Formátum másolása (kattintson duplán a bekapcsolva tartáshoz)",

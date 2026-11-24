@@ -107,12 +107,12 @@ const CSS_PATTERN_SELECTOR = '[style*="--office-pattern-size"]';
  * A turned or sheared HTML element (its box not its layout box scaled
  * alike both ways) keeps its own defaults.
  */
-export function syncOfficePatterns(anchor: Element, bitCssPx = 1, originSelector?: string): void {
+export function syncOfficePatterns(anchor: Element, bitCssPx = 1, originSelector?: string): boolean {
   const svgPatterns = Array.from(anchor.querySelectorAll(`pattern[${OFFICE_PATTERN_SVG_ATTRIBUTE}]`));
   const cssPatterns = Array.from(anchor.querySelectorAll(CSS_PATTERN_SELECTOR));
   // No pattern: no measuring (a frame's layout is never forced for nothing,
   // the slide being typed into).
-  if (!svgPatterns.length && !cssPatterns.length) return;
+  if (!svgPatterns.length && !cssPatterns.length) return false;
   const rootBox = anchor.getBoundingClientRect();
   // A paged host's patterns sit on their own page's grid: the page (an
   // `originSelector` match under the anchor) whose box holds the pattern's
@@ -156,6 +156,20 @@ export function syncOfficePatterns(anchor: Element, bitCssPx = 1, originSelector
     set("--office-pattern-x", `${Number(placement.x.toFixed(4))}px`);
     set("--office-pattern-y", `${Number(placement.y.toFixed(4))}px`);
   }
+  return true;
+}
+
+/** An SVG pattern or a CSS-background pattern host: `node` itself or under it. */
+function holdsOfficePattern(node: Node): boolean {
+  if (typeof Element === "undefined" || !(node instanceof Element)) return false;
+  const selector = `pattern[${OFFICE_PATTERN_SVG_ATTRIBUTE}], ${CSS_PATTERN_SELECTOR}`;
+  return node.matches(selector) || node.querySelector(selector) !== null;
+}
+
+/** On unless `window.__docsPatternScanLazy = false` (A/B): an anchor holding no
+ * pattern is not searched whole after every change under it. */
+function lazyPatternScan(): boolean {
+  return typeof window === "undefined" || (window as Window & { __docsPatternScanLazy?: boolean }).__docsPatternScanLazy !== false;
 }
 
 /**
@@ -170,9 +184,16 @@ export function watchOfficePatterns(
   originSelector?: string,
 ): { refresh(): void; disconnect(): void } {
   let frame = 0;
+  // Whether the anchor held a pattern when it was last searched. While it
+  // held none, a change is searched for one where it happened (the nodes it
+  // added, the element whose style it changed), not the whole anchor: a
+  // Word page of 124 sheets with no pattern was searched whole (two
+  // selector scans, one of every element's style text) a frame after each
+  
+  let holds = true;
   const run = () => {
     frame = 0;
-    syncOfficePatterns(anchor, bitCssPx, originSelector);
+    holds = syncOfficePatterns(anchor, bitCssPx, originSelector);
   };
   const schedule = () => {
     if (frame || typeof requestAnimationFrame === "undefined") return;
@@ -183,6 +204,16 @@ export function watchOfficePatterns(
     typeof MutationObserver === "undefined"
       ? null
       : new MutationObserver((records) => {
+          if (!holds && lazyPatternScan()) {
+            for (const record of records) {
+              if (record.type === "childList") {
+                for (const added of Array.from(record.addedNodes)) if (holdsOfficePattern(added)) return schedule();
+              } else if (record.target !== anchor && holdsOfficePattern(record.target)) {
+                return schedule();
+              }
+            }
+            return;
+          }
           for (const record of records) {
             if (record.type !== "attributes") return schedule();
             if (record.attributeName === "patternTransform") continue;
@@ -203,11 +234,17 @@ export function watchOfficePatterns(
     attributeOldValue: true,
     attributeFilter: ["style", "transform", "width", "height", "x", "y", "viewBox", "class"],
   });
-  const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
+  const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => {
+    if (holds || !lazyPatternScan()) schedule();
+  });
   resize?.observe(anchor);
   run();
   return {
-    refresh: schedule,
+    refresh: () => {
+      // Asked from outside (a zoom): searched whole, as a change it cannot see.
+      holds = true;
+      schedule();
+    },
     disconnect() {
       mutations?.disconnect();
       resize?.disconnect();

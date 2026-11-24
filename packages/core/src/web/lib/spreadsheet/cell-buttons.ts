@@ -327,6 +327,11 @@ export function writeCellValueInto(
     } else {
       delete nextCell.formula;
     }
+    // The file's held result belongs to the formula it names: a write of any
+    // other content retires it, so retyping that formula later calculates it
+    // (xlsx-rounds R483-X13 WALK1: 1.23... typed over a Google Sheets
+    // __xludf formula kept its cached 7 on the page, which no save writes).
+    if (nextCell.keptResult && nextCell.keptResult.formula !== nextCell.formula) delete nextCell.keptResult;
     // A freshly typed / pasted / filled value invalidates any inline rich-text
     // `runs` carried over from the cell's PREVIOUS value (their concatenation no
     // longer equals `value`), so keep them only while they still match — else
@@ -373,6 +378,7 @@ export function writeCellValueInto(
     if (stripped) {
       delete stripped.formula;
       delete stripped.picture;
+      delete stripped.keptResult; // the cleared formula's file value
     }
     if (hasCellMetadata(stripped)) {
       // Cleared to empty: stale runs can't match "" either — drop them so the

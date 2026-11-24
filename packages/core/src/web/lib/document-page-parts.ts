@@ -613,6 +613,33 @@ function samePartContent(left: readonly unknown[], right: readonly unknown[]): b
   }
 }
 
+/**
+ * samePartContent(blocks, the saved part), block by block: a block whose JSON
+ * is the saved block's own is the same, and only the others are read again
+ * and compared (the comparison is block by block anyway). Each pause in
+ * typing read the whole saved part back (JSON.parse) and keyed every block of
+ * it to tell the one part being typed into had changed: 0.48 s of 10 s of
+ * typing on R286-D01 (124 pages, CPU profile kh32). The saved part as a whole
+ * where its blocks are not known, or are not the very blocks it was made of.
+ * `window.__docsPartCompareByBlock = false`: the whole part every time (old).
+ */
+export function samePartAsSaved(
+  blocks: readonly unknown[],
+  each: readonly string[],
+  saved: string,
+  savedBlocks: readonly string[] | null,
+): boolean {
+  const byBlock = typeof window === "undefined" || (window as Window & { __docsPartCompareByBlock?: boolean }).__docsPartCompareByBlock !== false;
+  if (byBlock && savedBlocks && savedBlocks.length === each.length && `[${savedBlocks.join(",")}]` === saved) {
+    for (let index = 0; index < each.length; index += 1) {
+      if (each[index] === savedBlocks[index]) continue;
+      if (!samePartContent([blocks[index]], [JSON.parse(savedBlocks[index]!) as unknown])) return false;
+    }
+    return true;
+  }
+  return samePartContent(blocks, JSON.parse(saved) as unknown[]);
+}
+
 export type DocumentPartsSplit =
   | { readonly ok: true; readonly parts: readonly (readonly unknown[])[] }
   | { readonly ok: false; readonly reason: DocumentPartsBlock };
@@ -2626,7 +2653,7 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
         return;
       }
       const unchanged = json === record.saved ||
-        (record.saved !== "" && samePartContent(blocks, JSON.parse(record.saved) as unknown[]));
+        (record.saved !== "" && samePartAsSaved(blocks, each, record.saved, record.savedBlocks));
       if (unchanged && json !== record.saved) {
         // Filled in by itself: compared with the part as it reads now from here on.
         record.saved = json;
@@ -2711,7 +2738,7 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
       const each = blocks.map((item) => JSON.stringify(item));
       const sending = sendingBlocks.current.get(index) ?? null;
       const unchanged = `[${each.join(",")}]` === record.saved ||
-        (record.saved !== "" && samePartContent(blocks, JSON.parse(record.saved) as unknown[]));
+        (record.saved !== "" && samePartAsSaved(blocks, each, record.saved, record.savedBlocks));
       if (unchanged && !sending) return;
       const parse = (list: readonly string[]) => list.map((json) => JSON.parse(json) as unknown);
       parts.push({

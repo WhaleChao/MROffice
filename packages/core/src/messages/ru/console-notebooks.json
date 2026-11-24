@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "В презентации должен остаться хотя бы один слайд.",
  "presentation.duplicateSlide": "Дублировать слайд",
  "presentation.slideCopyUnavailable": "Сейчас этот слайд нельзя дублировать. Повторите попытку через несколько секунд.",
+ "presentation.newSlideNoPackageSlide": "В файле не осталось исходных слайдов, от которых новый слайд мог бы взять макет.",
  "presentation.slideCopyRebuilt": "Эта копия воссоздана по странице, поэтому анимации и подобные детали могут отсутствовать.",
  "presentation.undo": "Отменить",
  "presentation.formatPainter": "Формат по образцу (дважды щелкните, чтобы закрепить)",

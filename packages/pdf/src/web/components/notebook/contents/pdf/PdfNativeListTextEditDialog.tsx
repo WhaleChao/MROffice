@@ -184,6 +184,10 @@ import {
   type PdfTextEditingContextRibbonLabels,
   type PdfTextEditingControl,
 } from "./PdfTextEditingContextRibbon";
+import {
+  PdfRibbonFitContext,
+  usePdfRibbonFitOfElement,
+} from "./pdfRibbonFit";
 import { toFullWidth, toHalfWidth, transformCase } from "@mrnote/core/web/lib/presentation-text-case.ts";
 import type { PdfRibbonTranslator } from "./pdfRibbonTranslator";
 import type {
@@ -3129,6 +3133,8 @@ function PdfNativeListTextInlineEditor({
     HTMLElement | null | undefined
   >(undefined);
   const [ribbonHost, setRibbonHost] = useState<HTMLElement | null>(null);
+  // The band's fold (pdfRibbonFit) for the ribbon portalled into it.
+  const ribbonFit = usePdfRibbonFitOfElement(ribbonHost);
   const [ribbonPainted, setRibbonPainted] = useState(false);
   useEffect(() => {
     if (!paintRibbonAfterFocus || ribbonPainted) return;
@@ -8909,6 +8915,13 @@ function PdfNativeListTextInlineEditor({
         layoutFrameRef.current?.contains(target) ||
         (!layoutFrameRef.current && inlineEditorHost?.contains(target)) ||
         (ribbonControl && ribbon?.contains(ribbonControl)) ||
+        // A folded group's panel (pdfRibbonFit) is drawn beside the band,
+        // not in it: its commands are this ribbon's too. Before, 加粗 from
+        // the folded 字体 on a 900 px window ended the edit.
+        (ribbonControl &&
+          ownerWindowId &&
+          ribbonControl.closest("[data-pdf-ribbon-flyout-panel]") &&
+          ribbonControl.closest<HTMLElement>("[data-window-id]")?.dataset.windowId === ownerWindowId) ||
         (ownerWindowId && ownerWindowId === popupOwner) ||
         ownsMenu,
       );
@@ -14220,9 +14233,11 @@ function PdfNativeListTextInlineEditor({
           >
             {labels.title}
           </span>
-          <OfficeFormatPreviewProvider adapter={nativeFormatPreviewAdapter}>
-            {ribbonPainted || !paintRibbonAfterFocus ? ribbonSurface : null}
-          </OfficeFormatPreviewProvider>
+          <PdfRibbonFitContext.Provider value={ribbonFit}>
+            <OfficeFormatPreviewProvider adapter={nativeFormatPreviewAdapter}>
+              {ribbonPainted || !paintRibbonAfterFocus ? ribbonSurface : null}
+            </OfficeFormatPreviewProvider>
+          </PdfRibbonFitContext.Provider>
         </>,
         ribbonPortalTarget,
       )

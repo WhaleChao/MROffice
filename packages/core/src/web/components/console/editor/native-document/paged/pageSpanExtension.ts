@@ -24,6 +24,7 @@
  */
 
 import { Extension } from "@tiptap/core";
+import { createBackgroundLane, requestLaneFrame, type BackgroundLane } from "../../../../../lib/background-work";
 import { readSheetNoteContinuationPages } from "./structuralFootnotes";
 import { coverHidesFirstPageNumber } from "../../../../../lib/document-cover-pages/coverFirstPage";
 import type { Node as PmNode } from "@tiptap/pm/model";
@@ -869,7 +870,23 @@ export const PageSpanExtension = Extension.create({
           // (hidden-preview) view's destroy cancelled its pending frame but
           // left `raf` non-zero, so every later view's schedule() short-
           // circuited forever and no sheet was ever stamped.
-          let raf = 0;
+          let raf: (() => void) | null = null;
+          
+          // opening it waits for its share of the thread instead of taking
+          // every frame (66 frames, 2 s of one long document's opening).
+          // `window.__docsStepBudgetOff = true`: every frame, as before.
+          let lane: BackgroundLane | null = null;
+          const requestRead = (callback: () => void): (() => void) => {
+            if ((window as Window & { __docsStepBudgetOff?: boolean }).__docsStepBudgetOff === true) {
+              const handle = window.requestAnimationFrame(callback);
+              return () => window.cancelAnimationFrame(handle);
+            }
+            lane ??= createBackgroundLane({
+              label: "docs-page-spans",
+              owner: () => view.dom.closest(".wm-window") ?? view.dom,
+            });
+            return requestLaneFrame(lane, callback, window);
+          };
           // Sheets nothing changed in keep their reading (SheetMeasureMemo);
           // a layout nudge, a font or a new width reads every sheet again.
           const memo = new SheetMeasureMemo<SheetSpanReading>(view.dom);
@@ -908,8 +925,8 @@ export const PageSpanExtension = Extension.create({
           let pendingAfterComposition = false;
           const schedule = () => {
             if (raf) return;
-            raf = window.requestAnimationFrame(() => {
-              raf = 0;
+            raf = requestRead(() => {
+              raf = null;
               if (!view.dom.isConnected) return;
               if (isImeCompositionActive(view)) {
                 // Even a decoration-only dispatch can redraw the pageBlock
@@ -993,9 +1010,10 @@ export const PageSpanExtension = Extension.create({
               memo.disconnect();
               stopImeSettled();
               if (raf) {
-                window.cancelAnimationFrame(raf);
-                raf = 0;
+                raf();
+                raf = null;
               }
+              lane?.dispose();
             },
           };
         },

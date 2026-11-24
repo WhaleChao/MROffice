@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "Predstavitev mora imeti vsaj eno prosojnico.",
  "presentation.duplicateSlide": "Podvoji prosojnico",
  "presentation.slideCopyUnavailable": "Te prosojnice zdaj ni mogoče podvojiti. Poskusite znova čez trenutek.",
+ "presentation.newSlideNoPackageSlide": "Ni ostala nobena prosojnica iz izvirne datoteke, od katere bi nova prosojnica prevzela postavitev.",
  "presentation.slideCopyRebuilt": "Ta kopija je bila obnovljena iz strani, zato lahko manjkajo animacije in podobne podrobnosti.",
  "presentation.undo": "Razveljavi",
  "presentation.formatPainter": "Čopič oblik (dvokliknite, da ostane vklopljen)",

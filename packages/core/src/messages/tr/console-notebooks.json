@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "Bir sunuda en az bir slayt bulunur.",
  "presentation.duplicateSlide": "Slaydı Çoğalt",
  "presentation.slideCopyUnavailable": "Bu slayt şu anda çoğaltılamıyor. Biraz sonra yeniden deneyin.",
+ "presentation.newSlideNoPackageSlide": "Yeni slayta düzenini verecek, özgün dosyadan kalan bir slayt yok.",
  "presentation.slideCopyRebuilt": "Bu kopya sayfadan yeniden oluşturuldu; animasyonlar ve benzeri ayrıntılar eksik olabilir.",
  "presentation.undo": "Geri Al",
  "presentation.formatPainter": "Biçim Boyacısı (açık tutmak için çift tıklatın)",

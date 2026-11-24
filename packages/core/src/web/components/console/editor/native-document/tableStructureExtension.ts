@@ -1474,6 +1474,50 @@ function restoreWordGridColumnWidths(
  * from appendTransaction would remap an active IME/caret through a node replace
  * after every character; setNodeMarkup keeps cell content and selection stable.
  */
+/**
+ * Where `transactions` changed the document, in the last one's document, for
+ * the AutoFit walk: each step's own range (a replacement's, a mark's, a node
+ * attribute's), carried through the steps after it. Null -- every table --
+ * when one is not a step of these kinds (the document's own attributes, an
+ * unknown step), when nothing changed the document (the IME's settling), or
+ * when `window.__docsAutofitScoped = false` (old).
+ */
+export function autofitReachedRanges(
+  transactions: readonly Transaction[],
+  size: number,
+): Array<[number, number]> | null {
+  if (typeof window !== "undefined" && (window as Window & { __docsAutofitScoped?: boolean }).__docsAutofitScoped === false) return null;
+  let ranges: Array<[number, number]> = [];
+  let any = false;
+  for (const transaction of transactions) {
+    if (!transaction.docChanged) continue;
+    for (const step of transaction.steps) {
+      const map = step.getMap();
+      ranges = ranges.map(([from, to]) => [map.map(from, -1), map.map(to, 1)]);
+      const json = step.toJSON() as { stepType?: unknown; from?: unknown; to?: unknown; pos?: unknown };
+      if (json.stepType === "replace" || json.stepType === "replaceAround") {
+        let mapped = false;
+        map.forEach((_oldStart, _oldEnd, newStart, newEnd) => {
+          ranges.push([newStart, newEnd]);
+          mapped = true;
+        });
+        if (!mapped && typeof json.from === "number") ranges.push([json.from, json.from]);
+      } else if ((json.stepType === "addMark" || json.stepType === "removeMark") && typeof json.from === "number" && typeof json.to === "number") {
+        ranges.push([json.from, json.to]);
+      } else if ((json.stepType === "attr" || json.stepType === "addNodeMark" || json.stepType === "removeNodeMark") && typeof json.pos === "number") {
+        ranges.push([json.pos, json.pos + 1]);
+      } else {
+        return null;
+      }
+      any = true;
+    }
+  }
+  if (!any) return null;
+  // A range widened by one each way: nodesBetween then passes through every
+  // ancestor of the change, the tables holding it among them.
+  return ranges.map(([from, to]) => [Math.max(0, Math.min(from, to) - 1), Math.min(size, Math.max(from, to) + 1)]);
+}
+
 function applyAutoFitContentWidths(
   transaction: Transaction,
   table: ProseMirrorNode,
@@ -1939,8 +1983,18 @@ const TableStructure = Extension.create({
           // table in a cell is its own Word table with its own AutoFit);
           // the walk descends past every table to reach them. Only
           // attributes change, so positions stay valid across the walk.
-          newState.doc.descendants((node, pos) => {
+          // A table's widths are its own content's (autoFitTableContents),
+          // so only the tables a change reached are fitted again: a key
+          // typed on page 90 fitted every one of R286-D01's 227 tables and
+          
+          const reached = autofitReachedRanges(transactions, newState.doc.content.size);
+          const seen = new Set<number>();
+          const visit = (node: ProseMirrorNode, pos: number): boolean => {
             if (node.type.name !== "table") return !node.isTextblock;
+            if (reached) {
+              if (seen.has(pos)) return true;
+              seen.add(pos);
+            }
             if (node.attrs.tableLayoutPolicy !== "autofit_contents")
               return true;
             const policy: DocumentTableLayoutPolicy = {
@@ -1955,7 +2009,12 @@ const TableStructure = Extension.create({
             changed =
               applyAutoFitContentWidths(transaction, node, pos) || changed;
             return true;
-          });
+          };
+          if (reached) {
+            for (const [from, to] of reached) newState.doc.nodesBetween(from, to, visit);
+          } else {
+            newState.doc.descendants(visit);
+          }
           if (!changed) return null;
           transaction.setMeta(recomputeMeta, true);
           transaction.setMeta("addToHistory", false);

@@ -22,6 +22,7 @@ import path from "node:path";
 import { app } from "electron";
 import { ensureLibreOfficeFonts, libreOfficeBinary } from "./libreoffice";
 import { localModelDir } from "./local-model";
+import { readManifest } from "./ondemand-assets";
 
 import { printerEnabled } from "./printer";
 import { checkerSha256, vibeCheckerEnabled } from "./vibe-checker";
@@ -55,6 +56,8 @@ export interface Layout {
   readonly vibeRuntimeDir: string | null;
   /** The pinned Pyodide files a shared Python window is checked with (the code window's copy). */
   readonly pyodideDir: string | null;
+  /** The parts fetched after installing (./ondemand-assets.ts): the package's list and where they are kept; null when shipped. */
+  readonly ondemand: { readonly manifestFile: string; readonly root: string; readonly groups: readonly string[] } | null;
   readonly development: boolean;
 }
 
@@ -91,6 +94,7 @@ export function layout(): Layout {
   if (staged) {
     const resources = staged || process.resourcesPath;
     const windows = process.platform === "win32";
+    const ondemand = ondemandLayout(path.join(resources, "mrnote", "ondemand-assets.json"));
     return {
       // An unpackaged run may put a wrapper in front of the staged Python
       // (a profiler, for a benchmark); a packed app never reads it.
@@ -109,7 +113,11 @@ export function layout(): Layout {
       fontsDir: path.join(resources, "mrnote", "apps", "web", "public", "fonts"),
       bundledProfile: path.join(resources, "mrnote", "profile.json"),
       vibeRuntimeDir: path.join(resources, "mrnote", "vibe-runtime"),
-      pyodideDir: path.join(resources, "mrnote", "apps", "web", "pyodide", "v0.26.2", "full"),
+      // Fetched after installing when the package lists it (./ondemand-assets.ts).
+      pyodideDir: ondemand?.groups.includes("pyodide")
+        ? path.join(ondemand.root, "pyodide", "v0.26.2", "full")
+        : path.join(resources, "mrnote", "apps", "web", "pyodide", "v0.26.2", "full"),
+      ondemand,
       development: false,
     };
   }
@@ -127,8 +135,16 @@ export function layout(): Layout {
     // node apps/web/scripts/build-vibe-runtime.mjs <dir> --desktop
     vibeRuntimeDir: process.env.MRAI_CLASSIC_VIBE_RUNTIME || null,
     pyodideDir: process.env.MRAI_CLASSIC_VIBE_PYODIDE || null,
+    ondemand: null,
     development: true,
   };
+}
+
+/** The package's on-demand list, if it has one, and the folder its files are kept in. */
+function ondemandLayout(manifestFile: string): Layout["ondemand"] {
+  const manifest = readManifest(manifestFile);
+  if (!manifest) return null;
+  return { manifestFile, root: path.join(app.getPath("userData"), "ondemand"), groups: Object.keys(manifest.groups) };
 }
 
 /** The app's data: SQLite database, objects, profile, secrets. */
@@ -317,6 +333,10 @@ export function apiEnv(
   // server itself (apps/api app/desktop/local_model.py).
   env.MRAI_DESKTOP_LOCAL_MODEL_DIR = localModelDir();
   if (where.engineHostRoot) env.MRAI_ENGINE_HOST_ROOT = where.engineHostRoot;
+  // The ink readers' models, fetched after installing (./ondemand-assets.ts):
+  // the API reads them there (ink_local_recognition.ink_models_dir) and says
+  // "not installed" until they are.
+  if (where.ondemand?.groups.includes("ink-models")) env.INK_MODELS_DIR = path.join(where.ondemand.root, "ink-models");
   // The engines run on the app's own Node (a closure's node/bin/node is not
   // shipped: it would be the build machine's).
   if (where.node !== "node") env.MRAI_ENGINE_HOST_NODE = where.node;
@@ -356,6 +376,9 @@ export function webEnv(where: Layout, launch: Launch, firstPage?: string, warmPa
     // It ends itself when the shell does, even after a crash (desktop-server.mjs).
     MRAI_DESKTOP_PARENT_PID: String(process.pid),
     MRAI_DESKTOP_WEB_DIR: where.webDir,
+    // The code pages' Python, fetched after installing (./ondemand-assets.ts):
+    // the sandbox host serves its files from there (desktop-sandbox.mjs).
+    ...(where.ondemand?.groups.includes("pyodide") ? { MRAI_DESKTOP_PYODIDE_FILES: path.join(where.ondemand.root, "pyodide") } : {}),
     ...(firstPage ? { MRAI_DESKTOP_FIRST_PAGE: firstPage } : {}),
     ...(warmPages.length ? { MRAI_DESKTOP_WARM_PAGES: warmPages.join(",") } : {}),
     // Node keeps the server's compiled code here (desktop-server.mjs flushes

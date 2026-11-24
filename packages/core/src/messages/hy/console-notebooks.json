@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "Ներկայացումը պարունակում է առնվազն մեկ սլայդ։",
  "presentation.duplicateSlide": "Կրկնօրինակել սլայդը",
  "presentation.slideCopyUnavailable": "Այս սլայդը հիմա հնարավոր չէ կրկնօրինակել։ Փորձեք կրկին մի փոքր ուշ։",
+ "presentation.newSlideNoPackageSlide": "Բնօրինակ ֆայլից ոչ մի սլայդ չի մնացել, որից նոր սլայդը կարողանա վերցնել դասավորությունը։",
  "presentation.slideCopyRebuilt": "Այս պատճենը վերակառուցվել է էջից, ուստի անիմացիաները և նմանատիպ մանրամասները կարող են բացակայել։",
  "presentation.undo": "Հետարկել",
  "presentation.formatPainter": "Ձևաչափի պատճենիչ (կրկնակի սեղմեք՝ միացված պահելու համար)",

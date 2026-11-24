@@ -5697,6 +5697,7 @@
  "presentation.deleteSlideKeepOne": "Eine Präsentation behält mindestens eine Folie.",
  "presentation.duplicateSlide": "Folie duplizieren",
  "presentation.slideCopyUnavailable": "Diese Folie kann gerade nicht dupliziert werden. Versuchen Sie es gleich noch einmal.",
+ "presentation.newSlideNoPackageSlide": "Es ist keine Folie aus der Originaldatei mehr vorhanden, die einer neuen Folie ihr Layout geben kann.",
  "presentation.slideCopyRebuilt": "Diese Kopie wurde aus der Seite neu erstellt; Animationen und Ähnliches können fehlen.",
  "presentation.undo": "Rückgängig",
  "presentation.formatPainter": "Format übertragen (Doppelklick, um aktiviert zu lassen)",

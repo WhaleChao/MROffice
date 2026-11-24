@@ -5,6 +5,7 @@
  */
 import { SheetFact } from "@mrnote/core/web/lib/editor/sheet-facts.ts";
 import { PX_PER_PT } from "@mrnote/core/web/lib/office-units.ts";
+import { createBackgroundLane, requestLaneFrame, type BackgroundLane } from "@mrnote/core/web/lib/background-work.ts";
 import { Extension } from "@tiptap/core";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
@@ -1153,8 +1154,26 @@ export const BandTabLayout = Extension.create({
         },
         view(editorView) {
           const win = editorView.dom.ownerDocument.defaultView;
-          let frame: number | null = null;
+          /** The measure asked for (its cancel). */
+          let frame: (() => void) | null = null;
           let destroyed = false;
+          
+          // opening it waits for its share of the thread instead of taking every
+          // frame (89 frames, 3.2 s of one long document's opening).
+          // `window.__docsStepBudgetOff = true`: every frame, as before.
+          let lane: BackgroundLane | null = null;
+          const requestMeasure = (callback: () => void): (() => void) => {
+            if (!win) return () => {};
+            if ((win as Window & { __docsStepBudgetOff?: boolean }).__docsStepBudgetOff === true) {
+              const handle = win.requestAnimationFrame(callback);
+              return () => win.cancelAnimationFrame(handle);
+            }
+            lane ??= createBackgroundLane({
+              label: "docs-band-tabs",
+              owner: () => editorView.dom.closest(".wm-window") ?? editorView.dom,
+            });
+            return requestLaneFrame(lane, callback, win);
+          };
           let installed = "";
           // Passes since the last change from outside (an edit, a resize, a
           // font): a wrapped paragraph's tabs settle over a few.
@@ -1230,7 +1249,7 @@ export const BandTabLayout = Extension.create({
           };
           const settle = () => {
             if (frame !== null || !win) return;
-            frame = win.requestAnimationFrame(run);
+            frame = requestMeasure(run);
           };
           const schedule = () => {
             settlePasses = 0;
@@ -1242,7 +1261,7 @@ export const BandTabLayout = Extension.create({
           // the settling below, run to its end in one go.
           const unregisterSettler = registerLayoutSettler(editorView.dom, "band-tabs", () => {
             if (destroyed) return;
-            if (frame !== null) win?.cancelAnimationFrame(frame);
+            frame?.();
             frame = null;
             if (editorView.dom instanceof HTMLElement) tabMeasureMemos.get(editorView.dom)?.clear();
             fromClearSlate = true;
@@ -1250,8 +1269,10 @@ export const BandTabLayout = Extension.create({
             for (let pass = 0; pass <= MAX_SETTLE_PASSES; pass += 1) {
               measureNow();
               // A wrapped line asked for another look: taken now, not next frame.
-              if (frame === null) break;
-              win?.cancelAnimationFrame(frame);
+              // (Set again by the measure: TypeScript cannot see the closure write.)
+              const asked = frame as (() => void) | null;
+              if (asked === null) break;
+              asked();
               frame = null;
             }
             clearLayoutPending(editorView.dom, "band-tabs");
@@ -1336,7 +1357,8 @@ export const BandTabLayout = Extension.create({
             },
             destroy() {
               destroyed = true;
-              if (frame !== null) win?.cancelAnimationFrame(frame);
+              frame?.();
+              lane?.dispose();
               clearLayoutPending(editorView.dom, "band-tabs");
               unregisterSettler();
               observer?.disconnect();

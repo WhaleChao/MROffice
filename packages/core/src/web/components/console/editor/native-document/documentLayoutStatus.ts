@@ -211,3 +211,31 @@ export function sourceFontPlanIsReady(doc: PmNode, root: HTMLElement, wait: bool
  * out the line boxes a page depends on before it paints the page.
  */
 export const LAYOUT_METRICS_FLUSH_EVENT = "mrn-layout-metrics-flush";
+
+/**
+ * A flush the ledger may take in steps (`detail.deadline`, performance.now()):
+ * a projection that can measure part of what is waiting stops at the deadline,
+ * says so (`detail.partial`) and goes on with the next flush, which the ledger
+ * asks for in its next turn instead of the next frame. One flush of a long
+ * opening document's lines was 0.3-0.8 s in a single task, through which no
+ * other window could take a key or a drag. The lines measured, and the
+ * pages laid out from them, are the same; only the tasks they are measured in
+ * change. A flush without a deadline measures everything at once, as before.
+ */
+export interface LayoutMetricsFlushDetail {
+  deadline?: number;
+  partial?: boolean;
+}
+
+/** The deadline of a flush taken in steps, or null (measure everything now). */
+export function layoutMetricsFlushDeadline(event: Event | undefined): number | null {
+  const detail = (event as CustomEvent<LayoutMetricsFlushDetail | null> | undefined)?.detail;
+  const deadline = detail && typeof detail === "object" ? detail.deadline : undefined;
+  return typeof deadline === "number" && Number.isFinite(deadline) ? deadline : null;
+}
+
+/** A projection stopped at the flush's deadline with lines still to measure. */
+export function noteLayoutMetricsFlushPartial(event: Event | undefined): void {
+  const detail = (event as CustomEvent<LayoutMetricsFlushDetail | null> | undefined)?.detail;
+  if (detail && typeof detail === "object") detail.partial = true;
+}

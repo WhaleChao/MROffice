@@ -556,7 +556,7 @@ function PresentationBlockViewDrawing({
           );
       if (effectName) {
         parts.push(
-          `${effectName} ${occurrence.durationMs}ms ${timing?.timingFunction ?? playTimingFunction(occurrence.recipeKeyframe)} ${occurrence.delayMs}ms${timing ? ` ${timing.iterationCount} ${timing.direction}` : ""} ${fill}`,
+          `${effectName} ${occurrence.durationMs}ms ${timing?.timingFunction ?? playTimingFunction(occurrence.recipeKeyframe, occurrence.animation, occurrence.effectOption)} ${occurrence.delayMs}ms${timing ? ` ${timing.iterationCount} ${timing.direction}` : ""} ${fill}`,
         );
       }
       if (occurrence.motionKeyframe) {
@@ -604,7 +604,7 @@ function PresentationBlockViewDrawing({
       const repeat = timing ? ` ${timing.iterationCount} ${timing.direction}` : "";
       const motionAnim = `${motionKeyframe} ${durationMs}ms ${timing?.timingFunction ?? "ease-in-out"} ${delayMs}ms${repeat} ${timing?.rewind ? "none" : "forwards"}`;
       const entranceAnim = entranceName
-        ? `${entranceName} ${durationMs}ms ${timing?.timingFunction ?? playTimingFunction(play.recipeKeyframe)} ${delayMs}ms${repeat} ${timing?.rewind ? "backwards" : "both"}`
+        ? `${entranceName} ${durationMs}ms ${timing?.timingFunction ?? playTimingFunction(play.recipeKeyframe, play.animation, play.effectOption)} ${delayMs}ms${repeat} ${timing?.rewind ? "backwards" : "both"}`
         : null;
       style = {
         ...staticStyle,
@@ -621,7 +621,7 @@ function PresentationBlockViewDrawing({
         ...(effectName
           ? {
               animationName: effectName,
-              animationTimingFunction: timing?.timingFunction ?? playTimingFunction(play.recipeKeyframe),
+              animationTimingFunction: timing?.timingFunction ?? playTimingFunction(play.recipeKeyframe, play.animation, play.effectOption),
               animationFillMode: timing?.rewind ? "backwards" : "both",
               animationDelay: `${delayMs}ms`,
               animationDuration: `${durationMs}ms`,

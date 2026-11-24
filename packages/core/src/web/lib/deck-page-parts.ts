@@ -365,6 +365,12 @@ function readKeptEdits(pageId: string): Record<string, KeptPartEdit> {
   }
 }
 
+/** The ids of the slides a part's room holds now. */
+function roomSlideIds(content: Rec): Set<string> {
+  const slides = Array.isArray(content.slides) ? (content.slides as unknown[]) : [];
+  return new Set(slides.map((slide) => asRec(slide)?.id).filter((id): id is string => typeof id === "string"));
+}
+
 function writeKeptEdit(pageId: string, index: number, entry: KeptPartEdit | null): void {
   try {
     const all = readKeptEdits(pageId);
@@ -933,7 +939,17 @@ export class DeckPartsSession<S extends DeckSlideLike> {
     // A later part's slide is the body's room's no more than the server's
     // part is: an edit of it not saved yet stays as the editor has it.
     const currentById = new Map<string, S>();
+    // What the window shows of each slide, drawn (not a stub): a slide the
+    // server put in a part this editor holds before the part was read with
+    // it -- this window's own New Slide or copy, its insert landed -- stays
+    // as the window has it while the part is read again for it. Made a stub,
+    // the box being typed in was taken away under the caret: the deck's
+    // first New Slide after an import, typed on at once, lost every key
+    
+    // moment after the insert landed).
+    const shownById = new Map<string, S>();
     for (const slide of current ?? []) {
+      if (slide.importPending !== true) shownById.set(slide.id, slide);
       const part = this.ownerOf.get(slide.id);
       if (part !== undefined && part > 0 && this.drafts.has(part)) currentById.set(slide.id, slide);
     }
@@ -993,12 +1009,15 @@ export class DeckPartsSession<S extends DeckSlideLike> {
       // A slide the server put in a part this editor holds (another
       // editor's insert or copy): the part is read again for it.
       if (holding && !held && !editing) this.incomplete.add(entry.part);
+      const shown = holding && !held && !editing ? shownById.get(entry.id) : undefined;
       out.push(
         editing
           ? this.withHidden(editing, entry.hidden === true)
           : held
             ? this.withHidden(held, entry.hidden === true)
-            : this.stubFor(entry),
+            : shown
+              ? this.withHidden(shown, entry.hidden === true)
+              : this.stubFor(entry),
       );
       placed.add(entry.id);
       follow(entry.id);
@@ -1419,7 +1438,24 @@ export class DeckPartsSession<S extends DeckSlideLike> {
           if (known !== undefined && known !== slideRecordJson(record)) changed = true;
         }
       }
-      if (held.room?.accepting) {
+      // A changed slide the room does not hold -- one inserted into this part
+      // since the room was seeded, the room's reseed not reached this window --
+      // cannot go into the room: its publication states only the slides the
+      // room holds, and the typing was dropped there, no draft, no device copy,
+      
+      // New Slide of a later part). It goes by the part's save, kept on this
+      // device; the server carries that save into the room, which then holds it.
+      const roomHolds = held.room?.accepting ? roomSlideIds(held.room.content()) : null;
+      const outsideRoom = roomHolds !== null && changed && records.some(({ id }) => {
+        const saved = held.saved.get(id);
+        return !roomHolds.has(id) && (!saved || liveOf.get(id) !== saved);
+      });
+      if (outsideRoom) {
+        console.warn("[deck-parts] a changed slide its part's room does not hold goes by the part's save", {
+          partIndex: index, ids: records.filter(({ id }) => !roomHolds!.has(id)).map(({ id }) => id),
+        });
+      }
+      if (held.room?.accepting && !outsideRoom) {
         // A part with a live room: what changed goes into the room, as this
         // member's step there; the room saves it into the part.
         if (changed && this.publishToRoom(held, content, records, liveOf)) this.touchedRooms.add(index);
@@ -1587,6 +1623,24 @@ export class DeckPartsSession<S extends DeckSlideLike> {
       const saved = held.saved.get(id);
       if (now && saved && now !== saved && !unchangedFromSaved(now, saved)) typed.set(id, { now, saved });
     }
+    // A slide this window put into the part after the part was read (its New
+    // Slide, a copy) has no saved reading here: what the room holds of it is
+    // what the window put there, the base of what was typed on it since. Left
+    // out, the room's version was handed back over the window's and the words
+    // typed on the new slide before its room was read were gone, nothing
+    
+    // Slide after the import, typed on at once).
+    const freshBases = new Map<string, Rec>();
+    for (const [id, now] of draft?.live ?? []) {
+      if (!now || typed.has(id) || held.saved.has(id)) continue;
+      const record = (input.slides as unknown[]).map(asRec).find((slide) => slide?.id === id);
+      const roomSlide = slides.find((slide) => slide.id === id);
+      if (!record || !roomSlide) continue;
+      const roomView = this.shown(roomSlide);
+      if (unchangedFromSaved(now, roomView)) continue;
+      typed.set(id, { now, saved: roomView });
+      freshBases.set(id, record);
+    }
     // What each typed slide was when it was typed on: the part as installed
     // (or as last saved). Only the draft's change from it goes into the room:
     // the room may hold newer words of another member's, given to it and not
@@ -1606,7 +1660,7 @@ export class DeckPartsSession<S extends DeckSlideLike> {
         }
       }
       for (const id of typed.keys()) {
-        let base = installedSlides?.map(asRec).find((slide) => slide?.id === id) ?? null;
+        let base = freshBases.get(id) ?? installedSlides?.map(asRec).find((slide) => slide?.id === id) ?? null;
         const stored = held.savedStore.get(id);
         if (!base && stored !== undefined) {
           try {
@@ -1791,6 +1845,51 @@ export class DeckPartsSession<S extends DeckSlideLike> {
     this.refused.delete(index);
     if (this.pageId) writeKeptEdit(this.pageId, index, null);
     this.changed();
+    return { replace, copiesAfter };
+  }
+
+  /**
+   * Part `index`'s room has its save held (`part_room_write_conflict`: a
+   * write of the server's changed slides it was typing on) and is being
+   * settled: what the room holds -- this window's typing in it -- is kept on
+   * this device as the part's recoverable copy first, so a settlement that
+   * fails or never answers loses nothing. False when there is no room.
+   */
+  keepRoomAsRecoverable(index: number): boolean {
+    const held = this.parts.get(index);
+    if (!held?.room || !this.pageId) return false;
+    writeKeptEdit(this.pageId, index, { rev: held.revision, content: held.room.content() as Rec, sending: false });
+    return true;
+  }
+
+  /**
+   * Part `index`'s held room was settled (`resolveRoomWriteConflict`): the
+   * part is `fresh`, the slides `heldIds` as the server's write left them.
+   * The part is merged as a part saved elsewhere first (`mergeConflict`), and
+   * each held slide this window had otherwise (`liveBefore`, read before it
+   * asked) is kept as a copy after it -- the member's words never guessed
+   * into the write's blocks, never dropped. Null when `fresh` is not that part.
+   */
+  settleRoomWriteConflict(
+    index: number,
+    fresh: DocumentPartResponse,
+    live: readonly S[],
+    liveBefore: readonly S[],
+    heldIds: readonly string[],
+  ): DeckPartMerge<S> | null {
+    const merge = this.mergeConflict(index, fresh, live);
+    if (!merge) return null;
+    const before = new Map(liveBefore.map((slide) => [slide.id, slide]));
+    const replace = new Map(merge.replace);
+    const copiesAfter = new Map(merge.copiesAfter);
+    const held = this.parts.get(index);
+    for (const id of heldIds) {
+      const theirs = held?.saved.get(id);
+      const mine = before.get(id);
+      if (!theirs) continue;
+      replace.set(id, theirs);
+      if (mine && !sameSlideButVisibility(mine, theirs)) copiesAfter.set(id, mine);
+    }
     return { replace, copiesAfter };
   }
 

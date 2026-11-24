@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "ඉදිරිපත් කිරීමක අවම වශයෙන් එක් ස්ලයිඩයක්වත් තිබිය යුතුය.",
  "presentation.duplicateSlide": "ස්ලයිඩය අනුපිටපත් කරන්න",
  "presentation.slideCopyUnavailable": "මෙම ස්ලයිඩය දැන් අනුපිටපත් කළ නොහැක. මොහොතකින් නැවත උත්සාහ කරන්න.",
+ "presentation.newSlideNoPackageSlide": "නව විනිවිදකයට පිරිසැලසුම ලබා දීමට මුල් ගොනුවෙන් කිසිදු විනිවිදකයක් ඉතිරිව නැත.",
  "presentation.slideCopyRebuilt": "මෙම පිටපත පිටුවෙන් නැවත ගොඩනගා ඇති බැවින් සජීවීකරණ සහ සමාන විස්තර මග හැරී තිබිය හැක.",
  "presentation.undo": "අහෝසි කරන්න",
  "presentation.formatPainter": "ආකෘති පින්තාරුකාරය (ක්‍රියාත්මකව තබා ගැනීමට දෙවරක් ක්ලික් කරන්න)",

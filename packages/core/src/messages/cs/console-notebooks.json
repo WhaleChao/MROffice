@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "Prezentace musí obsahovat alespoň jeden snímek.",
  "presentation.duplicateSlide": "Duplikovat snímek",
  "presentation.slideCopyUnavailable": "Tento snímek teď nelze duplikovat. Zkuste to za chvíli znovu.",
+ "presentation.newSlideNoPackageSlide": "Nezůstal žádný snímek z původního souboru, od kterého by nový snímek převzal rozložení.",
  "presentation.slideCopyRebuilt": "Tato kopie byla znovu sestavena ze stránky, proto mohou chybět animace a podobné podrobnosti.",
  "presentation.undo": "Zpět",
  "presentation.formatPainter": "Kopírovat formát (poklikáním ho ponecháte zapnutý)",

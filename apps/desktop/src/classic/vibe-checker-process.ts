@@ -85,6 +85,8 @@ export function startVibeCheckerProcess(
     if (stopped || !runtimeDir) return;
     lastStart = Date.now();
     const keep = ["PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR", "LANG", "LC_ALL", "APPDATA", "LOCALAPPDATA"];
+    // Linux: Chromium needs the display server even for a window never shown.
+    if (process.platform === "linux") keep.push("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "XDG_RUNTIME_DIR", "XDG_SESSION_TYPE");
     const env: NodeJS.ProcessEnv = {};
     for (const key of keep) if (process.env[key]) env[key] = process.env[key];
     Object.assign(env, {
@@ -98,6 +100,10 @@ export function startVibeCheckerProcess(
     // A packed app's executable starts its own entry; an unpacked run is
     // Electron with the entry's path.
     const args = app.isPackaged ? [CHECKER_PROCESS_FLAG] : [process.argv[1], CHECKER_PROCESS_FLAG];
+    // Linux: started without Chromium's sandbox (the AppImage's AppRun does
+    // that where the system gives no user namespace), this app's own second
+    // Electron must be too, or it aborts on the SUID helper it cannot use.
+    if (process.platform === "linux" && app.commandLine.hasSwitch("no-sandbox")) args.push("--no-sandbox");
     const started = spawn(process.execPath, args, { env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     child = started;
     const forward = (chunk: Buffer) => {

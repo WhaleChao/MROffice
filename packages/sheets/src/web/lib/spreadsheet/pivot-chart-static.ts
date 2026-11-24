@@ -57,8 +57,23 @@ export function spreadsheetChartLiteralRows(
   chart: SpreadsheetChartLike,
 ): string[][] | null {
   if (!normalizeSpreadsheetChartBinding(chart.binding)?.literal) return null;
+  return spreadsheetChartCachedRows(chart);
+}
+
+/**
+ * The rows the chart's model last read, header row first, whatever its
+ * binding: what a PivotChart whose PivotTable draws no report plots (a
+ * preserve-only one, an OLAP cube's), as Excel shows the values the file
+ * cached (X-235). R480-X04: an imported PivotChart bound to its report's
+ * cells (no `binding.literal`) on a preserve-only PivotTable plotted
+ * nothing and printed "no visible chart data". Null for a model with no
+ * category data.
+ */
+export function spreadsheetChartCachedRows(
+  chart: SpreadsheetChartLike,
+): string[][] | null {
   const data = (chart.chartV2 as ChartBlockAttrsV2 | undefined)?.data;
-  if (!data || data.kind !== "category") return null;
+  if (!data || data.kind !== "category" || data.series.length === 0) return null;
   return [
     ["", ...data.series.map((series) => series.name)],
     ...data.categories.map((category, index) => [
@@ -69,6 +84,19 @@ export function spreadsheetChartLiteralRows(
       }),
     ]),
   ];
+}
+
+/**
+ * The multi-level category axis the chart's model last read (outer levels,
+ * outermost first, one entry per category), for the rows
+ * `spreadsheetChartCachedRows` gives; undefined for an axis of one level.
+ */
+export function spreadsheetChartCachedCategoryLevels(
+  chart: SpreadsheetChartLike,
+): string[][] | undefined {
+  const data = (chart.chartV2 as ChartBlockAttrsV2 | undefined)?.data;
+  if (!data || data.kind !== "category" || !data.categoryLevels?.length) return undefined;
+  return data.categoryLevels.map((level) => [...level]);
 }
 
 /**

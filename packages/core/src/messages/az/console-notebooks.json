@@ -6112,6 +6112,7 @@
  "presentation.deleteSlideKeepOne": "Təqdimatda ən azı bir slayd qalır.",
  "presentation.duplicateSlide": "Slaydı dublikat et",
  "presentation.slideCopyUnavailable": "Bu slaydı hazırda dublikat etmək mümkün deyil. Bir az sonra yenidən cəhd edin.",
+ "presentation.newSlideNoPackageSlide": "Yeni slayda tərtibatını verəcək orijinal fayldan heç bir slayd qalmayıb.",
  "presentation.slideCopyRebuilt": "Bu kopya səhifədən yenidən quruldu, ona görə animasiyalar və bənzər detallar çatışmaya bilər.",
  "presentation.undo": "Geri qaytar",
  "presentation.formatPainter": "Format sürəti (aktiv saxlamaq üçün iki dəfə klikləyin)",

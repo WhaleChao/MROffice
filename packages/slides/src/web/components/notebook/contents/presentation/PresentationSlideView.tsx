@@ -658,10 +658,20 @@ export function PresentationSlideView({
     for (let i = 0; i < sequence.length; i += 1) {
       const step = sequence[i];
       const rawState = states.get(i);
-      const state =
+      const shiftedState =
         rawState && rawState.animate && transitionRemainingMs > 0
           ? { ...rawState, delayMs: rawState.delayMs + transitionRemainingMs }
           : rawState;
+      // An Appear shown at the end of its duration (row 1088): the object
+      // comes in a millisecond before the effect ends, as PowerPoint plays it.
+      const state =
+        shiftedState && step.appearAtEnd === true && shiftedState.animate && shiftedState.durationMs > 1
+          ? {
+              ...shiftedState,
+              delayMs: shiftedState.delayMs + shiftedState.durationMs - 1,
+              durationMs: 1,
+            }
+          : shiftedState;
       if (!state) continue;
       // A chart built element by element (row 1080): the background step
       // (gridlines and legend) brings the chart itself; each series,
@@ -795,7 +805,7 @@ export function PresentationSlideView({
               stepMs: textUnitStepMs ?? 0,
               hiddenUntilStart: presentationAnimationEffect(step.animation)?.category === "entrance",
               unit: textUnit,
-              timingFunction: stepTiming?.timingFunction ?? playTimingFunction(undefined),
+              timingFunction: stepTiming?.timingFunction ?? playTimingFunction(undefined, step.animation, step.effectOption),
               ...(stepTiming ? { timing: stepTiming } : {}),
             };
           }

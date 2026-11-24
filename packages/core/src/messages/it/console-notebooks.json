@@ -5697,6 +5697,7 @@
  "presentation.deleteSlideKeepOne": "Una presentazione mantiene almeno una diapositiva.",
  "presentation.duplicateSlide": "Duplica diapositiva",
  "presentation.slideCopyUnavailable": "Impossibile duplicare questa diapositiva ora. Riprova tra poco.",
+ "presentation.newSlideNoPackageSlide": "Non rimane alcuna diapositiva del file originale da cui una nuova diapositiva possa prendere il layout.",
  "presentation.slideCopyRebuilt": "Questa copia è stata ricreata dalla pagina: animazioni e simili potrebbero mancare.",
  "presentation.undo": "Annulla",
  "presentation.formatPainter": "Copia formato (doppio clic per mantenerlo attivo)",

@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "Prezentacja musi zawierać co najmniej jeden slajd.",
  "presentation.duplicateSlide": "Duplikuj slajd",
  "presentation.slideCopyUnavailable": "Nie można teraz zduplikować tego slajdu. Spróbuj ponownie za chwilę.",
+ "presentation.newSlideNoPackageSlide": "Nie pozostał żaden slajd z oryginalnego pliku, od którego nowy slajd mógłby przejąć układ.",
  "presentation.slideCopyRebuilt": "Ta kopia została odtworzona na podstawie strony, więc może brakować animacji i podobnych szczegółów.",
  "presentation.undo": "Cofnij",
  "presentation.formatPainter": "Malarz formatów (kliknij dwukrotnie, aby pozostawić włączony)",

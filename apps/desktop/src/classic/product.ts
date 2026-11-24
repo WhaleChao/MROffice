@@ -26,6 +26,8 @@ export interface DesktopProduct {
   readonly runtimeName: string;
   readonly displayName: { readonly en: string; readonly zh: string };
   readonly appId: string;
+  /** The package's name; on Linux also the executable's and the desktop entry's (<packageName>.desktop). */
+  readonly packageName: string;
   readonly protocol: string;
   readonly progIdPrefix: string;
   readonly registeredApp: string | null;

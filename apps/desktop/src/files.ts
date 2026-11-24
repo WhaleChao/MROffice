@@ -14,6 +14,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { pathFromFileArgument } from "./linux-desktop-entry";
+
 export interface OpenableType {
   readonly extensions: readonly string[];
   readonly mimeType: string;
@@ -110,12 +112,12 @@ export function isOpenablePath(filePath: string): boolean {
   return MIME_BY_EXTENSION.has(path.extname(filePath).toLowerCase());
 }
 
-/** The document paths among a process's arguments (Windows passes them so). */
+/** The document paths among a process's arguments (Windows passes them so;
+ * a Linux file manager passes paths or file:// URLs: ./linux-desktop-entry.ts). */
 export function openablePathsFromArgv(argv: readonly string[]): string[] {
-  return argv.filter(
-    (argument) =>
-      !argument.startsWith("-") && path.isAbsolute(argument) && isOpenablePath(argument),
-  );
+  return argv
+    .map((argument) => pathFromFileArgument(argument) ?? argument)
+    .filter((argument) => !argument.startsWith("-") && path.isAbsolute(argument) && isOpenablePath(argument));
 }
 
 export interface OpenedFile {

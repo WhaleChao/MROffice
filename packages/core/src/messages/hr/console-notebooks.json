@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "Prezentacija mora sadržavati barem jedan slajd.",
  "presentation.duplicateSlide": "Dupliciraj slajd",
  "presentation.slideCopyUnavailable": "Ovaj slajd trenutačno nije moguće duplicirati. Pokušajte ponovno za trenutak.",
+ "presentation.newSlideNoPackageSlide": "Nije preostao nijedan slajd iz izvorne datoteke od kojeg bi novi slajd preuzeo raspored.",
  "presentation.slideCopyRebuilt": "Ovaj je primjerak ponovno izgrađen iz stranice pa mogu nedostajati animacije i slični detalji.",
  "presentation.undo": "Poništi",
  "presentation.formatPainter": "Kopiraj oblikovanje (dvoklik za trajno uključivanje)",

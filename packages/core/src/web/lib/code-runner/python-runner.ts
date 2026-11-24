@@ -33,6 +33,7 @@
  * the real WASM runtime.
  */
 
+import { desktopOndemand, ensureDesktopOndemand } from "../desktop-ondemand";
 import type { LogStream } from "./cell-output-format";
 import type { RunResult } from "./js-runner";
 import type { OnOutput } from "./output-coalescer";
@@ -935,19 +936,36 @@ function createSandboxFrameChannel(origin: string): SandboxFrameChannel {
   }
 
   window.addEventListener("message", onWindowMessage);
-  if (!usesPrivateSandboxBootstrap()) {
-    const frame = makeFrame();
-    frame.src = `${origin}${PYTHON_SANDBOX_PAGE_PATH}`;
-    document.body.appendChild(frame);
-    iframe = frame;
+  function startFrame(): void {
+    if (disposed || failed) return;
+    if (!usesPrivateSandboxBootstrap()) {
+      const frame = makeFrame();
+      frame.src = `${origin}${PYTHON_SANDBOX_PAGE_PATH}`;
+      document.body.appendChild(frame);
+      iframe = frame;
+    }
+    readyTimer = setTimeout(() => {
+      fail(
+        `Python sandbox origin ${origin} did not become ready within ` +
+          `${Math.round(FRAME_READY_TIMEOUT_MS / 1000)}s — check that the ` +
+          "sandbox host serves /python-sandbox.html (NEXT_PUBLIC_SANDBOX_ORIGIN).",
+      );
+    }, FRAME_READY_TIMEOUT_MS);
+    if (usesPrivateSandboxBootstrap()) void bootstrapPrivateFrame();
   }
-  readyTimer = setTimeout(() => {
-    fail(
-      `Python sandbox origin ${origin} did not become ready within ` +
-        `${Math.round(FRAME_READY_TIMEOUT_MS / 1000)}s — check that the ` +
-        "sandbox host serves /python-sandbox.html (NEXT_PUBLIC_SANDBOX_ORIGIN).",
+  // The desktop app fetches Python after installing (lib/desktop-ondemand):
+  // the frame starts once it is on this computer; posts wait meanwhile.
+  if (desktopOndemand()) {
+    ensureDesktopOndemand("pyodide").then(startFrame, (error: unknown) =>
+      fail(
+        `Python is not on this computer yet and could not be downloaded (${
+          error instanceof Error ? error.message : String(error)
+        }). Connect to the internet and run it again.`,
+      ),
     );
-  }, FRAME_READY_TIMEOUT_MS);
+  } else {
+    startFrame();
+  }
 
   const channel: SandboxFrameChannel = {
     post(message) {
@@ -981,7 +999,6 @@ function createSandboxFrameChannel(origin: string): SandboxFrameChannel {
     },
     dispose,
   };
-  if (usesPrivateSandboxBootstrap()) void bootstrapPrivateFrame();
   return channel;
 }
 

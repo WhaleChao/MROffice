@@ -84,6 +84,19 @@ export function pdfLayoutFallbackReasons(header: string | null): string[] | null
   return reasons.length ? [...new Set(reasons)] : ["unknown"];
 }
 
+/** Which drawing a PDF read as bytes is (`fetchPageExportBlob`): for a caller that hands the file on and must say so
+ * itself (an embedded editor's Automation API, which answers a host page, not a person; triage TRIAGE 135). */
+export interface PageExportLayout {
+  readonly layout: "editor" | "fallback";
+  readonly reasons: readonly string[];
+}
+const blobLayouts = new WeakMap<Blob, PageExportLayout>();
+
+/** The drawing of a PDF `fetchPageExportBlob` answered (null: not a PDF, or the server did not say). */
+export function pageExportBlobLayout(blob: Blob): PageExportLayout | null {
+  return blobLayouts.get(blob) ?? null;
+}
+
 function announcePdfLayout(response: Response, pageId: string): void {
   const reasons = pdfLayoutFallbackReasons(response.headers.get("x-mrai-pdf-layout"));
   if (!reasons || typeof window === "undefined") return;
@@ -853,7 +866,13 @@ export async function fetchPageExportBlob(
     ) {
       throw new Error("The export arrived as a download link, not a file.");
     }
-    return serverStampedInEmbed(await encryptedExportBlob(await response.blob(), secured), secured.format);
+    const blob = serverStampedInEmbed(await encryptedExportBlob(await response.blob(), secured), secured.format);
+    const header = response.headers.get("x-mrai-pdf-layout");
+    if (secured.format === "pdf" && header) {
+      const reasons = pdfLayoutFallbackReasons(header);
+      blobLayouts.set(blob, reasons ? { layout: "fallback", reasons } : { layout: "editor", reasons: [] });
+    }
+    return blob;
   });
 }
 

@@ -95,6 +95,8 @@ export interface PresentationSlideRailMenuContentCtl {
   slideRailMenuTargetSlide: SlideModel | undefined;
   slideRailMenuSectionIndex: number;
   slideRailMenuCanAddSlide: boolean;
+  /** Why New Slide is off, when the deck can say (`presentationNewSlideVouchingSlide`). */
+  slideRailMenuAddSlideReason?: string;
   slideRailMenuSelectedIds: readonly string[] | null;
   slideRailMenuCanDuplicate: boolean;
   slideRailMenuCanCut: boolean;
@@ -139,6 +141,7 @@ export function PresentationSlideRailMenuContent({ ctl }: { ctl: PresentationSli
     slideRailMenuTargetSlide,
     slideRailMenuSectionIndex,
     slideRailMenuCanAddSlide,
+    slideRailMenuAddSlideReason,
     slideRailMenuSelectedIds,
     slideRailMenuCanDuplicate,
     slideRailMenuCanCut,
@@ -208,6 +211,7 @@ export function PresentationSlideRailMenuContent({ ctl }: { ctl: PresentationSli
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       disabled={!slideRailMenuCanAddSlide}
+                      title={slideRailMenuAddSlideReason}
                       data-testid="presentation-slide-gap-new"
                       onSelect={() =>
                         slideRailMenuAfterSlideId
@@ -291,6 +295,7 @@ export function PresentationSlideRailMenuContent({ ctl }: { ctl: PresentationSli
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       disabled={!slideRailMenuCanAddSlide}
+                      title={slideRailMenuAddSlideReason}
                       data-testid="presentation-slide-context-new"
                       onSelect={() =>
                         slideRailMenuAfterSlideId

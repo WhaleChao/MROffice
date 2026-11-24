@@ -5697,6 +5697,7 @@
  "presentation.deleteSlideKeepOne": "Een presentatie houdt ten minste één dia.",
  "presentation.duplicateSlide": "Dia dupliceren",
  "presentation.slideCopyUnavailable": "Deze dia kan nu niet worden gedupliceerd. Probeer het zo opnieuw.",
+ "presentation.newSlideNoPackageSlide": "Er is geen dia uit het oorspronkelijke bestand meer over om een nieuwe dia een indeling te geven.",
  "presentation.slideCopyRebuilt": "Deze kopie is opnieuw opgebouwd vanuit de pagina, dus animaties en dergelijke kunnen ontbreken.",
  "presentation.undo": "Ongedaan maken",
  "presentation.formatPainter": "Opmaak kopiëren/plakken (dubbelklik om ingeschakeld te houden)",

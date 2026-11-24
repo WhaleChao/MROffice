@@ -34,3 +34,26 @@ test("on by default (owner, 2026-11-15): only the person's own \"off\" keeps it 
   assert.equal(prelaunchWanted(true), true);
   assert.equal(prelaunchWanted(false), false);
 });
+
+test("a service that stops while nothing is shown is restarted quietly, three times in half an hour at most", () => {
+  const { backgroundRestartAllowed, backgroundRestartArgs, BACKGROUND_RESTART_WINDOW_MS } = require("../dist/classic/prelaunch-agent.js");
+  const now = 10 * BACKGROUND_RESTART_WINDOW_MS;
+  let history = [];
+  for (let i = 0; i < 3; i += 1) {
+    const answer = backgroundRestartAllowed(history, now + i);
+    assert.equal(answer.allowed, true);
+    history = answer.history;
+  }
+  assert.equal(backgroundRestartAllowed(history, now + 3).allowed, false);
+  // Older ones no longer count; nonsense entries never do.
+  const later = backgroundRestartAllowed([...history, Number.NaN, now + 1e15], now + BACKGROUND_RESTART_WINDOW_MS + 5);
+  assert.equal(later.allowed, true);
+  assert.deepEqual(later.history, [now + BACKGROUND_RESTART_WINDOW_MS + 5]);
+  // Relaunched in the background, with the app's switches only.
+  assert.deepEqual(
+    backgroundRestartArgs(["/x/MR Office", "--inspect=0", BACKGROUND_ARG, "C:\\a.docx", "mroffice-oss://open"]),
+    ["--inspect=0", BACKGROUND_ARG],
+  );
+  assert.deepEqual(backgroundRestartArgs(["/x/MR Office"]), [BACKGROUND_ARG]);
+  assert.deepEqual(backgroundRestartArgs(["electron", "dist/classic/main.js", "/a.pdf"], true), ["dist/classic/main.js", BACKGROUND_ARG]);
+});

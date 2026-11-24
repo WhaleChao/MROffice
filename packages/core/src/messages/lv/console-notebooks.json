@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "Prezentācijā jāsaglabā vismaz viens slaids.",
  "presentation.duplicateSlide": "Dublēt slaidu",
  "presentation.slideCopyUnavailable": "Šo slaidu pašlaik nevar dublēt. Mēģiniet vēlreiz pēc brīža.",
+ "presentation.newSlideNoPackageSlide": "Nav palicis neviens sākotnējā faila slaids, no kura jaunais slaids varētu pārņemt izkārtojumu.",
  "presentation.slideCopyRebuilt": "Šī kopija tika izveidota no lapas, tāpēc animācijas un līdzīgas detaļas var trūkt.",
  "presentation.undo": "Atsaukt",
  "presentation.formatPainter": "Formāta kopētājs (veiciet dubultklikšķi, lai ieslēgtu)",

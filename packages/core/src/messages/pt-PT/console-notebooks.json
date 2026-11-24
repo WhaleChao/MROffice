@@ -2308,6 +2308,7 @@
  "presentation.deleteSlideKeepOne": "Uma apresentação mantém pelo menos um diapositivo.",
  "presentation.duplicateSlide": "Duplicar diapositivo",
  "presentation.slideCopyUnavailable": "De momento, não é possível duplicar este diapositivo. Tente novamente daqui a pouco.",
+ "presentation.newSlideNoPackageSlide": "Não resta nenhum diapositivo do ficheiro original para dar o esquema a um novo diapositivo.",
  "presentation.slideCopyRebuilt": "Esta cópia foi recriada a partir da página, pelo que podem faltar animações e detalhes semelhantes.",
  "presentation.undo": "Anular",
  "presentation.formatPainter": "Pincel de Formatação (faça duplo clique para manter ativo)",

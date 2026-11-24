@@ -82,8 +82,10 @@ export function snapshotReceiptFor(pageId: string, part: number, root: JSONConte
     traceLayoutSnapshot(`part ${part}: no row`);
     return null;
   }
-  const row = withProjectionJsonMemo(() =>
-    wholePartRows(candidates).find((candidate) => rowNamesContent(candidate, root.attrs, root.content ?? [], nameOf)));
+  const row = withProjectionJsonMemo(() => {
+    const naming = wholePartRows(candidates).filter((candidate) => rowNamesContent(candidate, root.attrs, root.content ?? [], nameOf));
+    return rowByFontsHere(naming, content);
+  });
   if (!row) {
     traceLayoutSnapshot(`part ${part}: no row of ${candidates.length} names it`);
     for (const whole of wholePartRows(candidates)) {
@@ -109,6 +111,62 @@ export function snapshotReceiptFor(pageId: string, part: number, root: JSONConte
       geometry: row.pages.map(() => NO_PAGE_GEOMETRY),
     }),
   };
+}
+
+
+
+
+
+
+
+
+
+
+
+export function rowByFontsHere(naming: readonly LayoutSnapshotRow[], content: JSONContent): LayoutSnapshotRow | undefined {
+  if (naming.length < 2 || (globalThis as { __docsSnapshotRowByFonts?: boolean }).__docsSnapshotRowByFonts === false) return naming[0];
+  const known = fontsKeyReadHere(fontFamiliesOf(content));
+  return (known && naming.find((row) => row.fontsKey === known)) || naming[0];
+}
+
+const FONTS_KEYS_STORE = "mrai-docs-fonts-keys-v1";
+const FONTS_KEYS_KEPT = 64;
+let fontsKeysRead: Map<string, string> | null = null;
+
+function fontsKeysHere(): Map<string, string> {
+  if (fontsKeysRead) return fontsKeysRead;
+  fontsKeysRead = new Map();
+  try {
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(FONTS_KEYS_STORE) : null;
+    const entries = raw ? JSON.parse(raw) : null;
+    if (Array.isArray(entries)) {
+      for (const entry of entries) {
+        if (Array.isArray(entry) && typeof entry[0] === "string" && typeof entry[1] === "string") fontsKeysRead.set(entry[0], entry[1]);
+      }
+    }
+  } catch {
+    // Nothing remembered: the newest row is taken.
+  }
+  return fontsKeysRead;
+}
+
+/** The key these families read last in this browser (fontsKeyFor), or null. */
+export function fontsKeyReadHere(families: readonly string[]): string | null {
+  return fontsKeysHere().get(families.join("|")) ?? null;
+}
+
+function rememberFontsKeyRead(families: readonly string[], key: string): void {
+  const keys = fontsKeysHere();
+  const name = families.join("|");
+  if (keys.get(name) === key) return;
+  keys.delete(name);
+  keys.set(name, key);
+  while (keys.size > FONTS_KEYS_KEPT) keys.delete(keys.keys().next().value!);
+  try {
+    if (typeof localStorage !== "undefined") localStorage.setItem(FONTS_KEYS_STORE, JSON.stringify([...keys]));
+  } catch {
+    // Kept for this tab only.
+  }
 }
 
 /** A row found for a later part, its fonts checked, as appended. */
@@ -430,7 +488,9 @@ export async function fontsKeyFor(families: readonly string[]): Promise<string |
     a = Math.imul(a ^ c, 0x01000193);
     b = Math.imul(b ^ c, 0x85ebca6b);
   }
-  return (a >>> 0).toString(16).padStart(8, "0") + (b >>> 0).toString(16).padStart(8, "0");
+  const key = (a >>> 0).toString(16).padStart(8, "0") + (b >>> 0).toString(16).padStart(8, "0");
+  rememberFontsKeyRead(families, key);
+  return key;
 }
 
 /** How long a differing reading waits for faces yet to be declared (the page's

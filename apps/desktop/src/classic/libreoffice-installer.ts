@@ -26,6 +26,12 @@
  *   Its own faces, which that unpack leaves where LibreOffice never looks,
  *   go to its share\fonts\truetype with the app's packaged faces
  *   (placeWindowsFonts), and it must draw with them (fontDrawTest).
+ * - Linux: the official Debian packages (one .tar.gz of .deb files) are
+ *   unpacked without the system's package tool and without root: each .deb
+ *   is an ar archive whose data.tar.xz the system's tar reads; the
+ *   packages' /opt/libreoffice<series> becomes the app's copy (LibreOffice
+ *   runs from wherever it is put). The desktop menus, the desktop
+ *   environments' integration and the update checker are left out.
  * - Before it is used, the copy converts a small text file headless; only
  *   then is it moved into place (one rename) and its record written.
  *
@@ -50,9 +56,9 @@ export const LIBREOFFICE_VERSION = "26.2.6";
 export const LIBREOFFICE_BUILD = "26.2.6.3";
 
 export interface LibreOfficePackage {
-  readonly key: "mac-arm64" | "mac-x64" | "win-x64";
+  readonly key: "mac-arm64" | "mac-x64" | "win-x64" | "linux-x64";
   readonly version: string;
-  readonly kind: "dmg" | "msi";
+  readonly kind: "dmg" | "msi" | "debs";
   readonly file: string;
   readonly size: number;
   readonly sha256: string;
@@ -115,6 +121,17 @@ export const PACKAGES: Readonly<Record<LibreOfficePackage["key"], LibreOfficePac
     "f9877032fd908beb9c0ddf06df4af5c2e85f419c42e14876c4cce5aae5fb2660",
     1_400_000_000,
   ),
+  
+  // 26.2.6, so the archive is where it comes from.
+  "linux-x64": pinned(
+    "linux-x64",
+    "deb/x86_64",
+    (v) => `LibreOffice_${v}_Linux_x86-64_deb.tar.gz`,
+    "debs",
+    217_285_735,
+    "fd0e8f8f2408dd2e5b90286e60f3f97cf566ba441cd48cfc5bcc68067303e0bc",
+    1_000_000_000,
+  ),
 };
 
 /**
@@ -125,6 +142,7 @@ export const PACKAGES: Readonly<Record<LibreOfficePackage["key"], LibreOfficePac
 export function packageFor(platform: NodeJS.Platform, arch: string, arm64Translation = false): LibreOfficePackage | null {
   if (platform === "darwin") return arch === "arm64" || arm64Translation ? PACKAGES["mac-arm64"] : PACKAGES["mac-x64"];
   if (platform === "win32" && (arch === "x64" || arch === "arm64")) return PACKAGES["win-x64"];
+  if (platform === "linux" && arch === "x64") return PACKAGES["linux-x64"];
   return null;
 }
 
@@ -522,6 +540,64 @@ async function unpackDmg(dmg: string, staging: string, paths: RuntimePaths, opti
   }
 }
 
+/** The members of an ar archive (a .deb): name, offset of its data, size. */
+export function arMembers(archive: Buffer): { name: string; offset: number; size: number }[] {
+  if (archive.toString("latin1", 0, 8) !== "!<arch>\n") throw new InstallError("unpack", "not an ar archive");
+  const members: { name: string; offset: number; size: number }[] = [];
+  let at = 8;
+  while (at + 60 <= archive.length) {
+    const name = archive.toString("latin1", at, at + 16).trim().replace(/\/$/, "");
+    const size = Number.parseInt(archive.toString("latin1", at + 48, at + 58).trim(), 10);
+    if (archive.toString("latin1", at + 58, at + 60) !== "`\n" || !Number.isSafeInteger(size) || size < 0) {
+      throw new InstallError("unpack", "a damaged ar archive");
+    }
+    members.push({ name, offset: at + 60, size });
+    at += 60 + size + (size % 2);
+  }
+  return members;
+}
+
+/** Debian packages of the release that a headless converter does without. */
+const SKIPPED_DEBS = /-(debian-menus|gnome-integration|kde-integration|onlineupdate)_/;
+
+async function unpackDebs(tarball: string, staging: string, options: InstallOptions): Promise<string> {
+  const run = options.run ?? runProgram;
+  const extracted = path.join(staging, "debs");
+  const root = path.join(staging, "root");
+  fs.mkdirSync(extracted, { recursive: true });
+  fs.mkdirSync(root, { recursive: true });
+  await mustRun(run, "unpack", "tar", ["-xzf", tarball, "-C", extracted], { signal: options.signal, timeoutMs: 600_000 });
+  const debs: string[] = [];
+  (function walk(dir: string) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile() && entry.name.endsWith(".deb") && !SKIPPED_DEBS.test(entry.name)) debs.push(full);
+    }
+  })(extracted);
+  if (debs.length < 10) throw new InstallError("unpack", `the package holds ${debs.length} Debian packages`);
+  for (const deb of debs.sort()) {
+    const archive = fs.readFileSync(deb);
+    const data = arMembers(archive).find((member) => /^data\.tar(\.(xz|gz|zst|bz2))?$/.test(member.name));
+    if (!data) throw new InstallError("unpack", `${path.basename(deb)} has no data archive`);
+    const member = path.join(extracted, `data-${path.basename(deb)}${path.extname(data.name)}`);
+    fs.writeFileSync(member, archive.subarray(data.offset, data.offset + data.size));
+    // GNU tar reads the compression from the file (xz: Debian's own tools need it).
+    await mustRun(run, "unpack", "tar", ["-xf", member, "-C", root, "--no-same-owner"], { signal: options.signal, timeoutMs: 600_000 });
+    fs.rmSync(member, { force: true });
+  }
+  fs.rmSync(extracted, { recursive: true, force: true });
+  const opt = path.join(root, "opt");
+  const series = fs.existsSync(opt) ? fs.readdirSync(opt).find((name) => /^libreoffice\d/.test(name)) : undefined;
+  if (!series || !fs.existsSync(path.join(opt, series, "program", "soffice"))) {
+    throw new InstallError("unpack", "the packages unpacked without opt/libreoffice*/program/soffice");
+  }
+  const install = path.join(staging, "LibreOffice");
+  fs.renameSync(path.join(opt, series), install);
+  fs.rmSync(root, { recursive: true, force: true });
+  return install;
+}
+
 async function unpackMsi(msi: string, staging: string, options: InstallOptions): Promise<string> {
   const run = options.run ?? runProgram;
   const extracted = path.join(staging, "admin");
@@ -812,9 +888,11 @@ export async function install(pkg: LibreOfficePackage, paths: RuntimePaths, opti
         ? await unpackDmg(file, staging, paths, options)
         : platform === "win32"
           ? await unpackMsi(file, staging, options)
-          : (() => {
-              throw new InstallError("unsupported", `no LibreOffice package for ${platform}`);
-            })();
+          : platform === "linux" && pkg.kind === "debs"
+            ? await unpackDebs(file, staging, options)
+            : (() => {
+                throw new InstallError("unsupported", `no LibreOffice package for ${platform}`);
+              })();
     const stagedBinary = path.join(unpacked, path.relative(paths.install, paths.binary));
     if (!fs.existsSync(stagedBinary)) throw new InstallError("unpack", `no ${path.relative(paths.install, paths.binary)} in the unpacked copy`);
     if (platform === "win32") {

@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "پریزنٹیشن میں کم از کم ایک سلائیڈ رہتی ہے۔",
  "presentation.duplicateSlide": "سلائیڈ کی نقل بنائیں",
  "presentation.slideCopyUnavailable": "اس سلائیڈ کی اس وقت نقل نہیں بنائی جا سکتی۔ ایک لمحے بعد دوبارہ کوشش کریں۔",
+ "presentation.newSlideNoPackageSlide": "اصل فائل کی کوئی سلائیڈ باقی نہیں رہی جس سے نئی سلائیڈ اپنا لے آؤٹ لے سکے۔",
  "presentation.slideCopyRebuilt": "یہ نقل صفحہ سے دوبارہ بنائی گئی ہے، اس لیے اینیمیشنز اور اسی طرح کی تفصیلات غائب ہو سکتی ہیں۔",
  "presentation.undo": "کالعدم کریں",
  "presentation.formatPainter": "فارمیٹ پینٹر (جاری رکھنے کے لیے دو بار کلک کریں)",

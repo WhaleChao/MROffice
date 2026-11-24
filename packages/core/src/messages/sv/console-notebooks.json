@@ -5697,6 +5697,7 @@
  "presentation.deleteSlideKeepOne": "En presentation behåller minst en bild.",
  "presentation.duplicateSlide": "Duplicera bild",
  "presentation.slideCopyUnavailable": "Bilden kan inte dupliceras just nu. Försök igen om en stund.",
+ "presentation.newSlideNoPackageSlide": "Det finns ingen bild kvar från originalfilen som kan ge en ny bild dess layout.",
  "presentation.slideCopyRebuilt": "Den här kopian byggdes om från sidan, så animeringar och liknande kan saknas.",
  "presentation.undo": "Ångra",
  "presentation.formatPainter": "Hämta format (dubbelklicka för att låta det vara aktivt)",

@@ -104,7 +104,7 @@ export async function redeem(cloud: string, code: string, verifier: string): Pro
     body: JSON.stringify({
       code,
       verifier,
-      label: `${PRODUCT.displayName.en} ${app.getVersion()} (${process.platform === "darwin" ? "macOS" : process.platform === "win32" ? "Windows" : process.platform})`,
+      label: `${PRODUCT.displayName.en} ${app.getVersion()} (${process.platform === "darwin" ? "macOS" : process.platform === "win32" ? "Windows" : process.platform === "linux" ? "Linux" : process.platform})`,
     }),
     signal: AbortSignal.timeout(30_000),
   });

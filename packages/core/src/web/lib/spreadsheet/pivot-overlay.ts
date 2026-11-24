@@ -194,6 +194,15 @@ function* plannedPivots(sheets: readonly PivotOverlaySheet[], boundPivotPlanKeys
       })),
   )) {
     const planKey = pivotPlanKey(candidate.id, slot);
+    // An imported PivotTable the file only preserves keeps the report it was
+    // saved with, even when its authority is past what the window models
+    // and does not normalize (R480-X04: 136 cache fields, no snapshot, its
+    // source on 'Analysis-2012 and 2015'). Dropped, it read as a PivotTable
+    // of its own sheet: a report of five rows of its own cells, and its
+    // PivotChart printed "no visible chart data" where Excel plots the cache.
+    const rawNative = (rawPivot as { native?: unknown }).native;
+    if (rawNative && typeof rawNative === "object" &&
+      (rawNative as { disposition?: unknown }).disposition === "preserve-only") continue;
     const sourceRange = normalizePivotRange(rawPivot.source);
     const maxCol = sourceRange
       ? sourceRange.c2 - sourceRange.c1

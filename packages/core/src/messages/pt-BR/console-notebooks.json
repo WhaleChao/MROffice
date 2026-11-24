@@ -5697,6 +5697,7 @@
  "presentation.deleteSlideKeepOne": "Uma apresentação mantém pelo menos um slide.",
  "presentation.duplicateSlide": "Duplicar slide",
  "presentation.slideCopyUnavailable": "Não é possível duplicar este slide agora. Tente novamente em instantes.",
+ "presentation.newSlideNoPackageSlide": "Não resta nenhum slide do arquivo original para dar o layout a um novo slide.",
  "presentation.slideCopyRebuilt": "Esta cópia foi recriada a partir da página, então animações e itens semelhantes podem estar faltando.",
  "presentation.undo": "Desfazer",
  "presentation.formatPainter": "Pincel de formatação (clique duas vezes para manter ativado)",

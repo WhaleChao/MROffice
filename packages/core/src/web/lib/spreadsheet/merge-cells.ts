@@ -60,6 +60,11 @@ export interface MergeSpan {
 
 
   coveredValues?: Readonly<Record<string, Readonly<{ value: string; kind: "text" | "number" }>>>;
+  
+
+
+  toLastRow?: true;
+  toLastColumn?: true;
 }
 
 /** A 0-based grid coordinate. */
@@ -173,6 +178,8 @@ export function normalizeSpan(raw: unknown): MergeSpan | null {
       && (r.coveredAnchorArea as Record<string, unknown>).hyperlink
       ? { coveredAnchorArea: r.coveredAnchorArea as NonNullable<MergeSpan["coveredAnchorArea"]> }
       : {}),
+    ...(r.toLastRow === true ? { toLastRow: true as const } : {}),
+    ...(r.toLastColumn === true ? { toLastColumn: true as const } : {}),
   };
 }
 

@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "Презентацията трябва да съдържа поне един слайд.",
  "presentation.duplicateSlide": "Дублиране на слайд",
  "presentation.slideCopyUnavailable": "Този слайд не може да бъде дублиран в момента. Опитайте отново след малко.",
+ "presentation.newSlideNoPackageSlide": "Не е останал слайд от оригиналния файл, от който новият слайд да вземе оформлението си.",
  "presentation.slideCopyRebuilt": "Това копие е създадено наново от страницата, затова може да липсват анимации и подобни подробности.",
  "presentation.undo": "Отмяна",
  "presentation.formatPainter": "Форматна четка (щракнете двукратно, за да остане включена)",

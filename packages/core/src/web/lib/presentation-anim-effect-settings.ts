@@ -25,6 +25,12 @@
  *  - `textUnit` (+ `textUnitDelayPct` | `textUnitDelayMs`): Animate text By
  *    word / By letter, each unit starting a share of the duration or a time
  *    after the one before.
+ *  - `wholeIterate` (+ `wholeIterateDelayPct` | `wholeIterateDelayMs`): an
+ *    iteration over the whole object as the file wrote it (`p:iterate` with
+ *    no type, "bare", or `type="el"`, "el"; row 1089). PowerPoint plays the
+ *    effect on the object as a whole, as without one, so the show ignores it;
+ *    it is kept so the effect is written back as it was. Never beside
+ *    `textUnit` (choosing By word / By letter replaces it).
  *
  * Absent keys are the effect's own defaults; a step without the object is
  * byte-for-byte what it was before. This module has no dependencies, so the
@@ -95,7 +101,14 @@ export interface PresentationAnimationEffectSettings {
   textUnit?: EffectTextUnit;
   textUnitDelayPct?: number;
   textUnitDelayMs?: number;
+  wholeIterate?: EffectWholeIterate;
+  wholeIterateDelayPct?: number;
+  wholeIterateDelayMs?: number;
 }
+
+/** An iteration over the whole object: no type stated, or "el" (row 1089). */
+export const EFFECT_WHOLE_ITERATES = ["bare", "el"] as const;
+export type EffectWholeIterate = (typeof EFFECT_WHOLE_ITERATES)[number];
 
 
 function wholeIn(value: unknown, low: number, high: number): value is number {
@@ -162,6 +175,22 @@ export function normalizeEffectSettings(
       out.textUnitDelayMs = record.textUnitDelayMs;
     }
   }
+  if (
+    out.textUnit === undefined &&
+    typeof record.wholeIterate === "string" &&
+    (EFFECT_WHOLE_ITERATES as readonly string[]).includes(record.wholeIterate)
+  ) {
+    if (wholeIn(record.wholeIterateDelayPct, 0, MAX_EFFECT_SHARE) && record.wholeIterateDelayMs === undefined) {
+      out.wholeIterate = record.wholeIterate as EffectWholeIterate;
+      out.wholeIterateDelayPct = record.wholeIterateDelayPct;
+    } else if (
+      wholeIn(record.wholeIterateDelayMs, 0, MAX_EFFECT_TEXT_DELAY_MS) &&
+      record.wholeIterateDelayPct === undefined
+    ) {
+      out.wholeIterate = record.wholeIterate as EffectWholeIterate;
+      out.wholeIterateDelayMs = record.wholeIterateDelayMs;
+    }
+  }
   // A key this release does not know is dropped with the rest of the
   // malformed values; the server refuses to write it either way.
   return Object.keys(out).length > 0 ? out : undefined;
@@ -214,6 +243,13 @@ export function canonicalEffectSettings(
   if (out.accel === defaults.accel) delete out.accel;
   if (out.decel === defaults.decel) delete out.decel;
   if (!defaults.rewindable) delete out.rewind;
+  if (defaults.iterates || out.textUnit !== undefined) {
+    // An effect that iterates itself takes no iteration of the file's; By
+    // word / By letter replaces a whole-object one.
+    delete out.wholeIterate;
+    delete out.wholeIterateDelayPct;
+    delete out.wholeIterateDelayMs;
+  }
   if (defaults.iterates) {
     delete out.textUnit;
     delete out.textUnitDelayPct;

@@ -952,6 +952,8 @@ import {
   type PivotChartFieldButtonLayout,
 } from "./spreadsheet/PivotChartFieldButtons";
 import {
+  spreadsheetChartCachedCategoryLevels,
+  spreadsheetChartCachedRows,
   spreadsheetChartLiteralRows,
   spreadsheetChartLiteralXYSeries,
 } from "../../../lib/spreadsheet/pivot-chart-static";
@@ -34438,10 +34440,8 @@ function SpreadsheetWindow({
         const literalRows = chart.pivotSource ? null : spreadsheetChartLiteralRows(chart);
         // A PivotChart whose PivotTable draws no report (a preserve-only one,
         // an OLAP cube's) plots the values the file cached, as Excel does.
-        const undrawnPivotRows =
-          chart.pivotSource && !pivotChartReportFor(chart.pivotSource)
-            ? spreadsheetChartLiteralRows(chart)
-            : null;
+        const undrawnPivot = Boolean(chart.pivotSource && !pivotChartReportFor(chart.pivotSource));
+        const undrawnPivotRows = undrawnPivot ? spreadsheetChartCachedRows(chart) : null;
         const rows = chart.pivotSource
           ? undrawnPivotRows ?? pivotChartRowsFor(chart.pivotSource)
           : literalRows
@@ -34461,7 +34461,9 @@ function SpreadsheetWindow({
               return chartCategoryLevelsForRows(rows, outerCells.map((_, level) => visible.map((row) => row[level] ?? "")));
             })()
           : undefined;
-        const categoryLevels = chart.pivotSource ? pivotChartLevelsFor(chart.pivotSource) : outerLevels;
+        const categoryLevels = chart.pivotSource
+          ? undrawnPivotRows ? spreadsheetChartCachedCategoryLevels(chart) : pivotChartLevelsFor(chart.pivotSource)
+          : outerLevels;
         const previous = nativeChartViewCache.get(chart);
         if (previous && previous.chart === chart && copilotJsonEqual(previous.rows, rows) && copilotJsonEqual(previous.xySeries, xySeries) && copilotJsonEqual(previous.categoryLevels, categoryLevels)) return previous;
         const view = {
@@ -34588,8 +34590,10 @@ function SpreadsheetWindow({
     // plots the values it last showed, which are now its own.
     // So does a PivotChart whose PivotTable draws no report (a preserve-only
     // one, an OLAP cube's): Excel shows the values the file cached (X-235).
-    const ownRows =
-      (!pivotSource && nativeReference) || (pivotSource && !pivotChartReportFor(pivotSource))
+    const undrawnPivot = Boolean(pivotSource && !pivotChartReportFor(pivotSource));
+    const ownRows = undrawnPivot
+      ? spreadsheetChartCachedRows(authorObject)
+      : !pivotSource && nativeReference
         ? spreadsheetChartLiteralRows(authorObject)
         : null;
     // An X Y chart whose data is its own plots its own points, as a former
@@ -34607,7 +34611,9 @@ function SpreadsheetWindow({
                 [String(index + 1), ...ownXY.map((series) => String(series.points[index]?.y ?? ""))])]
             : pivotChartRowsFor(pivotSource)),
           headerRow: true as const,
-          categoryLevels: pivotSource ? pivotChartLevelsFor(pivotSource) : undefined,
+          categoryLevels: pivotSource
+            ? undrawnPivot && ownRows ? spreadsheetChartCachedCategoryLevels(authorObject) : pivotChartLevelsFor(pivotSource)
+            : undefined,
           visibility: { state: "resolved" as const, sourcePointIndices: [] as number[], sourceSeriesIndices: [] as number[] },
           sourcePointIndices: undefined,
         }
@@ -34814,7 +34820,11 @@ function SpreadsheetWindow({
             src={sheetPictureDisplaySrc(object)}
             alt={object.alt || object.caption || ""}
             draggable={false}
-            loading="lazy"
+            // Printed, every page's picture is fetched: a lazy one on a page
+            // below the print page's fixed host never comes into view, so it
+            // never loads and its sheet waited out the 120 s ceiling (R481-X09:
+            // two pictures on page 58, 135 s for a 0.12 MB workbook).
+            loading={printPresentation ? "eager" : "lazy"}
             decoding="async"
             style={{
               ...(object.cropRect && !isIdentityCrop(object.cropRect)
@@ -34841,6 +34851,10 @@ function SpreadsheetWindow({
             effects={object.pictureEffects}
             size={{ width, height }}
             fillParent
+            // An evenly scaled outer shadow is the picture's silhouette scaled
+            // about its alignment point, as Excel draws it (probe
+            // lf13-xlsx-picshscale, TRIAGE 100b), as a slide's picture does.
+            evenScaleShadowUnder
             testId={`spreadsheet-page-layout-picture-effects-${object.id}`}
           >
             {pictureContent}
@@ -58639,6 +58653,22 @@ function SpreadsheetWindow({
     const rowLow = Math.min(...rows), rowHigh = Math.max(...rows);
     const colLow = Math.min(...cols), colHigh = Math.max(...cols);
     if (pageLayoutMergeKeepsPage(mergeSpans, rows, cols)) return true;
+    // A table's style paints its blanks, cells or not, and Excel prints the
+    // page they paint: R480-X22's Teaching Method Combination table (A1:D41)
+    // has no D cells past row 29, and Windows Excel prints a sixth page of
+    // its banded D39/D41 fills alone (the API's print draws them too).
+    for (const table of dataTables) {
+      const { r1, c1, r2, c2 } = table.range;
+      if (r2 < rowLow || r1 > rowHigh || c2 < colLow || c1 > colHigh) continue;
+      for (const row of rows) {
+        if (row < r1 || row > r2) continue;
+        for (const col of cols) {
+          if (col < c1 || col > c2) continue;
+          const paint = tableStylePaintAt(row, col);
+          if (paint && (paint.backgroundColor || Object.keys(paint.borderEdges ?? {}).length)) return true;
+        }
+      }
+    }
     if (pageLayoutSpansKeepPage((sheet as { rowSpans?: unknown }).rowSpans, [rowLow, rowHigh], [colLow, colHigh],
       () => rows.some((row) => cols.some((col) => {
         const cell = sheet.cells[`${row}:${col}`];
@@ -76995,6 +77025,9 @@ function SpreadsheetWindow({
                         effects={pictureCropActive ? undefined : object.pictureEffects}
                         size={{ width: memberBox.width, height: memberBox.height }}
                         fillParent
+                        // Excel scales an even outer shadow about its alignment
+                        // point (lf13-xlsx-picshscale, TRIAGE 100b).
+                        evenScaleShadowUnder
                         testId={`spreadsheet-picture-effects-${object.id}`}
                       >
                       {(spreadsheetPictureStyleShown(object) ?? null) &&

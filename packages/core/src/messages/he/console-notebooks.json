@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "מצגת חייבת לכלול שקופית אחת לפחות.",
  "presentation.duplicateSlide": "שכפול שקופית",
  "presentation.slideCopyUnavailable": "לא ניתן לשכפל שקופית זו כרגע. יש לנסות שוב בעוד רגע.",
+ "presentation.newSlideNoPackageSlide": "לא נותרה אף שקופית מהקובץ המקורי שתיתן לשקופית חדשה את הפריסה שלה.",
  "presentation.slideCopyRebuilt": "עותק זה נבנה מחדש מהעמוד, ולכן ייתכן שחסרות הנפשות ופרטים דומים.",
  "presentation.undo": "ביטול פעולה",
  "presentation.formatPainter": "מברשת עיצוב (לחיצה כפולה להשארתה פעילה)",

@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "Prezentacija mora da ima barem jedan slajd.",
  "presentation.duplicateSlide": "Umnoži slajd",
  "presentation.slideCopyUnavailable": "Ovaj slajd trenutno ne može da se umnoži. Pokušajte ponovo za koji trenutak.",
+ "presentation.newSlideNoPackageSlide": "Nije preostao nijedan slajd iz originalne datoteke od kog bi novi slajd preuzeo raspored.",
  "presentation.slideCopyRebuilt": "Ova kopija je ponovo izgrađena sa stranice, pa animacije i slični detalji mogu da nedostaju.",
  "presentation.undo": "Opozovi",
  "presentation.formatPainter": "Četkica za oblikovanje (dvaput kliknite da ostane uključena)",

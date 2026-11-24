@@ -5376,6 +5376,7 @@ export default function NoteEditor({
     return schema ? storedFormOfBlocks(blocks, schema) : [...blocks];
   }, [editor]);
   const readHydrationApplied = useCallback(() => hydrationAppliedRef.current, []);
+  const documentRoomsSerializedRef = useRef<{ doc: ProseMirrorNode; document: Record<string, unknown> } | null>(null);
   const serializeDocumentForParts = useCallback((): Record<string, unknown> | null => {
     const target = editor;
     if (!isUsableEditor(target)) return null;
@@ -5383,6 +5384,21 @@ export default function NoteEditor({
     if (!doc) return null;
     const serialized = documentPartsSerializedRef.current;
     if (serialized?.doc === doc) return serialized.document;
+    if ((window as Window & { __docsPartsSerializeRecords?: boolean }).__docsPartsSerializeRecords !== true) {
+      // What the parts read of the view is its blocks (a split, a count, a
+      // baseline whose attrs leave the layout records out): the rooms' own
+      // serialization, kept per document. With the records it measured every
+      // sheet of the view again each time the ledger moved one, as a long
+      
+      // `window.__docsPartsSerializeRecords = true`: with the records (old).
+      const kept = documentRoomsSerializedRef.current;
+      if (kept?.doc === doc) return kept.document;
+      const light = normalizeDocumentForSave(runtimeDocumentJson(doc) as Record<string, unknown>, false, false);
+      if (!light.ok) return null;
+      const document = light.document as Record<string, unknown>;
+      documentRoomsSerializedRef.current = { doc, document };
+      return document;
+    }
     const normalized = normalizeDocumentForSave(runtimeDocumentJson(doc) as Record<string, unknown>, true, false);
     return normalized.ok ? (normalized.document as Record<string, unknown>) : null;
   }, [editor, normalizeDocumentForSave]);
@@ -5391,7 +5407,6 @@ export default function NoteEditor({
   // receipt measured off every sheet of a long document, which the rooms never
   // carry: publishing before each change another member made measured them
   // all, and two members typing kept a busy machine's main thread on it).
-  const documentRoomsSerializedRef = useRef<{ doc: ProseMirrorNode; document: Record<string, unknown> } | null>(null);
   const serializeDocumentForRooms = useCallback((): Record<string, unknown> | null => {
     const target = editor;
     if (!isUsableEditor(target)) return null;

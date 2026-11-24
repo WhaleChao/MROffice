@@ -43,6 +43,7 @@ import {
   DOCUMENT_JUSTIFIED_SHRINK_PENDING,
   DOCUMENT_WORD_CJK_SPACING_PENDING,
   LAYOUT_METRICS_FLUSH_EVENT,
+  type LayoutMetricsFlushDetail,
   measureOutsideEditorObservation,
   PAGE_LEDGER_BACKGROUND_ATTR,
   PAGED_BULK_FILL_ATTR,
@@ -81,7 +82,7 @@ import { disposeWordRowspanHeights, projectWordRowspanHeights } from "../../word
 import { invalidateRenderedTextHeads, joinedTextBreaksAtSeam } from "@mrnote/core/web/components/console/editor/native-document/paged/renderedTextHead.ts";
 import { engineJoinedRows } from "@mrnote/core/web/components/console/editor/native-document/paged/ledger/ledgerEngineLines.ts";
 import { createTwitchWatch, noteLayoutTwitch, pageOnScreen, reportLayoutTwitch, type TwitchWatch } from "./ledgerTwitch";
-import { refreshInlineImagePageProjection } from "../../ImageResizeNodeView";
+import { inlineImageProjectionWrites, refreshInlineImagePageProjection } from "../../ImageResizeNodeView";
 import { INLINE_PICTURE_NODE_NAME } from "@mrnote/core/web/components/console/editor/native-document/documentObjectNodes.ts";
 import { isForcedBreakBlock, PAGE_BLOCK_NODE } from "@mrnote/core/web/components/console/editor/native-document/paged/pageBlockExtension.ts";
 import { documentPartsStillToCome } from "../pageCountSettled";
@@ -453,6 +454,19 @@ const SLOW_BACKGROUND_STEP_MS = 250;
 const QUICK_BACKGROUND_STEP_MS = 80;
 /** A metrics flush longer than this ends the pass's task; the pass goes on in the next frame. */
 const FLUSH_YIELD_MS = 50;
+
+
+
+
+
+
+
+
+
+export const LEDGER_STEP_BUDGET_MS = 32;
+function stepBudgetOn(win: Window | null): boolean {
+  return Boolean(win) && (win as Window & { __docsStepBudgetOff?: boolean }).__docsStepBudgetOff !== true;
+}
 /** How long typing pauses before a slow document re-paginates. */
 export const LEDGER_EDIT_IDLE_MS = 350;
 const EDIT_IDLE_MS = LEDGER_EDIT_IDLE_MS;
@@ -811,6 +825,12 @@ function projectSheetsForMeasurement(view: EditorView, cache?: LedgerMeasureCach
   measureOutsideEditorObservation(view, () => projectSheetsUnobserved(view, cache, maxSheet));
 }
 
+/** `window.__docsColumnsAgainAlways = true`: project the column tracks of
+ * every sheet with a picture a second time, as before (A/B). */
+function columnsAgainAlways(view: EditorView): boolean {
+  return (view.dom.ownerDocument.defaultView as (Window & { __docsColumnsAgainAlways?: boolean }) | null)?.__docsColumnsAgainAlways === true;
+}
+
 function projectSheetsUnobserved(view: EditorView, cache?: LedgerMeasureCache | null, maxSheet: number | null = null): void {
   const pages = collectPages(view.state.doc);
   const sheets = sheetsOf(view.dom);
@@ -876,15 +896,21 @@ function projectSheetsUnobserved(view: EditorView, cache?: LedgerMeasureCache | 
   };
   for (const index of projectedIndexes) projectUnequalColumnSheet(sheets[index], footZones?.[index] ?? 0, columnSheetOptions);
   step("columns");
+  // The tracks are projected again on a sheet whose pictures' fit this pass
+  // changed: one whose pictures stand as they were measured reads the same
+  // DOM the first projection read (`window.__docsColumnsAgainAlways = true`:
+  // every sheet with a picture, as before).
+  const againAlways = columnsAgainAlways(view);
   for (const pageIndex of projectedIndexes) {
     const page = pages[pageIndex];
     let childPos = page.pos + 1;
+    const writesBefore = inlineImageProjectionWrites();
     page.node.forEach((child) => {
       if (child.type.name === "image") {
         const dom = view.nodeDOM(childPos);
         if (dom instanceof HTMLElement && dom.parentElement === sheets[pageIndex]) {
           refreshInlineImagePageProjection(child, dom);
-          pictured.add(pageIndex);
+          if (againAlways) pictured.add(pageIndex);
         }
       } else if (child.isTextblock && child.childCount > 0) {
         // "In Line with Text" pictures among a top-level paragraph's runs get
@@ -894,12 +920,13 @@ function projectSheetsUnobserved(view: EditorView, cache?: LedgerMeasureCache | 
           const dom = view.nodeDOM(childPos + 1 + offset);
           if (dom instanceof HTMLElement) {
             refreshInlineImagePageProjection(inline, dom);
-            pictured.add(pageIndex);
+            if (againAlways) pictured.add(pageIndex);
           }
         });
       }
       childPos += child.nodeSize;
     });
+    if (inlineImageProjectionWrites() !== writesBefore) pictured.add(pageIndex);
   }
   step("pictures");
   for (const index of projectedIndexes) {
@@ -925,6 +952,111 @@ function projectSheetsUnobserved(view: EditorView, cache?: LedgerMeasureCache | 
   if (tracing && performance.now() - startedAt >= 200) {
     traceLedgerPass(view, { projectSteps: { ...steps, sheets: sheets.length, projected: projectedIndexes.length } });
   }
+}
+
+/**
+ * The sheet projections a pass would run first (projectSheetsUnobserved's
+ * column tracks and picture fits), taken ahead of the pass in steps: the
+ * sheets that need them are projected one after another until `deadline`
+ * (performance.now()), at least one a call. True once none this pass would
+ * project is left (the pass then finds them projected and goes on); false
+ * when the next turn has more to do. `done` counts the projections of each
+ * sheet ahead of this pass: one that something changed again in between (a
+ * projection's decorations) is projected again, up to PROJECT_AHEAD_MAX times;
+ * past that the pass projects it.
+ *
+ * Each sheet's projections read and write that sheet alone, so one taken a
+ * turn ahead writes what the pass would have written (a sheet something
+ * changes in between is projected again by the pass). A long opening
+ * document's pass projected 15-25 sheets at ~14 ms each in one task.
+ */
+const PROJECT_AHEAD_MAX = 3;
+function projectSheetsAhead(
+  view: EditorView,
+  cache: LedgerMeasureCache,
+  maxSheet: number | null,
+  deadline: number,
+  done: Map<HTMLElement, number>,
+): boolean {
+  let finished = true;
+  measureOutsideEditorObservation(view, () => {
+    const pages = collectPages(view.state.doc);
+    const sheets = sheetsOf(view.dom);
+    if (!pages || sheets.length !== pages.length) return;
+    const docAttrs: unknown = view.state.doc.attrs;
+    const due = sheets.flatMap((sheet, index) =>
+      (maxSheet === null || index <= maxSheet) && (done.get(sheet) ?? 0) < PROJECT_AHEAD_MAX && cache.needsProjection(sheet, pages[index].node, docAttrs) ? [index] : [],
+    );
+    if (due.length === 0) return;
+    // What the pass writes before the column tracks (attributes the margin and
+    // column rules key off, floating tables, blank lines): every sheet, as the
+    // pass does; they write only what changed.
+    flushMarkerTabFitsIn(view.dom);
+    syncStructuralPageStartSpacing(
+      sheets,
+      pages.map((_, index) => {
+        const previous = pages[index - 1]?.node.lastChild;
+        return previous ? isForcedBreakBlock(previous) : false;
+      }),
+      copilotLeadingSpacePolicy(view.state),
+    );
+    for (const sheet of sheets) syncStructuralColumnFlow(sheet);
+    const tableKeepOnPage = {
+      wordCompatibilityMode: normalizeWordCompatibilityMode(view.state.doc.attrs.wordCompatibilityMode),
+      headerFooter: false,
+    };
+    const tableFrameOptions = { doNotBreakWrappedTables: view.state.doc.attrs.wordDoNotBreakWrappedTables === true };
+    publishTableBothSides(view, sheets.flatMap((sheet) => projectTablePageFrames(sheet, tableKeepOnPage, tableFrameOptions)));
+    for (const sheet of sheets) markBlankLinesPastFloats(sheet);
+    cache.flush();
+    const footZones = projectedSheetFootZones(view, pages, sheets);
+    const mode = normalizeWordCompatibilityMode(view.state.doc.attrs.wordCompatibilityMode) ?? 0;
+    const columnSheetOptions = { keepNextCutsLastLines: mode >= 15, wordLegacyBalance: mode < 15 };
+    const againAlways = columnsAgainAlways(view);
+    let taken = 0;
+    for (const index of due) {
+      if (taken > 0 && performance.now() >= deadline) {
+        finished = false;
+        return;
+      }
+      taken += 1;
+      const sheet = sheets[index];
+      const page = pages[index];
+      projectUnequalColumnSheet(sheet, footZones?.[index] ?? 0, columnSheetOptions);
+      const writesBefore = inlineImageProjectionWrites();
+      let pictured = false;
+      let childPos = page.pos + 1;
+      page.node.forEach((child) => {
+        if (child.type.name === "image") {
+          const dom = view.nodeDOM(childPos);
+          if (dom instanceof HTMLElement && dom.parentElement === sheet) {
+            refreshInlineImagePageProjection(child, dom);
+            if (againAlways) pictured = true;
+          }
+        } else if (child.isTextblock && child.childCount > 0) {
+          child.forEach((inline, offset) => {
+            if (inline.type.name !== INLINE_PICTURE_NODE_NAME) return;
+            const dom = view.nodeDOM(childPos + 1 + offset);
+            if (dom instanceof HTMLElement) {
+              refreshInlineImagePageProjection(inline, dom);
+              if (againAlways) pictured = true;
+            }
+          });
+        }
+        childPos += child.nodeSize;
+      });
+      if (pictured || inlineImageProjectionWrites() !== writesBefore) {
+        projectUnequalColumnSheet(sheet, footZones?.[index] ?? 0, columnSheetOptions);
+      }
+      cache.flush();
+      cache.markProjected(sheet, page.node);
+      done.set(sheet, (done.get(sheet) ?? 0) + 1);
+    }
+    // (Every sheet due was projected: the next call finds none, or only
+    // sheets already projected ahead of this pass.)
+    finished = due.length === taken;
+  });
+  return finished;
 }
 
 /**
@@ -1143,6 +1275,7 @@ export function runLedgerPass(
   // boundary first (an in-sheet seam); the plan then reads the fragments.
   const columnSplit = planUnequalColumnSplit(view, cache);
   if (columnSplit) {
+    if (ledgerTraceEnabled(view)) traceLedgerPass(view, { columnSplit: columnSplit.steps.length, projectMs: Math.round(performance.now() - t0) });
     return { dispatched: dispatchWithinLayout(view, columnSplit), converged: false, plan: null, build: null, scope: null };
   }
   // A page or column break typed inside a list, quote or callout: the
@@ -2552,7 +2685,16 @@ function sheetFontCharactersOf(view: EditorView, sheet: HTMLElement): ReturnType
   return groups;
 }
 
-function screenFacesLoaded(view: EditorView, sheets: readonly HTMLElement[], asked: Set<string>, settled: () => void): boolean {
+/**
+ * `asked`: each face group asked for, and whether its load has answered. A
+ * group whose load answered and that still does not check (a face of its
+ * family failed: a `local()` face the machine does not have, a file that is
+ * not there) has every face it will have: the first layout no longer waits
+ * for it. It held every such document's first layout, and its input, for the
+ * gate and the whole faces grace (6 s: "Segoe UI" on a Mac), to lay out in the
+ * same faces at the end. `window.__docsFacesWaitErrored = true`: waits, as before.
+ */
+export function screenFacesLoaded(view: EditorView, sheets: readonly HTMLElement[], asked: Map<string, boolean>, settled: () => void): boolean {
   const fonts = view.dom.ownerDocument.fonts as FontFaceSet | undefined;
   if (!fonts || typeof fonts.check !== "function" || sheets.length === 0) return true;
   // The sheets on screen (the first, where nothing is on screen yet), three
@@ -2567,6 +2709,7 @@ function screenFacesLoaded(view: EditorView, sheets: readonly HTMLElement[], ask
   const first = whole ? 0 : range && range.first >= 0 && range.first < sheets.length ? range.first : 0;
   const last = whole ? sheets.length - 1 : range && range.last >= first ? Math.min(range.last, first + 2, sheets.length - 1) : first;
   let loaded = true;
+  const waitErrored = (view.dom.ownerDocument.defaultView as (Window & { __docsFacesWaitErrored?: boolean }) | null)?.__docsFacesWaitErrored === true;
   for (let index = first; index <= last; index += 1) {
     const sheet = sheets[index];
     if (!sheet) continue;
@@ -2582,11 +2725,17 @@ function screenFacesLoaded(view: EditorView, sheets: readonly HTMLElement[], ask
       } catch {
         continue;
       }
-      loaded = false;
       const key = `${font}\u0000${characters}`;
-      if (asked.has(key)) continue;
-      asked.add(key);
-      void fonts.load(font, characters).then(settled, settled);
+      const answered = asked.get(key);
+      if (answered === true && !waitErrored) continue;
+      loaded = false;
+      if (answered !== undefined) continue;
+      asked.set(key, false);
+      const answer = () => {
+        asked.set(key, true);
+        settled();
+      };
+      void fonts.load(font, characters).then(answer, answer);
     }
   }
   return loaded;
@@ -2795,6 +2944,10 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
           let pendingAfterNoteEdit = false;
           let gridRetries = 0;
           let yieldedAfterFlush = false;
+          /** Sheets projected ahead of the next pass (projectSheetsAhead). */
+          const projectedAhead = new Map<HTMLElement, number>();
+          /** The next compose goes on with those projections. */
+          let resumingProjection = false;
           // The pages a background step lays out, by what the last one cost:
           // twelve pages of the 298-page book (their line-metric projection,
           // their measurement) held the main thread 1.5-2.3 s at a time
@@ -2819,7 +2972,7 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
           // bounded time and its grace (GATE_FACES_GRACE_MS).
           let facesHoldUntil = 0;
           let facesTimer: number | undefined;
-          const screenFacesAsked = new Set<string>();
+          const screenFacesAsked = new Map<string, boolean>();
           // The first layout was held for the document's faces (its font plan
           // or the faces on screen), and whether a pass has composed since the
           // initial settle opened: a layout the faces let go just before the
@@ -3617,6 +3770,7 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
           };
           const compose = (chained: boolean) => {
             raf = 0;
+            const composeStartedAt = performance.now();
             if (!chained) frameStartedAt = performance.now();
             if (destroyed || editorView.isDestroyed) return;
             // Before any hold: the faces load while the pass waits for the rest.
@@ -3811,6 +3965,12 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
                 ? Math.max(backgroundPagesPerPass, lastRestStepMs > REST_STEP_SLOW_MS ? PROGRESSIVE_BACKGROUND_PAGES : restStepPages(editorView.dom))
                 : backgroundPagesPerPass;
             const restStep = pagesPerPass > backgroundPagesPerPass;
+            // This step's work is taken in turns of at most LEDGER_STEP_BUDGET_MS
+            // (the metrics flush, the sheet projections) unless an edit of the
+            // settled pages waits for it in this frame, or a print lays it out.
+            const stepDeadline = stepBudgetOn(win) && !eagerBackground && !bypassCache && !(settledOnce && editedSinceLastPass)
+              ? composeStartedAt + LEDGER_STEP_BUDGET_MS
+              : null;
             editedSinceLastPass = false;
             readerEditedSinceLastPass = false;
             for (const range of takeRestoredSheets(editorView.dom)) {
@@ -3867,26 +4027,35 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
             // the page first put a KaTeX tree back for every formula the
             // background reached.
             const tFlush = performance.now();
-            if (projectAgain || metricsPending(editorView)) {
+            // (A turn that goes on with the projections ahead of a pass asks the
+            // projections for no lines the flush before it did not.)
+            const resuming = resumingProjection;
+            resumingProjection = false;
+            if ((projectAgain && !resuming) || metricsPending(editorView)) {
               // The line boxes this page depends on are still waiting for
               // their own frame: measure them now, in this frame (Word lays
               // out the lines before it paints the page), and only wait for
               // a frame when something genuinely asynchronous (a font) holds.
               flushingMetrics = true;
+              const flushDetail: LayoutMetricsFlushDetail = { deadline: stepDeadline ?? undefined };
               try {
                 // One projection may wait on another (CJK spacing on Auto
                 // line spacing): flush until a round clears nothing more.
                 for (let round = 0; round < 3 && ((round === 0 && projectAgain) || metricsPending(editorView)); round += 1) {
                   const before = pendingMetricsKey(editorView);
-                  editorView.dom.dispatchEvent(new CustomEvent(LAYOUT_METRICS_FLUSH_EVENT));
-                  if (pendingMetricsKey(editorView) === before) break;
+                  editorView.dom.dispatchEvent(stepDeadline !== null
+                    ? new CustomEvent<LayoutMetricsFlushDetail>(LAYOUT_METRICS_FLUSH_EVENT, { detail: flushDetail })
+                    : new CustomEvent(LAYOUT_METRICS_FLUSH_EVENT));
+                  if (flushDetail.partial || pendingMetricsKey(editorView) === before) break;
                 }
               } finally {
                 flushingMetrics = false;
               }
               if (metricsPending(editorView)) {
-                if (ledgerTraceEnabled(editorView)) traceLedgerPass(editorView, { composeHeld: "metrics", pendingKey: pendingMetricsKey(editorView) }); 
-                schedule();
+                if (ledgerTraceEnabled(editorView)) traceLedgerPass(editorView, { composeHeld: "metrics", pendingKey: pendingMetricsKey(editorView), ...(flushDetail.partial ? { partial: true } : {}) }); 
+                
+                if (flushDetail.partial) continueSoon();
+                else schedule();
                 return;
               }
               // A long flush (the CJK spacing of the horizon's changed
@@ -3897,9 +4066,10 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
               stepFlushMs += performance.now() - tFlush;
               // Once: a flush that takes as long in the next frame is measured
               // after, so a slow projection can never hold the pass.
-              if (!yieldedAfterFlush && performance.now() - tFlush > FLUSH_YIELD_MS) {
+              if (!yieldedAfterFlush && (stepDeadline !== null ? performance.now() >= stepDeadline : performance.now() - tFlush > FLUSH_YIELD_MS)) {
                 yieldedAfterFlush = true;
-                schedule();
+                if (stepDeadline !== null) continueSoon();
+                else schedule();
                 return;
               }
             }
@@ -3977,6 +4147,28 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
             // A pending sheet that left the document (its page was drained)
             // has nothing left to lay out.
             for (const sheet of pending) if (!sheets.includes(sheet)) pending.delete(sheet);
+            // The sheet projections the pass runs first, ahead of it in turns
+            // (projectSheetsAhead); the pass itself then runs in a turn of its
+            // own, with them done.
+            if (stepDeadline !== null) {
+              const projectThrough = progressive && notesAllowProgress(editorView) ? progressive.horizon.maxSheet : null;
+              let before = 0;
+              for (const count of projectedAhead.values()) before += count;
+              if (!projectSheetsAhead(editorView, measureCache, projectThrough, stepDeadline, projectedAhead)) {
+                if (ledgerTraceEnabled(editorView)) traceLedgerPass(editorView, { composeHeld: "projecting", projectedAhead: projectedAhead.size });
+                resumingProjection = true;
+                continueSoon();
+                return;
+              }
+              let after = 0;
+              for (const count of projectedAhead.values()) after += count;
+              if (after > before && performance.now() >= stepDeadline) {
+                resumingProjection = true;
+                continueSoon();
+                return;
+              }
+            }
+            projectedAhead.clear();
 
             let outcome: LedgerPassOutcome;
             selfDispatching = true;
@@ -4454,6 +4646,17 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
             if (destroyed || !win || raf || turnAsked) return;
             raf = win.requestAnimationFrame(run);
           };
+          
+
+
+          const continueSoon = () => {
+            if (destroyed || !win || raf || turnAsked) return;
+            turnAsked = true;
+            void ledgerLane.turn().then(() => {
+              turnAsked = false;
+              if (!ledgerLane.disposed && !destroyed) composeAndRest();
+            });
+          };
 
           // A pass runs in the frame that would paint the key just typed. On a
           // document whose pass is felt (a 158-page import: seconds), an edit
@@ -4546,6 +4749,7 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
             }
             // Fonts, width, zoom or page geometry lay out every sheet anew.
             measureCache.clear(reason);
+            projectedAhead.clear();
             if (!keepHollow) forgetHollowMeasures();
             // A nudge (a projection redrawn after the ledger's own move, a band) is no
             // new input: the cycle watch keeps what it saw, or a layout going round

@@ -155,6 +155,8 @@ export interface PresentationCanvasTextBlockCtl {
   pendingImportedPreviewCaret: (blockId: string) => { start: number; end: number } | null;
   /** The words of a body the window's typing burst holds and has not drawn, else null. */
   heldBlockWords: (blockId: string) => string | null;
+  /** The caret of a body being typed in, taken away with the focus (``EditingHostHandover``). */
+  editingHostHandover: EditingHostHandover;
   commitImportedPreviewText: (blockId: string, preview: HTMLElement, paragraphs?: readonly SlideParagraphWithRuns[], letterTyped?: boolean,
     replacement?: string | null) => void;
   replaceImportedPreviewSelection: (blockId: string, preview: HTMLElement, insertedText: string, paragraphs?: readonly SlideParagraphWithRuns[], softLineBreaks?: boolean) => number;
@@ -235,8 +237,28 @@ function caretOutOfParagraphMarker(preview: HTMLElement, backward = false): void
   selection.addRange(range);
 }
 
+
+
+
+
+
+
+
+
+
+
+export type EditingHostHandover = {
+  /** The body of ``blockId`` went with the focus, its words and caret as they were. */
+  lost: (blockId: string, caret: { text: string; start: number; end: number }) => void;
+  /** The caret ``blockId``'s body went with, once; null if none, or it no longer stands. */
+  take: (blockId: string) => { text: string; start: number; end: number } | null;
+  /** Where the window puts the focus a body took with it (not a place chosen). */
+  isFallback: (element: Element) => boolean;
+};
+
 function useRichPreviewFocusHandover(
   blockId: string,
+  windowHandover: EditingHostHandover,
   restoreAfterCommit: (blockId: string, start: number, end: number) => void,
   /**
    * The caret this person's own commit is putting back, if one is: it wins
@@ -259,16 +281,26 @@ function useRichPreviewFocusHandover(
         const text = presentationPreviewPlainText(previous);
         const range = presentationPreviewSelection(previous, text.length) ?? { start: text.length, end: text.length };
         handoverRef.current = { text, ...range };
+        // This box itself may be the one going (drawn again whole): the
+        // window keeps the caret for the box that takes its place.
+        windowHandover.lost(blockId, handoverRef.current);
       }
       return;
     }
     hostRef.current = node;
-    const handover = handoverRef.current;
+    const fromWindow = windowHandover.take(blockId);
+    const handover = handoverRef.current ?? fromWindow;
     handoverRef.current = null;
     if (!handover) return;
     const active = node.ownerDocument.activeElement;
-    // Focus that went somewhere on purpose stays there.
-    if (active && active !== node.ownerDocument.body && !node.contains(active)) return;
+    // Focus that went somewhere on purpose stays there; the window's own
+    // fallback for a focus taken away is no such place.
+    if (
+      active &&
+      active !== node.ownerDocument.body &&
+      !node.contains(active) &&
+      !windowHandover.isFallback(active)
+    ) return;
     const local = pendingLocalCaret(blockId);
     if (local) {
       // This person's commit remounted the body: its caret is the one the
@@ -283,7 +315,7 @@ function useRichPreviewFocusHandover(
     node.focus({ preventScroll: true });
     setPresentationPreviewSelection(node, start, end);
     restoreAfterCommit(blockId, start, end);
-  }, [blockId, pendingLocalCaret, restoreAfterCommit]);
+  }, [blockId, pendingLocalCaret, restoreAfterCommit, windowHandover]);
   const host = useCallback(() => hostRef.current, []);
   return { ref, host };
 }
@@ -375,6 +407,7 @@ export function PresentationCanvasTextBlock({ ctl }: { ctl: PresentationCanvasTe
     restoreImportedPreviewSelectionAfterCommit,
     pendingImportedPreviewCaret,
     heldBlockWords,
+    editingHostHandover,
     commitImportedPreviewText,
     replaceImportedPreviewSelection,
     clearLiveRibbonList,
@@ -396,6 +429,7 @@ export function PresentationCanvasTextBlock({ ctl }: { ctl: PresentationCanvasTe
   } = ctl;
   const richPreviewHost = useRichPreviewFocusHandover(
     block.id,
+    editingHostHandover,
     restoreImportedPreviewSelectionAfterCommit,
     pendingImportedPreviewCaret,
   );

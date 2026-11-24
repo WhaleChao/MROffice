@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "Una presentació ha de tenir com a mínim una diapositiva.",
  "presentation.duplicateSlide": "Duplica la diapositiva",
  "presentation.slideCopyUnavailable": "Ara mateix no es pot duplicar aquesta diapositiva. Torna-ho a provar d'aquí a un moment.",
+ "presentation.newSlideNoPackageSlide": "No queda cap diapositiva del fitxer original que doni la disposició a una diapositiva nova.",
  "presentation.slideCopyRebuilt": "Aquesta còpia s'ha reconstruït a partir de la pàgina, de manera que pot ser que faltin animacions i altres detalls similars.",
  "presentation.undo": "Desfés",
  "presentation.formatPainter": "Copia el format (fes doble clic per mantenir-lo actiu)",

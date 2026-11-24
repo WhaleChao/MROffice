@@ -90,4 +90,32 @@ function macImportedTypeDeclarations() {
   }));
 }
 
-module.exports = { PRESENTATION_TYPES, PRESENTATION_EXTENSIONS, macPresentationDocumentType, macImportedTypeDeclarations };
+/**
+ * Linux (freedesktop.org Desktop Entry Specification, "MimeType"; the shared
+ * MIME-info database names each type): the documents the app is offered
+ * for in a file manager's Open With, by MIME type. Only the desktop entry
+ * lists them; no type is defined or redefined (electron-builder's
+ * fileAssociations would install a mime-info file restating application/pdf
+ * and the Office types under the app's name), and none is made the app's
+ * default by the package (src/default-app.ts asks the person, as on the
+ * other systems). The same files as src/files.ts OPENABLE_TYPES.
+ */
+const LINUX_DOCUMENT_MIME_TYPES = Object.freeze([
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-word.document.macroEnabled.12",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  ...new Set(PRESENTATION_TYPES.map((type) => type.mime)),
+  "application/pdf",
+  "text/markdown",
+  "text/csv",
+  "text/tab-separated-values",
+]);
+
+module.exports = {
+  PRESENTATION_TYPES,
+  PRESENTATION_EXTENSIONS,
+  LINUX_DOCUMENT_MIME_TYPES,
+  macPresentationDocumentType,
+  macImportedTypeDeclarations,
+};

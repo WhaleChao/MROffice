@@ -17,6 +17,12 @@
  *   `status` reads the person's choice per type from the registry
  *   (Explorer\FileExts\.<ext>\UserChoice, else the class's own default)
  *   and compares it with the ProgID the installer registered.
+ * - Linux: the freedesktop.org MIME applications list (xdg-mime, from
+ *   xdg-utils, which the desktops read): `xdg-mime default <app>.desktop
+ *   <type>` writes the person's own choice (~/.config/mimeapps.list), no
+ *   confirmation; `xdg-mime query default <type>` reads it. The app's
+ *   desktop entry is the package's (.deb) or the one the AppImage installs
+ *   for the person (./linux-integration.ts), named alike.
  * - Anything else: not offered.
  */
 
@@ -53,10 +59,32 @@ let windowsProgIdPrefix = "MROfficeEditors.";
  * opens this app's own Default apps page (MR Note: build/installer.nsh;
  * MR Office: build/office/installer.nsh). */
 let windowsRegisteredApp = "MR Office Editors";
+/** Linux: the app's desktop entry (package.json desktopName). */
+let linuxDesktopId: string | null = null;
 
-export function configureDefaultApp(options: { windowsProgIdPrefix?: string; windowsRegisteredApp?: string }): void {
+export function configureDefaultApp(options: { windowsProgIdPrefix?: string; windowsRegisteredApp?: string; linuxDesktopId?: string }): void {
   if (options.windowsProgIdPrefix) windowsProgIdPrefix = options.windowsProgIdPrefix;
   if (options.windowsRegisteredApp) windowsRegisteredApp = options.windowsRegisteredApp;
+  if (options.linuxDesktopId) linuxDesktopId = options.linuxDesktopId;
+}
+
+/** Linux: the MIME type a double-click on each offered extension looks up. */
+export const LINUX_DEFAULT_MIME_TYPES: Readonly<Record<string, string>> = {
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  pdf: "application/pdf",
+  md: "text/markdown",
+  csv: "text/csv",
+};
+
+function xdgMime(args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile("xdg-mime", args, { timeout: 10_000 }, (error, stdout) => {
+      if (error) reject(error);
+      else resolve(String(stdout).trim());
+    });
+  });
 }
 
 /** The requested types that may be made default (all of them when none given). */
@@ -135,6 +163,16 @@ export async function defaultAppState(): Promise<DefaultAppState> {
       return { supported: "settings", checked: false, defaultFor: [], extensions: EXTENSIONS };
     }
   }
+  if (process.platform === "linux" && linuxDesktopId) {
+    const id = linuxDesktopId;
+    try {
+      const answers = await Promise.all(EXTENSIONS.map((ext) => xdgMime(["query", "default", LINUX_DEFAULT_MIME_TYPES[ext] ?? ""])));
+      const defaultFor = EXTENSIONS.filter((_ext, index) => answers[index] === id);
+      return { supported: "direct", checked: true, defaultFor, extensions: EXTENSIONS };
+    } catch {
+      return { supported: "direct", checked: false, defaultFor: [], extensions: EXTENSIONS };
+    }
+  }
   return { supported: "none", checked: false, defaultFor: [], extensions: EXTENSIONS };
 }
 
@@ -154,6 +192,9 @@ export async function makeDefaultApp(extensions: readonly string[] = EXTENSIONS)
     await shell
       .openExternal(`ms-settings:defaultapps?registeredAppUser=${encodeURIComponent(windowsRegisteredApp)}`)
       .catch(() => shell.openExternal("ms-settings:defaultapps"));
+  } else if (process.platform === "linux" && linuxDesktopId) {
+    const types = extensions.map((ext) => LINUX_DEFAULT_MIME_TYPES[ext]).filter((type): type is string => Boolean(type));
+    if (types.length) await xdgMime(["default", linuxDesktopId, ...types]).catch(() => undefined);
   }
   return defaultAppState();
 }

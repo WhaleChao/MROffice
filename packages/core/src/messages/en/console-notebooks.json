@@ -6215,6 +6215,7 @@
  "presentation.deleteSlideKeepOne": "A presentation keeps at least one slide.",
  "presentation.duplicateSlide": "Duplicate Slide",
  "presentation.slideCopyUnavailable": "This slide can't be duplicated right now. Try again in a moment.",
+ "presentation.newSlideNoPackageSlide": "No slide from the original file is left to give a new slide its layout.",
  "presentation.slideCopyRebuilt": "This copy was rebuilt from the page, so animations and similar details may be missing.",
  "presentation.undo": "Undo",
  "presentation.formatPainter": "Format painter (double-click to keep on)",

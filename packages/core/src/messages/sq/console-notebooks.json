@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "Një prezantim mban të paktën një sllajd.",
  "presentation.duplicateSlide": "Dubliko sllajdin",
  "presentation.slideCopyUnavailable": "Ky sllajd nuk mund të dublikohet tani. Provo përsëri pas një çasti.",
+ "presentation.newSlideNoPackageSlide": "Nuk ka mbetur asnjë sllajd nga skedari origjinal për t'i dhënë paraqitjen një sllajdi të ri.",
  "presentation.slideCopyRebuilt": "Kjo kopje u rindërtua nga faqja, prandaj animacionet dhe detaje të ngjashme mund të mungojnë.",
  "presentation.undo": "Zhbëj",
  "presentation.formatPainter": "Kopjues formati (kliko dy herë për ta mbajtur aktiv)",

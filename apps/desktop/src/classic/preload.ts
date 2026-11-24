@@ -212,6 +212,19 @@ contextBridge.exposeInMainWorld("mraiDesktop", {
     thumbnail: (target: string, size: number) =>
       ipcRenderer.invoke("mrai:places-thumbnail", String(target), Number(size) || 0),
   },
+  /** The parts fetched after installing (src/classic/ondemand-assets.ts): the
+   * code pages' Python ("pyodide") and the ink readers ("ink-models"): each
+   * group's state, fetch one now (resolves when it is there or failed), and
+   * hear when any of that moves. */
+  ondemand: {
+    status: () => ipcRenderer.invoke("mrai:ondemand-status"),
+    ensure: (group: string) => ipcRenderer.invoke("mrai:ondemand-ensure", String(group)),
+    onChange: (listener: () => void) => {
+      const handler = () => listener();
+      ipcRenderer.on("mrai:ondemand-changed", handler);
+      return () => ipcRenderer.removeListener("mrai:ondemand-changed", handler);
+    },
+  },
   /** The app's own LibreOffice (src/classic/libreoffice.ts): what it offers
    * and holds, download and enable it (resolves when done, cancelled or
    * failed), remove it, and hear when any of that changes. */

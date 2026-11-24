@@ -3531,6 +3531,22 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                     Math.min(top + height * scale + bleed, rowBand.end),
                   ] as const;
                   if (clip[0] >= clip[2] || clip[1] >= clip[3]) return null;
+                  // Printed right to left, a drawing stands mirrored about the
+                  // grid as its columns do, its picture unmirrored: it runs
+                  // from its anchor column leftwards, and a page cutting it
+                  // shows the part on its own columns (R477-X15: the chart
+                  // from E to L on a right-to-left sheet prints its right
+                  // part, Tween 20 and Span 20, on the first page, as Windows
+                  // Excel and the API print it; laid left to right here it
+                  // printed its left part at the page's right edge).
+                  const mirrored = printMode && rightToLeft;
+                  const bandLeft = colBand.offset - colBand.start;
+                  const boxLeft = mirrored
+                    ? dataLeft + gridWidth + drawingInset - (bandLeft + clip[2]) * paperScale
+                    : drawingsLeft + (bandLeft + clip[0]) * paperScale;
+                  const clipX = mirrored
+                    ? { left: colBand.end - clip[2], right: clip[0] - colBand.start }
+                    : { left: clip[0] - colBand.start, right: colBand.end - clip[2] };
                   return (
                     <div
                       key={`${rowPageIndex}.${colPageIndex}:${rowBandIndex}:${colBandIndex}:${id}`}
@@ -3564,8 +3580,7 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                       style={{
                         cursor: drawing[4] && !drawing[4].disabledReason ? "move" : undefined,
                         touchAction: drawing[4] && !drawing[4].disabledReason ? "none" : undefined,
-                        left:
-                          drawingsLeft + (colBand.offset + clip[0] - colBand.start) * paperScale,
+                        left: boxLeft,
                         top: drawingsTop + (rowBand.offset + clip[1] - rowBand.start) * paperScale,
                         width: (clip[2] - clip[0]) * paperScale,
                         height: (clip[3] - clip[1]) * paperScale,
@@ -3574,13 +3589,13 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                         // lets overflow it (`vertOverflow` "overflow", P20's
                         // second line under its frameless box, as Excel
                         // prints it) -- is cut only by the page's own band.
-                        clipPath: `inset(${-(clip[1] - rowBand.start) * paperScale}px ${-(colBand.end - clip[2]) * paperScale}px ${-(rowBand.end - clip[3]) * paperScale}px ${-(clip[0] - colBand.start) * paperScale}px)`,
+                        clipPath: `inset(${-(clip[1] - rowBand.start) * paperScale}px ${-clipX.right * paperScale}px ${-(rowBand.end - clip[3]) * paperScale}px ${-clipX.left * paperScale}px)`,
                       }}
                     >
                       <div
                         className="absolute origin-top-left"
                         style={{
-                          left: -(clip[0] - left) * paperScale,
+                          left: -(mirrored ? left + width * scale - clip[2] : clip[0] - left) * paperScale,
                           top: -(clip[1] - top) * paperScale,
                           width,
                           height,

@@ -70,7 +70,7 @@ import { normalizeWordCompatibilityMode } from "@mrnote/core/web/components/cons
 import { wordSetsIdeographsAsLetters, wordEastAsianLineRulesApply } from "@mrnote/core/web/components/console/editor/native-document/wordFarEastDefaults.ts";
 import { touchedTextblockRanges } from "@mrnote/core/web/components/console/editor/native-document/touchedTextblocks.ts";
 import { isImeCompositionActive, onImeCompositionSettled } from "@mrnote/core/web/components/console/editor/native-document/imeCompositionGuard.ts";
-import { DOCUMENT_ENGINE_FACES_WAITING, DOCUMENT_ENGINE_LINES_PENDING, LAYOUT_METRICS_FLUSH_EVENT, writeDocumentLayoutStatus } from "@mrnote/core/web/components/console/editor/native-document/documentLayoutStatus.ts";
+import { DOCUMENT_ENGINE_FACES_WAITING, DOCUMENT_ENGINE_LINES_PENDING, LAYOUT_METRICS_FLUSH_EVENT, layoutMetricsFlushDeadline, noteLayoutMetricsFlushPartial, writeDocumentLayoutStatus } from "@mrnote/core/web/components/console/editor/native-document/documentLayoutStatus.ts";
 import { projectionFontReach, sheetRangesOf } from "@mrnote/core/web/components/console/editor/native-document/projectionFontNews.ts";
 import { recordProjectedHorizon, sheetsWithinMeasureHorizon } from "@mrnote/core/web/components/console/editor/native-document/paged/measureHorizon.ts";
 import { createEngineLineCache, familyNews, type EngineLineCache, type EngineLineKey, type FamilyNews } from "./engineLineCache";
@@ -83,6 +83,12 @@ import { msSinceTyping, TYPING_IDLE_MS } from "@mrnote/core/web/lib/typing-sessi
 export const documentEngineLineBreaksKey = new PluginKey<EngineLinesState>("documentEngineLineBreaks");
 const META = "documentEngineLineBreaks";
 const BLOCKS_PER_SLICE = 30;
+/** The longest slice of a pass of frames (ms): thirty paragraphs of a long
+ * opening document were 0.1-0.4 s in one frame. */
+const ENGINE_FRAME_SLICE_MS = 24;
+function stepBudgetOff(win: Window): boolean {
+  return (win as Window & { __docsStepBudgetOff?: boolean }).__docsStepBudgetOff === true;
+}
 /** Rounds a paragraph is corrected again while the browser still disagrees. */
 const MAX_ROUNDS = 4;
 /** This projection's coverage record in measureHorizon. */
@@ -997,6 +1003,9 @@ export const DocumentEngineLineBreaks = Extension.create({
           /** What a pass read a frame at a time took to read (every paragraph,
            * the sheets of an arrived face): given back if it is cut short. */
           let inFlight: (() => void) | null = null;
+          /** The pass under way read on from where it stopped, now, until the
+           * deadline of the ledger's flush that asks (a flush taken in steps). */
+          let resume: ((deadline: number, event: Event) => void) | null = null;
           const rounds = new Map<number, number>();
           const lineCache = createEngineLineCache();
           const cacheStats = (): EngineLineCacheStats | null => {
@@ -1026,6 +1035,7 @@ export const DocumentEngineLineBreaks = Extension.create({
           const markPending = (pending: boolean) => writeDocumentLayoutStatus(view.dom, DOCUMENT_ENGINE_LINES_PENDING, pending ? "true" : null, view);
           const cancelScheduled = () => {
             if (frame !== null) { win.cancelAnimationFrame(frame); frame = null; }
+            resume = null;
             // A pass under way, cut short by the ledger's flush: what it took
             // to read is read by the flush instead. Taken and dropped, the
             // paragraphs waiting for a face that had just answered stayed the
@@ -1174,7 +1184,10 @@ export const DocumentEngineLineBreaks = Extension.create({
           };
           /** Measure; `sync`: every block now, the retry rounds too (the
            * ledger is waiting). Otherwise a slice per frame. */
-          const pass = (sync: boolean) => {
+          /** `deadline` (a flush taken in steps): what is read now stops there
+           * and the rest goes on as a pass of frames does, or with the next
+           * flush, which reads on from where this one stopped. */
+          const pass = (sync: boolean, deadline: number | null = null, flushEvent?: Event) => {
             if (!view.dom.isConnected) {
               markPending(false);
               waitUntilAttached();
@@ -1221,9 +1234,12 @@ export const DocumentEngineLineBreaks = Extension.create({
                 view.dispatch(tr);
                 return retry.length > 0;
               };
-              const slice = (count: number) => {
+              const slice = (count: number, until: number | null = null) => {
                 const end = Math.min(blocks.length, index + count);
+                const first = index;
                 for (; index < end; index += 1) {
+                  // (At least one paragraph a slice: each goes on from the last.)
+                  if (until !== null && index > first && performance.now() >= until) break;
                   const { node, pos, retry: again } = blocks[index];
                   const done = again ? (rounds.get(pos) ?? 0) : 0;
                   const result = measureBlock(view, node, pos, done, floats, cache);
@@ -1246,7 +1262,7 @@ export const DocumentEngineLineBreaks = Extension.create({
                   } else if (result.agrees) rounds.delete(pos);
                 }
               };
-              if (sync) {
+              if (sync && deadline === null) {
                 slice(blocks.length);
                 const more = finish();
                 anyFacesPending ||= facesPending;
@@ -1267,9 +1283,13 @@ export const DocumentEngineLineBreaks = Extension.create({
                   facesLanded = true;
                 }
               };
-              const step = () => {
+              // A slice of a pass of frames is bounded in time as well as in
+              // paragraphs (`window.__docsStepBudgetOff = true`: paragraphs only).
+              const frameUntil = () => (stepBudgetOff(win) ? null : performance.now() + ENGINE_FRAME_SLICE_MS);
+              const step = (until: number | null, event?: Event) => {
                 frame = null;
                 inFlight = null;
+                resume = null;
                 if (!view.dom.isConnected) { giveBack(); return; }
                 if (view.state.doc !== doc) {
                   // Edited meanwhile: what is left is measured next time.
@@ -1278,17 +1298,26 @@ export const DocumentEngineLineBreaks = Extension.create({
                   else schedule();
                   return;
                 }
-                slice(BLOCKS_PER_SLICE);
+                // (A flush's slice reads on to its deadline, a frame's to its count.)
+                slice(event ? blocks.length : BLOCKS_PER_SLICE, until);
                 if (index < blocks.length) {
-                  frame = win.requestAnimationFrame(step);
+                  frame = win.requestAnimationFrame(() => step(frameUntil()));
                   inFlight = giveBack;
+                  resume = (next, nextEvent) => {
+                    if (frame !== null) win.cancelAnimationFrame(frame);
+                    step(next, nextEvent);
+                  };
+                  if (event) {
+                    markPending(true);
+                    noteLayoutMetricsFlushPartial(event);
+                  }
                   return;
                 }
                 const more = finish();
                 settle(facesPending, all);
                 if (more) schedule();
               };
-              step();
+              step(deadline ?? frameUntil(), deadline !== null ? flushEvent : undefined);
               return;
             }
             settle(anyFacesPending, readAll);
@@ -1410,7 +1439,7 @@ export const DocumentEngineLineBreaks = Extension.create({
               schedule();
             }, WIDTH_WATCH_MS);
           };
-          const onFlush = () => {
+          const onFlush = (event?: Event) => {
             const state = documentEngineLineBreaksKey.getState(view.state);
             const dirty = Boolean(state && (state.dirty === "all" || state.dirty.length || state.retry.length));
             // The ledger is about to measure: a paragraph drawn now at another
@@ -1442,8 +1471,15 @@ export const DocumentEngineLineBreaks = Extension.create({
             // Ranges a hand is still typing in wait for the pause (afterTyping).
             if (!view.dom.hasAttribute(DOCUMENT_ENGINE_LINES_PENDING) && typingHolds()) return;
             flushes += 1;
+            // A flush taken in steps reads on from where the pass under way
+            // stopped (its paragraphs are those this flush would take).
+            const deadline = layoutMetricsFlushDeadline(event);
+            if (deadline !== null && resume && event) {
+              resume(deadline, event);
+              return;
+            }
             cancelScheduled();
-            pass(true);
+            pass(true, deadline, event);
           };
           view.dom.addEventListener(LAYOUT_METRICS_FLUSH_EVENT, onFlush);
           // Faces landing (the engine's answers move from pending) and a

@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "Aurkezpen batek gutxienez diapositiba bat izaten du.",
  "presentation.duplicateSlide": "Bikoiztu diapositiba",
  "presentation.slideCopyUnavailable": "Diapositiba hau ezin da orain bikoiztu. Saiatu berriro une bat barru.",
+ "presentation.newSlideNoPackageSlide": "Ez da jatorrizko fitxategiko diapositibarik geratzen diapositiba berriari diseinua emateko.",
  "presentation.slideCopyRebuilt": "Kopia hau orritik berreraiki da, beraz, animazioak eta antzeko xehetasunak falta izan daitezke.",
  "presentation.undo": "Desegin",
  "presentation.formatPainter": "Formatu-erreproduzigailua (egin klik bikoitza aktibatuta mantentzeko)",

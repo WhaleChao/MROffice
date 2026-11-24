@@ -173,6 +173,10 @@ export function PdfRibbonGroupFlyout({
             <div
               ref={panelRef}
               className={styles.flyoutPanel}
+              // A fold panel is the band's own surface: an editor that ends
+              // its edit on a press outside the band counts a press here as
+              // inside (the native text editor, PdfNativeListTextEditDialog).
+              data-pdf-ribbon-flyout-panel=""
               role="dialog"
               aria-label={label}
               data-testid={testId ? `${testId}-flyout` : undefined}

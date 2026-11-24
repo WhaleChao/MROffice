@@ -5697,6 +5697,7 @@
  "presentation.deleteSlideKeepOne": "En præsentation beholder mindst ét dias.",
  "presentation.duplicateSlide": "Dupliker dias",
  "presentation.slideCopyUnavailable": "Diasset kan ikke dubleres lige nu. Prøv igen om lidt.",
+ "presentation.newSlideNoPackageSlide": "Der er ingen dias tilbage fra den oprindelige fil, som kan give et nyt dias dets layout.",
  "presentation.slideCopyRebuilt": "Denne kopi er genopbygget fra siden, så animationer og lignende kan mangle.",
  "presentation.undo": "Fortryd",
  "presentation.formatPainter": "Formatpensel (dobbeltklik for at holde den aktiv)",

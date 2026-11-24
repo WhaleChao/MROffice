@@ -5716,6 +5716,7 @@
  "presentation.deleteSlideKeepOne": "簡報至少要保留一張投影片。",
  "presentation.duplicateSlide": "複製投影片",
  "presentation.slideCopyUnavailable": "暫時無法複製這張投影片，請稍後再試",
+ "presentation.newSlideNoPackageSlide": "原檔案中的投影片都已不在，新投影片無法取得版面配置。",
  "presentation.slideCopyRebuilt": "這張副本是依頁面內容重建的，動畫等可能不完整。",
  "presentation.undo": "復原",
  "presentation.formatPainter": "複製格式（按兩下可持續使用）",

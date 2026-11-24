@@ -6204,6 +6204,7 @@
  "presentation.deleteSlideKeepOne": "Persembahan mesti mempunyai sekurang-kurangnya satu slaid.",
  "presentation.duplicateSlide": "Pendua Slaid",
  "presentation.slideCopyUnavailable": "Slaid ini tidak dapat diduplikasi sekarang. Cuba lagi sebentar lagi.",
+ "presentation.newSlideNoPackageSlide": "Tiada slaid daripada fail asal yang tinggal untuk memberikan reka letak kepada slaid baharu.",
  "presentation.slideCopyRebuilt": "Salinan ini dibina semula daripada halaman, jadi animasi dan butiran serupa mungkin tiada.",
  "presentation.undo": "Buat Asal",
  "presentation.formatPainter": "Penyapu format (klik dua kali untuk kekalkan)",

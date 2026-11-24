@@ -5697,6 +5697,7 @@
  "presentation.deleteSlideKeepOne": "Esitykseen jää vähintään yksi dia.",
  "presentation.duplicateSlide": "Monista dia",
  "presentation.slideCopyUnavailable": "Diaa ei voi monistaa juuri nyt. Yritä hetken päästä uudelleen.",
+ "presentation.newSlideNoPackageSlide": "Alkuperäisestä tiedostosta ei ole jäljellä diaa, josta uusi dia voisi saada asettelunsa.",
  "presentation.slideCopyRebuilt": "Tämä kopio muodostettiin sivulta uudelleen, joten animaatioita ja vastaavia voi puuttua.",
  "presentation.undo": "Kumoa",
  "presentation.formatPainter": "Muotoilusivellin (pidä käytössä kaksoisnapsauttamalla)",

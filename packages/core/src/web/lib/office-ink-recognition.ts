@@ -19,6 +19,7 @@
  * when it is unsure, so writing in another language reads too.
  */
 import { apiGet, apiPostFormData } from "./api";
+import { ensureDesktopOndemand } from "./desktop-ondemand";
 import {
   rasterizeInkMathStrokes,
   recognizeInkMath,
@@ -82,8 +83,20 @@ export function loadOfficeInkRecognitionCapability(pageId: string): Promise<InkM
   const now = Date.now();
   const cached = capabilityCache.get(pageId);
   if (cached && now - cached.at < CAPABILITY_TTL_MS) return cached.answer;
-  const answer = apiGet<InkMathCapability>(`/api/v1/pages/${encodeURIComponent(pageId)}/ink-text/capability`)
-    .then((value) => (value && typeof value.available === "boolean" ? value : UNAVAILABLE))
+  // The desktop app fetches the readers' models after installing
+  // (lib/desktop-ondemand): asked for here, the first use waits for them with
+  // the download's progress showing; one that cannot come now is asked again
+  // next time.
+  let fetched = true;
+  const answer = ensureDesktopOndemand("ink-models")
+    .catch(() => {
+      fetched = false;
+    })
+    .then(() => apiGet<InkMathCapability>(`/api/v1/pages/${encodeURIComponent(pageId)}/ink-text/capability`))
+    .then((value) => {
+      if (!fetched) capabilityCache.delete(pageId);
+      return value && typeof value.available === "boolean" ? value : UNAVAILABLE;
+    })
     .catch(() => {
       capabilityCache.delete(pageId);
       return UNAVAILABLE;
