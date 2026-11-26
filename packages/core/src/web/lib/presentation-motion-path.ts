@@ -3,6 +3,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { isSmooth, smoothFramesAtEvenTimes, smoothShares } from "./presentation-smooth-timing";
+
 /**
  * MOTION PATHS for the present-mode animation timeline (PowerPoint's fourth
  * animation class, alongside entrance / emphasis / exit).
@@ -189,6 +191,33 @@ const PRESET_WAYPOINTS: Readonly<
 });
 
 /**
+ * The named preset whose canonical waypoints `waypoints` are, each within
+ * `toleranceEmu`, else null -- the import's reading of a PowerPoint path as
+ * one of the editor's presets (the server's `_pptx_parse_motion_path`;
+ * `loop` precedes `circle`, which shares its geometry).
+ */
+export function motionPathPresetOfWaypoints(
+  waypoints: readonly MotionWaypoint[],
+  toleranceEmu: number,
+): Exclude<MotionPathPreset, "custom"> | null {
+  for (const preset of MOTION_PATH_PRESETS) {
+    if (preset === "custom") continue;
+    const canonical = PRESET_WAYPOINTS[preset];
+    if (
+      canonical.length === waypoints.length &&
+      canonical.every(
+        (point, index) =>
+          Math.abs(waypoints[index].x - point.x) <= toleranceEmu &&
+          Math.abs(waypoints[index].y - point.y) <= toleranceEmu,
+      )
+    ) {
+      return preset;
+    }
+  }
+  return null;
+}
+
+/**
  * A normalized, render-safe motion path on a timeline step. `preset` names the
  * kind; `waypoints` is the resolved EMU offset list (relative to the block's
  * start, the implicit origin excluded). For a non-`custom` preset the waypoints
@@ -332,6 +361,8 @@ export function motionPathKeyframeBody(
   path: MotionPath,
   slideWidthEmu: number,
   slideHeightEmu: number,
+  accel = 0,
+  decel = 0,
 ): string {
   if (
     path.waypoints.length === 0 ||
@@ -343,18 +374,86 @@ export function motionPathKeyframeBody(
     return "";
   }
   // The origin (resting spot) is the implicit first frame at 0%.
-  const points: MotionWaypoint[] = [{ x: 0, y: 0 }, ...path.waypoints];
-  const last = points.length - 1;
-  const frames: string[] = [];
-  for (let i = 0; i < points.length; i += 1) {
-    const pct = last === 0 ? 0 : (i / last) * 100;
-    const x = (points[i].x / slideWidthEmu) * 100;
-    const y = (points[i].y / slideHeightEmu) * 100;
-    frames.push(
-      `${fmt(pct)}% { translate: ${fmt(x)}${X_UNIT} ${fmt(y)}${Y_UNIT}; }`,
-    );
+  const points: Array<[number, number]> = [{ x: 0, y: 0 }, ...path.waypoints].map((point) => [
+    (point.x / slideWidthEmu) * 100,
+    (point.y / slideHeightEmu) * 100,
+  ]);
+  const frame = (pct: number, [x, y]: readonly [number, number]) =>
+    `${fmt(pct)}% { translate: ${fmt(x)}${X_UNIT} ${fmt(y)}${Y_UNIT}; }`;
+  if (isSmooth(accel, decel)) {
+    // Smooth start / end over the whole path: frames at even times, each
+    // where the eased progress puts the block (played `linear`).
+    const shares = smoothShares(accel, decel);
+    return polylinePointsAlongSmoothly(points, SMOOTH_MOTION_FRAMES, shares.accel, shares.decel)
+      .map((point, index) => frame((index / SMOOTH_MOTION_FRAMES) * 100, point))
+      .join(" ");
   }
-  return frames.join(" ");
+  // At an even pace the block reaches each waypoint when it has travelled
+  // that share of the path's length (a path with no length: evenly).
+  const lengths = polylineLengths(points);
+  const total = lengths[lengths.length - 1]!;
+  const last = points.length - 1;
+  return points
+    .map((point, index) =>
+      frame(last === 0 ? 0 : total > 0 ? (lengths[index]! / total) * 100 : (index / last) * 100, point),
+    )
+    .join(" ");
+}
+
+/** The frames a path played with Smooth start / end is drawn with. */
+const SMOOTH_MOTION_FRAMES = 40;
+
+/** A polyline's cumulative lengths, point by point. */
+function polylineLengths(points: ReadonlyArray<readonly [number, number]>): number[] {
+  const lengths = [0];
+  for (let index = 1; index < points.length; index += 1) {
+    const [ax, ay] = points[index - 1]!;
+    const [bx, by] = points[index]!;
+    lengths.push(lengths[index - 1]! + Math.hypot(bx - ax, by - ay));
+  }
+  return lengths;
+}
+
+/** The point `fraction` (0..1) of the way along a polyline by length. */
+function pointAlongPolyline(
+  points: ReadonlyArray<readonly [number, number]>,
+  lengths: readonly number[],
+  fraction: number,
+): [number, number] {
+  const total = lengths[lengths.length - 1]!;
+  if (points.length === 1 || total === 0) return [points[0]![0], points[0]![1]];
+  const goal = Math.max(0, Math.min(1, fraction)) * total;
+  let segment = 1;
+  while (segment < lengths.length - 1 && lengths[segment]! < goal) segment += 1;
+  const span = lengths[segment]! - lengths[segment - 1]!;
+  const t = span > 0 ? (goal - lengths[segment - 1]!) / span : 0;
+  const [ax, ay] = points[segment - 1]!;
+  const [bx, by] = points[segment]!;
+  return [ax + (bx - ax) * t, ay + (by - ay) * t];
+}
+
+/**
+ * `count + 1` places along a polyline at even times of a motion played with
+ * Smooth start / end (`accel`, `decel` as shares; SMIL's mapping,
+ * `lib/presentation-smooth-timing`): the block moves along the path at one
+ * speed in its progress, the progress eased over the whole path (both 0: at
+ * one speed). Backwards (`reversed`, a negative speed on the motion) runs the
+ * eased progress from the path's end, as the motion's own time runs back
+ * inside its effect's (SMIL: the effect's accelerate eases the time its child
+ * then plays backwards).
+ */
+export function polylinePointsAlongSmoothly(
+  points: ReadonlyArray<readonly [number, number]>,
+  count: number,
+  accel: number,
+  decel: number,
+  reversed = false,
+): Array<[number, number]> {
+  if (points.length === 0) return [[0, 0]];
+  const lengths = polylineLengths(points);
+  return smoothFramesAtEvenTimes(count, accel, decel, (progress) =>
+    pointAlongPolyline(points, lengths, reversed ? 1 - progress : progress),
+  ).map((frame) => frame.value);
 }
 
 /**
@@ -376,10 +475,14 @@ export function motionPathKeyframeName(
   path: MotionPath,
   slideWidthEmu: number,
   slideHeightEmu: number,
+  accel = 0,
+  decel = 0,
 ): string {
+  const shares = smoothShares(accel, decel);
+  const smooth = isSmooth(accel, decel) ? `|s${shares.accel},${shares.decel}` : "";
   const seed = `${path.preset}|${slideWidthEmu}x${slideHeightEmu}|${path.waypoints
     .map((p) => `${p.x},${p.y}`)
-    .join(";")}`;
+    .join(";")}${smooth}`;
   // Two independent FNV-1a passes (different basis + prime) → ~64-bit ident.
   let h1 = 0x811c9dc5;
   let h2 = 0x811c9dc5 ^ 0x9e3779b9;
@@ -405,9 +508,11 @@ export function motionPathKeyframeCss(
   path: MotionPath,
   slideWidthEmu: number,
   slideHeightEmu: number,
+  accel = 0,
+  decel = 0,
 ): string {
-  const body = motionPathKeyframeBody(path, slideWidthEmu, slideHeightEmu);
+  const body = motionPathKeyframeBody(path, slideWidthEmu, slideHeightEmu, accel, decel);
   if (!body) return "";
-  const name = motionPathKeyframeName(path, slideWidthEmu, slideHeightEmu);
+  const name = motionPathKeyframeName(path, slideWidthEmu, slideHeightEmu, accel, decel);
   return `@keyframes ${name} { ${body} }`;
 }

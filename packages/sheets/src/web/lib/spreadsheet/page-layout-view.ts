@@ -6,7 +6,7 @@
 import { pxToPt } from "@mrnote/core/web/lib/office-units.ts";
 import { aspectLockedResizeSize } from "./drawing-aspect";
 import { OFFICE_PRINT_IDENTITY, type OfficePrintScale } from "./office-print-metrics";
-import { styledColumnEdge } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
+import { occupiedExtentWithValues, styledColumnEdge, valuedCellsExtent } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
 import {
   DEFAULT_SPREADSHEET_ROW_HEIGHT_PX,
   DEFAULT_SPREADSHEET_COLUMN_WIDTH_PX,
@@ -269,55 +269,9 @@ export function printedCellWidensRange(cell: { value?: unknown; formula?: unknow
   return valued || fill || border || Boolean(style.pattern) || Boolean(style.gradientFill);
 }
 
-const VALUED_CELLS_EXTENT = new WeakMap<object, { rows: number; cols: number }>();
-
-/**
- * The range a sheet's real cells occupy, for its print: the import's
- * occupiedExtent (`occupied`) widened to the cells holding a value or a
- * formula now; null when the import read none. A tiled workbook's page body
- * is projected from its stub, which leaves every valued cell to the tiles
- * (they own them: a tiled save, sort and recalc write them there), so its
- * extent stopped at the stub's last valued row (R13-X27: 50 rows for 51,
- * R379-X18: 5 for 140); the cells the window holds carry the tiles' too. A
- * whole read's extent already holds every valued cell, and a value entered
- * past it is in Excel's used range as well. The API's writer reads the same
- * (`_occupied_extent_with_values`).
- */
-export function occupiedExtentWithValues(
-  cells: Readonly<Record<string, unknown>>,
-  occupied: unknown,
-): { rows: number; cols: number } | null {
-  const extent = occupied && typeof occupied === "object" ? occupied as { rows?: unknown; cols?: unknown } : null;
-  const importedRows = extent?.rows;
-  const importedCols = extent?.cols;
-  if (typeof importedRows !== "number" || typeof importedCols !== "number") return null;
-  const valued = valuedCellsExtent(cells);
-  return { rows: Math.max(importedRows, valued.rows), cols: Math.max(importedCols, valued.cols) };
-}
-
-/** The rows and columns down and across to the last cell holding a value or a formula (0 for none). */
-export function valuedCellsExtent(cells: Readonly<Record<string, unknown>>): { rows: number; cols: number } {
-  let valued = VALUED_CELLS_EXTENT.get(cells);
-  if (!valued) {
-    let rows = 0;
-    let cols = 0;
-    for (const key in cells) {
-      const cell = cells[key] as { value?: unknown; formula?: unknown } | undefined;
-      if (!cell || typeof cell !== "object") continue;
-      if ((cell.value === undefined || cell.value === null || cell.value === "")
-        && !(typeof cell.formula === "string" && cell.formula !== "")) continue;
-      const separator = key.indexOf(":");
-      const row = Number(key.slice(0, separator));
-      const col = Number(key.slice(separator + 1));
-      if (separator <= 0 || !Number.isInteger(row) || !Number.isInteger(col)) continue;
-      if (row + 1 > rows) rows = row + 1;
-      if (col + 1 > cols) cols = col + 1;
-    }
-    valued = { rows, cols };
-    VALUED_CELLS_EXTENT.set(cells, valued);
-  }
-  return valued;
-}
+// occupiedExtentWithValues and valuedCellsExtent live with the line formats
+// (line-styles), whose print paint reads them too; named here as before.
+export { occupiedExtentWithValues, valuedCellsExtent };
 
 /**
  * The blanks that widen the printed range though they only show their row's
@@ -335,6 +289,9 @@ export function printedOccupiedLineBlanks(
   cells: Readonly<Record<string, unknown>>,
   own: Readonly<Record<string, unknown>>,
   occupied: unknown,
+  /** The file's stated row spans (`rowSpans`): a line's paint past a row's
+   * spans widens nothing (printedBlankPastStatedSpans). */
+  spans?: unknown,
 ): string[] {
   // Down to the last valued row only (a tiled body's valued cells are the
   // tiles', in `cells` too): a blank the file holds below it, whatever it
@@ -355,6 +312,7 @@ export function printedOccupiedLineBlanks(
     if (key in own) continue;
     const separator = key.indexOf(":");
     if (separator <= 0 || !(Number(key.slice(0, separator)) < rows) || !(Number(key.slice(separator + 1)) < cols)) continue;
+    if (printedBlankPastStatedSpans(spans, Number(key.slice(0, separator)), Number(key.slice(separator + 1)))) continue;
     const cell = cells[key];
     if (cell && typeof cell === "object" && printedCellWidensRange(cell as { value?: unknown; formula?: unknown; style?: Record<string, unknown> })) keys.push(key);
   }
@@ -458,6 +416,29 @@ export function pageLayoutMergeKeepsPage(
  * the five pages below the first in L:M (7 pages; 12 here). The API's
  * page_shows_line_formats_only is the same rule.
  */
+/**
+ * Whether a blank lies past the spans the file states for its row (`rowSpans`,
+ * [firstRow, lastRow, firstCol, lastCol] 0-based): no cell of the file's own
+ * is there, only its row's or column's format the import painted across the
+ * dimension, and Windows Excel widens its print by a line's border or fill
+ * inside the row's spans only (lookwin p230-lw, reading 970; R491-X96: row 2's
+ * bordered row format over spans 1:18 painted S2:CR2 out to the dimension's CR
+ * -- 25 pages for Excel's 6). A row no stated span covers is not judged here.
+ */
+export function printedBlankPastStatedSpans(spans: unknown, row: number, col: number): boolean {
+  if (!Array.isArray(spans)) return false;
+  let covered = false;
+  for (const run of spans) {
+    if (!Array.isArray(run) || run.length !== 4) continue;
+    const [firstRow, lastRow, firstCol, lastCol] = run as unknown[];
+    if (typeof firstRow !== "number" || typeof lastRow !== "number" || typeof firstCol !== "number" || typeof lastCol !== "number") continue;
+    if (row < firstRow || row > lastRow) continue;
+    if (col >= firstCol && col <= lastCol) return false;
+    covered = true;
+  }
+  return covered;
+}
+
 export function pageLayoutSpansKeepPage(
   spans: unknown,
   rows: readonly [number, number],
@@ -544,7 +525,13 @@ export function pageLayoutCarriedRunPrints(input: {
   const reachesLast = runEndCol >= last && textEnd + padding > leftOf(last) + slack;
   const pastUsed = input.usedColumns === undefined || input.usedColumns <= source ||
     textEnd + padding > leftOf(input.usedColumns);
-  return reachesLast && pastUsed;
+  // A text a value in its own row cuts short does not run out past the used
+  // range: its tail prints on no later page (lookwin spill S2: F1's long
+  // note stopped by Z1 prints only on F's page, the two pages it crosses
+  // blank; S4: stopped by N1, page 2 prints N1 alone). The server's writer:
+  // cut_by_value.
+  const cut = lefts.has(runEndCol + 1) && textEnd - slack > leftOf(runEndCol + 1);
+  return reachesLast && pastUsed && !cut;
 }
 
 /** Inverse of drawing clipping. Paper margins/gaps never become sheet offsets. */
@@ -1086,6 +1073,9 @@ export function resolveSpreadsheetPageLayoutGeometry(input: {
   totalRows: number;
   rowOrder?: readonly number[];
   totalCols: number;
+  /** False when only blanks run the range on into hidden columns past the
+   * last shown one: no blank band prints for them (R488-X42). */
+  hiddenTailReached?: boolean;
   hiddenRows?: ReadonlySet<number>;
   hiddenCols?: ReadonlySet<number>;
   printSettings?: PrintSettings;
@@ -1302,7 +1292,7 @@ export function resolveSpreadsheetPageLayoutGeometry(input: {
     hiddenLedCols: hiddenLedPositions(colProjection, input.hiddenCols, printArea?.c1 ?? 0),
     // The range runs on past its last shown column into hidden ones (a wide
     // column's text spilling over them): a blank band (the API's hidden_tail_cols).
-    hiddenTailCols: !printArea && totalCols > 0 && input.hiddenCols?.has(totalCols - 1) === true
+    hiddenTailCols: !printArea && input.hiddenTailReached !== false && totalCols > 0 && input.hiddenCols?.has(totalCols - 1) === true
       && colProjection.paginateCount > colProjection.repeatCount
       && (mapLocalAxisIndex(colProjection, colProjection.paginateCount - 1) ?? totalCols) < totalCols - 1,
     settings: paginationSettings,
@@ -1781,6 +1771,7 @@ export function resolveSpreadsheetPrintBatchPlan(
   geometry: SpreadsheetPageLayoutGeometry,
   start: number,
   pageText?: (page: SpreadsheetPageLayoutPage) => number,
+  textBudget: number = PRINT_BATCH_TEXT,
 ): SpreadsheetPageLayoutRenderPlan & { nextStart: number | null } {
   const pages: SpreadsheetPageLayoutPage[] = [];
   let renderedCellCount = 0;
@@ -1794,7 +1785,7 @@ export function resolveSpreadsheetPrintBatchPlan(
     // Within PRINT_BATCH_TEXT printed characters too (a page past it alone
     // is a batch of its own).
     const pageChars = pageText ? pageText(page) : 0;
-    if (pages.length && text + pageChars > PRINT_BATCH_TEXT) break;
+    if (pages.length && text + pageChars > textBudget) break;
     text += pageChars;
     pages.push(page);
     renderedCellCount += page.renderedCellCount;

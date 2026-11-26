@@ -30,6 +30,7 @@
       "lineHeightRule",
       "mirrorIndents",
       "overflowPunct",
+      "oversizedTable",
       "paragraphBorders",
       "paragraphFontSize",
       "paragraphMarkMarks",
@@ -129,6 +130,7 @@
       "listChain",
       "listDefinition",
       "listLevel",
+      "listRestart",
       "listStyleId",
       "source",
       "type"
@@ -654,6 +656,7 @@
       "class",
       "href",
       "inertHref",
+      "runsPastMark",
       "title"
     ],
     "fontSize": [

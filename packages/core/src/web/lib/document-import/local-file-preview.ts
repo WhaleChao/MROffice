@@ -44,6 +44,8 @@ export interface LocalFilePreviewEntry {
   readonly pageType: string | null;
   /** Why no page came of it (the import failed). */
   readonly failure: string | null;
+  /** The import's request has gone out (lib/document-import/pending-document-host). */
+  readonly sent?: boolean;
   /** The server import that is making the page, once it has said it read the
    * deck's first slides beside it (lib/document-import/pptx-first-slides). */
   readonly firstSlidesJob?: { readonly notebookId: string; readonly jobId: string } | null;
@@ -127,7 +129,7 @@ export function createLocalFilePreview(input: {
 
 export function updateLocalFilePreview(
   id: string,
-  patch: Partial<Pick<LocalFilePreviewEntry, "status" | "pageId" | "pageType" | "failure" | "firstSlidesJob">>,
+  patch: Partial<Pick<LocalFilePreviewEntry, "status" | "pageId" | "pageType" | "failure" | "firstSlidesJob" | "sent">>,
 ): void {
   const current = entries.get(id);
   if (!current) return;
@@ -137,6 +139,7 @@ export function updateLocalFilePreview(
     next.pageId === current.pageId &&
     next.pageType === current.pageType &&
     next.failure === current.failure &&
+    next.sent === current.sent &&
     next.firstSlidesJob?.jobId === current.firstSlidesJob?.jobId
   ) {
     return;

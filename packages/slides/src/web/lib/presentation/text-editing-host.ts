@@ -19,6 +19,7 @@ import { isTextBoxBlock } from "@mrnote/core/web/lib/presentation-slide-buttons.
 import { NEW_TEXT_BOX_FONT_SIZE_PT, NEW_TEXT_BOX_FONT_SIZE_PX } from "@mrnote/core/web/lib/presentation-shape-buttons.ts";
 import { POINT_TEXT_UNIT } from "@mrnote/core/web/lib/presentation/text-units-block.ts";
 import { readZoomTileMarker } from "../presentation-zoom";
+import { nativePlaceholderRole } from "@mrnote/core/web/lib/presentation-layouts.ts";
 import type {
   PresentationBlock,
 } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
@@ -261,6 +262,63 @@ export function layoutPlaceholderPrompt(
   return isTextBoxBlock(block)
     ? t("presentation.textBoxPlaceholder")
     : t("presentation.slideBodyPlaceholder");
+}
+
+/**
+ * The file's placeholder kinds whose empty box shows a prompt on the editing
+ * canvas when it comes in as a shape (an imported title, subtitle, text or
+ * picture placeholder with no words: `p:ph` with no text body of its own).
+ * A chart / table / media placeholder's prompt names its own object and has
+ * no message here, so it shows none rather than a wrong one.
+ */
+const SHAPE_PLACEHOLDER_PROMPT_TYPES: ReadonlySet<string> = new Set([
+  "title",
+  "ctrTitle",
+  "subTitle",
+  "body",
+  "obj",
+  "pic",
+]);
+
+/**
+ * The prompt an empty imported placeholder shape shows at rest on the editing
+ * canvas, as PowerPoint draws "Click to add title" in an empty title: the
+ * default prompt of its kind (`presentation.layoutPlaceholder.*`), drawn in
+ * the placeholder's own format. `picture` marks a picture placeholder, drawn
+ * with the Insert Picture icon. Never part of the slide: the thumbnails, the
+ * show, print and the exported file draw the box empty (they do not use this).
+ * `null` for any other shape, and for one with words.
+ */
+export function emptyPlaceholderShapePrompt(
+  block: PresentationBlock,
+  t: (key: string) => string,
+): { words: string; picture: boolean } | null {
+  if (block.type !== "shape") return null;
+  const record = block as Record<string, unknown>;
+  const source = record.source;
+  if (!source || typeof source !== "object") return null;
+  const kind = (source as Record<string, unknown>).placeholderType;
+  if (typeof kind !== "string" || !SHAPE_PLACEHOLDER_PROMPT_TYPES.has(kind)) return null;
+  if ((source as Record<string, unknown>).nativeSmartArtView) return null;
+  // A picture placeholder holding a picture is filled.
+  const fillImage = record.fillImage as { url?: unknown } | undefined;
+  if (fillImage && typeof fillImage.url === "string" && fillImage.url) return null;
+  if (String(record.text ?? "").trim() !== "") return null;
+  const paragraphs = record.paragraphs;
+  if (
+    Array.isArray(paragraphs) &&
+    paragraphs.some(
+      (paragraph) =>
+        paragraph &&
+        typeof paragraph === "object" &&
+        String((paragraph as Record<string, unknown>).text ?? "").trim() !== "",
+    )
+  ) {
+    return null;
+  }
+  const key = nativePlaceholderRole(kind)?.placeholder;
+  if (!key || !LAYOUT_PLACEHOLDER_KEYS.has(key)) return null;
+  return { words: t(`presentation.layoutPlaceholder.${key}`), picture: key === "picture" };
 }
 
 /** Empty Title + Content placeholder eligible for Office-style insert actions. */

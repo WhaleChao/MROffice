@@ -21,6 +21,11 @@
 /** The page key the server writes the record under. */
 export const PAGE_IMPORT_LOSSES_KEY = "importLosses";
 
+/** A deck's reading of the layout New Slide takes its header and footer from
+ * (PowerPoint's Header & Footer "Apply to All" state of new slides): written by
+ * the server's reading, never by the editor, which leaves it out of the deck it
+ * serializes (`buildContent`). */
+export const PAGE_HEADER_FOOTER_NEW_SLIDE_KEY = "headerFooterNewSlide";
 
 
 
@@ -29,7 +34,16 @@ export const PAGE_IMPORT_LOSSES_KEY = "importLosses";
 
 
 
-export const SERVER_OWNED_PAGE_ROOT_KEYS: readonly string[] = [PAGE_IMPORT_LOSSES_KEY];
+
+
+
+
+
+
+
+
+
+export const SERVER_OWNED_PAGE_ROOT_KEYS: readonly string[] = [PAGE_IMPORT_LOSSES_KEY, PAGE_HEADER_FOOTER_NEW_SLIDE_KEY];
 
 export interface ImportLossEntry {
   readonly code: string;

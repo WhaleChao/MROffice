@@ -50,9 +50,11 @@ export interface PdfThreadedAnnotationWriter {
    * over a row someone else changed, the other fields are the stored ones.
    * A `"theirs"` payload that is a thread alone (the reader does not show
    * the annotation) is never written as it is: the stored row is asked for
-   * first and the thread is joined to it.
+   * first and the thread is joined to it. `"place"` puts the row where the
+   * page holds the annotation: over a row someone else changed, only its
+   * `page`, `x` and `y` are this payload's, the other fields the stored ones.
    */
-  write(id: string, payload: Payload, fields: "mine" | "theirs"): Promise<PdfThreadedAnnotationWrite>;
+  write(id: string, payload: Payload, fields: "mine" | "theirs" | "place"): Promise<PdfThreadedAnnotationWrite>;
   /** The replies this writer knows the row to hold. */
   known(id: string): readonly PdfAnnotationReply[];
 }
@@ -140,7 +142,12 @@ export function createPdfThreadedAnnotationWriter(deps: {
           thread = mergePdfAnnotationReplies(known(id), mine);
           // A stored payload the server could not read back comes as {}:
           // nothing to build on, so this writer's own fields are written.
-          const base = fields === "theirs" && Object.keys(stored.payload).length > 0 ? stored.payload : next;
+          const kept = Object.keys(stored.payload).length > 0;
+          const base = fields === "theirs" && kept
+            ? stored.payload
+            : fields === "place" && kept
+              ? { ...stored.payload, page: payload.page, x: payload.x, y: payload.y }
+              : next;
           next = withThread(base, thread);
         }
       }

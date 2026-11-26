@@ -304,6 +304,19 @@ export const spreadsheetCellSchema = z
     // Excel's dialog stops at 2,083 characters, its files do not, and the API
     // sets no bound: a link Excel saved made the whole workbook read-only here
     
+    // A link the editor cannot follow (a path relative to the workbook,
+    // file:, a UNC or drive path), held INERT as the file states it (reading
+    // 1046, xlsxHyperlinkInert; the sheet's counterpart of Docs' `inertHref`):
+    // nothing renders it as an anchor or opens it; copy, cut and fill carry
+    // it, and the API's save writes it back as the file's own External link,
+    // refusing a scheme it never writes (document_link_policy). Bounded as
+    // Excel's dialog is, no control characters.
+    inertHyperlink: z
+      .string()
+      .min(1)
+      .max(2_083)
+      .refine((value) => !/[\u0000-\u001f\u007f-\u009f]/.test(value))
+      .optional(),
     
     hyperlinkInArea: z.boolean().optional(),
     // The cell's own link is listed in the file after a link the sheet holds

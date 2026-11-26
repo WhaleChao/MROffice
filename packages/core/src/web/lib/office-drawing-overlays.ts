@@ -618,6 +618,12 @@ export interface OfficeFreeformDrawOptions {
    * not a reliable double-click. Without them, no bar.
    */
   readonly touchKeys?: { readonly finish: string; readonly cancel: string };
+  /**
+   * Esc ends the drawing, keeping what is drawn, as PowerPoint's Custom
+   * motion path does ("To stop drawing a custom path, press Esc"); without
+   * it, Esc cancels, as a shape's drawing does.
+   */
+  readonly escapeFinishes?: boolean;
 }
 
 const DRAW_EMU = 9525;
@@ -872,6 +878,10 @@ export function mountOfficeFreeformDraw(
   const onKey = (event: KeyboardEvent) => {
     if (event.key === "Escape") {
       stop(event);
+      if (options.escapeFinishes) {
+        finish(false);
+        return;
+      }
       reset();
       options.onCancel();
     } else if (event.key === "Enter") {

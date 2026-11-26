@@ -136,6 +136,7 @@ import {
 } from "./managed-table";
 import { PDF_TEXT_BOX_MAX_COLUMNS, pdfTextBoxTabStops, pdfTextBoxTextPaint } from "@mrnote/core/web/lib/pdf/text-box-typography.ts";
 import { normalizePdfTextLineLayout } from "@mrnote/core/web/lib/pdf/text-line-layout.ts";
+import { sanitizeInsertedPageId } from "@mrnote/core/web/lib/pdf/inserted-page-identity.ts";
 import {
   normalizePdfTextStyleRuns,
   persistablePdfTextStyleRuns,
@@ -146,6 +147,9 @@ export interface PdfAnnotation {
   text: string;
   quote?: string;
   page?: number;
+  /** The page inserted in MR Office the comment is on (`page` is then the
+   * page before it): lib/pdf/inserted-page-identity. */
+  insertedPageId?: string;
   rect?: [number, number, number, number];
   createdAt: string;
   author?: string;
@@ -254,6 +258,7 @@ export function getStoredAnnotations(
         item.managedMarkup ?? item.managed_markup,
       );
       const replyAuthority = readNativeNoteReplyAuthority(item);
+      const insertedPageId = sanitizeInsertedPageId(item.insertedPageId);
       const rawRect = item.rect;
       const rect =
         Array.isArray(rawRect) &&
@@ -282,6 +287,7 @@ export function getStoredAnnotations(
           typeof item.page === "number" && Number.isFinite(item.page)
             ? item.page
             : undefined,
+        ...(insertedPageId ? { insertedPageId } : {}),
         ...(rect ? { rect } : {}),
         createdAt: String(
           item.createdAt || item.created_at || new Date().toISOString(),
@@ -828,9 +834,11 @@ export function getStoredInkStrokes(
       const nativeSource = sanitizeNativePdfInkAnnotationSource(
         item.nativeSource ?? item.native_source,
       );
+      const insertedPageId = sanitizeInsertedPageId(item.insertedPageId);
       return {
         id: String(item.id || ""),
         page: Number(item.page) || 0,
+        ...(insertedPageId ? { insertedPageId } : {}),
         color: typeof item.color === "string" ? item.color : "#dc2626",
         width: typeof item.width === "number" ? item.width : 2,
         points: Array.isArray(item.points)
@@ -872,6 +880,7 @@ export function readerInkToManagedStroke(stroke: InkAnnotation): PdfInkStroke {
     width: stroke.width,
     points: stroke.points.flatMap((point) => [point.x / 100, point.y / 100]),
     penType: "pen",
+    ...(stroke.insertedPageId ? { insertedPageId: stroke.insertedPageId } : {}),
   };
 }
 

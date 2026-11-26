@@ -21,6 +21,7 @@
  * Only the paragraphs a transaction touched are measured again (typing
  * re-reads one paragraph); a font landing re-reads them all.
  */
+import { canvasGestureActive, requestQuietFrame } from "@mrnote/core/web/lib/canvas-gesture.ts";
 import { coldFirstLayout, firstLayoutHoldsFaces } from "@mrnote/core/web/components/console/editor/native-document/paged/coldFirstLayout.ts";
 import { noteEngineDeclinedBlock, takeEngineDeclinedNews } from "./engineDeclinedBlocks";
 import { drawnLinesWidth, engineLinesKeptOn, forgetDrawnLines, noteDrawnLines, retireSeededLines, seededLinesFor, spansAt } from "@mrnote/core/web/components/console/editor/native-document/engineLinesKept.ts";
@@ -166,6 +167,10 @@ function hyphenElement(): HTMLElement {
   return span;
 }
 
+function joinerProofOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsJoinerProofOff?: boolean }).__docsJoinerProofOff === true;
+}
+
 /** A word joiner: no line break on either side of it (UAX #14 LB11). */
 function joinerElement(): HTMLElement {
   const span = document.createElement("span");
@@ -280,7 +285,15 @@ function decorationsFor(doc: ProseMirrorNode, spans: readonly Span[]): Decoratio
       return [Decoration.widget(span.from, hyphenElement, { side: -1, key: DOCS_ENGINE_HYPHEN_CLASS, engineLine: true, ignoreSelection: true })];
     }
     if (span.joiner) {
-      return [Decoration.widget(span.from, joinerElement, { side: -1, key: DOCS_ENGINE_JOINER_CLASS, engineLine: true, ignoreSelection: true })];
+      // A zero-width character that takes no line height under the auto-line
+      // proof (documentAutoLineSpacing's sourceTextDOM): no foreign layout
+      // owner. As one it took its paragraph's proof away, and the pieces of a
+      // code listing that held a joiner drew each line 1.4 px taller than its
+      
+      return [Decoration.widget(span.from, joinerElement, {
+        side: -1, key: DOCS_ENGINE_JOINER_CLASS, engineLine: true, ignoreSelection: true,
+        ...(joinerProofOff() ? {} : { zeroLayoutFormattingMark: true }),
+      })];
     }
     if (span.headHyphen) {
       return [Decoration.widget(span.from, headHyphenElement, { side: -1, key: DOCS_ENGINE_HEAD_HYPHEN_CLASS, engineLine: true, ignoreSelection: true })];
@@ -976,7 +989,9 @@ export const DocumentEngineLineBreaks = Extension.create({
             const node = view.state.doc.nodeAt(pos);
             return node ? auditDocsParagraph(element, rulesFor(view, node), true, (paragraph) => engineHyphenation(view, element, paragraph)) : null;
           };
-          let frame: number | null = null;
+          // The cancel of the frame asked for (requestQuietFrame: a canvas
+          // gesture in progress puts the next slice after it).
+          let frame: (() => void) | null = null;
           let idle: number | null = null;
           let waitTimer: number | null = null;
           let full = true;
@@ -1034,7 +1049,7 @@ export const DocumentEngineLineBreaks = Extension.create({
           // lines and never undone by a correction after them.
           const markPending = (pending: boolean) => writeDocumentLayoutStatus(view.dom, DOCUMENT_ENGINE_LINES_PENDING, pending ? "true" : null, view);
           const cancelScheduled = () => {
-            if (frame !== null) { win.cancelAnimationFrame(frame); frame = null; }
+            if (frame !== null) { frame(); frame = null; }
             resume = null;
             // A pass under way, cut short by the ledger's flush: what it took
             // to read is read by the flush instead. Taken and dropped, the
@@ -1081,8 +1096,8 @@ export const DocumentEngineLineBreaks = Extension.create({
             markPending(true);
             if (frame !== null) return;
             const seen = flushes;
-            frame = win.requestAnimationFrame(() => {
-              frame = win.requestAnimationFrame(() => {
+            frame = requestQuietFrame(win, () => {
+              frame = requestQuietFrame(win, () => {
                 frame = null;
                 if (firstLayoutHoldsFaces(view.dom, schedule, "engine-lines")) return;
                 if (flushes === seen) pass(false);
@@ -1301,10 +1316,10 @@ export const DocumentEngineLineBreaks = Extension.create({
                 // (A flush's slice reads on to its deadline, a frame's to its count.)
                 slice(event ? blocks.length : BLOCKS_PER_SLICE, until);
                 if (index < blocks.length) {
-                  frame = win.requestAnimationFrame(() => step(frameUntil()));
+                  frame = requestQuietFrame(win, () => step(frameUntil()));
                   inFlight = giveBack;
                   resume = (next, nextEvent) => {
-                    if (frame !== null) win.cancelAnimationFrame(frame);
+                    if (frame !== null) frame();
                     step(next, nextEvent);
                   };
                   if (event) {
@@ -1429,7 +1444,9 @@ export const DocumentEngineLineBreaks = Extension.create({
             widthTimer = win.setTimeout(() => {
               widthTimer = null;
               if (!view.dom.isConnected || widthWatchOff() || isImeCompositionActive(view)) return;
-              if (typingHolds() || frame !== null || idle !== null) {
+              // Not while a canvas window or the desk moves: reading every
+              // paragraph's width lays the document out (0.45 s in WebKit).
+              if (typingHolds() || frame !== null || idle !== null || canvasGestureActive()) {
                 watchWidths();
                 return;
               }

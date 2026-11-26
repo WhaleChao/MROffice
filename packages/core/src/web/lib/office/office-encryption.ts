@@ -228,6 +228,23 @@ export function pageOpenedFromEncryptedFile(pageId: string): boolean {
  * with `office_encryption_cancelled` when the person cancels, or with the
  * server's refusal for an encryption no password opens.
  */
+/** The 97-2003 name and type of a compound file named as a newer Office
+ * package (``ENCRYPTABLE_OFFICE_NAME``), its title unchanged. */
+function compoundFileUnderItsLegacyName(file: File): File {
+  const extension = /\.(doc|xls|ppt)[xm]$|\.(dot)[xm]$/i.exec(file.name);
+  if (!extension) return file;
+  const family = (extension[1] ?? "doc").toLowerCase();
+  const legacy = family === "xls"
+    ? { extension: ".xls", type: "application/vnd.ms-excel" }
+    : family === "ppt"
+      ? { extension: ".ppt", type: "application/vnd.ms-powerpoint" }
+      : { extension: ".doc", type: "application/msword" };
+  return new File([file], file.name.slice(0, extension.index) + legacy.extension, {
+    type: legacy.type,
+    lastModified: file.lastModified,
+  });
+}
+
 export async function unlockEncryptedOfficeFiles(
   files: readonly File[],
   signal?: AbortSignal,
@@ -241,10 +258,13 @@ export async function unlockEncryptedOfficeFiles(
     try {
       await probeEncryptedOfficeFile(file, signal);
     } catch (error) {
-      // An Office name over a compound file that is no encrypted package
-      // (an unencrypted Word 97-2003 file renamed): the import reads it.
+      // An Office name over a compound file that is no encrypted package:
+      // a Word (Excel, PowerPoint) 97-2003 file under a newer name, which
+      // Office opens by its contents. It is imported as the file it is, by
+      // the server's conversion; under its .docx name the import refused it
+      
       if (isOfficeEncryptionError(error) && error.code === "office_not_encrypted") {
-        out.push(file);
+        out.push(compoundFileUnderItsLegacyName(file));
         continue;
       }
       throw error;

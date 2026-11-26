@@ -14,9 +14,10 @@
  * (structural split, no behaviour change).
  */
 
+import { layoutUnitAxisSizes } from "@mrnote/core/web/lib/presentation-table-size.ts";
 import { PresentationEngineTableCellText, usePresentationEngineTable } from "./presentationEngineTable";
 import { usePresentationMergedRowHeights } from "./usePresentationMergedRowHeights";
-import { PRESENTATION_TEXT_ENGINE_ATTRIBUTE } from "./PresentationEngineTextBody";
+import { PRESENTATION_TEXT_ENGINE_ATTRIBUTE, PresentationEngineLinksContext } from "./PresentationEngineTextBody";
 import { useAutofitMeasureVersion } from "../../../../lib/presentation/autofit-measure-store";
 import {
   presentationTableCellParagraphBreakStyles,
@@ -343,6 +344,8 @@ function PresentationBlockViewDrawing({
     [block],
   );
   const engineTable = usePresentationEngineTable(engineTableBlock);
+  // A cell word's link where the engine draws the cell (the show, the print).
+  const engineLinks = useMemo(() => ({ slideIds, onNavigateToSlide }), [slideIds, onNavigateToSlide]);
   // Its rows under merged cells as PowerPoint sizes them: a merge's shortfall
   // on the last row it covers (`usePresentationMergedRowHeights`), where the
   // browser lays the rows out.
@@ -561,7 +564,8 @@ function PresentationBlockViewDrawing({
       }
       if (occurrence.motionKeyframe) {
         parts.push(
-          `${occurrence.motionKeyframe} ${occurrence.durationMs}ms ease-in-out ${occurrence.delayMs}ms forwards`,
+          // A path's Smooth start / end are in its frames (linear).
+          `${occurrence.motionKeyframe} ${occurrence.durationMs}ms linear ${occurrence.delayMs}ms forwards`,
         );
       }
     });
@@ -602,7 +606,9 @@ function PresentationBlockViewDrawing({
         : null;
       const timing = play.timing;
       const repeat = timing ? ` ${timing.iterationCount} ${timing.direction}` : "";
-      const motionAnim = `${motionKeyframe} ${durationMs}ms ${timing?.timingFunction ?? "ease-in-out"} ${delayMs}ms${repeat} ${timing?.rewind ? "none" : "forwards"}`;
+      // A path's Smooth start / end are baked into its frames at even times
+      // (lib/presentation-smooth-timing): it runs linearly.
+      const motionAnim = `${motionKeyframe} ${durationMs}ms linear ${delayMs}ms${repeat} ${timing?.rewind ? "none" : "forwards"}`;
       const entranceAnim = entranceName
         ? `${entranceName} ${durationMs}ms ${timing?.timingFunction ?? playTimingFunction(play.recipeKeyframe, play.animation, play.effectOption)} ${delayMs}ms${repeat} ${timing?.rewind ? "backwards" : "both"}`
         : null;
@@ -776,7 +782,7 @@ function PresentationBlockViewDrawing({
     const displayedTable = engineTableBlock ?? tableWithFrameAlignedGrid(block);
     const displayedRowStyles =
       engineTable.status === "ok"
-        ? engineTable.rowHeightsPx.map((height) => ({ height }))
+        ? layoutUnitAxisSizes(engineTable.rowHeightsPx).map((height) => ({ height }))
         : mergedTableRowStyles;
     content = (
       <div
@@ -788,6 +794,7 @@ function PresentationBlockViewDrawing({
       >
         {!geometry && block.caption ? <strong>{block.caption}</strong> : null}
         {engineTable.status === "pending" ? <span hidden {...{ [PRESENTATION_TEXT_ENGINE_ATTRIBUTE]: "pending" }} /> : null}
+        <PresentationEngineLinksContext.Provider value={engineLinks}>
         <PresentationTableShadowFrame block={displayedTable}>
         <table
           ref={tableRef}
@@ -819,7 +826,7 @@ function PresentationBlockViewDrawing({
                       }}
                     >
                       <TableCellCompoundEdges tdStyle={tableCellTdStyle(displayedTable, cell, rowIndex, cellIndex)} />
-                      <div data-testid="presentation-static-table-cell" data-text-paint={cellStyle.textPaint ? "true" : undefined} style={{ ...tableCellVisualTextStyle(displayedTable, { ...cellStyle, superscript: false, subscript: false }, block.headerRow === true && rowIndex === 0, false, cell, tableCellStatedHeightPx(displayedTable, rowIndex, cell)), textDecoration: "none", backgroundColor: undefined,
+                      <div data-testid="presentation-static-table-cell" data-text-paint={cellStyle.textPaint ? "true" : undefined} style={{ ...tableCellVisualTextStyle(displayedTable, { ...cellStyle, superscript: false, subscript: false }, block.headerRow === true && rowIndex === 0, false, cell, tableCellStatedHeightPx(displayedTable, rowIndex, cell), engineTable.status === "ok" && !!engineTable.cells[rowIndex]?.[cellIndex]), textDecoration: "none", backgroundColor: undefined,
                         // A word the engine let run past the cell, as PowerPoint draws it: over the cells after it,
                         // whose `<td>` a table drawing its own lines positions (`tableEdgeStrokePlan`), and their lines.
                         ...(engineTable.status === "ok" && engineTable.cells[rowIndex]?.[cellIndex] ? { overflow: "visible", position: "relative", zIndex: 7 } : {}) }}>
@@ -866,6 +873,7 @@ function PresentationBlockViewDrawing({
           </tbody>
         </table>
         </PresentationTableShadowFrame>
+        </PresentationEngineLinksContext.Provider>
       </div>
     );
   } else if (block.type === "shape") {

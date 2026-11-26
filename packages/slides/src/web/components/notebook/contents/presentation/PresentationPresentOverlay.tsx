@@ -29,9 +29,11 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronLeft,
   ChevronRight,
+  LayoutGrid,
   Eraser,
   Highlighter,
   MonitorPlay,
@@ -45,7 +47,10 @@ import {
   Timer,
   Trash2,
   X,
+  ZoomIn,
 } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
+import { showMagnifyStyle, type ShowMagnify } from "../../../../lib/presentation-show-magnify";
+import { attachPinchGestures } from "@mrnote/core/web/lib/use-pinch-zoom.ts";
 import presentationChrome from "@mrnote/core/web/lib/presentation/presentation-window-shell.module.css";
 import { runSlideActionTarget, shownSlideActionIndex } from "@mrnote/core/web/lib/presentation-point-runs.ts";
 import {
@@ -122,7 +127,10 @@ import { PresentationGlTransition } from "./PresentationGlTransition";
 import { isGlTransitionKind } from "../../../../lib/presentation-gl-transitions";
 import { PresentationMorphText, type MorphTextPair } from "./PresentationMorphText";
 import { PresentationSlideView } from "./PresentationSlideView";
+import { PresentationEngineLinkSurfaceContext, PresentationTextEngineSurfaceContext } from "./PresentationEngineTextBody";
+import { textEngineEnabled } from "@mrnote/core/web/lib/text-engine/flags.ts";
 import { slideNarrationPlaybackSrc } from "@mrnote/core/web/lib/page-picture-objects.ts";
+import { warmShowFontsAhead } from "../../../../lib/presentation/show-fonts-ahead";
 
 /** A pending morph: the slide we came FROM, the slide we morphed INTO, the layer
  * duration (ms), and a monotonic token so a rapid re-advance restarts cleanly. */
@@ -480,6 +488,109 @@ const PRESENT_SWIPE_MAX_MS = 800;
  * crash on `slide.blocks`/`slide.notes`). Entry into present mode is also
  * blocked on an empty deck upstream, so this is a defensive backstop.
  */
+/** The longest a slide is held out of sight on its entry for its faces (TRIAGE 181). */
+const PRESENT_FACES_HOLD_MS = 1500;
+/** Held out of sight by its paint only: the slide keeps its focus, its keys and what assistive readers read of it. */
+const PRESENT_FACES_HOLD_STYLE: CSSProperties = { opacity: 0 };
+/** The show's holds for faces, tallied with the engine's answers (`window.__mraiSlidesEngine`, the probes' view). */
+function noteShowFacesHold(what: "held" | "pending-timeout"): void {
+  if (typeof window === "undefined") return;
+  const tally = ((window as unknown as { __mraiSlidesEngine?: Record<string, number> }).__mraiSlidesEngine ??= {});
+  const key = `present: ${what}`;
+  tally[key] = (tally[key] ?? 0) + 1;
+}
+
+/** The detached element the show lays the next slide's words out in (TRIAGE 181): never in the page. */
+let prefetchHostElement: HTMLDivElement | null = null;
+function presentPrefetchHost(): HTMLDivElement | null {
+  if (typeof document === "undefined") return null;
+  prefetchHostElement ??= document.createElement("div");
+  return prefetchHostElement;
+}
+/** A slide's words only (its text boxes, shapes and tables), one per slide. */
+const facesSlides = new WeakMap<object, SlideModel>();
+function presentFacesSlide(slide: SlideModel): SlideModel {
+  let faces = facesSlides.get(slide);
+  if (!faces) {
+    faces = { ...slide, blocks: slide.blocks.filter((block) => block.type === "text" || block.type === "shape" || block.type === "table") };
+    facesSlides.set(slide, faces);
+  }
+  return faces;
+}
+
+
+
+
+
+
+
+
+
+const PREFETCH_HEAVY_WEIGHT = 100;
+/** Half a 60 Hz frame for laying the next slide out: the other half left to this slide's animations. */
+const PREFETCH_FRAME_MS = 8;
+/** The longest the next slide waits for this one's animations to finish (a long or looping build). */
+const PREFETCH_ANIMATION_CAP_MS = 5000;
+ 
+function noteShowPrefetch(complete: boolean): void {
+  if (typeof window === "undefined") return;
+  const tally = ((window as unknown as { __mraiShowPrefetch?: { left: number; complete: number } }).__mraiShowPrefetch ??= { left: 0, complete: 0 });
+  tally.left += 1;
+  if (complete) tally.complete += 1;
+}
+
+
+
+
+
+
+function markShow(name: string, detail: Record<string, number>): void {
+  if (typeof window === "undefined" || (window as { __mraiShowMarks?: boolean }).__mraiShowMarks !== true) return;
+  try {
+    performance.mark(name, { detail });
+  } catch {
+    // A browser without mark details: the marks are diagnostics only.
+  }
+}
+/**
+ * Ask the browser for the faces a slide laid out ahead draws (its elements' own font styles: the engine's SVG text
+ * and the browser's words both carry them inline), each face once, with the characters it draws: FontFaceSet.load
+ * fetches only the unicode-range slices those characters need.
+ */
+function loadPrefetchedFaces(host: HTMLElement | null): void {
+  if (!host || typeof document === "undefined" || !document.fonts) return;
+  const faces = new Map<string, string>();
+  for (const element of host.querySelectorAll<HTMLElement | SVGElement>("[style*='font-family']")) {
+    const style = element.style;
+    if (!style.fontFamily) continue;
+    const key = `${style.fontStyle === "italic" ? "italic " : ""}${style.fontWeight || "400"} 16px ${style.fontFamily}`;
+    const text = (element.textContent || "").slice(0, 200);
+    if (!text.trim()) continue;
+    const known = faces.get(key) ?? "";
+    if (known.length < 400) faces.set(key, known + text);
+    if (faces.size >= 64) break;
+  }
+  for (const [font, text] of faces) void document.fonts.load(font, text).catch(() => undefined);
+}
+function prefetchWeight(slide: SlideModel): number {
+  let weight = 0;
+  for (const block of slide.blocks) {
+    if (block.type === "table") weight += (block as { rows?: unknown[][] }).rows?.reduce((n: number, row) => n + (Array.isArray(row) ? row.length : 0), 0) ?? 0;
+    else weight += 1;
+  }
+  return weight;
+}
+/** The first `count` blocks of a faces slide, one object per count (the portal draws again only when it grows). */
+const facesSlideParts = new WeakMap<object, Map<number, SlideModel>>();
+function presentFacesSlidePart(slide: SlideModel, count: number): SlideModel {
+  if (count >= slide.blocks.length) return slide;
+  let parts = facesSlideParts.get(slide);
+  if (!parts) facesSlideParts.set(slide, (parts = new Map()));
+  let part = parts.get(count);
+  if (!part) parts.set(count, (part = { ...slide, blocks: slide.blocks.slice(0, count) }));
+  return part;
+}
+
 export function PresentationPresentOverlay({
   slides,
   presentIndex,
@@ -488,6 +599,7 @@ export function PresentationPresentOverlay({
   prefetchSlideTextures,
   presentEnded = false,
   presentVisit = 0,
+  randomEffectSeed,
   headerFooter,
   deckSlideIds,
   presentStep = 1,
@@ -505,6 +617,16 @@ export function PresentationPresentOverlay({
   onAdvance,
   onRetreat,
   onJumpToSlide,
+  showLayer,
+  showLayerCovers = false,
+  magnify = null,
+  magnifyArmed = false,
+  onToggleMagnify,
+  onMagnifyAt,
+  onMagnifyPan,
+  onMagnifyPinch,
+  onStageContextMenu,
+  onSeeAllSlides,
   onClickAction,
   overlayRef,
   onExit,
@@ -561,6 +683,8 @@ export function PresentationPresentOverlay({
   /** Past the last slide: the black End of slide show screen (PPT-B128). */
   presentEnded?: boolean;
   presentVisit?: number;
+  /** The show's Random Effects seed, set when the show starts (row 1041). */
+  randomEffectSeed?: number;
   /** The deck's Header & Footer, drawn on each slide as the editor draws it. */
   headerFooter?: DeckHeaderFooter;
   /** Every slide id of the deck in order: slide numbers follow the deck. */
@@ -619,6 +743,41 @@ export function PresentationPresentOverlay({
    * relative jumps and the scrollbar keep skipping hidden slides.
    */
   onJumpToSlide?: (index: number, explicit?: boolean) => void;
+  /**
+   * What the show lays over itself at the overlay's root, outside the stage
+   * (its See All Slides grid and right-click menu): under the show's text
+   * engine and media providers, never held out of sight with the stage.
+   */
+  showLayer?: ReactNode;
+  /**
+   * The show layer covers the slide (See All Slides' grid is open): the
+   * pen / highlighter / eraser toolbar, which is the slide's, steps out of
+   * the way -- PowerPoint's grid shows none -- and comes back as it was,
+   * its chosen tool kept, when the grid closes.
+   */
+  showLayerCovers?: boolean;
+  /**
+   * The slide magnified (GAP 7, PowerPoint's magnifying glass): its scale and the slide point at the
+   * middle of the view (lib/presentation-show-magnify). Null: the whole slide.
+   */
+  magnify?: ShowMagnify | null;
+  /** The glass is chosen: the next click on the slide magnifies there. */
+  magnifyArmed?: boolean;
+  /** The toolbar's magnifying glass: armed when off, ends the magnification when on. */
+  onToggleMagnify?: () => void;
+  /** A click on the slide with the glass armed, at the slide point (fx, fy) (fractions of the slide). */
+  onMagnifyAt?: (fx: number, fy: number) => void;
+  /** A drag over the magnified slide: (dx, dy) screen pixels over a slide drawn (width, height). */
+  onMagnifyPan?: (dx: number, dy: number, width: number, height: number) => void;
+  /**
+   * Two fingers spread or pinched on the slide (Support: "use a stretch gesture"): `start` at the
+   * slide point (fx, fy) between them, then the spread `scale` relative to that start, then `end`.
+   */
+  onMagnifyPinch?: (phase: "start" | "change" | "end", scale: number, fx: number, fy: number) => void;
+  /** The show's right-click at (x, y) on its slide (PowerPoint's show menu). */
+  onStageContextMenu?: (x: number, y: number) => void;
+  /** The presenter's See All Slides control. */
+  onSeeAllSlides?: () => void;
   /** Execute an Action Button against live presenter state/media. */
   onClickAction?: (action: PresentationClickAction) => void;
   overlayRef: RefObject<HTMLDivElement | null>;
@@ -883,14 +1042,15 @@ export function PresentationPresentOverlay({
       const root = overlayRef.current;
       if (!root?.isConnected) return;
       const focusable = Array.from(
-        root.querySelectorAll<HTMLElement>(
+        // An SVG link counts too: a word's link where the engine draws the words (TRIAGE 181).
+        root.querySelectorAll<HTMLElement | SVGElement>(
           'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
       ).filter((element) => !element.closest('[hidden], [aria-hidden="true"], [inert]'));
       if (focusable.length === 0) return;
       const active = root.ownerDocument.activeElement;
       const inside = active instanceof Node && root.contains(active);
-      const index = active instanceof HTMLElement ? focusable.indexOf(active) : -1;
+      const index = active instanceof HTMLElement || active instanceof SVGElement ? focusable.indexOf(active) : -1;
       const wrap = !inside || index === -1 || (event.shiftKey ? index === 0 : index === focusable.length - 1);
       if (!wrap) return;
       event.preventDefault();
@@ -1005,6 +1165,40 @@ export function PresentationPresentOverlay({
   
   const swipeRef = useRef<{ id: number; x: number; y: number; at: number } | null>(null);
   const swipedAtRef = useRef(Number.NEGATIVE_INFINITY);
+  // The magnifying glass's drag (pan) and the click it leaves behind (GAP 7).
+  const magnifyDragRef = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
+  const magnifyClickEatenRef = useRef(false);
+  // The stretch gesture: the editors' pinch (lib/use-pinch-zoom), on the show's stage.
+  const onMagnifyPinchRef = useRef(onMagnifyPinch);
+  onMagnifyPinchRef.current = onMagnifyPinch;
+  const pinchWired = onMagnifyPinch !== undefined;
+  useEffect(() => {
+    const stage = pinchWired
+      ? overlayRef.current?.querySelector<HTMLElement>('[data-testid="presentation-present-stage"]')
+      : null;
+    if (!stage) return;
+    const slidePoint = (center: { x: number; y: number }) => {
+      const rect = stage.querySelector('[data-testid="presentation-present-slide"]')?.getBoundingClientRect();
+      if (!rect || !(rect.width > 0) || !(rect.height > 0)) return { fx: 0.5, fy: 0.5 };
+      return { fx: (center.x - rect.left) / rect.width, fy: (center.y - rect.top) / rect.height };
+    };
+    return attachPinchGestures(
+      stage,
+      {
+        onStart: (center) => {
+          const point = slidePoint(center);
+          onMagnifyPinchRef.current?.("start", 1, point.fx, point.fy);
+        },
+        onChange: (scale, center) => {
+          const point = slidePoint(center);
+          onMagnifyPinchRef.current?.("change", scale, point.fx, point.fy);
+        },
+        onEnd: () => onMagnifyPinchRef.current?.("end", 1, 0.5, 0.5),
+      },
+      // The stage keeps its own touch-action (none: the show takes every touch).
+      { preventPanWhilePinching: true, setTouchAction: false },
+    );
+  }, [overlayRef, pinchWired]);
   useEffect(() => {
     const previous = pushPreviousRef.current;
     if (presentingSlide) pushPreviousRef.current = { index: clampedIndex, slide: presentingSlide };
@@ -1125,20 +1319,21 @@ export function PresentationPresentOverlay({
     setMorph(null);
   }, [captureSettleToken]);
 
-  // Empty deck: nothing to project. Render no overlay rather than passing an
-  // undefined slide into PresentationSlideView. (Hooks above run unconditionally
-  // so this early return never changes the hook order.)
-  if (!presentingSlide) return null;
-  // A morph is "active" only while one is pending AND it targets the slide we are
-  // currently projecting (a stale spec from a since-changed index never plays) AND
-  // we are in the AUDIENCE layout (presenter view never shows a morph). Toggling
-  // INTO presenter view mid-morph hides the layer via this derived gate; the
-  // settle timer still fires and clears the pending spec, so nothing leaks.
-  const activeMorph =
-    morph && !presenterView && morph.toSlide.id === presentingSlide.id
-      ? morph
-      : null;
-  // Derived purely from pure helpers so both layouts report identical numbers
+  // A slide whose words the engine still waits on the faces of (TRIAGE 181)
+  // is held unpainted on its entry until they land, at most 1.5 s: its
+  // first frame is the engine's drawing, not the browser's moved a moment
+  // later. The next slide's faces are asked for ahead (`presentFacesSlide`),
+  // so this holds only a slide the show jumped to, or the show's first.
+  const showTextEngineOn = textEngineEnabled("slides-present");
+  const [facesHold, setFacesHold] = useState(false);
+  // The next slide is laid out ahead while this one is on screen (TRIAGE 181): not in the flip's own task (it charged
+  // the flip with the next slide's bodies), nor while this slide's transition or its step's animations play (it took
+  
+  // next slide's layout counted in it). It starts once every finite animation on the stage has finished and 300 ms
+  // more (600 ms on a slide that plays none), on an idle callback; a heavy next slide (PREFETCH_HEAVY_WEIGHT) is added
+  // a few blocks a commit, each commit kept near PREFETCH_FRAME_MS. The next flip cancels it: the portal draws nothing
+  // for another slide, so a half-built next slide is dropped, and an unready slide is laid out on its entry, as before.
+  // (Above the next slide's layout ahead, which reads them.) Derived purely from pure helpers so both layouts report identical numbers
   // and the next-slide preview / end-of-deck state stay consistent.
   const fallbackPresentableIndices = slides.flatMap((slide, index) =>
     index >= scrollStart && index <= scrollEnd && !isSlideHidden(slide)
@@ -1153,6 +1348,167 @@ export function PresentationPresentOverlay({
     0,
     presentableIndices.indexOf(clampedIndex),
   );
+  // The whole deck's faces, asked for once a show (lib/presentation/show-fonts-ahead.ts): a flip faster than the next
+  // slide's layout ahead no longer lands on faces never asked for. All of it after the first slide is drawn and the
+  
+  
+  // fallbacks among them) are read off the stage then.
+  useEffect(() => {
+    if (!showTextEngineOn) return;
+    const stacks = () => {
+      const found = new Set<string>();
+      overlayRef.current?.querySelectorAll("[data-text-engine] text, [data-text-engine] tspan, [data-testid=\"presentation-present-slide\"] span").forEach((element, index) => {
+        if (index < 64) found.add(getComputedStyle(element).fontFamily);
+      });
+      return [...found];
+    };
+    const next = presentableIndices[presentablePosition + 1];
+    const nextSlides = next === undefined ? [] : [slides[next]];
+    // Drawn: on the stage, no engine body waiting for its faces, and the page's own font loads done (the first
+    // slide's slices: asked for by the slide itself, not to be shared with the deck's).
+    const firstDrawn = () => {
+      const root = overlayRef.current;
+      if (!root?.querySelector('[data-testid="presentation-present-slide"], [data-testid="presentation-presenter-current"]')) return false;
+      if (root.querySelector('[data-testid="presentation-present-slide"] [data-text-engine="pending"], [data-testid="presentation-presenter-current"] [data-text-engine="pending"]')) return false;
+      return typeof document === "undefined" || !document.fonts || document.fonts.status === "loaded";
+    };
+    return warmShowFontsAhead(slides, stacks, nextSlides, firstDrawn);
+    // Once a show: the deck as it starts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showTextEngineOn]);
+  useLayoutEffect(() => {
+    markShow("mrai-show-enter", { index: clampedIndex });
+  }, [clampedIndex, presentVisit]);
+  const [prefetch, setPrefetch] = useState<{ index: number; blocks: number } | null>(null);
+  const prefetchStep = useRef<{ index: number; blocks: number; total: number; at: number } | null>(null);
+  useEffect(() => {
+    if (!showTextEngineOn) return;
+    const index = clampedIndex;
+    let cancelled = false;
+    let idle: number | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const start = () => {
+      if (cancelled) return;
+      const begin = () => {
+        if (cancelled) return;
+        const next = presentableIndices[presentablePosition + 1];
+        const slide = next === undefined ? null : slides[next];
+        if (!slide) return;
+        const faces = presentFacesSlide(slide);
+        const blocks = prefetchWeight(faces) > PREFETCH_HEAVY_WEIGHT ? 1 : faces.blocks.length;
+        prefetchStep.current = { index, blocks, total: faces.blocks.length, at: performance.now() };
+        markShow("mrai-show-prefetch-request", { index, blocks });
+        setPrefetch({ index, blocks });
+      };
+      if (typeof window !== "undefined" && "requestIdleCallback" in window) idle = window.requestIdleCallback(begin, { timeout: 800 });
+      else timer = setTimeout(begin, 0);
+    };
+    const stage = overlayRef.current?.querySelector('[data-testid="presentation-present-stage"], [data-testid="presentation-presenter-current"]');
+    const playing = (stage?.getAnimations?.({ subtree: true }) ?? []).filter((animation) => animation.effect?.getTiming().iterations !== Infinity);
+    if (playing.length) {
+      const settled = Promise.allSettled(playing.map((animation) => animation.finished));
+      const cap = new Promise((done) => setTimeout(done, PREFETCH_ANIMATION_CAP_MS));
+      void Promise.race([settled, cap]).then(() => { if (!cancelled) timer = setTimeout(start, 300); });
+    } else {
+      timer = setTimeout(start, 600);
+    }
+    return () => {
+      cancelled = true;
+      if (idle !== null) window.cancelIdleCallback(idle);
+      if (timer !== null) clearTimeout(timer);
+      // Whether the slide the show goes to next was laid out whole by now (the probes' "prefetched at entry").
+      const step = prefetchStep.current;
+      noteShowPrefetch(step !== null && step.index === index && step.blocks >= step.total);
+      prefetchStep.current = null;
+      setPrefetch(null);
+    };
+    // The next slide is read when it starts: a deck edited meanwhile is the one laid out.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clampedIndex, presentVisit, showTextEngineOn]);
+  // A heavy next slide's next few blocks, once the last ones are drawn: as many as keep a commit near PREFETCH_FRAME_MS.
+  useLayoutEffect(() => {
+    const step = prefetchStep.current;
+    if (prefetch) markShow("mrai-show-prefetch-commit", { index: prefetch.index, blocks: prefetch.blocks, current: clampedIndex });
+    if (!prefetch || !step || step.index !== prefetch.index || step.blocks !== prefetch.blocks) return;
+    const next = presentableIndices[presentablePosition + 1];
+    const total = next === undefined ? 0 : presentFacesSlide(slides[next]!).blocks.length;
+    if (prefetch.blocks >= total) {
+      
+      // waited for faces on entry, the browser's loads of them starting only once it was on the stage -- a portal out
+      // of the document loads none). Once, while the page is idle.
+      const index = prefetch.index;
+      const load = () => {
+        if (prefetchStep.current?.index !== index) return;
+        markShow("mrai-show-prefetch-faces", { index });
+        loadPrefetchedFaces(presentPrefetchHost());
+      };
+      const handle = typeof window !== "undefined" && "requestIdleCallback" in window ? window.requestIdleCallback(load, { timeout: 1000 }) : null;
+      const timer = handle === null ? setTimeout(load, 50) : null;
+      return () => {
+        if (handle !== null) window.cancelIdleCallback(handle);
+        if (timer !== null) clearTimeout(timer);
+      };
+    }
+    const spent = Math.max(0.5, performance.now() - step.at);
+    const more = Math.max(1, Math.round((prefetch.blocks / spent) * PREFETCH_FRAME_MS));
+    const index = prefetch.index;
+    const add = () => {
+      if (prefetchStep.current?.index !== index) return;
+      const blocks = Math.min(total, prefetch.blocks + more);
+      prefetchStep.current = { index, blocks, total, at: performance.now() };
+      markShow("mrai-show-prefetch-request", { index, blocks });
+      setPrefetch({ index, blocks });
+    };
+    const handle = typeof window !== "undefined" && "requestIdleCallback" in window ? window.requestIdleCallback(add, { timeout: 300 }) : null;
+    const timer = handle === null ? setTimeout(add, 16) : null;
+    return () => {
+      if (handle !== null) window.cancelIdleCallback(handle);
+      if (timer !== null) clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefetch]);
+  useLayoutEffect(() => {
+    if (!showTextEngineOn) return;
+    const root = overlayRef.current;
+    if (!root) return;
+    const waiting = () =>
+      root.querySelector('[data-testid="presentation-present-slide"] [data-text-engine="pending"], [data-testid="presentation-presenter-current"] [data-text-engine="pending"]') !== null;
+    if (!waiting()) return;
+    setFacesHold(true);
+    noteShowFacesHold("held");
+    const started = performance.now();
+    let frame = 0;
+    const tick = () => {
+      const late = performance.now() - started > PRESENT_FACES_HOLD_MS;
+      if (!waiting() || late) {
+        // Past the hold the slide shows as it is, the browser's words where
+        // the engine has none yet; the probes count it (pending-timeout).
+        if (late) noteShowFacesHold("pending-timeout");
+        setFacesHold(false);
+        return;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(frame);
+      setFacesHold(false);
+    };
+  }, [clampedIndex, presentVisit, showTextEngineOn, overlayRef]);
+
+  // Empty deck: nothing to project. Render no overlay rather than passing an
+  // undefined slide into PresentationSlideView. (Hooks above run unconditionally
+  // so this early return never changes the hook order.)
+  if (!presentingSlide) return null;
+  // A morph is "active" only while one is pending AND it targets the slide we are
+  // currently projecting (a stale spec from a since-changed index never plays) AND
+  // we are in the AUDIENCE layout (presenter view never shows a morph). Toggling
+  // INTO presenter view mid-morph hides the layer via this derived gate; the
+  // settle timer still fires and clears the pending spec, so nothing leaks.
+  const activeMorph =
+    morph && !presenterView && morph.toSlide.id === presentingSlide.id
+      ? morph
+      : null;
   const counter = presenterCounterLabel(clampedIndex, slides.length);
   const nextIndex = presentableIndices[presentablePosition + 1] ?? null;
   const nextSlide = nextIndex === null ? null : slides[nextIndex];
@@ -1271,6 +1627,58 @@ export function PresentationPresentOverlay({
       }
     },
   };
+  // The magnifying glass (GAP 7). Armed, a click on the slide magnifies there; magnified, a drag
+  // pans and the click that ends it neither advances nor magnifies again. (What a plain click
+  // does while magnified waits for office-truth/probes/show-magnify; it pans for now.)
+  const projectedSlideRect = (stage: Element) =>
+    stage.querySelector('[data-testid="presentation-present-slide"]')?.getBoundingClientRect() ?? null;
+  const magnifyHandlers = {
+    onPointerDown: (event: ReactPointerEvent) => {
+      swipeHandlers.onPointerDown(event);
+      magnifyDragRef.current =
+        magnify && annotationTool === null && event.button === 0
+          ? { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false }
+          : null;
+    },
+    onPointerMove: (event: ReactPointerEvent) => {
+      const drag = magnifyDragRef.current;
+      if (!drag || drag.id !== event.pointerId) return;
+      const dx = event.clientX - drag.x;
+      const dy = event.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) < 3) return;
+      const rect = projectedSlideRect(event.currentTarget);
+      if (!rect) return;
+      magnifyDragRef.current = { ...drag, x: event.clientX, y: event.clientY, moved: true };
+      onMagnifyPan?.(dx, dy, rect.width, rect.height);
+    },
+    onPointerUp: (event: ReactPointerEvent) => {
+      swipeHandlers.onPointerUp(event);
+      const drag = magnifyDragRef.current;
+      magnifyDragRef.current = null;
+      magnifyClickEatenRef.current = drag !== null;
+    },
+    onPointerCancel: () => {
+      swipeHandlers.onPointerCancel();
+      magnifyDragRef.current = null;
+    },
+    onClickCapture: (event: ReactMouseEvent) => {
+      swipeHandlers.onClickCapture(event);
+      if (event.isPropagationStopped()) return;
+      if (magnifyArmed && onMagnifyAt) {
+        const rect = projectedSlideRect(event.currentTarget);
+        event.stopPropagation();
+        if (rect && rect.width > 0 && rect.height > 0) {
+          onMagnifyAt((event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height);
+        }
+        return;
+      }
+      if (magnifyClickEatenRef.current) {
+        magnifyClickEatenRef.current = false;
+        event.stopPropagation();
+      }
+    },
+  };
+  const magnifyStyle = showMagnifyStyle(magnify);
   const exitButton = (
     <button
       type="button"
@@ -1435,6 +1843,20 @@ export function PresentationPresentOverlay({
           })}
         </div>
       ) : null}
+      {onToggleMagnify ? (
+        <button
+          type="button"
+          className="office-ribbon-control presentation-present__annot-btn"
+          onClick={() => onToggleMagnify()}
+          title={t("presentation.slideshow.magnify")}
+          aria-label={t("presentation.slideshow.magnify")}
+          aria-pressed={magnifyArmed || magnify !== null}
+          data-testid="presentation-show-magnify"
+          data-active={magnifyArmed || magnify !== null ? "true" : "false"}
+        >
+          <ZoomIn size={16} />
+        </button>
+      ) : null}
       <button
         type="button"
         className="office-ribbon-control presentation-present__annot-btn presentation-present__annot-clear"
@@ -1467,7 +1889,21 @@ export function PresentationPresentOverlay({
         ariaLabel={t("presentation.annotationLayerLabel")}
       />
     ) : null;
+  const showTextEngine = showTextEngineOn;
+  const prefetchHost = showTextEngine ? presentPrefetchHost() : null;
+  const nextDeckIndex = nextSlide ? Math.max(0, deckSlideIds?.indexOf(nextSlide.id) ?? nextIndex ?? 0) : 0;
+  const nextSlideNumber = nextSlide
+    ? nextDeckIndex + (presentationSlideHeaderFooter(headerFooter, nextSlide, masters, theme)?.firstSlideNumber ?? 1)
+    : undefined;
+  const nextFacesSlide = showTextEngine && nextSlide && nextIndex !== clampedIndex && prefetch?.index === clampedIndex
+    ? presentFacesSlidePart(presentFacesSlide(nextSlide), prefetch.blocks)
+    : null;
   const wrapWithBackgroundAudio = (content: ReactNode) => (
+    // The show draws an imported body and table as the printed deck and the
+    // canvas at rest draw them, laid out by the text engine (TRIAGE 181;
+    // `slides-present` in lib/text-engine/flags.ts, the switch back).
+    <PresentationTextEngineSurfaceContext.Provider value={showTextEngine}>
+    <PresentationEngineLinkSurfaceContext.Provider value="show">
     <PresentationShowMediaControlsContext.Provider value={showMediaControls}>
       <PresentationManagedBackgroundMediaContext.Provider
         value={managedBackgroundMediaIds}
@@ -1493,6 +1929,8 @@ export function PresentationPresentOverlay({
         </PresentationCarryAudioContext.Provider>
       </PresentationManagedBackgroundMediaContext.Provider>
     </PresentationShowMediaControlsContext.Provider>
+    </PresentationEngineLinkSurfaceContext.Provider>
+    </PresentationTextEngineSurfaceContext.Provider>
   );
 
   // The second-screen presenter window OWNS the console; while it is open this
@@ -1533,9 +1971,20 @@ export function PresentationPresentOverlay({
               <div
                 className="presentation-presenter__stage"
                 data-testid="presentation-presenter-current"
+                data-faces-hold={facesHold ? "true" : undefined}
+                style={facesHold ? PRESENT_FACES_HOLD_STYLE : undefined}
                 // PowerPoint's presenter view: click (tap) the current slide
                 
                 onClick={annotationTool === null && onAdvance ? () => onAdvance("pointer") : undefined}
+                // PowerPoint's show menu on a right-click (See All Slides, GAP #6).
+                onContextMenu={
+                  onStageContextMenu
+                    ? (event) => {
+                        event.preventDefault();
+                        onStageContextMenu(event.clientX, event.clientY);
+                      }
+                    : undefined
+                }
                 {...swipeHandlers}
               >
                 {/* Key only on the projected slide, as the audience stage
@@ -1544,6 +1993,7 @@ export function PresentationPresentOverlay({
                     slide's audio and video keep playing where they are
                     (PPT-B011). */}
                 <PresentationSlideView
+                  randomEffectSeed={randomEffectSeed}
                   key={`presenter-current-${clampedIndex}-${presentVisit}`}
                   fitToParent
                   slide={presentingSlide}
@@ -1591,6 +2041,18 @@ export function PresentationPresentOverlay({
                   </button>
                 ) : null}
                 {annotationToolbar}
+                {onSeeAllSlides ? (
+                  <button
+                    type="button"
+                    className="office-ribbon-control presentation-presenter__nav"
+                    onClick={onSeeAllSlides}
+                    title={t("presentation.slideshow.seeAllSlides")}
+                    aria-label={t("presentation.slideshow.seeAllSlides")}
+                    data-testid="presentation-presenter-see-all"
+                  >
+                    <LayoutGrid size={20} aria-hidden="true" />
+                  </button>
+                ) : null}
                 {onAdvance ? (
                   <button
                     type="button"
@@ -1681,6 +2143,7 @@ export function PresentationPresentOverlay({
                   // badges, so nothing of the next slide plays before the show
                   // reaches it (PPT-B010).
                   <PresentationSlideView
+                    randomEffectSeed={randomEffectSeed}
                     key={`presenter-next-${nextIndex}`}
                     fitToParent
                     slide={nextSlide}
@@ -1710,6 +2173,7 @@ export function PresentationPresentOverlay({
             </div>
           </aside>
         </div>
+        {showLayer}
       </div>,
     );
   }
@@ -1784,8 +2248,29 @@ export function PresentationPresentOverlay({
         // The event is not the source: passed as one, it slipped past On
         
         onClick={onAdvance ? () => onAdvance("pointer") : undefined}
+        // PowerPoint's show menu on a right-click (See All Slides, GAP #6).
+        onContextMenu={
+          onStageContextMenu
+            ? (event) => {
+                event.preventDefault();
+                onStageContextMenu(event.clientX, event.clientY);
+              }
+            : undefined
+        }
         data-testid="presentation-present-stage"
-        {...swipeHandlers}
+        data-faces-hold={facesHold ? "true" : undefined}
+        data-magnify={magnify ? "on" : magnifyArmed ? "armed" : undefined}
+        style={
+          facesHold || magnifyStyle
+            ? ({
+                ...(facesHold ? PRESENT_FACES_HOLD_STYLE : null),
+                ...(magnifyStyle
+                  ? { "--show-magnify-translate": magnifyStyle.translate, "--show-magnify-scale": magnifyStyle.scale }
+                  : null),
+              } as CSSProperties)
+            : undefined
+        }
+        {...magnifyHandlers}
       >
         {presentEnded ? (
           <div
@@ -1820,6 +2305,7 @@ export function PresentationPresentOverlay({
             data-testid="presentation-present-push-exit"
           >
             <PresentationSlideView
+              randomEffectSeed={randomEffectSeed}
               fitToParent
               slide={pushExit.slide}
               showAnimations={false}
@@ -1840,6 +2326,7 @@ export function PresentationPresentOverlay({
             and an in-flight Morph overlay remain continuous across same-slide
             build advances. */}
         <PresentationSlideView
+          randomEffectSeed={randomEffectSeed}
           key={`present-slide-${clampedIndex}-${presentVisit}`}
           fitToParent
           slide={presentingSlide}
@@ -1911,9 +2398,42 @@ export function PresentationPresentOverlay({
             ) : null
           }
         />
+        {/* The next slide's words laid out out of sight while this one shows,
+            when the engine draws the show's words (TRIAGE 181): its faces are
+            asked for now, so its words come laid out by the engine when the
+            show reaches it, not drawn the browser's way first and moved. Its
+            text, shapes and tables only, drawn into a detached element: no
+            second copy in the page, nothing to focus, read or lay out. */}
+        {showTextEngine && nextFacesSlide && prefetchHost
+          ? createPortal(
+              <>
+                <PresentationSlideView
+                  key={`present-prefetch-${nextIndex}`}
+                  slide={nextFacesSlide}
+                  slideNumber={nextSlideNumber}
+                  theme={theme}
+                  masters={masters}
+                  showAnimations={false}
+                  staticMedia
+                />
+                {
+}
+                {nextSlide ? (
+                  <PresentationHeaderFooterOverlay
+                    resolved={presentationSlideHeaderFooter(headerFooter, nextSlide, masters, theme)}
+                    deckIndex={nextDeckIndex}
+                    now={headerFooterNow}
+                    testIdPrefix="presentation-prefetch"
+                    placement={presentationHeaderFooterPlacement(nextSlide, masters)}
+                  />
+                ) : null}
+              </>,
+              prefetchHost,
+            )
+          : null}
       </div>
       <div className={`presentation-present__strip ${presentationChrome.presentFooter}`}>
-        {annotationToolbar}
+        {showLayerCovers ? null : annotationToolbar}
         {showType === "window" && resolvedShowScrollbar && onJumpToSlide ? (
           <input
             type="range"
@@ -1926,6 +2446,7 @@ export function PresentationPresentOverlay({
           />
         ) : null}
       </div>
+      {showLayer}
     </div>,
   );
 }

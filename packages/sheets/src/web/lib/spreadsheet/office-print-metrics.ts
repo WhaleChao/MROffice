@@ -143,6 +143,21 @@ export function officePrintedTextInsetDots(family: string, sizePt: number, scale
 }
 
 /**
+ * Windows Excel's printed Shrink to Fit size, printer dots. Excel shrinks the
+ * text as a zoom: the page's whole-percent scale times the fit (the room over
+ * the text's width), taken down to a whole percent; the font at that zoom is
+ * a whole number of twips, then of printer dots, never under two (lookwin
+ * p118-lw shr3: MS PGothic and Arial 8-22 pt at 25 % print the same sizes and
+ * skip the same ones -- 14 pt never 4/11/17/24 dots, 12 pt none; the API's
+ * office_shrunk_printed_dots).
+ */
+export function officeShrunkPrintedDots(sizePt: number, scale: number, fit: number): number {
+  const percent = Math.max(1, Math.floor(Math.max(1, Math.round(scale * 100)) * fit + 1e-9));
+  const twips = Math.floor((sizePt * 20 * percent) / 100 + 0.5);
+  return Math.max(2, Math.floor((twips * OFFICE_PRINT_DPI) / 1440 + 0.5));
+}
+
+/**
  * How Windows Excel's printer scales a workbook's grid: from its Normal font
  * (font 0, the native grid font) and the screen digit width its columns are
  * counted in (officeDigitWidth of that font unless given).
@@ -293,23 +308,6 @@ export function officePrintAnchorKind(
   const kind = anchor?.kind === "oneCell" || anchor?.kind === "absolute" ? anchor.kind : "twoCell";
   if (kind !== "twoCell" && (anchor?.fileMarkers === true || anchor?.editAs === kind)) return "twoCell";
   return kind;
-}
-
-/** Whether a drawing widens the range Windows Excel prints when the sheet
- * sets no print area. A drawing the file places by cells (a two-cell or
- * one-cell anchor) does: the rows and columns it reaches print, blank or not.
- * One placed by a position on the worksheet (`xdr:absoluteAnchor`, which no
- * cell holds) does not: it prints where it stands on the pages the cells and
- * the other drawings make, cut at their edge (lookwin p310-lw: R480-X27's
- * scatter chart at 8.6 in x 8 in, 9.45 x 6.85 in, below and right of
- * A1:Q44, printed 3 pages with the chart's top cut off by the first page
- * band; the same chart by two cell markers 6 pages). A chartsheet's chart
- * is the page itself and keeps its own. */
-export function officeDrawingWidensPrint(
-  kind: "twoCell" | "oneCell" | "absolute" | undefined,
-  chartSheet: boolean,
-): boolean {
-  return chartSheet || kind !== "absolute";
 }
 
 /** The size a one-cell drawing the file places by two cell markers spans on

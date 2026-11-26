@@ -16,6 +16,7 @@
  */
 import { readSfntMetrics, type SfntMetrics } from "../pdf/engine/native/sfnt/sfnt-reader";
 import { faceMetricsOffThreadAvailable, readFaceMetricsOffThread } from "./face-metrics-offthread";
+import { afterCanvasGesture } from "../canvas-gesture";
 
 export type FaceMetrics = SfntMetrics;
 export type FaceMetricsState = FaceMetrics | "pending" | "failed";
@@ -47,7 +48,8 @@ function settled(): void {
       try { listener(); } catch { /* a listener's failure is its own */ }
     }
   };
-  setTimeout(run, 0);
+  // Measured again after a canvas gesture, not during it (lib/canvas-gesture).
+  setTimeout(() => afterCanvasGesture(run), 0);
 }
 
 /** Other face data the engine loads beside the files (Office's pair

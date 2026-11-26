@@ -64,6 +64,9 @@ type Table = Record<string, Record<string, ExcelWindowsFaces>>;
 const DRAWN: ReadonlyMap<string, string> = new Map(Object.entries((data as { drawn: Record<string, string> }).drawn));
 const LACKING: ReadonlySet<string> = new Set((data as { lacking: string[] }).lacking);
 const RECORDLESS: ReadonlyMap<string, string> = new Map(Object.entries((data as { recordless?: Record<string, string> }).recordless ?? {}));
+const IMPLIED_FAMILY: ReadonlyMap<string, number> = new Map(
+  Object.entries((data as { impliedFamily?: Record<string, number> }).impliedFamily ?? {}),
+);
 const SUBSTITUTES = (data as unknown as { substitutes: { family: Record<string, ExcelWindowsFaces>; charset: Table } }).substitutes;
 
 /** The faces GDI maps a font record Windows lacks to, by its charset and family class. */
@@ -94,7 +97,13 @@ export function excelWindowsDrawnFaces(
     // p234-lw: TimesNewRomanPSMT alone is Times New Roman; with family 2, as
     // Excel for Mac writes it, Arial, R462-X17).
     const recordless = record.family == null && record.charset == null ? RECORDLESS.get(key) : undefined;
-    return recordless ? facesOf(recordless) : excelWindowsSubstitute(record);
+    if (recordless) return facesOf(recordless);
+    // A Times alias or full name (Times New Roman Regular, Tms Rmn, CG Times)
+    // is roman to GDI where the record states no family: charset 134 draws
+    // it in MingLiU-ExtB, not SimSun; family 2 still Arial (lookwin p315-lw,
+    // R485-X67).
+    const implied = record.family == null ? IMPLIED_FAMILY.get(key) : undefined;
+    return excelWindowsSubstitute(implied == null ? record : { ...record, family: implied });
   }
   const drawn = DRAWN.get(key);
   if (!drawn) return undefined;

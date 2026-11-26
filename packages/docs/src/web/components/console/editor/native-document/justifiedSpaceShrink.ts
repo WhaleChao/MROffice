@@ -36,6 +36,7 @@
  * that no longer stays on the line loses the narrowing. Paint and line
  * breaking only: nothing is saved.
  */
+import { requestQuietFrame } from "@mrnote/core/web/lib/canvas-gesture.ts";
 import { firstLayoutHoldsFaces } from "@mrnote/core/web/components/console/editor/native-document/paged/coldFirstLayout.ts";
 import { engineDeclinedBlock, textblockOfElement } from "./engineDeclinedBlocks";
 import { Extension } from "@tiptap/core";
@@ -492,7 +493,12 @@ export const JustifiedSpaceShrink = Extension.create({
         view(view) {
           const win = view.dom.ownerDocument.defaultView;
           if (!win) return {};
-          let frame: number | null = null;
+          // The cancel of the frame asked for. A pass is background layout:
+          // while a canvas window or the desk moves its frames wait for the
+          // gesture's end (requestQuietFrame; it was every frame of a drag in
+          // WebKit on a document still settling, each slice a redraw of the
+          // pages it pulled). `window.__canvasGestureHoldOff`: every frame.
+          let frame: (() => void) | null = null;
           let waitTimer: number | null = null;
           let full = true;
           /** What the whole pass under way has read: it stands through a restart. */
@@ -629,7 +635,7 @@ export const JustifiedSpaceShrink = Extension.create({
                   if (waitTimer === null) {
                     waitTimer = win.setTimeout(() => {
                       waitTimer = null;
-                      if (frame === null) frame = win.requestAnimationFrame(step);
+                      if (frame === null) frame = requestQuietFrame(win, step);
                     }, TYPING_PAUSE_MS - sinceTyping);
                   }
                   return;
@@ -680,7 +686,7 @@ export const JustifiedSpaceShrink = Extension.create({
               }
               if (index < blocks.length) {
                 if (flushing) step();
-                else frame = win.requestAnimationFrame(step);
+                else frame = requestQuietFrame(win, step);
                 return;
               }
               if (ranges === "all") readThisPass = new WeakSet();
@@ -714,7 +720,7 @@ export const JustifiedSpaceShrink = Extension.create({
             if (frame === null && firstLayoutHoldsFaces(view.dom, schedule, "justified-shrink")) return;
             if (hasWork()) markPending(true);
             if (frame !== null) return;
-            frame = win.requestAnimationFrame(run);
+            frame = requestQuietFrame(win, run);
           };
           // The ledger asks for the line metrics before it measures a page: a
           // page read before its paragraphs' pulls reads a line too many, and
@@ -722,7 +728,7 @@ export const JustifiedSpaceShrink = Extension.create({
           const onMetricsFlush = () => {
             if (!view.dom.hasAttribute(DOCUMENT_JUSTIFIED_SHRINK_PENDING)) return;
             if (frame !== null) {
-              win.cancelAnimationFrame(frame);
+              frame();
               frame = null;
             }
             flushing = true;
@@ -864,7 +870,7 @@ export const JustifiedSpaceShrink = Extension.create({
               view.dom.ownerDocument.fonts?.removeEventListener?.("loadingdone", onFontsLoaded);
               view.dom.removeEventListener(MEASURE_HORIZON_EVENT, onHorizon);
               view.dom.removeEventListener(LAYOUT_METRICS_FLUSH_EVENT, onMetricsFlush);
-              if (frame !== null) win.cancelAnimationFrame(frame);
+              if (frame !== null) frame();
               if (waitTimer !== null) win.clearTimeout(waitTimer);
             },
           };

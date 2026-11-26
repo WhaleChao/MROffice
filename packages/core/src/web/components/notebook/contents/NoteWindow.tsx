@@ -42,10 +42,12 @@ export default function NoteWindow({
   const refreshTimerRef = useRef<number | null>(null);
   const [footerPortalTarget, setFooterPortalTarget] = useState<HTMLDivElement | null>(null);
   // a page placed from the homepage opens at the zoom it had there, once
-  const [classicZoom] = useState(() => takeClassicOpenZoom(pageId));
+  // (a window mounted before its page exists -- an import's -- has none:
+  // lib/document-import/pending-document-host)
+  const [classicZoom] = useState(() => (pageId ? takeClassicOpenZoom(pageId) : undefined));
   // ...and with the edits made to it there, made here (NoteEditor)
   const [classicEdits] = useState(() =>
-    takeClassicEditsPending(pageId) ? classicPendingEditsFor(pageId) : undefined,
+    pageId && takeClassicEditsPending(pageId) ? classicPendingEditsFor(pageId) : undefined,
   );
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // An AI answer's source "Locate": bring the passage it read into view.
@@ -68,6 +70,8 @@ export default function NoteWindow({
       // store synchronously - calling flushSync mid-render is ignored by
       // React with a console error and drops the update. Defer one microtask
       // so the rename lands after the current render commit.
+      // No page yet (a window waiting for its import): no window to name.
+      if (!pageId) return;
       const nextTitle = title.trim() || t("pages.untitled");
       queueMicrotask(() => renameWindowByMeta("pageId", pageId, nextTitle));
       // The title the page was loaded with is the saved one: the page list

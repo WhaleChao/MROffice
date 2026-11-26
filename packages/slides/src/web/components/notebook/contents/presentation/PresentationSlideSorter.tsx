@@ -95,6 +95,11 @@ export interface PresentationSlideSorterProps<S extends PresentationSorterSlide>
   readonly onActivate: (slideId: string) => void;
   /** Double-click / Enter: back to Normal view on that slide. */
   readonly onOpen: (slideId: string) => void;
+  /**
+   * A click opens the slide, as one does in the slide show's See All Slides
+   * (PresentationShowAllSlides); the arrows still only move between slides.
+   */
+  readonly openOnClick?: boolean;
   readonly onReorder: (nextOrder: readonly string[], keepActiveId: string, drop?: SlideDrop) => void;
   readonly onDelete: (slideIds: readonly string[]) => void;
   /**
@@ -205,6 +210,7 @@ export function PresentationSlideSorter<S extends PresentationSorterSlide>({
   readOnly,
   onActivate,
   onOpen,
+  openOnClick = false,
   onReorder,
   onDelete,
   onContextMenu,
@@ -389,7 +395,7 @@ export function PresentationSlideSorter<S extends PresentationSorterSlide>({
       click: (slide, event) => {
         // a finger's double tap opens the slide, as the mouse's double-click
         // does (an iPad may not send dblclick at all)
-        if (isDoubleTap(event.nativeEvent, slide.id)) {
+        if (openOnClick || isDoubleTap(event.nativeEvent, slide.id)) {
           onOpen(slide.id);
           return;
         }
@@ -455,11 +461,11 @@ export function PresentationSlideSorter<S extends PresentationSorterSlide>({
                   onSectionContextMenu(section.id, event.clientX, event.clientY);
                 }}
               >
-                <span aria-hidden="true" className={styles.chevron} data-collapsed={collapsed ? "true" : undefined}>
+                <span aria-hidden="true" className={styles.chevron} data-collapsed={collapsed ? "true" : undefined} data-sorter-part="chevron">
                   ▾
                 </span>
-                <span className={styles.sectionName}>{section.name}</span>
-                <span className={styles.sectionCount}>
+                <span className={styles.sectionName} data-sorter-part="name">{section.name}</span>
+                <span className={styles.sectionCount} data-sorter-part="count">
                   {labels.sectionCount(group.slides.length)}
                 </span>
               </button>

@@ -52,13 +52,16 @@ import { keepRemoteCaret } from "../../../../lib/presentation/remote-caret-hold"
 import { fitOfficeInlineTextEditor, moveOfficeInlineTextCaretHomeEnd, placeOfficeInlineTextCaret, officeInlineTextEditorStyle, typeOfficeInlineTextTab } from "@mrnote/core/web/lib/office-inline-text-editor.ts";
 import { holdOfficeTextBoxForChrome } from "@mrnote/core/web/lib/office-inactive-selection.ts";
 import { ShapeTextOverlay } from "./PresentationShapeTextOverlay";
+import { emptyPlaceholderShapePrompt } from "../../../../lib/presentation/text-editing-host";
+import { Image as ImageIcon } from "lucide-react";
 import { useRichTextSelectionFollower } from "./useRichTextSelectionFollower";
 import { PresentationTypingTextarea } from "./PresentationTypingTextarea";
 import { inputIsLetterInPlace, usePresentationRichTypingKey } from "./usePresentationRichTypingKey";
 import { browserReplacement } from "../../../../lib/presentation/collab-caret";
 import { normalizeParagraphsWithRuns } from "@mrnote/core/web/lib/presentation-text-buttons.ts";
 import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";
-import { useCallback, useContext, useRef, useState } from "react";
+import { memo, useCallback, useContext, useRef, useState } from "react";
+import { shallowEqualRecords } from "@mrnote/core/web/lib/shallow-equal.ts";
 import type {
   CSSProperties,
   Dispatch,
@@ -74,6 +77,7 @@ import type { BlockGeometry } from "@mrnote/core/web/lib/presentation-drag.ts";
 import { smartArtFlat2d } from "@mrnote/core/web/lib/office-smartart/edit-in-2d.ts";
 import { inkLineWidthScaled } from "@mrnote/core/web/lib/office-ink-line-scale.ts";
 import { isTextEditLocked, isTextKeptReadOnly, isTextKeptReadOnlyTruncated } from "@mrnote/core/web/lib/presentation-text-case.ts";
+import { degradedObjectOf } from "@mrnote/core/web/lib/presentation-object-degraded.ts";
 import { presentationBlockWithGroupPaint } from "../../../../lib/presentation-group-fill";
 import { PresentationLiveGeometryContext } from "./PresentationLiveBlockFrame";
 
@@ -184,7 +188,7 @@ function typingOutside(host: HTMLElement): boolean {
   );
 }
 
-export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasShapeBlockCtl }) {
+function PresentationCanvasShapeBlockBody({ ctl }: { ctl: PresentationCanvasShapeBlockCtl }) {
   // A stroke of ink another member is scaling is drawn where their hand has
   // it, at its size and its scaled line (PresentationLiveGeometryContext).
   const liveGeom = useContext(PresentationLiveGeometryContext);
@@ -961,7 +965,8 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
                           // An empty shape shows only the caret, as
                           // PowerPoint's does: a shape has no prompt of its
                           // own (a layout placeholder's prompt is drawn by
-                          // its text box).
+                          // its text box, or at rest by the shape of an
+                          // empty imported placeholder, below).
                           aria-label={t("presentation.shapeTextLabel")}
                           data-testid="presentation-shape-text-input"
                           className="presentation-window__shape-text-input"
@@ -997,14 +1002,63 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
                         // (`presentationShapeGeometryHitClassName`).
                         // At rest its words are laid out by the text engine,
                         // as the thumbnails and the printed slide draw them.
-                        <PresentationTextEngineSurfaceContext.Provider value={!isSelected}>
-                          <ShapeTextOverlay
-                            block={block}
-                            hitText={presentationShapeHitsByGeometry(block)}
-                          />
-                        </PresentationTextEngineSurfaceContext.Provider>
+                        <>
+                          <PresentationTextEngineSurfaceContext.Provider value={!isSelected}>
+                            <ShapeTextOverlay
+                              block={block}
+                              hitText={presentationShapeHitsByGeometry(block)}
+                            />
+                          </PresentationTextEngineSurfaceContext.Provider>
+                          {(() => {
+                            // An empty title / subtitle / text / picture
+                            // placeholder of the file (it comes in as a shape:
+                            // no words of its own) shows its kind's prompt at
+                            // rest, in its own format and the prompts' grey,
+                            // as PowerPoint draws "Click to add title" on the
+                            // editing canvas; a picture placeholder's comes
+                            // with the Insert Picture icon. Only here: the
+                            // thumbnails, the show, print and the file draw it
+                            // empty, and it goes while the box is typed in
+                            // (this branch is the shape at rest).
+                            const prompt = emptyPlaceholderShapePrompt(block, t);
+                            if (!prompt) return null;
+                            return (
+                              <div
+                                aria-hidden="true"
+                                className="presentation-window__placeholder-prompt"
+                                data-testid="presentation-placeholder-prompt"
+                                data-placeholder-prompt-kind={prompt.picture ? "picture" : "text"}
+                                style={{
+                                  position: "absolute",
+                                  inset: 0,
+                                  pointerEvents: "none",
+                                  userSelect: "none",
+                                  WebkitUserSelect: "none",
+                                }}
+                              >
+                                {prompt.picture ? (
+                                  <div
+                                    data-testid="presentation-placeholder-prompt-picture-icon"
+                                    style={{
+                                      position: "absolute",
+                                      inset: 0,
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                    }}
+                                  >
+                                    <ImageIcon size={40} strokeWidth={1.25} aria-hidden="true" />
+                                  </div>
+                                ) : null}
+                                <ShapeTextOverlay
+                                  block={{ ...(block as PresentationShapeBlock), text: prompt.words, runs: undefined, paragraphs: undefined } as PresentationShapeBlock}
+                                />
+                              </div>
+                            );
+                          })()}
+                        </>
                       ) : null}
-                      {isSelected && isTextKeptReadOnly(block) ? (
+                      {isSelected && isTextKeptReadOnly(block) && !degradedObjectOf(block) ? (
                         // A placeholder whose words the import could not make
                         // editable (PPTX reading row 814): drawn as the file
                         // has it and kept unchanged; selecting it says so.
@@ -1037,3 +1091,19 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
                     </div>
   );
 }
+
+/**
+ * A shape on the editing canvas, drawn again only when a value of its `ctl`
+ * changes (TRIAGE 155): a Select All or a marquee redraws each block's frame
+ * (its selection attributes), not every shape's geometry, fill and words.
+ * The canvas slot gives it the window's stable handlers and the values
+ * filtered to this shape (its crop, its label editor, its previews).
+ */
+export const PresentationCanvasShapeBlock = memo(
+  PresentationCanvasShapeBlockBody,
+  (previous, next) =>
+    shallowEqualRecords(
+      previous.ctl as unknown as Record<string, unknown>,
+      next.ctl as unknown as Record<string, unknown>,
+    ),
+);

@@ -25,6 +25,7 @@ import {
   type OfficeStrokeJoin,
 } from "./office-stroke-detail";
 import { smartArtPictureSrc } from "./office-smartart/picture";
+import { OFFICE_SHADOW_ALIGNMENTS, type OfficeShadowAlignment } from "./office-shadow-effects";
 import { OFFICE_CHART_BEVEL, type OfficeChartBevel } from "./office-charts/chart-bevel";
 import {
   normalizeOfficePictureEffects,
@@ -37,6 +38,7 @@ import {
   officePictureNaturalSize,
   type OfficePictureFillOptions,
 } from "./office-picture-fill-options";
+import { chartShadowBlur } from "./office-charts/shadow-deviation";
 
 /** `a:headEnd@type` / `a:tailEnd@type` but "none" (ECMA-376 ST_LineEndType). */
 export const OFFICE_CHART_LINE_END_TYPES = ["triangle", "stealth", "diamond", "oval", "arrow"] as const;
@@ -91,6 +93,13 @@ export interface OfficeChartShapePaint {
   /** The picture fill's options (tile / stretch offsets / transparency), the shapes' model. */
   fillPictureOptions?: OfficePictureFillOptions;
   shadow?: OfficeShapeShadow;
+  /**
+   * The outer shadow's scale and skew (`a:outerShdw@sx/@sy/@kx/@ky`, reading
+   * 1047) and the corner of the element's box they hold (`algn`): the shadow
+   * is the element's whole shape scaled about that corner (a series': all its
+   * marks', `chart-render-server`). Only beside `shadow`.
+   */
+  shadowScale?: OfficeChartShadowScale;
   /**
    * Format ▸ Fill ▸ Solid fill ▸ Transparency, as the solid `fill` colour's
    * opacity (`a:solidFill/a:srgbClr/a:alpha`, 0 clear .. below 1); absent is
@@ -179,6 +188,56 @@ export function normalizeOfficeChartInnerShadow(value: unknown): OfficeChartInne
 export const OFFICE_CHART_INNER_SHADOW = "officeInnerShadow";
 /** The itemStyle key a mark's Soft Edges rides on to the picture renderer. */
 export const OFFICE_CHART_SOFT_EDGE = "officeSoftEdge";
+
+/** `OfficeChartShapePaint.shadowScale` (the server's `chart_shadow_scale`). */
+export interface OfficeChartShadowScale {
+  readonly algn: OfficeShadowAlignment;
+  /** Scale, 1/1000 %; absent = 100 %. */
+  readonly sx?: number;
+  readonly sy?: number;
+  /** Skew, 1/60000 degree; absent = 0. */
+  readonly kx?: number;
+  readonly ky?: number;
+}
+
+/** The scale bound (200 %) and skew bound the shared shadow value takes (`office_shadow_effects`). */
+const MAX_CHART_SHADOW_SCALE = 200_000;
+const MAX_CHART_SHADOW_SKEW = 5_399_999;
+
+export function normalizeOfficeChartShadowScale(value: unknown): OfficeChartShadowScale | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  if (Object.keys(raw).some((key) => !["algn", "sx", "sy", "kx", "ky"].includes(key))) return null;
+  if (!(OFFICE_SHADOW_ALIGNMENTS as readonly unknown[]).includes(raw.algn)) return null;
+  const result: { -readonly [K in keyof OfficeChartShadowScale]: OfficeChartShadowScale[K] } = {
+    algn: raw.algn as OfficeShadowAlignment,
+  };
+  for (const [key, neutral, bound] of [
+    ["sx", 100_000, MAX_CHART_SHADOW_SCALE],
+    ["sy", 100_000, MAX_CHART_SHADOW_SCALE],
+    ["kx", 0, MAX_CHART_SHADOW_SKEW],
+    ["ky", 0, MAX_CHART_SHADOW_SKEW],
+  ] as const) {
+    const number = raw[key];
+    if (number === undefined) continue;
+    if (typeof number !== "number" || !Number.isInteger(number) || Math.abs(number) > bound) return null;
+    if (number !== neutral) result[key] = number;
+  }
+  return Object.keys(result).length > 1 ? result : null;
+}
+
+/**
+ * The key an ECharts item style carries a point's scaled or skewed outer
+ * shadow under (`OfficeChartScaledShadow`): the engine draws none for it,
+ * the picture renderer draws the series' whole shape as its shadow
+ * (`chart-render-server`, `scaledShadowsDrawn`).
+ */
+export const OFFICE_CHART_SCALED_SHADOW = "officeScaledShadow";
+
+export interface OfficeChartScaledShadow {
+  readonly shadow: OfficeShapeShadow;
+  readonly scale: OfficeChartShadowScale;
+}
 
 /**
  * The width an arrow end is sized from, px: the line's, but never under
@@ -874,6 +933,7 @@ export function normalizeOfficeChartShapePaint(
           "lineGradient",
           "lineDash",
           "shadow",
+          "shadowScale",
           "fillAlpha",
           "lineAlpha",
           "lineCompound",
@@ -929,6 +989,8 @@ export function normalizeOfficeChartShapePaint(
     throw Error("invalid_chart_fill_picture");
   const lineGradient = normalizeOfficeShapeGradient(raw.lineGradient);
   const shadow = normalizeOfficeShapeShadow(raw.shadow);
+  const shadowScale = raw.shadowScale === undefined ? undefined : normalizeOfficeChartShadowScale(raw.shadowScale);
+  if (shadowScale === null || (shadowScale && !shadow)) throw Error("invalid_chart_shadow_scale");
   const glow = normalizeOfficeChartGlow(raw.glow);
   const innerShadow = normalizeOfficeChartInnerShadow(raw.innerShadow);
   const softEdge = normalizeOfficeChartSoftEdge(raw.softEdge);
@@ -980,6 +1042,7 @@ export function normalizeOfficeChartShapePaint(
     ...(lineGradient ? { lineGradient } : {}),
     ...(raw.lineDash === undefined ? {} : { lineDash: raw.lineDash }),
     ...(shadow ? { shadow } : {}),
+    ...(shadowScale ? { shadowScale } : {}),
     ...(fillAlpha === undefined ? {} : { fillAlpha }),
     ...(lineAlpha === undefined ? {} : { lineAlpha }),
     ...(raw.lineCompound === undefined ? {} : { lineCompound: raw.lineCompound }),
@@ -1007,6 +1070,8 @@ export function officeChartShapeRecipePaint(
 }
 export function officeChartShapePaintCss(
   value: OfficeChartShapePaint,
+  /** The Gaussian deviation its outer shadow's blur radius draws, per unit of it (a slide's: `POWERPOINT_SHADOW_BLUR_DEVIATION`). */
+  options: { readonly shadowBlurDeviation?: number } = {},
 ): CSSProperties {
   const p = normalizeOfficeChartShapePaint(value)!;
   return {
@@ -1019,7 +1084,7 @@ export function officeChartShapePaintCss(
           : {}),
     ...(p.outlineWidthPt === undefined ? {} : { borderWidth: p.outlineWidthPt + "pt" }),
     ...(p.shadow
-      ? { boxShadow: officeShadowCss(p.shadow) }
+      ? { boxShadow: officeShadowCss(p.shadow, options.shadowBlurDeviation === undefined ? {} : { blurDeviation: options.shadowBlurDeviation }) }
       : p.glow
         ? { boxShadow: `0 0 ${officeChartGlowShadow(p.glow).shadowBlur}px ${officeChartGlowShadow(p.glow).shadowColor}` }
         : {}),
@@ -1188,9 +1253,12 @@ export function officeChartShapeEChartsStyle(
             ? { [target === "item" ? "color" : "backgroundColor"]: color }
             : {}),
         }),
-    ...(p.shadow
+    ...(p.shadow && p.shadowScale && target === "item"
+      ? { [OFFICE_CHART_SCALED_SHADOW]: { shadow: p.shadow, scale: p.shadowScale } satisfies OfficeChartScaledShadow }
+      : p.shadow
       ? {
-          shadowBlur: p.shadow.blur,
+          // A slide's chart: PowerPoint's deviation (`chartShadowBlur`, scoped by the picture server).
+          shadowBlur: chartShadowBlur(p.shadow.blur),
           shadowColor:
             p.shadow.color +
             Math.round(p.shadow.opacity * 255)

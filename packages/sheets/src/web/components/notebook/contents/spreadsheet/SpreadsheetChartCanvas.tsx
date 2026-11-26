@@ -5,6 +5,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { anchorBoxTurned } from "@mrnote/core/web/lib/spreadsheet/drawing-rotation-box.ts";
 import { officeChartAreaPart } from "@mrnote/core/web/lib/office-charts/chart-hit.ts";
 import { AUTOMATIC_AXIS_TITLE_READING } from "@mrnote/core/web/lib/office-charts/chart-automatic-title.ts";
 import { useOfficeChartSelectedArea } from "@mrnote/core/web/lib/office-charts/chart-selection-store.ts";
@@ -76,6 +77,15 @@ export interface SpreadsheetChartCanvasProps extends MiniChartProps {
   onTitlesInPicture?: (inPicture: boolean) => void;
   /** Its title and axis titles are typed in place, its elements dragged by hand. */
   editable?: boolean;
+  /**
+   * Printed, what a PivotChart's field buttons take off the top and the
+   * bottom of the chart area (px): the picture is laid out in what is left,
+   * the chart area's fill and line keep the whole frame, as Windows Excel
+   * prints it (lib/spreadsheet/pivot-chart-print-buttons). `legend`: where
+   * the legend's field button's left and its entries' middle stand in the
+   * chart area (px).
+   */
+  pictureRoom?: { top: number; bottom: number; legend?: { leftPx: number; middlePx: number }; legendRoomOnly?: boolean };
   /**
    * The chart record drawn (a `sheet.charts[]` chart or an imported
    * `sheet.objects[]` one; a gallery preview hands the record with the
@@ -202,12 +212,12 @@ const VISUALLY_HIDDEN: CSSProperties = {
 /** The shapes a chart's own drawing places over it (`chartUserShapes`, read
  * at import from `c:userShapes`): each a box in fractions of the chart and its
  * shape. At most 64; anything malformed is left out. */
-function chartUserShapesOf(record: unknown): { x: number; y: number; w: number; h: number; shape: ReturnType<typeof normalizeShapeStyle> }[] {
+function chartUserShapesOf(record: unknown): { x: number; y: number; w: number; h: number; rotation?: number; shape: ReturnType<typeof normalizeShapeStyle> }[] {
   const raw = (record as { chartUserShapes?: unknown } | null | undefined)?.chartUserShapes;
   if (!Array.isArray(raw)) return [];
   const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
   return raw.slice(0, 64).flatMap((entry) => {
-    const item = entry as { x?: unknown; y?: unknown; w?: unknown; h?: unknown; shape?: unknown } | null;
+    const item = entry as { x?: unknown; y?: unknown; w?: unknown; h?: unknown; rotation?: unknown; shape?: unknown } | null;
     if (!item || !finite(item.x) || !finite(item.y) || !finite(item.w) || !finite(item.h) || item.w <= 0 || item.h <= 0) return [];
     if (!item.shape || typeof item.shape !== "object") return [];
     // What its text body leaves unstated is DrawingML's own default, as Excel
@@ -222,7 +232,9 @@ function chartUserShapesOf(record: unknown): { x: number; y: number; w: number; 
       ...(raw.textAlign === undefined && !statesAlign ? { textAlign: "left" } : {}),
       ...(raw.textVerticalAlign === undefined && layout?.bodyPr?.anchor === undefined ? { textVerticalAlign: "top" } : {}),
     });
-    return [{ x: item.x, y: item.y, w: item.w, h: item.h, shape }];
+    // Its turn (reading 1036): the box is the one Excel stores for it.
+    const rotation = finite(item.rotation) && item.rotation % 360 !== 0 ? ((item.rotation % 360) + 360) % 360 : undefined;
+    return [{ x: item.x, y: item.y, w: item.w, h: item.h, ...(rotation !== undefined ? { rotation } : {}), shape }];
   });
 }
 
@@ -310,6 +322,7 @@ function SpreadsheetChartCanvasDrawn({
   drawTitles = true,
   onTitlesInPicture,
   editable = false,
+  pictureRoom,
 }: SpreadsheetChartCanvasProps) {
   const t = useTranslations("console-notebooks");
   const selectedArea = useOfficeChartSelectedArea(selectionKey);
@@ -491,7 +504,9 @@ function SpreadsheetChartCanvasDrawn({
   // stands above the table's band and the legend below it, as Excel lays
   // them out (X-037: the legend stood between the plot and the table); the
   // picture says where the band starts (`dataTable.topPx`).
-  const pictureHeight = dataTable ? innerHeight : height;
+  const roomTop = Math.max(0, pictureRoom?.top ?? 0);
+  const roomBottom = Math.max(0, pictureRoom?.bottom ?? 0);
+  const pictureHeight = Math.max(24, (dataTable ? innerHeight : height) - roomTop - roomBottom);
   const [tablePicture, setTablePicture] = useState<ChartRenderPicture | null>(null);
   const tableColors = useMemo(
     () =>
@@ -536,9 +551,22 @@ function SpreadsheetChartCanvasDrawn({
     const content = { host: "spreadsheet" as const, sheet, tips: true };
     return { content, contentKey: canonicalJson(content) };
   }, [input]);
+  // A PivotChart printed without its legend button: the legend's room, no legend.
+  const legendRoomOnly = pictureRoom?.legendRoomOnly === true;
+  const legendButtonLeft = pictureRoom?.legend?.leftPx;
+  const legendButtonMiddle = pictureRoom?.legend ? pictureRoom.legend.middlePx - roomTop : undefined;
   const request = useMemo<ChartRenderRequest>(
-    () => ({ ...content.content, width, height: pictureHeight, ...(dataTable ? { dataTableBand: true } : {}) }),
-    [content, width, pictureHeight, dataTable],
+    () => ({
+      ...content.content,
+      width,
+      height: pictureHeight,
+      ...(dataTable ? { dataTableBand: true } : {}),
+      ...(legendButtonLeft !== undefined && legendButtonMiddle !== undefined
+        ? { legendUnderButton: { leftPx: legendButtonLeft, middlePx: legendButtonMiddle } }
+        : {}),
+      ...(legendRoomOnly ? { legendRoomOnly: true } : {}),
+    }),
+    [content, width, pictureHeight, dataTable, legendButtonLeft, legendButtonMiddle, legendRoomOnly],
   );
   // A size that keeps changing (a frame being dragged) is followed by the
   // picture (OfficeChartPicture `following`); the settled size is drawn once.
@@ -645,7 +673,7 @@ function SpreadsheetChartCanvasDrawn({
         ...(drawn?.attrs.format?.roundedCorners ? { borderRadius: 10 } : {}),
       })}
     >
-      <div style={{ height: dataTable ? pictureHeight : "100%", position: "relative", width: "100%" }}>
+      <div style={{ height: dataTable || roomTop || roomBottom ? pictureHeight : "100%", position: "relative", width: "100%", ...(roomTop ? { marginTop: roomTop } : {}) }}>
         <div
           ref={hostRef}
           data-chart-canvas-host="true"
@@ -770,21 +798,33 @@ function SpreadsheetChartCanvasDrawn({
         // The chart's own drawing (`c:userShapes`), over the chart area at
         // its fractions of it, as Excel draws it (X-208); display only.
         <div aria-hidden="true" data-chart-user-shapes="true" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-          {userShapes.map((entry, index) => (
-            <div
-              key={index}
-              style={{
-                position: "absolute",
-                left: entry.x * width,
-                top: entry.y * height,
-                width: entry.w * width,
-                height: entry.h * height,
-                fontFamily: fontFamily ?? undefined,
-              }}
-            >
-              <SpreadsheetShapeView shape={entry.shape} boxWidthPx={entry.w * width} boxHeightPx={entry.h * height} />
-            </div>
-          ))}
+          {userShapes.map((entry, index) => {
+            // A shape turned a quarter or more (to 135 degrees, or 225 to
+            // 315) has its box stored turned (anchorBoxTurned): its own
+            // rectangle, sides exchanged about the box's centre, turns
+            // there (R485-X14's axis titles, text boxes turned 270).
+            const boxWidth = entry.w * width;
+            const boxHeight = entry.h * height;
+            const turned = anchorBoxTurned(entry.rotation);
+            const frameWidth = turned ? boxHeight : boxWidth;
+            const frameHeight = turned ? boxWidth : boxHeight;
+            return (
+              <div
+                key={index}
+                style={{
+                  position: "absolute",
+                  left: entry.x * width + (boxWidth - frameWidth) / 2,
+                  top: entry.y * height + (boxHeight - frameHeight) / 2,
+                  width: frameWidth,
+                  height: frameHeight,
+                  fontFamily: fontFamily ?? undefined,
+                  ...(entry.rotation !== undefined ? { transform: `rotate(${entry.rotation}deg)` } : {}),
+                }}
+              >
+                <SpreadsheetShapeView shape={entry.shape} boxWidthPx={frameWidth} boxHeightPx={frameHeight} rotation={entry.rotation} />
+              </div>
+            );
+          })}
         </div>
       ) : null}
       {dataTable ? (

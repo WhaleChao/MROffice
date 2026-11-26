@@ -330,6 +330,10 @@ export function carryKeystrokeToLive(options: {
   typed: string;
   selection?: TextRange;
   caretAfter?: number;
+  /** The words the field showed when the key went in, when known. */
+  shown?: string;
+  /** Where in `shown` it went, when not `selection` (a composition). */
+  shownRange?: TextRange;
 }): {
   onLive: boolean;
   text: string;
@@ -344,8 +348,23 @@ export function carryKeystrokeToLive(options: {
    * take the collaborator's newer letters for this key's, see below). */
   read: KeystrokeRead;
 } {
-  const { changes, slideId, blockId, rendered, live, typed, selection, caretAfter } = options;
+  const { changes, slideId, blockId, rendered, live, typed, selection, caretAfter, shown, shownRange } = options;
   const read = (words: string) => keystrokeSplice(words, typed, selection) ?? caretSplice(words, typed, caretAfter);
+  // The field showed the live words when the key went in, not the drawn ones
+  // (a typing burst flushed while the box was fitted to its words, not drawn
+  // yet): the key is read in what the field showed. Read in the drawn words,
+  // the caret it left took the burst's own letters for this key's, and they
+  // were carried into the live words a second time -- "k21" typed after a
+  // burst's "k2" stood as "k21k2", the caret before the copy, and the next
+  
+  // in while the server wrote into its part's room, stored garbled).
+  if (shown !== undefined && shown === live && live !== rendered) {
+    const atShown = (shownRange ? keystrokeSplice(live, typed, shownRange) : null) ?? read(live);
+    if (atShown) {
+      return { onLive: true, text: typed, selection: { start: atShown.start, end: atShown.end }, shift: 0, splice: atShown,
+        read: "exact" };
+    }
+  }
   // Read as typed into the drawn words first (what the screen showed); only
   // words that cannot be those are the live ones (an earlier key's commit
   // not drawn yet).

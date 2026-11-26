@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { assertNoStringifiedPageKey } from "./page-key-guard";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiGet, apiPut, ApiRequestError } from "./api";
@@ -197,6 +198,7 @@ export function knownDocumentPartsPage(pageId: string | null | undefined): boole
 }
 
 export function rememberDocumentPartsPage(pageId: string | null | undefined, parts: boolean): void {
+  assertNoStringifiedPageKey(pageId, "document-page-parts rememberDocumentPartsPage");
   if (!pageId || knownPartsPages.has(pageId) === parts) return;
   if (parts) knownPartsPages.add(pageId);
   else knownPartsPages.delete(pageId);
@@ -2562,9 +2564,23 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
     const stored = optionsRef.current.body;
     if (documentPartsCount(stored) < 2 || !isRecord(stored)) return content;
     const storedBlocks = Array.isArray(stored.content) ? stored.content : [];
+    // The body as this page read it, sent again where nothing new of it is
+    // to be saved. It is the body the page was opened with, not the body as
+    // stored now: once the body's room has saved an edit (the page's version
+    // moved on with it), sent under that version it wrote the opened body
+    // back over the edit, the room was seeded again from it and the edit
+    
+    // paragraph and a heading stored, then the body back at 222 blocks and
+    // all three gone). Nothing of the body is sent instead (null), which is
+    // what each of these cases means. `window.__docsPartsStaleBodyResent =
+    // true`: the body as opened is sent again (old).
+    const unchangedBody = (): Record<string, unknown> | null =>
+      typeof window !== "undefined" && (window as Window & { __docsPartsStaleBodyResent?: boolean }).__docsPartsStaleBodyResent === true
+        ? { ...stored, content: storedBlocks }
+        : null;
     if (blockedRef.current || !optionsRef.current.writable) {
       // Nothing is saved from here: the body stays what it is.
-      return { ...stored, content: storedBlocks };
+      return unchangedBody();
     }
     // Until the editor holds the body as opened (its reading of it is taken
     // right after hydration), what it holds is not the body: a draft made
@@ -2589,12 +2605,12 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
       traceDocsHandoverPart({ step: "prepare-stale-draft" });
       return undefined;
     }
-    if (split.ok && !partsReadRight(split.parts)) return { ...stored, content: storedBlocks };
+    if (split.ok && !partsReadRight(split.parts)) return unchangedBody();
     publishViewToRooms();
-    if (blockedRef.current) return { ...stored, content: storedBlocks };
+    if (blockedRef.current) return unchangedBody();
     if (!split.ok) {
       block(split.reason);
-      return { ...stored, content: storedBlocks };
+      return unchangedBody();
     }
     // A loaded part none of whose blocks the view holds any more is not an
     // edit of it: the view was read again (a reload whose hydration has yet to
@@ -2681,7 +2697,7 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
     const blocksJson = JSON.stringify(split.parts[0]);
     const attrsJson = withoutLayoutAttrs(content.attrs);
     if (baseline && baseline.blocks === blocksJson && baseline.attrs === attrsJson) {
-      return baseline.prepared ?? { ...stored, content: storedBlocks };
+      return baseline.prepared ?? unchangedBody();
     }
     // Most of the body gone at once with nobody having asked is no edit of
     
@@ -2694,7 +2710,7 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
       ? { ...stored, content: storedBlocks.slice(0, preparedBodyCount.current) } : stored;
     if (!bulkGestureLately() && documentBodyCutNeedsSaying(shrunkFrom, { content: split.parts[0] })) {
       refuseJump(0, storedBlocks.length, split.parts[0].length, "body");
-      return { ...stored, content: storedBlocks };
+      return unchangedBody();
     }
     const prepared = bodyContentForSave(content, stored, optionsRef.current.storedForm?.(split.parts[0]) ?? split.parts[0]);
     bodyBaseline.current = { blocks: blocksJson, attrs: attrsJson, prepared };

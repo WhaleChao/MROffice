@@ -80,3 +80,23 @@ export function SpreadsheetCellCheckbox({
     </svg>
   </span>;
 }
+
+interface PlainProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "size" | "style" | "checked"> {
+  checked: boolean;
+  containerTestId?: string;
+  horizontalAlign?: "left" | "center" | "right" | "justify" | string;
+}
+
+/** A cell check box where the sheet has no native grid to place one on: the
+ * browser's own box over the cell, aligned as the cell's text. The same
+ * control in every view (Normal, Page Break Preview, Page Layout). */
+export function SpreadsheetPlainCellCheckbox({ checked, containerTestId, horizontalAlign, disabled, ...inputProps }: PlainProps) {
+  return <span className="spreadsheet-window__checkbox-layer" data-testid={containerTestId} style={{
+    position: "absolute", inset: 0, display: "flex", alignItems: "center",
+    justifyContent: horizontalAlign === "left" ? "flex-start" : horizontalAlign === "right" ? "flex-end" : "center",
+    padding: "0 6px",
+  }}>
+    <input {...inputProps} type="checkbox" checked={checked} disabled={disabled}
+      style={{ width: 15, height: 15, margin: 0, cursor: disabled ? "default" : "pointer", accentColor: "var(--console-accent, #0D9488)" }} />
+  </span>;
+}

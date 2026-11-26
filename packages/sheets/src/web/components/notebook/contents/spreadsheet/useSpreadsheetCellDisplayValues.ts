@@ -185,7 +185,11 @@ export function useSpreadsheetCellDisplayValues({
               typedNumerals: true,
             });
       }
-      let override = numberFormatOverride;
+      // Show Formulas (sheetView@showFormulas): a constant is drawn as it is
+      // stored, under no number format -- 1,234.50 shows 1234.5, a date its
+      // serial 46265, 25.6% 0.256 (Windows Excel, lookwin lw109/sf; KB
+      // Q72065) -- as its formulas show their own text.
+      let override = sheetShowsConstantsRaw(sheet, cell) ? "" : numberFormatOverride;
       if (
         override === undefined &&
         conditionalNumberFormatRules.some(
@@ -275,6 +279,7 @@ export function useSpreadsheetCellDisplayValues({
       formulaEvaluator,
       locale,
       sheet.hideZeros,
+      sheet.showFormulas,
       spillOverlay,
       webImageRevision,
     ],
@@ -308,4 +313,13 @@ export function useSpreadsheetCellDisplayValues({
     checkboxCheckedAt,
     conditionalLeadingEdgeAreas,
   };
+}
+
+/** Whether a cell of a sheet in Show Formulas is a constant drawn raw (no
+ * number format): Windows Excel shows its value as stored there. */
+export function sheetShowsConstantsRaw(
+  sheet: { readonly showFormulas?: boolean },
+  cell: SpreadsheetCell | undefined,
+): boolean {
+  return sheet.showFormulas === true && Boolean(cell?.value) && !spreadsheetCellIsFormula(cell);
 }

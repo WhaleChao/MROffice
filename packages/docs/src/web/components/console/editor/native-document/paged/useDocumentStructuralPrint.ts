@@ -22,6 +22,7 @@ import { normalizeWordCompatibilityMode } from "@mrnote/core/web/components/cons
 import { documentMissingFontSubstitutes } from "@mrnote/core/web/components/console/editor/native-document/documentDisplayFonts.ts";
 import { footnoteTextStyleFromDocAttrs } from "@mrnote/core/web/components/console/editor/native-document/noteTextStyle.ts";
 import { printStructuralSheets, type StructuralPrintOptions } from "./structuralPrint";
+import { documentPrintFailureMessages, printFailureMessage } from "../printReadiness";
 import type { PrintRevisionMarkup } from "./printRevisionMarkup";
 import { documentEvenAndOddHeaders } from "@mrnote/core/web/components/console/editor/native-document/paged/sheetPageSpans.ts";
 import { isUsableEditor, type MaybeNoteEditor } from "./editorRuntime";
@@ -184,9 +185,11 @@ export function useDocumentStructuralPrintOptions({
         firstSheetUnderlay:
           handwritingCoverRef.current?.querySelector<HTMLElement>("[data-handwriting-cover-face]") ?? null,
         readinessErrorMessage: t("toolbar.printReadinessFailed"),
+        printUnsettledNotice: t("toolbar.printUnsettledNotice"),
+        readinessErrorMessages: documentPrintFailureMessages(t),
         preparingMessage: t("toolbar.printPreparing"),
-        onReadinessError: () =>
-          toast({ title: t("toolbar.printReadinessFailed") }),
+        onReadinessError: (error) =>
+          toast({ title: printFailureMessage(error, t("toolbar.printReadinessFailed"), documentPrintFailureMessages(t)) }),
         onPrintWindowBlocked: () =>
           toast({ title: t("toolbar.printPopupBlocked"), variant: "destructive" }),
       };

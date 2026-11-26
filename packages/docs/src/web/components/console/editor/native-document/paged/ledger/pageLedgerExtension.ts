@@ -28,7 +28,7 @@
 import { MRNOTE_BLOCK_ID_ATTR } from "@mrnote/core/web/components/console/editor/native-document/blockIds.ts";
 import { headRowTakesTailWord, staleRowSeamKeepPx } from "./ledgerStaleSeam";
 import { msSinceTyping } from "@mrnote/core/web/lib/typing-session.ts";
-import { hostHasTheKeyboard, keyTypesCharacter, returnKeysToWindow, takeKeysHeldForWindow, windowHoldsKeysFor, windowIdAround } from "@mrnote/core/web/lib/editor/held-keys.ts";
+import { hostHasTheKeyboard, openingKeyOf, returnHeldKeysToWindow, takeHeldKeysForWindow, typeHeldKeys, windowHoldsKeysFor, windowIdAround, type HeldKey, type HeldKeysTarget } from "@mrnote/core/web/lib/editor/held-keys.ts";
 import { inkTraceWork } from "@mrnote/core/web/lib/ink-input-trace.ts";
 import { HOLLOW_SHEET_ATTR } from "@mrnote/core/web/components/console/editor/native-document/paged/pageSheetView.ts";
 import { dispatchKeepingReader } from "../readerAnchor";
@@ -54,6 +54,7 @@ import {
   writeDocumentLayoutStatus,
 } from "@mrnote/core/web/components/console/editor/native-document/documentLayoutStatus.ts";
 import { collectDocumentFontCharacters, fontCharactersLoaded } from "@mrnote/core/web/components/console/editor/native-document/documentFontCharacters.ts";
+import { documentDisplayFontPluginKey } from "@mrnote/core/web/components/console/editor/native-document/documentDisplayFonts.ts";
 import { READ_ONLY_TRUSTED_MUTATION_META } from "@mrnote/core/web/components/console/editor/native-document/readOnlyTransactionAuthority.ts";
 import { isImeCompositionActive, onImeCompositionSettled } from "@mrnote/core/web/components/console/editor/native-document/imeCompositionGuard.ts";
 import {
@@ -2007,7 +2008,14 @@ function finishLedgerPass(
   const goesRound = !alternates && capacitiesHeld && plannedStarts.length >= currentStarts.length && !pinReturnsOff(view)
     ? twitchWatches.get(view)?.wouldGoRoundAgain(currentStarts, plannedStarts, authoredEditSeq(view)) ?? null
     : null;
-  const cycle = alternates ? earlierOpening(plannedStarts, currentStarts) : goesRound !== null ? { page: goesRound, aEarlier: false } : null;
+  // A page held because it would go round again is held at the layout that
+  // opens it earlier, as an alternation is: held at whichever stood when it was
+  // seen, R461 settled with its page 48 opening at "135+text:6512" or at 6510
+  // (163 or 162 pages) by whether its faces had come before the layout.
+  const roundOpening = goesRound !== null && !cycleHoldsAll(view) && !cycleOpeningRulesOff(view) ? earlierOpening(plannedStarts, currentStarts) : null;
+  const cycle = alternates ? earlierOpening(plannedStarts, currentStarts) : goesRound !== null
+    ? { page: goesRound, aEarlier: roundOpening?.page === goesRound ? roundOpening.aEarlier : false }
+    : null;
   // A cycle between two layouts of as many pages keeps the one that opens
   // the page where they differ earlier (the block moved whole to the next
   // page, as Word moves a list item that does not fit). A cycle between a
@@ -2017,7 +2025,22 @@ function finishLedgerPass(
   // page of its own (R26-D04: 602 of 605 px against 615; Word keeps 15
   // pages).
   const pageCountCycle = cycle !== null && putsBackWhole && plannedStarts.length !== currentStarts.length;
-  const keepCurrent = cycle !== null && (pageCountCycle ? currentStarts.length < plannedStarts.length : !cycle.aEarlier);
+  // Two layouts that open a page after the alternating one alike again differ
+  // in length only by what follows that page, which the layout goes on to lay
+  // out (below): the alternating page is decided as between layouts of as many
+  // pages. Decided by the length, it was the one whose tail had not been laid
+  // out yet that was kept, and R461 settled on 162 or 163 pages by which of
+  // two cuts 2 characters apart stood when the cycle was seen.
+  // Kept by its length only when the two differ from the shorter one's last
+  // page on (R26-D04: the same pages, one block pushed onto a page of its
+  // own): a page further up that alternates is decided by its opening. Two
+  // cuts of R461's page 48 two characters apart re-cut every page after it
+  // and the layouts never opened a page alike again; kept by length, the one
+  // standing when the cycle was seen stayed (162 or 163 pages).
+  const resyncsAfter = cycle !== null && !cycleHoldsAll(view) && !cycleOpeningRulesOff(view) &&
+    (plannedStarts.some((start, index) => index > cycle.page && start === currentStarts[index]) ||
+      cycle.page < Math.min(plannedStarts.length, currentStarts.length) - 1);
+  const keepCurrent = cycle !== null && (pageCountCycle && !resyncsAfter ? currentStarts.length < plannedStarts.length : !cycle.aEarlier);
   if (cycle && keepCurrent && putsBackLocally) {
     // The pages further on still have to be laid out, so the kept page is
     // held and the plan made again around it. A page a continuation opens
@@ -2055,6 +2078,23 @@ function finishLedgerPass(
       const held = parseOpening(currentStarts[cycle.page] ?? "");
       const seq = authoredEditSeq(view);
       if (held && !held.whole && refusedCut.includes("+text:")) refuseTableRowCut(view, refusedCut, () => authoredEditSeq(view) === seq);
+    }
+    // Only the cut that went round is held: past the first page where the two
+    // layouts open alike again, the plan is laid out (that page is left
+    // pending and the background goes on from it). Holding the whole
+    // document at the first page that alternated left everything after it as
+    // it stood when the alternation was seen -- R461's three code listings of
+    // 14,000-22,000 characters each pages short, its sheets far over their
+    // paper -- and the page count it settled on (149, 154, 162 or 163; Word
+    // 160) depended on when that was.
+    // `window.__docsCycleHoldsAllOn = true` holds the whole document as before.
+    if (!cycleHoldsAll(view)) {
+      const resync = plannedStarts.findIndex((start, index) => index > cycle.page && start === currentStarts[index]);
+      if (resync > cycle.page && plannedStarts.some((start, index) => index > resync && start !== currentStarts[index])) {
+        traceLedgerPass(view, { cycleHeldGoesOn: { page: cycle.page, why: `plan laid out from page ${resync}`, pending: 1 } });
+        publishOverTallSheets(view, build, overTallSheetsOf(plan, build), scoped ? scoped.start.page : 0, resync);
+        return { dispatched: false, converged: false, plan, build, scope: { startPage: scoped ? scoped.start.page : 0, stopPage: resync, yieldedAt: resync, leaves: [] }, stablePages };
+      }
     }
     publishOverTallSheets(view, build, overTallSheetsOf(plan, build), scoped ? scoped.start.page : 0, stopPage);
     publishContinuedFootnotes(view, plan, build, noteChromePx);
@@ -2143,6 +2183,20 @@ function finishLedgerPass(
 /** The sheets `plan` gave to a block that could not be cut and is taller
  * than its page: the fragments of the plan's overflowing atoms that do not
  * fit a page by themselves. */
+
+
+function cycleHoldsAll(view: EditorView): boolean {
+  return (view.dom.ownerDocument.defaultView as (Window & { __docsCycleHoldsAllOn?: boolean }) | null)?.__docsCycleHoldsAllOn === true;
+}
+
+
+
+
+
+function cycleOpeningRulesOff(view: EditorView): boolean {
+  return (view.dom.ownerDocument.defaultView as (Window & { __docsCycleOpeningRulesOff?: boolean }) | null)?.__docsCycleOpeningRulesOff === true;
+}
+
 function overTallSheetsOf(plan: LedgerPlan, build: LedgerBuild): Set<HTMLElement> {
   const sheets = new Set<HTMLElement>();
   for (const atom of plan.overflowingAtoms) {
@@ -2679,14 +2733,25 @@ function repairPhysicalOverflow(
  * and reading a computed style per element. The sheet's text and styles come
  * from the state; a new state (any transaction, a font plan applied) reads it
  * again. */
-const sheetFontCharacters = new WeakMap<HTMLElement, { state: EditorState; groups: ReturnType<typeof collectDocumentFontCharacters> }>();
+//
+// Kept, too, across the states that change neither the document nor its
+// display fonts (documentDisplayFonts: the font plan's decorations, the one
+// thing besides the content that sets a sheet's fonts): the line projections'
+// flush, read in turns while the first layout waits, dispatches its lines as
+// metadata, and every look of the next turn walked every sheet again
+// (allometric.docx, 8 sheets: 0.13-0.27 s of the main thread before it was
+// editable). `window.__docsFirstScreenTrimOff = true`: per state, as before.
+const sheetFontCharacters = new WeakMap<HTMLElement, { state: EditorState; doc: PmNode; fonts: unknown; groups: ReturnType<typeof collectDocumentFontCharacters> }>();
 
 function sheetFontCharactersOf(view: EditorView, sheet: HTMLElement): ReturnType<typeof collectDocumentFontCharacters> {
-  if (!coldFirstLayout(view.dom.ownerDocument.defaultView)) return collectDocumentFontCharacters(sheet);
+  const win = view.dom.ownerDocument.defaultView as (Window & { __docsFirstScreenTrimOff?: boolean }) | null;
+  if (!coldFirstLayout(win)) return collectDocumentFontCharacters(sheet);
   const kept = sheetFontCharacters.get(sheet);
-  if (kept && kept.state === view.state) return kept.groups;
+  const fonts = documentDisplayFontPluginKey.getState(view.state);
+  if (kept && (kept.state === view.state ||
+      (win?.__docsFirstScreenTrimOff !== true && kept.doc === view.state.doc && kept.fonts === fonts))) return kept.groups;
   const groups = collectDocumentFontCharacters(sheet);
-  sheetFontCharacters.set(sheet, { state: view.state, groups });
+  sheetFontCharacters.set(sheet, { state: view.state, doc: view.state.doc, fonts, groups });
   return groups;
 }
 
@@ -2889,6 +2954,9 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
   },
   addProseMirrorPlugins() {
     const { waitForSourceFontPlan, eagerBackground } = this.options;
+    // The editor the keys held while the pages were hidden are typed into
+    // (typeHeldKeys: text input, key bindings, as typed).
+    const tiptapEditor = this.editor;
     // Per editor, not per plugin view. ProseMirror rebuilds every plugin view
     // whenever any plugin is registered or removed (the floating toolbar, Find),
     // and a rebuilt view must not start the INITIAL settle over: re-marking the
@@ -3537,31 +3605,41 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
           // A document with a room is written to a moment after its pages show:
           // the keys of that moment wait for it too, and for no longer than this.
           const LONGEST_WAIT_TO_WRITE_MS = 30_000;
-          let heldKeys = "";
+          let heldKeys: HeldKey[] = [];
           let keysStillHeld = false;
           let keysGiveUp: ReturnType<typeof setTimeout> | undefined;
           let keysWindowId: string | null = null;
           const ownerDocument = editorView.dom.ownerDocument;
+          // The keys a typist uses (characters, Enter, Backspace, Delete, Tab, the
+          // arrows, the formatting shortcuts: lib/editor/held-keys openingKeyOf).
           const holdKey = (event: KeyboardEvent) => {
-            if (!keyTypesCharacter(event)) return;
             if (editorView.editable) return;
             if (windowHoldsKeysFor(editorView.dom)) return;
             const held = editorView.dom.closest(".wm-window");
             if (held && !held.classList.contains("wm-window--focused")) return;
-            if (hostHasTheKeyboard(held ?? editorView.dom, ownerDocument)) heldKeys += event.key;
+            if (!hostHasTheKeyboard(held ?? editorView.dom, ownerDocument)) return;
+            const target = event.target;
+            if (target instanceof Element && target !== ownerDocument.body && !editorView.dom.contains(target) &&
+                target.closest("input, textarea, select, [contenteditable='true'], [role='dialog']")) return;
+            const key = openingKeyOf(event);
+            if (key === null || key === "drop") return;
+            event.preventDefault();
+            const last = heldKeys[heldKeys.length - 1];
+            if (key.kind === "text" && last?.kind === "text") last.text += key.text;
+            else heldKeys.push(key);
           };
           const heldKeysOn = !editorView.dom.classList.contains("sheet-band-story");
           if (heldKeysOn) ownerDocument.addEventListener("keydown", holdKey, true);
           const releaseHeldKeys = () => {
             if (!heldKeysOn) return;
             keysWindowId = windowIdAround(editorView.dom) ?? keysWindowId;
-            heldKeys = takeKeysHeldForWindow(editorView.dom) + heldKeys;
+            heldKeys = [...takeHeldKeysForWindow(editorView.dom), ...heldKeys];
             if (!destroyed && !editorView.isDestroyed && !editorView.editable) {
               if (!keysStillHeld) {
                 keysStillHeld = true;
+                // Past this it holds no more keys, and keeps what it holds for
+                // the moment the editor takes input (never dropped).
                 keysGiveUp = setTimeout(() => {
-                  keysStillHeld = false;
-                  heldKeys = "";
                   ownerDocument.removeEventListener("keydown", holdKey, true);
                 }, LONGEST_WAIT_TO_WRITE_MS);
               }
@@ -3570,11 +3648,11 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
             keysStillHeld = false;
             if (keysGiveUp !== undefined) clearTimeout(keysGiveUp);
             ownerDocument.removeEventListener("keydown", holdKey, true);
-            const text = heldKeys;
-            heldKeys = "";
-            if (!text || destroyed || editorView.isDestroyed) return;
+            const keys = heldKeys;
+            heldKeys = [];
+            if (keys.length === 0 || destroyed || editorView.isDestroyed) return;
             editorView.focus();
-            editorView.dispatch(editorView.state.tr.insertText(text));
+            typeHeldKeys(tiptapEditor as unknown as HeldKeysTarget, keys);
           };
           const showPagesBeforeSettled = () => {
             if (gateTimer !== undefined) win?.clearTimeout(gateTimer);
@@ -5225,7 +5303,7 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
               intentDoc.removeEventListener("pointerup", onPointerUp, { capture: true });
               intentDoc.removeEventListener("pointercancel", onPointerUp, { capture: true });
               if (keysGiveUp !== undefined) clearTimeout(keysGiveUp);
-              returnKeysToWindow(keysWindowId ?? windowIdAround(editorView.dom), heldKeys);
+              returnHeldKeysToWindow(keysWindowId ?? windowIdAround(editorView.dom), heldKeys);
               ownerDocument.removeEventListener("keydown", holdKey, true);
               if (gatedView === editorView) gatedView = null;
               if (gateTimer !== undefined) win?.clearTimeout(gateTimer);

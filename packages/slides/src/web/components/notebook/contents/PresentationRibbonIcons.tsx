@@ -1505,6 +1505,25 @@ export function IconTransitionClockOption({
   option,
   size,
 }: RibbonIconProps & { option: SlideTransitionClockOption }) {
+  if (option === "counterclockwise" || option === "wedge") {
+    // Counterclockwise (p14:wheelReverse): one hand and its turn the other
+    // way; Wedge (p:wedge): two hands opening from 12 o'clock (GAP 23).
+    return (
+      <svg
+        {...frame(size, true)}
+        data-presentation-ribbon-icon="transition-clock-option"
+        data-option={option}
+      >
+        <circle cx="12" cy="12" r="8" opacity="0.48" />
+        {option === "wedge" ? (
+          <path className={homeRole(true, "accent")} d="M12 12L7.8 7.8M12 12L16.2 7.8" />
+        ) : (
+          <path className={homeRole(true, "accent")} d="M12 12V6M9 7.2A6 6 0 0 0 6.2 10.5" />
+        )}
+        <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
   const spokes = {
     "one-spoke": 1,
     "two-spokes": 2,

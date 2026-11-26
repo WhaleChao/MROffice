@@ -65,7 +65,23 @@ import type { PresentationSmartArtGroupFrameCtl } from "./PresentationSmartArtGr
  * the graphic, which PowerPoint selects by a click anywhere in its frame --
  * hit by its geometry, the click went through to the title placeholder below.
  */
+// Asked for every block each time the canvas draws its frames (a Select All
+// on 2,351 objects) and on each marquee step: answered once per block object
+// (TRIAGE 155). The answer reads the block alone (its kind, fill, outline,
+// theme paint and source), and a block is replaced by a new object whenever
+// any of that changes -- an edit, a remote change, a moved or resized frame --
+// so a changed block is asked again; the old object's entry goes with it.
+const hitsByGeometryCache = new WeakMap<PresentationBlock, boolean>();
+
 export function presentationShapeHitsByGeometry(block: PresentationBlock): boolean {
+  const known = hitsByGeometryCache.get(block);
+  if (known !== undefined) return known;
+  const hits = shapeHitsByGeometry(block);
+  hitsByGeometryCache.set(block, hits);
+  return hits;
+}
+
+function shapeHitsByGeometry(block: PresentationBlock): boolean {
   if (block.type !== "shape" || nativeSmartArtDrawingAbsent(block)) return false;
   if (readSmartArtBlockMarker(block) !== null) return true;
   // A text box the import took as a shape (`txBox="1"` with an outline that is

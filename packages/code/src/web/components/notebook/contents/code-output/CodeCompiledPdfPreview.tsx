@@ -41,6 +41,7 @@ import {
 } from "@mrnote/core/web/lib/pdf/pdfjs-runtime.ts";
 import {
   PdfReadOnlyPage,
+  pdfReadOnlyPageScale,
   readPdfReadOnlyPageDescriptors,
   type PdfPageHighlight,
   type PdfPagePoint,
@@ -156,6 +157,8 @@ export function CodeCompiledPdfPreview({
   label,
   highlight = null,
   onPointDoubleClick,
+  zoom,
+  onFitScale,
 }: {
   artifact: LanguageExecutionArtifact;
   /** The output's scroll container, which decides when a page is drawn. */
@@ -167,12 +170,25 @@ export function CodeCompiledPdfPreview({
   highlight?: { readonly page: number; readonly marks: PdfPageHighlight } | null;
   /** A double click on a page (SyncTeX inverse search). */
   onPointDoubleClick?: (page: number, point: PdfPagePoint) => void;
+  /** "fit" (the default): every page as wide as the column; a number: that
+   *  scale of the page's own size, wider than the column when it is more,
+   *  and then `root` scrolls sideways. */
+  zoom?: "fit" | number;
+  /** Hears the scale Fit Width draws the pages at (null until the first
+   *  page and the column are measured), for a zoom control beside it. */
+  onFitScale?: (scale: number | null) => void;
 }) {
   const t = useTranslations("console-notebooks");
   const columnRef = useRef<HTMLDivElement | null>(null);
   const { state, onRenderError: handleRenderError } =
     useCompiledPdfPages(artifact);
   const [columnWidth, setColumnWidth] = useState(0);
+  const firstPage = state.phase === "ready" ? state.pages[0] : undefined;
+  const fitScale =
+    firstPage && columnWidth > 0 ? pdfReadOnlyPageScale(firstPage, columnWidth) : null;
+  useEffect(() => {
+    onFitScale?.(fitScale);
+  }, [fitScale, onFitScale]);
 
   useLayoutEffect(() => {
     const node = columnRef.current;
@@ -236,7 +252,11 @@ export function CodeCompiledPdfPreview({
                 descriptor={descriptor}
                 onRenderError={handleRenderError}
                 root={root}
-                width={columnWidth}
+                width={
+                  zoom === undefined || zoom === "fit"
+                    ? columnWidth
+                    : descriptor.width * zoom
+                }
                 canvasTestId="code-output-pdf-page"
                 releaseOffscreen
                 keepDrawingUntilRedrawn

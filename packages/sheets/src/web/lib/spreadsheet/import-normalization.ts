@@ -101,6 +101,47 @@ function normalizeFiniteSizeMap(
   return { value: changed ? normalized : value, changed };
 }
 
+/** A row height the page stores that {@link normalizeSpreadsheetImportDimensions} shows otherwise. */
+export interface ImportRowHeightShownAs {
+  sheetIndex: number;
+  row: string;
+  stored: number;
+  shown: number;
+}
+
+
+
+
+
+
+
+
+export function importRowHeightsShownAs(
+  content: Record<string, unknown> | undefined,
+): ImportRowHeightShownAs[] {
+  if (!content || !Array.isArray(content.sheets)) return [];
+  const out: ImportRowHeightShownAs[] = [];
+  content.sheets.forEach((rawSheet, sheetIndex) => {
+    if (!isRecord(rawSheet) || !isRecord(rawSheet.rowHeights)) return;
+    const stored = rawSheet.rowHeights;
+    const nativeRows = normalizeNativeGrid(rawSheet.nativeGrid)?.rowMetrics;
+    const rows = normalizeFiniteSizeMap(
+      stored,
+      clampRowHeight,
+      MIN_ROW_HEIGHT_PX,
+      (index, pixels) => nativeRowPixelPairMatches(nativeRows, index, pixels),
+    );
+    if (!rows.changed || !isRecord(rows.value)) return;
+    for (const [row, size] of Object.entries(stored)) {
+      const shown = rows.value[row];
+      if (typeof size === "number" && typeof shown === "number" && shown !== size) {
+        out.push({ sheetIndex, row, stored: size, shown });
+      }
+    }
+  });
+  return out;
+}
+
 /**
  * Normalize imported Excel/WPS line sizes before the strict page schema gate.
  *

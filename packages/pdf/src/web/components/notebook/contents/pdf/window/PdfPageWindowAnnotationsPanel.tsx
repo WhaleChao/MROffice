@@ -72,7 +72,8 @@ import {
   NATIVE_MARKUP_COLORS,
 } from "./managedMarkup";
 import { isNativePdfUnknownDate } from "@mrnote/core/web/lib/pdf/native-text-annotations.ts";
-import type { PdfAnnotationReply } from "@mrnote/core/web/lib/pdf/annotation-replies.ts";
+import { pdfReplyDisplayText, type PdfAnnotationReply } from "@mrnote/core/web/lib/pdf/annotation-replies.ts";
+import { usePdfReviewStateLabel } from "../pdfReviewStateLabel";
 import { pdfSourceNoteProjectionKey } from "./sourceNotes";
 import type { PdfAnnotation } from "../../../../../lib/pdf/page-content-model";
 import type { PdfAnnotationListModel } from "../viewer/PDFViewerProps";
@@ -89,6 +90,14 @@ export interface PdfPageWindowAnnotationsPanelModel {
   viewerList?: PdfAnnotationListModel | null;
   /** The page the reader is on (1-based): 上下文 lists its comments. */
   currentPage: number;
+  /** That page as read (an inserted page counted): what the cards' "Page N"
+   * and 上下文 compare with; the upload's number without it. */
+  currentVisiblePage?: number;
+  /** A comment's page as read: its upload page's place, or its inserted
+   * page's (lib/pdf/inserted-page-identity); null for none still shown. */
+  visiblePageOf?: (page: number | null, insertedPageId?: string) => number | null;
+  /** Show the inserted page a comment is on. */
+  openInsertedPage?: (insertedPageId: string) => void;
   
 
   selectedKey?: string | null;
@@ -153,7 +162,6 @@ type PdfCommentMessage =
 type CommentViewMode = "contextual" | "list";
 type CommentFilter = "all" | "active" | "resolved";
 
-const REVIEW_STATE_NAMES = ["Accepted", "Rejected", "Cancelled", "Completed", "None", "Marked", "Unmarked"];
 /** The review states that close a discussion (Acrobat's 已接受 / 已完成). */
 const RESOLVING_REVIEW_STATES = new Set(["Accepted", "Completed"]);
 
@@ -226,6 +234,9 @@ export function PdfPageWindowAnnotationsPanel({ panel }: { panel: PdfPageWindowA
     annotations,
     viewerList = null,
     currentPage,
+    currentVisiblePage,
+    visiblePageOf,
+    openInsertedPage,
     selectedKey = null,
     writable,
     nativeRichTextNoteKeysRef,
@@ -288,10 +299,12 @@ export function PdfPageWindowAnnotationsPanel({ panel }: { panel: PdfPageWindowA
         kind: "note",
         key: `note:${annotation.id}`,
         annotation,
-        page: typeof annotation.page === "number" ? annotation.page : null,
+        page: visiblePageOf
+          ? visiblePageOf(typeof annotation.page === "number" ? annotation.page : null, annotation.insertedPageId)
+          : typeof annotation.page === "number" ? annotation.page : null,
         resolved: noteResolved(annotation),
       })),
-    [annotations],
+    [annotations, visiblePageOf],
   );
   const readerItems = useMemo<PdfPaneItem[]>(() => {
     if (!viewerList) return [];
@@ -306,10 +319,10 @@ export function PdfPageWindowAnnotationsPanel({ panel }: { panel: PdfPageWindowA
         kind: "reader",
         key: `${item.kind}:${item.id}`,
         item,
-        page: item.page,
+        page: visiblePageOf ? visiblePageOf(item.page, item.insertedPageId) : item.page,
         resolved: item.reviewState === "resolved",
       }));
-  }, [annotations, viewerList]);
+  }, [annotations, viewerList, visiblePageOf]);
   const allItems = useMemo<PdfPaneItem[]>(() => {
     const merged = [...noteItems, ...readerItems];
     // Page order, the notes without a page first; stable within a page.
@@ -323,12 +336,13 @@ export function PdfPageWindowAnnotationsPanel({ panel }: { panel: PdfPageWindowA
   // the all / open / resolved filter.
   const items = useMemo(() => {
     if (viewMode === "contextual") {
-      return allItems.filter((item) => !item.resolved && (item.page === null || item.page === currentPage));
+      const shownPage = currentVisiblePage ?? currentPage;
+      return allItems.filter((item) => !item.resolved && (item.page === null || item.page === shownPage));
     }
     if (filter === "active") return allItems.filter((item) => !item.resolved);
     if (filter === "resolved") return allItems.filter((item) => item.resolved);
     return allItems;
-  }, [allItems, currentPage, filter, viewMode]);
+  }, [allItems, currentPage, currentVisiblePage, filter, viewMode]);
 
   // The draft card opens by itself while there is nothing to list (as the
   // Docs pane opens empty), and on New.
@@ -382,13 +396,7 @@ export function PdfPageWindowAnnotationsPanel({ panel }: { panel: PdfPageWindowA
     },
     [t],
   );
-  const reviewStateLabel = useCallback(
-    (state: PdfAnnotationReply["reviewState"]): string =>
-      state
-        ? t(`pdf.reviewState.${REVIEW_STATE_NAMES.includes(state.state) ? state.state : "Other"}` as Parameters<typeof t>[0], { state: state.state })
-        : "",
-    [t],
-  );
+  const reviewStateLabel = usePdfReviewStateLabel(t);
   const rootText = useCallback(
     (annotation: PdfAnnotation): string =>
       annotation.text ||
@@ -451,7 +459,7 @@ export function PdfPageWindowAnnotationsPanel({ panel }: { panel: PdfPageWindowA
       getText: (message) =>
         message.kind === "root" ? rootText(message.annotation)
           : message.kind === "reply"
-            ? [message.reply.reviewState ? reviewStateLabel(message.reply.reviewState) : "", message.reply.text].filter(Boolean).join("\n")
+            ? pdfReplyDisplayText(message.reply, reviewStateLabel)
           : message.kind === "review" ? reviewStateLabel(message.state.reviewState)
           : message.kind === "reader-root" ? readerRootText(message.item)
           : message.reply.fullText || message.reply.text,
@@ -473,9 +481,10 @@ export function PdfPageWindowAnnotationsPanel({ panel }: { panel: PdfPageWindowA
   const goToItem = useCallback(
     (entry: PdfPaneItem) => {
       if (entry.kind === "reader") viewerList?.onNavigate(entry.item);
-      else if (entry.page) requestPdfPageOpenAt(pageId, entry.page);
+      else if (entry.annotation.insertedPageId) openInsertedPage?.(entry.annotation.insertedPageId);
+      else if (typeof entry.annotation.page === "number") requestPdfPageOpenAt(pageId, entry.annotation.page);
     },
-    [pageId, viewerList],
+    [openInsertedPage, pageId, viewerList],
   );
   const selectItem = useCallback(
     (entry: PdfPaneItem) => {

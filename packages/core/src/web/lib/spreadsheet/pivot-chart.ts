@@ -378,6 +378,7 @@ const PIVOT_CHART_REFRESH_LOSSES = [
   "errorBarStyle",
   "errorBarsX",
   "errorBarXStyle",
+  "seriesErrorBars",
 ] as const;
 
 /**

@@ -20,6 +20,8 @@ import { warmNamedBodyBlock } from "@mrnote/core/web/lib/collab/page-causal-name
 import { keptBlockJson, runtimeDocumentJson } from "@mrnote/core/web/__cut__/m2c7d818b46.ts";
 import { warmPageBlockLayoutInput } from "@mrnote/core/web/components/console/editor/native-document/paged/pageBlockExtension.ts";
 import { PAGE_BLOCK_NODE } from "@mrnote/core/web/components/console/editor/native-document/paged/paginationProjectionKeys.ts";
+import { INITIAL_PAGINATION_SETTLING_ATTR } from "@mrnote/core/web/components/console/editor/native-document/paged/pageRebalanceExtension.ts";
+import { INITIAL_SETTLE_SHOWN_ATTR } from "@mrnote/core/web/components/console/editor/native-document/documentLayoutStatus.ts";
 import { contentLayoutInputKept, stableProjectionJson, withProjectionJsonMemo } from "@mrnote/core/web/components/console/editor/native-document/paged/projectionJsonMemo.ts";
 
 /** Quiet time after a change of the document before reading resumes. */
@@ -35,6 +37,14 @@ const AFTER_STROKE_MS = 300;
 const WRITING_STEP_MS = 16;
 
 export const saveTextWarmupKey = new PluginKey("saveTextWarmup");
+
+/** The page ledger holds the pages back for the document's first layout
+ * (INITIAL_PAGINATION_SETTLING_ATTR, not yet shown: INITIAL_SETTLE_SHOWN_ATTR). */
+function pagesHeldForFirstLayout(root: HTMLElement): boolean {
+  const win = root.ownerDocument.defaultView as (Window & { __docsFirstScreenTrimOff?: boolean }) | null;
+  if (win?.__docsFirstScreenTrimOff === true) return false;
+  return root.getAttribute(INITIAL_PAGINATION_SETTLING_ATTR) === "true" && root.getAttribute(INITIAL_SETTLE_SHOWN_ATTR) !== "true";
+}
 
 type WarmWindow = Window & { __mraiNoSaveWarm?: boolean; __mraiNoYEncodeWarm?: boolean; __mraiNoDraftWarm?: boolean };
 
@@ -159,6 +169,15 @@ class SaveTextWarmer {
   private run(): void {
     this.timer = null;
     if ((!warmupWanted() && !draftWarmupWanted() && !roomWarmupWanted()) || this.view.isDestroyed) return;
+    // Not while the document's first layout holds its pages back: nothing is
+    // saved before they show and take input, and each slice was a task of its
+    // own between the layout's turns (allometric.docx: 0.2-0.35 s of the
+    // first layout's main thread before it was editable). Once they show, as
+    // before. `window.__docsFirstScreenTrimOff = true`: as before.
+    if (pagesHeldForFirstLayout(this.view.dom)) {
+      this.schedule(QUIET_MS);
+      return;
+    }
     if (inkPointerArbiter.strokeRunning()) {
       this.schedule(PEN_RETRY_MS);
       return;

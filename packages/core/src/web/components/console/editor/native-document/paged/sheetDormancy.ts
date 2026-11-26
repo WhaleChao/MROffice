@@ -8,6 +8,7 @@ import { measureOutsideEditorObservation } from "../documentLayoutStatus";
 import { PAGE_OVERSIZE_ATTR } from "./paginationProjectionKeys";
 import { sheetsOf } from "./sheetMeasureMemo";
 import { msSinceTyping } from "../../../../../lib/typing-session";
+import { tabMeasureMutation } from "./tabMeasureMark";
 
 /** On a dormant sheet: its content is out of the render tree. */
 export const SHEET_DORMANT_ATTR = "data-page-dormant";
@@ -478,6 +479,7 @@ export function createSheetDormancy(view: EditorView, options: SheetDormancyOpti
     let structural = false;
     const woke: HTMLElement[] = [];
     for (const record of records) {
+      if (tabMeasureMutation(record)) continue;
       if (record.target === root) {
         if (record.type === "childList") structural = true;
         continue;

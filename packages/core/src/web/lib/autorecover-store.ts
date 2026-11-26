@@ -26,6 +26,7 @@
  *
  * Every operation is best-effort and never throws.
  */
+import { assertNoStringifiedPageKey, assertPageKey } from "./page-key-guard";
 import { rememberPageCost, rememberedPageCost } from "./remembered-page-costs";
 import { readCookie } from "./cookie";
 import { encodeJsonInSlices } from "./json-slices";
@@ -520,6 +521,7 @@ const closingEditors = new Map<string, Set<() => boolean>>();
 /** An editor of `pageId` in this tab, answering (synchronously) whether it
  * holds nothing the stored page lacks. Returns its release. */
 export function noteAutoRecoverClosingEditor(pageId: string, holdsNothing: () => boolean): () => void {
+  assertPageKey(pageId, "autorecover-store noteAutoRecoverClosingEditor");
   let editors = closingEditors.get(pageId);
   if (!editors) {
     editors = new Set();
@@ -546,6 +548,7 @@ export function noteAutoRecoverClosingEditor(pageId: string, holdsNothing: () =>
  * the tab's copy is that editor's too. False when nothing was dropped.
  */
 export function markAutoRecoverClosingHeld(pageId: string, editor?: () => boolean): boolean {
+  assertPageKey(pageId, "autorecover-store markAutoRecoverClosingHeld");
   if (typeof window === "undefined" || !pageId) return false;
   for (const other of closingEditors.get(pageId) ?? []) {
     if (other === editor) continue;
@@ -683,6 +686,7 @@ export function noteAutoRecoverChange(
 
   deferWhile?: () => boolean,
 ): void {
+  assertPageKey(pageId, "autorecover-store noteAutoRecoverChange");
   if (typeof window === "undefined" || !pageId) return;
   const principal = autoRecoverPrincipal();
   if (!principal) return;
@@ -882,6 +886,7 @@ export function noteAutoRecoverHandoverKeys(
   entry: { slot: string | null; place: unknown; keys: readonly unknown[];
     edits?: { readonly blocks: readonly unknown[]; readonly base: readonly unknown[] } | null },
 ): boolean {
+  assertNoStringifiedPageKey(pageId, "autorecover-store noteAutoRecoverHandoverKeys");
   if (typeof window === "undefined" || !pageId) return false;
   const principal = autoRecoverPrincipal();
   if (!principal) return false;
@@ -912,6 +917,7 @@ export function noteAutoRecoverHandoverKeys(
 /** Says a view of this tab holds the page's handover keys itself (so its
  * record is not read as left behind); the returned function lets go. */
 export function holdAutoRecoverHandoverKeys(pageId: string): () => void {
+  assertPageKey(pageId, "autorecover-store holdAutoRecoverHandoverKeys");
   handoverKeysHeld.set(pageId, (handoverKeysHeld.get(pageId) ?? 0) + 1);
   let held = true;
   return () => {
@@ -993,6 +999,7 @@ export function forgetAutoRecoverHandoverKeys(pageId: string, tab: string = TAB_
 
 /** Keep `entry` as a set-aside copy of the page; resolves to its slot. */
 export async function setAsideAutoRecoverCopy(pageId: string, entry: AutoRecoverEntry): Promise<string | null> {
+  assertPageKey(pageId, "autorecover-store setAsideAutoRecoverCopy");
   const principal = autoRecoverPrincipal();
   if (!principal || !pageId) return null;
   asideCounter += 1;

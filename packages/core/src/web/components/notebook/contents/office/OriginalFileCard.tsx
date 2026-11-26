@@ -79,6 +79,8 @@ export const OriginalFileCard = memo(function OriginalFileCard({
         ? "originalFile.reasonEncrypted"
       : preview.reason === "unreadable"
         ? "originalFile.reasonUnreadable"
+      : preview.reason === "conversion_incomplete"
+        ? "originalFile.reasonConversionIncomplete"
         : preview.reason === "workspace_full"
           ? "originalFile.reasonWorkspaceFull"
           : "originalFile.reasonTooLarge";

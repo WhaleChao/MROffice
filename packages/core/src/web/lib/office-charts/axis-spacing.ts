@@ -73,6 +73,19 @@ function faceBox(family: unknown): readonly [number, number, number] {
   return DEFAULT_FACE;
 }
 
+/**
+ * Where Windows Excel stands a legend entry's baseline under its key's
+ * middle, in em of the entry's face: (win ascent - 3 x win descent + 1) / 4
+ * (lookwin lw124/fb, R480-X04's chart: Calibri 0.287 at 9 and 14 pt, Arial
+ * 0.323, Times New Roman 0.319; this 0.286 / 0.317 / 0.311). An SVG's
+ * central baseline stood the words 0.35 em (the API's PDF) or the face's
+ * box middle (a browser's) under it: Calibri 0.57 pt low at 9 pt.
+ */
+export function officeLegendBaselineEm(family: unknown): number {
+  const [ascent, descent] = faceBox(family);
+  return (ascent - 3 * descent + 1) / 4;
+}
+
 /** A face's line (OS/2 win ascent + descent), in em: Calibri 1.221, Arial 1.117. */
 export function officeFaceLineEm(family: unknown): number {
   const [ascent, descent] = faceBox(family);
@@ -168,6 +181,22 @@ export function officeAxisTitleOffset(size: number, family: unknown, upright: bo
 export function officeAxisTitleInset(size: number, upright: boolean): number {
   return upright ? 0.7 * size + 12.9 : 0.6 * size + 10.8;
 }
+
+/**
+ * Windows Excel's turned title beside a worksheet chart's left value axis
+ * (lookwin lw124/fb: R480-X04's chart with its title at 8, 10, 14 and 20
+ * pt, Calibri): the edge of the title's line nearer the axis stands 0.11 of
+ * its size and 3.12 pt off the labels' outer edge (4.0 / 4.25 / 4.66 / 5.32
+ * pt), and the line's middle 0.61 of its size and 12.4 pt in from the
+ * chart's left edge (17.3 / 18.5 / 20.9 / 24.6 pt), in points. PowerPoint's
+ * centre-to-labels measure (`officeAxisTitleOffset`) stood the title's line
+ * half a line too far out: ECharts sets a turned name's line from its near
+ * edge, not its middle (R480-X04: 3.9 pt left of Excel's).
+ */
+export const workbookTurnedAxisTitle = {
+  gap: (size: number) => 0.11 * size + 3.12,
+  inset: (size: number) => 0.61 * size + 12.4,
+} as const;
 
 
 

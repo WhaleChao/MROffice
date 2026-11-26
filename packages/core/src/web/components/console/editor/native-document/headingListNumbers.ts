@@ -35,6 +35,8 @@ import { fragmentCarries } from "./paged/fragmentRoles";
 export interface HeadingListNumber {
   readonly label: string;
   readonly suffix: ListLevelSuffix;
+  /** The counts of levels 0..level the number is made of. */
+  readonly values?: readonly number[];
 }
 
 const definitions = new WeakMap<object, ListDefinition | null>();
@@ -76,7 +78,9 @@ function hardBreakPiece(source: object): { base: string; index: number; count: n
  * page 4; the page drew "1.3" alone at the foot of page 3 and "1.4" over
  * the words, and every later number of the chapter one too high).
  */
-export function createHeadingListNumberer(): (
+export function createHeadingListNumberer(
+  restarts?: Map<string, ListRestartSinceHeading>,
+): (
   attrs: Record<string, unknown> | null | undefined,
   empty?: boolean,
 ) => HeadingListNumber | null {
@@ -139,14 +143,85 @@ export function createHeadingListNumberer(): (
       restarted.add(restartKey);
       state.seedLevel(safeLevel, definition.levels[safeLevel].start);
     }
+    // A body list of this heading's chain that the page numbers from its own
+    // start since the heading before (Restart Numbering in the editor, after
+    // the import stated `itemsBefore`): Word's one count goes on from that
+    // list's numbers, so the heading takes the count the lists left (corpus
+    // R489-D55 E62: the headings after a level-0 restart kept the numbers
+    // read at import, 27 where Word draws 13).
+    const listChain = (numbering as Record<string, unknown>).listChain;
+    if (restarts && typeof listChain === "string") {
+      const since = restarts.get(listChain);
+      restarts.delete(listChain);
+      if (since && since.level <= safeLevel) state.seedLevel(since.level, since.value + since.count);
+    }
     const values = state.advance(definition, safeLevel);
     const label = listMarkerText(definition, safeLevel, values);
     if (!label) return null;
-    return { label, suffix: definition.levels[safeLevel]?.suffix ?? "tab" };
+    return { label, suffix: definition.levels[safeLevel]?.suffix ?? "tab", values };
   };
 }
 
+/** A chained body list that numbers from its own start (it continues no
+ *  list), with the items of its level the chain's later lists added to it,
+ *  since the last heading of the chain. */
+export interface ListRestartSinceHeading {
+  level: number;
+  value: number;
+  count: number;
+}
+
 const byDoc = new WeakMap<ProseMirrorNode, ReadonlyMap<number, HeadingListNumber>>();
+
+/** `globalThis.__docsHeadingsCountBodyRestartsOff = true`: headings keep the
+ *  counts the import stated whatever restarts the body lists since (A/B). */
+export function headingsCountBodyRestartsOff(): boolean {
+  return (globalThis as { __docsHeadingsCountBodyRestartsOff?: boolean }).__docsHeadingsCountBodyRestartsOff === true;
+}
+
+const LIST_CHAIN_ID = /^[A-Za-z0-9:_-]{1,64}$/;
+
+/** A top-level ordered list's part in the restarts headings count: a list
+ *  that starts its chain's count again opens one, a list continuing it (or a
+ *  page-split fragment of the last list) adds its items at that level. The
+ *  list's attributes and its items' (the editor's node or the page's JSON). */
+export function noteOrderedListRestart(
+  attrs: Record<string, unknown> | null | undefined,
+  itemAttrs: ReadonlyArray<Record<string, unknown> | null | undefined>,
+  restarts: Map<string, ListRestartSinceHeading>,
+  last: { chain: string | null },
+): void {
+  const items = itemAttrs.filter((item) => item?.pageSplitItemContinuation !== true).length;
+  if (!fragmentCarries("listLabel", attrs ?? undefined)) {
+    const open = last.chain ? restarts.get(last.chain) : undefined;
+    if (open) open.count += items;
+    return;
+  }
+  const rawChain = attrs?.listChain;
+  const chain = typeof rawChain === "string" && LIST_CHAIN_ID.test(rawChain) ? rawChain : null;
+  last.chain = chain;
+  if (!chain) return;
+  const rawLevel = attrs?.listLevel;
+  const level = typeof rawLevel === "number" && Number.isInteger(rawLevel) && rawLevel >= 0 && rawLevel <= 8 ? rawLevel : 0;
+  if (attrs?.listContinue === true) {
+    const open = restarts.get(chain);
+    if (open && open.level === level) open.count += items;
+    return;
+  }
+  const start = attrs?.start;
+  const value = typeof start === "number" && Number.isInteger(start) && start >= 0 ? start : 1;
+  restarts.set(chain, { level, value, count: items });
+}
+
+function noteOrderedList(
+  node: ProseMirrorNode,
+  restarts: Map<string, ListRestartSinceHeading>,
+  last: { chain: string | null },
+): void {
+  const itemAttrs: Record<string, unknown>[] = [];
+  node.forEach((item) => itemAttrs.push(item.attrs as Record<string, unknown>));
+  noteOrderedListRestart(node.attrs as Record<string, unknown>, itemAttrs, restarts, last);
+}
 
 /** Word's gallery name of a manual table of contents' content control. */
 export const MANUAL_TOC_GALLERY = "Table of Contents";
@@ -217,13 +292,24 @@ const HOLDS_LIST_NUMBERED = new SheetFact(
     (node.type.name === "blockContentControl" && node.attrs.docPartGallery === MANUAL_TOC_GALLERY),
 );
 
+/** Sheets that hold a heading, a manual table of contents or an ordered list. */
+const HOLDS_LIST_NUMBERED_OR_LIST = new SheetFact(
+  (node) =>
+    node.type.name === "heading" ||
+    node.type.name === "orderedList" ||
+    (node.type.name === "blockContentControl" && node.attrs.docPartGallery === MANUAL_TOC_GALLERY),
+);
+
 /** Every Word-numbered heading's number in `doc`, by the heading's position,
  *  and a manual table of contents' title's (manualTocTitleListNumbering). */
 export function headingListNumbers(doc: ProseMirrorNode): ReadonlyMap<number, HeadingListNumber> {
   const known = byDoc.get(doc);
   if (known) return known;
   const numbers = new Map<number, HeadingListNumber>();
-  const numberer = createHeadingListNumberer();
+  const countRestarts = !headingsCountBodyRestartsOff();
+  const restarts = new Map<string, ListRestartSinceHeading>();
+  const lastList = { chain: null as string | null };
+  const numberer = createHeadingListNumberer(countRestarts ? restarts : undefined);
   let titleNumbering: Record<string, unknown> | null | undefined;
   const titleSource = () => {
     if (titleNumbering === undefined) {
@@ -238,7 +324,14 @@ export function headingListNumbers(doc: ProseMirrorNode): ReadonlyMap<number, He
     }
     return titleNumbering ? { source: { listNumbering: titleNumbering } } : null;
   };
-  HOLDS_LIST_NUMBERED.descendants(doc, (node, pos) => {
+  (countRestarts ? HOLDS_LIST_NUMBERED_OR_LIST : HOLDS_LIST_NUMBERED).descendants(doc, (node, pos) => {
+    if (countRestarts && node.type.name === "orderedList") {
+      noteOrderedList(node, restarts, lastList);
+      return false;
+    }
+    // A list in another list's item numbers within it, as the table of
+    // contents' walk counts it; no heading stands in a list.
+    if (countRestarts && (node.type.name === "bulletList" || node.type.name === "taskList")) return false;
     if (node.type.name === "blockContentControl" && node.attrs.docPartGallery === MANUAL_TOC_GALLERY) {
       const title = node.firstChild;
       const attrs = title && isManualTocTitle(title.type.name, title.attrs) ? titleSource() : null;

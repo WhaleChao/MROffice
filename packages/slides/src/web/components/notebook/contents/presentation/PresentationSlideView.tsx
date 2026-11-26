@@ -53,6 +53,7 @@ import {
   effectRecipeKeyframeName,
   effectRecipeLetterStepMs,
   effectRecipeSettledStyle,
+  withRecipeTextColors,
 } from "@mrnote/core/web/lib/presentation-effect-recipes.ts";
 import { effectTextUnitStepMs } from "@mrnote/core/web/lib/presentation-anim-effect-settings.ts";
 import {
@@ -81,6 +82,7 @@ import {
   motionPathKeyframeCss,
   motionPathKeyframeName,
 } from "@mrnote/core/web/lib/presentation-motion-path.ts";
+import { nativeMotionPathKeyframes } from "@mrnote/core/web/lib/presentation-motion-path-native.ts";
 import { presentationBodyFontStyle, presentationHyperlinkStyle, resolveThemeAccentColors, type DeckTheme } from "@mrnote/core/web/lib/presentation-theme.ts";
 import { officeMasterStatesBackground } from "../../../../lib/presentation-office-master";
 import { officeLayoutHidesBackgroundGraphics } from "../../../../lib/presentation-office-master-structure";
@@ -107,8 +109,12 @@ import {
   animationEffectOptionKeyframeBody,
   PRESENTATION_TIMELINE_EFFECT_KEYFRAMES_CSS,
   settledEmphasisFrame,
+  growShrinkKeyframe,
+  flyOffSlideKeyframe,
   timelineAnimationKeyframeName,
   effectCssTiming,
+  smoothHandDrawnKeyframe,
+  stepSmoothShares,
   playTimingFunction,
   resolveEffectDimColor,
   PRESENTATION_AFTER_HIDE_KEYFRAME,
@@ -124,6 +130,11 @@ import { presentationSlideInk } from "../../../../lib/presentation/slide-ink";
 import { captureTransitionLeadMs } from "../../../../lib/presentation-export-video/capture-timing";
 import { getApiHttpBaseUrl } from "@mrnote/core/web/lib/env.ts";
 import { inlineEffectSoundUrl } from "../../../../lib/presentation-package-sounds";
+import {
+  newRandomEffectSeed,
+  resolveRandomEffectSteps,
+  slideRandomEffectSeed,
+} from "../../../../lib/presentation/random-effects";
 import { PresentationPageIdContext } from "./PresentationMediaContent";
 
 /** One media call of the steps, due in the playing group. */
@@ -166,6 +177,7 @@ export function PresentationSlideView({
   naturalSize = false,
   fitToParent = false,
   showAnimations = true,
+  randomEffectSeed: showRandomEffectSeed,
   slideNumber,
   entranceLeadMs,
   captureFrameMs,
@@ -252,6 +264,12 @@ export function PresentationSlideView({
   /** False projects final object states without playing object animations. */
   showAnimations?: boolean;
   /**
+   * The show's Random Effects seed (row 1041), set once when the show starts
+   * and shared with every window of it, so all play the same pick. Without
+   * one (a preview), each showing of the slide picks anew.
+   */
+  randomEffectSeed?: number;
+  /**
    * A pattern fill's bit, in CSS pixels on screen (lib/office-pattern-anchor):
    * 1 -- one screen point at any zoom, PowerPoint's window (the show, the
    * thumbnails); 4/3 -- one point of the page, PowerPoint's print.
@@ -310,6 +328,12 @@ export function PresentationSlideView({
   // wait for it to finish, as PowerPoint plays the transition first and the
   // slide's first automatic animation after it (PPT-B037).
   const [transitionLeadMs, setTransitionLeadMs] = useState(0);
+  // Random Effects (row 1041): each showing of the slide picks anew.
+  const [ownRandomEffectSeed] = useState(newRandomEffectSeed);
+  const randomEffectSeed =
+    showRandomEffectSeed !== undefined
+      ? slideRandomEffectSeed(showRandomEffectSeed, slide.id)
+      : ownRandomEffectSeed;
   const transitionEndsAtRef = useRef(0);
   /** On a recording's clock: the lead, and the builds the slide entered with. */
   const transitionCaptureLeadRef = useRef<{ lead: number; groups: number | undefined }>({ lead: 0, groups: undefined });
@@ -579,8 +603,12 @@ export function PresentationSlideView({
   }>(() => {
     const map = new Map<string, BlockPlayState>();
     const mediaCalls: SlideMediaCall[] = [];
-    // A step on a whole group plays on every member (row 1074).
-    const sequence = expandGroupTargetSteps(slide.animationSequence ?? [], slide.blocks);
+    // A step on a whole group plays on every member (row 1074); Random
+    // Effects plays the basic entrance this showing picked (row 1041).
+    const sequence = resolveRandomEffectSteps(
+      expandGroupTargetSteps(slide.animationSequence ?? [], slide.blocks),
+      randomEffectSeed,
+    );
     // A slide drawn still at a settled step (the slide a transition is leaving)
     // keeps what its build has brought in or taken away, with nothing playing.
     if (
@@ -727,6 +755,19 @@ export function PresentationSlideView({
       // An effect drawn from a recipe: its keyframe is built for this block's
       // place on the slide and injected with the motion-path keyframes.
       let recipeKeyframe: string | undefined;
+      // Grow/Shrink of its own Size and Direction (row 1094), or a Fly In
+      // from a whole slide away (row 1096): a keyframe built for it,
+      // injected the same way.
+      const growKeyframe =
+        state.animate && step.animation === "grow-shrink"
+          ? growShrinkKeyframe(step.effectSettings)
+          : state.animate
+            ? flyOffSlideKeyframe(step.animation, step.effectOption, step.effectSettings)
+            : null;
+      if (growKeyframe) {
+        keyframeByName.set(growKeyframe.name, growKeyframe.css);
+        recipeKeyframe = growKeyframe.name;
+      }
       let stepLetterPlay: LetterPlay | undefined;
       // Effect Options: how the occurrence's keyframe runs (Repeat,
       // Auto-reverse, Smooth start / end, Rewind), and when After animation
@@ -750,7 +791,7 @@ export function PresentationSlideView({
         const baseRecipe = effectRecipe(step.animation, step.effectOption);
         // Smooth start / end changed on a recipe effect: its samples bake the
         // easing in, so they are drawn again with the chosen shares.
-        const recipe =
+        const easedRecipe =
           baseRecipe && settings && (settings.accel !== undefined || settings.decel !== undefined)
             ? {
                 ...baseRecipe,
@@ -758,6 +799,11 @@ export function PresentationSlideView({
                 dc: (settings.decel ?? Math.round((baseRecipe.dc ?? 0) * 100_000)) / 100_000,
               }
             : baseRecipe;
+        // A text colour track's own two colours (row 1308).
+        const recipe =
+          easedRecipe && settings?.typewriterTextColors
+            ? withRecipeTextColors(easedRecipe, settings.typewriterTextColors)
+            : easedRecipe;
         const recipeClass = effectRecipeClass(step.animation);
         if (recipe && recipeClass) {
           if (stepTiming?.timingFunction) {
@@ -775,6 +821,12 @@ export function PresentationSlideView({
             (letters ? "-letter" : "") +
             (recipe !== baseRecipe
               ? `-s${Math.round((recipe.ac ?? 0) * 100_000)}-${Math.round((recipe.dc ?? 0) * 100_000)}`
+              : "") +
+            (settings?.typewriterTextColors
+              ? `-c${settings.typewriterTextColors
+                  .map((color) => `${color.kind}${color.val}${(color.mods ?? []).flat().join("")}`)
+                  .join("-")
+                  .replace(/[^A-Za-z0-9-]/g, "")}`
               : "");
           if (!keyframeByName.has(keyframe)) {
             keyframeByName.set(
@@ -789,14 +841,18 @@ export function PresentationSlideView({
               delayMs: state.delayMs,
               stepMs: textUnit !== undefined ? (textUnitStepMs ?? 0) : (letterStepMs ?? 0),
               hiddenUntilStart: recipeClass === "entr",
-              ...(textUnit ? { unit: textUnit } : {}),
+              // An effect that iterates by itself (Color Typewriter) steps
+              // through the letters PowerPoint counts: every character that
+              
+              unit: textUnit ?? (recipe.it?.type === "wd" ? "word" : "letter"),
               ...(stepTiming ? { timing: stepTiming } : {}),
             };
           } else recipeKeyframe = keyframe;
         } else if (textUnit) {
           // A hand-drawn effect By word / By letter: each unit runs the
           // effect's own keyframe.
-          const keyframe = timelineAnimationKeyframeName(step.animation, step.effectOption);
+          const keyframe =
+            growKeyframe?.name ?? timelineAnimationKeyframeName(step.animation, step.effectOption);
           if (keyframe) {
             stepLetterPlay = {
               keyframe,
@@ -808,6 +864,23 @@ export function PresentationSlideView({
               timingFunction: stepTiming?.timingFunction ?? playTimingFunction(undefined, step.animation, step.effectOption),
               ...(stepTiming ? { timing: stepTiming } : {}),
             };
+          }
+        }
+        // A hand-drawn keyframe with stops between its ends (Blinds,
+        // Checkerboard, Random Bars, Split ...): Smooth start / end eased
+        // between its stops would restart at each of them, so the step plays
+        // a copy with the easing of the whole effect baked in, linearly.
+        if (!recipeKeyframe && !stepLetterPlay) {
+          const name = timelineAnimationKeyframeName(step.animation, step.effectOption);
+          const smooth = stepSmoothShares(step);
+          const eased = name ? smoothHandDrawnKeyframe(name, smooth.accel, smooth.decel) : null;
+          if (eased) {
+            keyframeByName.set(eased.name, eased.css);
+            recipeKeyframe = eased.name;
+            if (stepTiming?.timingFunction) {
+              const { timingFunction: _baked, ...rest } = stepTiming;
+              stepTiming = rest;
+            }
           }
         }
         const category = presentationAnimationEffect(step.animation)?.category;
@@ -865,22 +938,48 @@ export function PresentationSlideView({
               color: recipeLayer?.holds ? recipeLayerColor : undefined,
             }
           : null;
-      if (state.animate && state.motionPath) {
+      // A path as PowerPoint wrote it (row 1078) plays from its own
+      // coordinates, as PowerPoint plays it: from its start, which need not
+      // be the object's place, curves as curves (motion-path-roundtrip);
+      // one played backwards (Reverse Path Direction, row 1314) from its end.
+      // Smooth start / end are baked into a path's frames, which run
+      // linearly: eased between frames, the object would slow down at each
+      // of them and cross the path at an even pace.
+      const motionSmooth = stepSmoothShares(step);
+      const nativeMotion =
+        state.motionPath && step.motionPathNative
+          ? nativeMotionPathKeyframes(
+              step.motionPathNative.path,
+              step.motionPathNative.reversed === true,
+              motionSmooth.accel,
+              motionSmooth.decel,
+            )
+          : null;
+      if (state.animate && nativeMotion) {
+        motionKeyframe = nativeMotion.name;
+        keyframeByName.set(nativeMotion.name, nativeMotion.css);
+      } else if (state.animate && state.motionPath) {
         const css = motionPathKeyframeCss(
           state.motionPath,
           motionWidthEmu,
           motionHeightEmu,
+          motionSmooth.accel,
+          motionSmooth.decel,
         );
         if (css) {
           motionKeyframe = motionPathKeyframeName(
             state.motionPath,
             motionWidthEmu,
             motionHeightEmu,
+            motionSmooth.accel,
+            motionSmooth.decel,
           );
           keyframeByName.set(motionKeyframe, css);
         }
       }
-      if (state.motionPathSettled && state.motionPath) {
+      if (state.motionPathSettled && nativeMotion) {
+        settledMotionTranslate = nativeMotion.endTranslate;
+      } else if (state.motionPathSettled && state.motionPath) {
         settledMotionTranslate =
           motionPathEndTranslate(
             state.motionPath,
@@ -1013,7 +1112,7 @@ export function PresentationSlideView({
         // Grow grows the already grown object).
         ...(() => {
           const settled = state.emphasisSettled
-            ? settledEmphasisFrame(step.animation, step.effectOption)
+            ? settledEmphasisFrame(step.animation, step.effectOption, step.effectSettings)
             : null;
           return {
             settledTransform:
@@ -1066,6 +1165,7 @@ export function PresentationSlideView({
     defaultAnimationFillColor,
     slideTheme,
     background,
+    randomEffectSeed,
   ]);
   // Media calls of the steps (Play / Pause on a clip): each call once, at its
   // start in the group that plays it; one not yet due when the group changes

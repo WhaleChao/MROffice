@@ -26,7 +26,7 @@ import {
 
 // Moved to lib/spreadsheet/schema-set-aside (shared with the command layer).
 export { restoreSetAsideValues, type SpreadsheetSetAsideValue };
-import { normalizeSpreadsheetImportDimensions } from "../../../../lib/spreadsheet/import-normalization";
+import { importRowHeightsShownAs, normalizeSpreadsheetImportDimensions } from "../../../../lib/spreadsheet/import-normalization";
 import { normalizeSpreadsheetObjectIdentities } from "../../../../lib/spreadsheet/object-identities";
 import { normalizeSpreadsheetChartMapRegionCodes } from "@mrnote/core/web/lib/spreadsheet/chart-v2-binding.ts";
 import { normalizeSpreadsheetChartBinding, normalizeSpreadsheetChartV2 } from "@mrnote/core/web/lib/spreadsheet/chart-v2-model.ts";
@@ -57,7 +57,7 @@ import { normalizeConditionFilter, type ConditionFilter } from "@mrnote/core/web
 import { normalizeChartNativeLook } from "@mrnote/core/web/lib/office-chart-native-look.ts";
 import { normalizePresentationChartSeriesStyles, normalizePresentationChartSliceStyles } from "@mrnote/core/web/lib/presentation-chart-area-style.ts";
 import { normalizeCharts, normalizeChartSeriesGradientStyles, normalizeChartValueAxisNumberFormat, normalizeSpreadsheetChartColorPalette, normalizeSpreadsheetChartStyle } from "@mrnote/core/web/lib/spreadsheet/chart.ts";
-import { rememberLoadedSpelling } from "../../../../lib/spreadsheet/loaded-spelling";
+import { rememberLoadedSpelling } from "@mrnote/core/web/lib/spreadsheet/loaded-spelling.ts";
 import { normalizePivotConfig, pivotWithSharedSnapshot, unifyPivotCacheSnapshots, normalizePivotRange, type PivotConfig } from "@mrnote/core/web/lib/spreadsheet/pivot.ts";
 import { newSheetPrintSettings, normalizePrintSettings, parseA1Range } from "@mrnote/core/web/lib/spreadsheet/print-settings.ts";
 import { isSpreadsheetInkShapeStyle, normalizeShapeStyle, repairShapeObjectAnchor } from "@mrnote/core/web/lib/spreadsheet/shapes.ts";
@@ -530,6 +530,13 @@ export interface NormalizeSheetsOutcome {
    * something there (``restoreSetAsideValues``), so nothing stored is lost.
    */
   setAside?: SpreadsheetSetAsideValue[];
+  /**
+   * Values the load reads and shows in another form, kept as stored: each
+   * save puts the stored value back where the save still holds the shown one
+   * (``restoreSetAsideValues``, ``shownAs``). Not values left out: the
+   * workbook shows them, so they are no read degradation to report.
+   */
+  keptAsStored?: SpreadsheetSetAsideValue[];
 }
 
 export function normalizeSheets(
@@ -590,6 +597,22 @@ export function normalizeSheets(
     if (outcome && setAside) {
       outcome.schemaRejected = false;
       outcome.setAside = setAside;
+    }
+  }
+  // A row height shown otherwise than stored (an older page's 17 px row with
+  // no native pair, clamped to the grid's 18 px) is kept as stored, so a save
+  // of anything else in the window leaves the row as the file had it
+  
+  if (outcome && parsed.success && content) {
+    const shownAs = importRowHeightsShownAs(content);
+    const kept = shownAs.length
+      ? anchorSetAsideValues(
+        content,
+        shownAs.map(({ sheetIndex, row, stored }) => ({ path: ["sheets", sheetIndex, "rowHeights", row], value: stored })),
+      )
+      : null;
+    if (kept?.length === shownAs.length) {
+      outcome.keptAsStored = kept.map((entry, index) => ({ ...entry, shownAs: shownAs[index]!.shown }));
     }
   }
   const sheets = parsed.success ? parsed.data.sheets : [];
@@ -812,8 +835,13 @@ export function normalizeSheets(
     const manuallyHiddenRows = serializeManualHidden(
       normalizeManualHidden(sheet.manuallyHiddenRows, rowCount),
     );
+    // Hidden columns are kept to XFD, past the sheet's used columns too: the
+    // file hides them whole (`<col min="15" max="16384" hidden="1">`, read as
+    // hiddenColumnRuns), and Excel's Tab, Enter and arrows never stop in them
+    
+    // cut at the used columns, Tab went on to O3).
     const manuallyHiddenCols = serializeManualHidden(
-      normalizeManualHidden(sheet.manuallyHiddenCols, columnCount),
+      normalizeManualHidden(sheet.manuallyHiddenCols, MAX_SHEET_COLS),
     );
     // Reading 998: the hidden rows the file writes 0 points high, kept only
     // while they are hidden (a subset of manuallyHiddenRows).

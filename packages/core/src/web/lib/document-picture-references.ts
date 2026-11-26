@@ -20,6 +20,7 @@
  * drawn from the document opened last.
  */
 
+import { assertPageKey } from "./page-key-guard";
 import { pagePictureUrl, pictureObjectTokenSha } from "./page-picture-objects";
 import { activeMountWorkspaceId, mountWorkspaceFor } from "./workspace-mounts";
 
@@ -67,6 +68,7 @@ export function registerDocumentPictureReferences(
   content: unknown,
   notebookId?: string | null,
 ): void {
+  assertPageKey(pageId, "document-picture-references registerDocumentPictureReferences");
   if (!pageId) return;
   const workspaceId =
     (notebookId ? mountWorkspaceFor(notebookId) : null) ?? activeMountWorkspaceId();

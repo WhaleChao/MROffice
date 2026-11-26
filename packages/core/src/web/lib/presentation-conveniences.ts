@@ -35,6 +35,7 @@ import {
   normalizeParagraphs,
   paragraphsFromText,
 } from "./presentation-paragraphs";
+import { keptObjectCopySource } from "./presentation-object-degraded";
 
 /**
  * Structural subset of the editor's richer `SlideModel` needed to duplicate a
@@ -418,6 +419,13 @@ export function duplicatePresentationSlideAt<
     const remappedId = idMap.get(sourceBlock.id);
     if (!remappedId || !setCloneField(next, "id", remappedId)) return null;
     delete next.source;
+    // An object the import kept read-only (TRIAGE 152) stays kept in the copy:
+    // its record and the package object it copies (`keptFrom`), whose own XML
+    // the save takes for it -- never the page's drawing of it.
+    const kept = keptObjectCopySource(sourceBlock, source as unknown as { source?: unknown });
+    if (kept) {
+      if (!setCloneField(next, "source", kept) || !setCloneField(next, "locked", true)) return null;
+    }
     // The copy is the same object for Morph (PowerPoint matches the objects of
     // a duplicated slide): name the original it came from. A native package
     // slide is copied by the package writer, which keeps its own identity.

@@ -55,6 +55,9 @@ export interface PdfInkStroke {
   width: number;
   /** Flattened [x0,y0,x1,y1,…] page-relative fractions (0..1). */
   points: number[];
+  /** The page inserted in MR Office it is drawn on (`page` is then the page
+   * before it, 0-based): lib/pdf/inserted-page-identity. */
+  insertedPageId?: string;
   /**
    * "highlighter" renders (and exports) translucent; absent/"pen" is a plain
    * opaque pen. Optional so legacy persisted strokes stay valid unchanged.

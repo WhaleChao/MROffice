@@ -13,6 +13,7 @@ import {
   documentNumberingTabGeometry,
 } from "./documentNumberingLayout";
 import { listContinuationTypography } from "./listContinuationTypography";
+import { sourceContinuationListItems } from "./sourceHardBreakTail";
 import { wordNumberingLabelAdvancePx } from "./wordFontMetrics";
 import {
   paginationTransformScale,
@@ -178,7 +179,9 @@ export function documentNumberingMarker(input: {
     paragraphFrom = contentFrom - 1;
   const tail =
     item.attrs.pageSplitItemContinuation === true ||
-    !fragmentCarries("listLabel", block.attrs);
+    !fragmentCarries("listLabel", block.attrs) ||
+    // The rest of a split source paragraph: no number of its own.
+    sourceContinuationListItems(view.state.doc).has(itemFrom);
   if (tail) {
     if (!inherited) return skip();
     const paragraph = {

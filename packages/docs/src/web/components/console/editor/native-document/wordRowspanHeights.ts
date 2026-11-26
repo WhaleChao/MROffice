@@ -7,6 +7,7 @@ import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import type { EditorView } from "@tiptap/pm/view";
 
 import { loadedFontsKey } from "@mrnote/core/web/components/console/editor/native-document/loadedFontsKey.ts";
+import { tabMeasureMutation } from "@mrnote/core/web/components/console/editor/native-document/paged/tabMeasureMark.ts";
 
 
 
@@ -106,6 +107,7 @@ function stateOf(view: EditorView): RowspanState {
 
 function markDirty(state: RowspanState, records: MutationRecord[]): void {
   for (const record of records) {
+    if (tabMeasureMutation(record)) continue;
     // A table's own width and its columns are in its signature; other
     // projections restate them every pass.
     if (record.type === "attributes" && record.target instanceof Element && (record.target.localName === "table" || record.target.localName === "col")) continue;

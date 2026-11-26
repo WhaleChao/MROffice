@@ -278,6 +278,77 @@ export interface PresentationParagraphRowPlan {
   readonly endsInLineBreak?: true;
 }
 
+/**
+ * The face a row's marker is painted in, and the glyph it paints: the
+ * package's own symbol glyph in its `a:buFont` where the page can draw it
+ * (`nativeBulletGlyph`), else its stand-in; a bullet its face lacks in the
+ * face PowerPoint for Windows falls back to (`powerPointBulletFace`), with its
+ * advance there. `baseFamily` is the marker's CSS family before (its first
+ * run's: `a:buFontTx`), `firstRunFamily` that run's own face. Shared by a
+ * text body's rows (`planPresentationParagraphRows`) and a table cell's
+ * paragraphs in the text engine (readings row 1036).
+ */
+export function presentationNativeMarkerFace(
+  nativeMarker: NativeBulletMarker | null | undefined,
+  baseFamily: CSSProperties["fontFamily"],
+  firstRunFamily: unknown,
+  fontAliases: PresentationFontAliases,
+): {
+  glyph: ReturnType<typeof nativeBulletGlyph>;
+  fontFamily: CSSProperties["fontFamily"];
+  fallback?: PresentationParagraphRowPlan["markerFallback"];
+} {
+  const nativeGlyph = nativeMarker ? nativeBulletGlyph(nativeMarker, symbolFontIsAvailable) : undefined;
+  let fontFamily = baseFamily;
+  if (nativeGlyph?.fontFamily !== undefined) {
+    // Quoted: unquoted, "Wingdings 3" is not a family name in CSS (a
+    // word may not start with a digit), the declaration is dropped and
+    // the glyph drew in the text's face as a notdef box.
+    fontFamily = `"${nativeGlyph.fontFamily.replace(/["\\]/g, "")}"`;
+  }
+  // A geometric-shape or arrow marker its face has no glyph for is drawn
+  // from Times New Roman, as PowerPoint draws it (`MRAI Office Bullet`,
+  // globals.css), not from the browser's own last resort.
+  if (fontFamily !== undefined) {
+    fontFamily = `${fontFamily}, "MRAI Office Bullet"`;
+  }
+  // A bullet character its face lacks, or of a face Windows lacks, is drawn
+  // in the face PowerPoint for Windows draws it in, and laid out at that
+  // face's advance (`powerPointBulletFace`: Times New Roman behind a serif
+  // face, Arial behind a sans one, then Cambria Math, then Segoe UI Symbol;
+  
+  // embedded Bree Serif, which has none, is Times New Roman's 7.25 pt dot in
+  // PowerPoint's PDF; the stack after the face drew it in the script
+  // fallback's symbols face, twice that, ahead of "MRAI Office Bullet".
+  let markerFallback: PresentationParagraphRowPlan["markerFallback"];
+  const bulletChar = nativeMarker?.char !== undefined && !nativeMarker.picture && nativeGlyph ? nativeGlyph.text : undefined;
+  const bulletTypeface = nativeMarker?.typeface ?? firstRunFamily;
+  if (bulletChar !== undefined && typeof bulletTypeface === "string" && bulletTypeface.trim()) {
+    const ownName = bulletTypeface.trim().replace(/^["']|["']$/g, "").trim();
+    const alias = Object.hasOwn(fontAliases, ownName.toLowerCase()) ? fontAliases[ownName.toLowerCase()] : undefined;
+    const panoseSerifStyle = alias !== undefined ? embeddedPanoseSerifStyle(alias) : undefined;
+    const fallback = powerPointBulletFace(ownName, bulletChar, alias !== undefined
+      ? { embedded: true, ...(panoseSerifStyle !== undefined ? { panoseSerifStyle } : {}) }
+      : {});
+    const faceStack = fallback ? presentationFontFamilyWithAssets(fallback.face, fontAliases) : undefined;
+    // Where the reader lacks the fallback face, its stand-in at Windows'
+    // ink box (TRIAGE 99): a family of its own, declared only once the page
+    // draws this character and only on a machine without the face, named
+    // ahead of the face -- rendering only, never in the page's data.
+    const drawn = fallback?.drawnBy ? presentationBulletDrawnFamily(fallback.face, bulletChar, fallback.drawnBy) : undefined;
+    const fallbackStack = faceStack && drawn ? `"${drawn}", ${faceStack}` : faceStack;
+    if (fallback && fallbackStack) {
+      const ownStack = fallback.ownFirst && alias ? (alias.startsWith('"') ? alias : `"${alias}"`) : undefined;
+      fontFamily = ownStack ? `${ownStack}, ${fallbackStack}` : fallbackStack;
+      markerFallback = {
+        ...(fallback.advanceEm !== undefined ? { advanceEm: fallback.advanceEm } : {}),
+        ...(ownStack ? { ownStack } : {}),
+      };
+    }
+  }
+  return { glyph: nativeGlyph, fontFamily, ...(markerFallback ? { fallback: markerFallback } : {}) };
+}
+
 /** Plan every row of a body. */
 export function planPresentationParagraphRows({
   paragraphs,
@@ -363,55 +434,10 @@ export function planPresentationParagraphRows({
       (nativeBullet?.length === paragraphs.length
         ? nativeBullet[index]
         : undefined);
-    const nativeGlyph = nativeMarker
-      ? nativeBulletGlyph(nativeMarker, symbolFontIsAvailable)
-      : undefined;
-    if (nativeGlyph?.fontFamily !== undefined) {
-      // Quoted: unquoted, "Wingdings 3" is not a family name in CSS (a
-      // word may not start with a digit), the declaration is dropped and
-      // the glyph drew in the text's face as a notdef box.
-      markerCss.fontFamily = `"${nativeGlyph.fontFamily.replace(/["\\]/g, "")}"`;
-    }
-    // A geometric-shape or arrow marker its face has no glyph for is drawn
-    // from Times New Roman, as PowerPoint draws it (`MRAI Office Bullet`,
-    // globals.css), not from the browser's own last resort.
-    if (markerCss.fontFamily !== undefined) {
-      markerCss.fontFamily = `${markerCss.fontFamily}, "MRAI Office Bullet"`;
-    }
-    // A bullet character its face lacks, or of a face Windows lacks, is drawn
-    // in the face PowerPoint for Windows draws it in, and laid out at that
-    // face's advance (`powerPointBulletFace`: Times New Roman behind a serif
-    // face, Arial behind a sans one, then Cambria Math, then Segoe UI Symbol;
-    
-    // embedded Bree Serif, which has none, is Times New Roman's 7.25 pt dot in
-    // PowerPoint's PDF; the stack after the face drew it in the script
-    // fallback's symbols face, twice that, ahead of "MRAI Office Bullet".
-    let markerFallback: PresentationParagraphRowPlan["markerFallback"];
-    const bulletChar = nativeMarker?.char !== undefined && !nativeMarker.picture && nativeGlyph ? nativeGlyph.text : undefined;
-    const bulletTypeface = nativeMarker?.typeface ?? firstRun?.style?.fontFamily;
-    if (bulletChar !== undefined && typeof bulletTypeface === "string" && bulletTypeface.trim()) {
-      const ownName = bulletTypeface.trim().replace(/^["']|["']$/g, "").trim();
-      const alias = Object.hasOwn(fontAliases, ownName.toLowerCase()) ? fontAliases[ownName.toLowerCase()] : undefined;
-      const panoseSerifStyle = alias !== undefined ? embeddedPanoseSerifStyle(alias) : undefined;
-      const fallback = powerPointBulletFace(ownName, bulletChar, alias !== undefined
-        ? { embedded: true, ...(panoseSerifStyle !== undefined ? { panoseSerifStyle } : {}) }
-        : {});
-      const faceStack = fallback ? presentationFontFamilyWithAssets(fallback.face, fontAliases) : undefined;
-      // Where the reader lacks the fallback face, its stand-in at Windows'
-      // ink box (TRIAGE 99): a family of its own, declared only once the page
-      // draws this character and only on a machine without the face, named
-      // ahead of the face -- rendering only, never in the page's data.
-      const drawn = fallback?.drawnBy ? presentationBulletDrawnFamily(fallback.face, bulletChar, fallback.drawnBy) : undefined;
-      const fallbackStack = faceStack && drawn ? `"${drawn}", ${faceStack}` : faceStack;
-      if (fallback && fallbackStack) {
-        const ownStack = fallback.ownFirst && alias ? (alias.startsWith('"') ? alias : `"${alias}"`) : undefined;
-        markerCss.fontFamily = ownStack ? `${ownStack}, ${fallbackStack}` : fallbackStack;
-        markerFallback = {
-          ...(fallback.advanceEm !== undefined ? { advanceEm: fallback.advanceEm } : {}),
-          ...(ownStack ? { ownStack } : {}),
-        };
-      }
-    }
+    const markerFace = presentationNativeMarkerFace(nativeMarker, markerCss.fontFamily, firstRun?.style?.fontFamily, fontAliases);
+    const nativeGlyph = markerFace.glyph;
+    markerCss.fontFamily = markerFace.fontFamily;
+    const markerFallback = markerFace.fallback;
     if (nativeMarker?.color !== undefined && colorOverride === undefined) {
       markerCss.color = nativeMarker.color;
     }

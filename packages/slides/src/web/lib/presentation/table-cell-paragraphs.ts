@@ -9,7 +9,11 @@ import {
   officeTextLayoutFollowingText,
   officeTextLayoutLines,
   officeTextLineIndentCss,
+  type OfficeTextLine,
+  type OfficeTextParagraph,
 } from "@mrnote/core/web/lib/office-text-layout.ts";
+import { POWERPOINT_AUTONUM_BY_NUMBER_FORMAT } from "@mrnote/core/web/lib/office-list-catalog.ts";
+import { nativeAutoNumberLabel } from "@mrnote/core/web/lib/office-paragraph-render.ts";
 import { ptToPx } from "@mrnote/core/web/lib/office-units.ts";
 import { exactLineSpacingCss } from "@mrnote/core/web/lib/presentation-line-spacing.ts";
 import type { RunStyle } from "@mrnote/core/web/lib/presentation-runs.ts";
@@ -133,7 +137,9 @@ export function presentationTableCellParagraphSpacing(
   text: string,
   /** Paragraph margins and first-line indents taken too (else they are the browser's to draw). */
   withIndents = false,
-): { spaceBeforePt: number; spaceAfterPt: number; marginLeftPt: number; marginRightPt?: number; indentPt: number; lineSpacing?: number }[] | "drawn" | null {
+  /** Bullets and numbers taken too (readings row 1036), else a marked paragraph is "drawn". */
+  withMarkers = false,
+): { spaceBeforePt: number; spaceAfterPt: number; marginLeftPt: number; marginRightPt?: number; indentPt: number; lineSpacing?: number; marker?: CellParagraphMarker }[] | "drawn" | null {
   const indents = presentationTableCellParagraphIndents(cell, text);
   if (indents) {
     // Readings row 1028: the indents the cell states (the text layout is never
@@ -150,18 +156,76 @@ export function presentationTableCellParagraphSpacing(
   const layout = normalizeOfficeTextLayout(cell.textLayout);
   if (!layout) return null;
   const readWith = textOfRuns(cell.nativeText) ?? (typeof cell.text === "string" ? cell.text : text);
-  const lines = officeTextLayoutLines(text, officeTextLayoutFollowingText(layout, readWith, text));
+  const following = officeTextLayoutFollowingText(layout, readWith, text);
+  const lines = officeTextLayoutLines(text, following);
   // Exactly-spaced or Right-to-Left paragraphs (readings rows 831 / 832) are
   // the browser's to draw too.
-  if (lines.some((line) => line.marker !== null || line.lineSpacingPoints !== undefined || line.dir === "rtl" || (!withIndents && (line.marginPx || line.indentPx)))) return "drawn";
-  if (!lines.some((line) => line.spaceBeforePx || line.spaceAfterPx || line.lineSpacing !== undefined || line.marginPx || line.indentPx)) return null;
-  return lines.map((line) => ({
-    spaceBeforePt: (line.spaceBeforePx ?? 0) * 0.75,
-    spaceAfterPt: (line.spaceAfterPx ?? 0) * 0.75,
-    marginLeftPt: (line.marginPx ?? 0) * 0.75,
-    indentPt: (line.indentPx ?? 0) * 0.75,
-    ...(line.lineSpacing !== undefined ? { lineSpacing: line.lineSpacing } : {}),
-  }));
+  if (lines.some((line) => (line.marker !== null && !withMarkers) || line.lineSpacingPoints !== undefined || line.dir === "rtl" || (!withIndents && (line.marginPx || line.indentPx)))) return "drawn";
+  const rows = following?.paragraphs;
+  const markers = lines.map((line, index) => (line.marker !== null ? cellParagraphMarker(line, rows?.[index]) : undefined));
+  // A marker the cell's paragraph names but this reader cannot spell as
+  // PowerPoint does (a numbering scheme outside the catalogue, a bullet
+  // stating no character, a picture): the browser's, never a guess.
+  if (markers.some((marker) => marker === null)) return "drawn";
+  if (!lines.some((line, index) => line.spaceBeforePx || line.spaceAfterPx || line.lineSpacing !== undefined || line.marginPx || line.indentPx || markers[index])) return null;
+  return lines.map((line, index) => {
+    const marker = markers[index];
+    return {
+      spaceBeforePt: (line.spaceBeforePx ?? 0) * 0.75,
+      spaceAfterPt: (line.spaceAfterPx ?? 0) * 0.75,
+      marginLeftPt: (line.marginPx ?? 0) * 0.75,
+      indentPt: (line.indentPx ?? 0) * 0.75,
+      ...(line.lineSpacing !== undefined ? { lineSpacing: line.lineSpacing } : {}),
+      ...(marker ? { marker } : {}),
+    };
+  });
+}
+
+/**
+ * A cell paragraph's bullet or number as the text engine draws it (readings
+ * row 1036): its characters (`officeTextLayoutLines`: the package's
+ * `a:buChar`, else the numbering its `a:buAutoNum` counts to), the bullet's
+ * own `a:buFont` and character where it states one, and `a:buClr` /
+ * `a:buSzPct` / `a:buSzPts`. A marker stating none of those takes its first
+ * run's (`a:buFontTx`, `a:buClrTx`, `a:buSzTx`), as in a text box.
+ */
+export interface CellParagraphMarker {
+  readonly text: string;
+  /** `a:buChar@char` and `a:buFont@typeface`, as the package states them. */
+  readonly bullet?: { readonly char: string; readonly typeface?: string };
+  readonly color?: string;
+  /** `a:buSzPct`: a multiple of the first run's size. */
+  readonly scale?: number;
+  /** `a:buSzPts`, points: not scaled by autofit. */
+  readonly sizePt?: number;
+}
+
+/** A line's marker for the engine, or null when it cannot be spelled as PowerPoint does (see the caller). */
+function cellParagraphMarker(line: OfficeTextLine, row: OfficeTextParagraph | undefined): CellParagraphMarker | null {
+  if (!row || line.marker === null) return null;
+  const native = row.nativeBullet;
+  if (native?.picture !== undefined) return null;
+  let bullet: CellParagraphMarker["bullet"];
+  if (row.bullet === "number") {
+    // The package's scheme where the catalogue spells it (`a:buAutoNum@type`),
+    // else a gallery format the catalogue maps to one; a numbered paragraph
+    // stating neither is numbered by nothing PowerPoint wrote.
+    const spelled =
+      (native?.autoNum !== undefined && nativeAutoNumberLabel(native.autoNum, 1) !== undefined) ||
+      (native?.autoNum === undefined && row.numberFormat !== undefined && Object.hasOwn(POWERPOINT_AUTONUM_BY_NUMBER_FORMAT, row.numberFormat));
+    if (!spelled) return null;
+  } else if (row.bullet === "bullet") {
+    const char = native?.char ?? row.bulletChar;
+    if (char === undefined) return null;
+    bullet = native?.char !== undefined ? { char: native.char, ...(native.typeface !== undefined ? { typeface: native.typeface } : {}) } : { char };
+  } else return null;
+  return {
+    text: line.marker,
+    ...(bullet ? { bullet } : {}),
+    ...(line.markerColor !== undefined ? { color: line.markerColor } : {}),
+    ...(line.markerScale !== undefined ? { scale: line.markerScale } : {}),
+    ...(line.markerSizePt !== undefined ? { sizePt: line.markerSizePt } : {}),
+  };
 }
 
 

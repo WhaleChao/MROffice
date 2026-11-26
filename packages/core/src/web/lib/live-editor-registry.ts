@@ -16,6 +16,7 @@
  * own beyond the handle, and an unmounted editor is forgotten.
  */
 
+import { assertNoStringifiedPageKey } from "./page-key-guard";
 import type { Editor } from "@tiptap/core";
 
 export interface LiveDocumentEditor {
@@ -227,6 +228,7 @@ export function onLiveEditorsChange(listener: () => void): () => void {
 /** Register ``handle`` for ``pageId`` while the editor is mounted; returns
  * the unregister. The newest registration of a page answers first. */
 export function registerLiveEditor(pageId: string, handle: LiveEditorHandle): () => void {
+  assertNoStringifiedPageKey(pageId, "live-editor-registry registerLiveEditor");
   if (!pageId) return () => undefined;
   const list = handles.get(pageId) ?? [];
   list.unshift(handle);

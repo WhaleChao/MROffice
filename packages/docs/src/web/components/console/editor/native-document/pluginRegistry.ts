@@ -13,6 +13,7 @@ import { normalizeCellShadingPattern } from "@mrnote/core/web/components/console
 /** The registry's translate function (next-intl's `t`). */
 type Translator = (key: string, values?: Record<string, string | number | Date>) => string;
 import DocumentObjectVisibility from "./documentObjectVisibility";
+import { OversizedTablePlaceholder } from "./oversizedTablePlaceholder";
 import {DocumentAutoLineSpacing} from "@mrnote/core/web/components/console/editor/native-document/documentAutoLineSpacing.ts";
 import { FastRenderedAttributes } from "./fastRenderedAttributes";
 import { StableNodeViews } from "./stableNodeViews";
@@ -342,6 +343,8 @@ import ReadOnlyTransactionAuthority from "@mrnote/core/web/components/console/ed
 import ImeCompositionGuard from "@mrnote/core/web/components/console/editor/native-document/imeCompositionGuard.ts";
 import NativeHistoryInput from "./nativeHistoryInput";
 import TypingRunTime from "./typingRunTime";
+import DerivedDispatchGuard from "./derivedDispatchGuard";
+import ReadBackLossGuard from "./readBackLossGuard";
 import ParagraphBorderGroups from "./paragraphBorderGroups";
 import DocumentBoundaryInteraction from "@mrnote/core/web/components/console/editor/native-document/documentBoundaryInteraction.ts";
 import NativeParagraphInput from "./nativeParagraphInput";
@@ -2558,6 +2561,15 @@ export function createNativeDocumentPluginRegistry({
         // pagination so candidate keys and pre-edit text cannot be interpreted
         // as normal editor commands/content.
         ImeCompositionGuard,
+        // A derived write (pagination, line projections, settle styles) never
+        // lands between a keystroke's DOM change and its read-back: the view
+        // reads the DOM first, and a projection made for the older document is
+        
+        DerivedDispatchGuard,
+        // One typed character never deletes a paragraph: a read-back that
+        // would is refused, the paragraph is drawn again from the document
+        
+        ReadBackLossGuard,
         // A typing run is one Undo step on a long page too: an edit is
         // dated by its input event, not by when its dispatch got to it.
         TypingRunTime,
@@ -3705,6 +3717,20 @@ export function createNativeDocumentPluginRegistry({
         // Selection Pane Show/Hide: a document-local `selectionPaneHidden`
         // flag on every listed object, painted hidden by a node decoration.
         DocumentObjectVisibility,
+        // A Word preview's table too large to show, said in the reader's
+        // language where it stands (the server's `oversizedTable`).
+        OversizedTablePlaceholder.configure({
+          label: ({ rows, columns }) => {
+            // A surface whose messages lack the key keeps the paragraph's
+            // own (English) words rather than showing the key.
+            try {
+              const text = translate("oversizedImport.tablePlaceholder", { rows, columns });
+              return text.includes("tablePlaceholder") ? "" : text;
+            } catch {
+              return "";
+            }
+          },
+        }),
       ],
     },
     {

@@ -25,6 +25,7 @@
  */
 
 import { createContext, Fragment, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactElement, type ReactNode } from "react";
+import { officeTextPaintFlatFill, officeTextSvgFill } from "@mrnote/core/web/lib/office-text-paint.ts";
 import {
   layoutOfficeTextBody,
   type OfficeParagraphInput,
@@ -38,8 +39,10 @@ import { powerPointLineLanguage } from "@mrnote/core/web/lib/text-engine/powerpo
 import { OFFICE_TEXT_HIT_ATTRIBUTE, registerOfficeTextHitMap } from "@mrnote/core/web/lib/text-engine/office-text-hit.ts";
 import { OFFICE_TEXT_MARKER_ATTRIBUTE } from "@mrnote/core/web/lib/presentation/math-atom.ts";
 import { onTextEngineChange, resolveFace, textEngineEpoch } from "@mrnote/core/web/lib/text-engine/measure.ts";
+import { keepLayout, touchLayout } from "@mrnote/core/web/lib/text-engine/kept-layouts.ts";
 import { splitFamilyList } from "@mrnote/core/web/lib/text-engine/face-index.ts";
 import { ensureOfficeFauxBoldProbe, OFFICE_FAUX_BOLD_STROKE_WIDTH } from "@mrnote/core/web/lib/office-fonts/faux-bold.ts";
+import { powerPointWindowsLineEndFace } from "@mrnote/core/web/lib/office-fonts/windows-office-faces.ts";
 import { officeUnderline } from "@mrnote/core/web/lib/text-engine/office-underline.ts";
 import {
   OFFICE_TEXT_OUTLINE_COLOR,
@@ -54,7 +57,9 @@ import {
 } from "@mrnote/core/web/lib/office-text-outline/office-text-outline-css.ts";
 import { textEngineOn } from "@mrnote/core/web/lib/text-engine/page-adapter.ts";
 import { snapEngineSvgRoot } from "@mrnote/core/web/lib/text-engine/svg-root-snap.ts";
-import type { TextRun } from "@mrnote/core/web/lib/presentation-point-runs.ts";
+import { normalizeRunHyperlink, runSlideActionTarget, type TextRun } from "@mrnote/core/web/lib/presentation-point-runs.ts";
+import { parseSlideLinkTarget } from "@mrnote/core/web/lib/presentation-block-fx.ts";
+import { normalizeLinkTooltip } from "@mrnote/core/web/lib/presentation-link-settings.ts";
 import { normalizePresentationTabStops } from "../../../../lib/presentation-tab-stops";
 import { cssTextShadowParts, powerPointTextShadowParts, PRESENTATION_SCRIPT_SCALE, runStyleCss, TEXT_SHADOW_BASE_PROPERTY, type PresentationFontSizeUnit } from "../../../../lib/presentation/text-layout-css";
 import { POWERPOINT_MISSING_SCRIPT_FAMILY, type PresentationFontAliases } from "@mrnote/core/web/lib/presentation-font-faces.ts";
@@ -65,6 +70,84 @@ import { PresentationFontAliasesContext } from "./usePresentationFontFaces";
 
 /** Whether the bodies drawn under it may be drawn by the text engine. */
 export const PresentationTextEngineSurfaceContext = createContext(false);
+
+/**
+ * How a run's hyperlink is drawn where the engine draws the words: `"show"` a
+ * link to press, Tab to and open with Enter, with its ScreenTip (the slide
+ * show, as PresentationRunsText's links); `"print"` its address only, the
+ * printed PDF's link; none (the canvas at rest) no link, as before.
+ */
+export const PresentationEngineLinkSurfaceContext = createContext<"show" | "print" | null>(null);
+
+/** The slides a run's link may name and the show's jump to one (PresentationRunsText's `slideIds` / `onNavigateToSlide`). */
+export interface PresentationEngineLinks {
+  readonly slideIds?: ReadonlySet<string>;
+  readonly onNavigateToSlide?: (slideId: string) => void;
+}
+export const PresentationEngineLinksContext = createContext<PresentationEngineLinks | null>(null);
+
+export type EngineRunLink =
+  | { readonly kind: "address"; readonly href: string; readonly tip: string | undefined }
+  | { readonly kind: "slide"; readonly href: string; readonly target: string; readonly slideLink: string | null; readonly tip: string | undefined };
+
+/** A run's link as the engine draws it on `surface`, or null: the same reading as PresentationRunsText's. */
+export function engineRunLink(run: TextRun, links: PresentationEngineLinks | null, surface: "show" | "print" | null): EngineRunLink | null {
+  if (!surface) return null;
+  const href = normalizeRunHyperlink(run.style?.href, links?.slideIds);
+  if (!href) return null;
+  const tip = normalizeLinkTooltip(run.style?.linkTooltip);
+  const slideLink = parseSlideLinkTarget(href, links?.slideIds);
+  if (slideLink || runSlideActionTarget(href)) {
+    // A jump to a slide (or Next / Previous / First / Last): only the show
+    // jumps; drawn as plain words elsewhere, as the browser's drawing does.
+    if (surface !== "show" || !links?.onNavigateToSlide) return null;
+    return { kind: "slide", href, target: slideLink ?? href, slideLink, tip };
+  }
+  return { kind: "address", href, tip };
+}
+
+/** One run's stretch of a line inside its link: an SVG `a` around its tspans. */
+export function EngineRunLinkAnchor({ link, children }: { link: EngineRunLink; children: ReactNode }): ReactElement {
+  const links = useContext(PresentationEngineLinksContext);
+  const surface = useContext(PresentationEngineLinkSurfaceContext);
+  const tip = link.tip ? <title>{link.tip}</title> : null;
+  if (link.kind === "slide") {
+    const jump = (event: { stopPropagation: () => void; preventDefault: () => void }) => {
+      event.preventDefault();
+      event.stopPropagation();
+      links?.onNavigateToSlide?.(link.target);
+    };
+    return (
+      <a
+        role="link"
+        tabIndex={0}
+        data-testid="presentation-present-run-slide-link"
+        data-slide-link={link.slideLink ?? undefined}
+        data-run-href={link.href}
+        style={{ pointerEvents: "auto", cursor: "pointer" }}
+        onClick={jump}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") jump(event);
+        }}
+      >
+        {tip}
+        {children}
+      </a>
+    );
+  }
+  return (
+    <a
+      href={link.href}
+      data-run-href={link.href}
+      {...(surface === "show"
+        ? { target: "_blank", rel: "noopener noreferrer", style: { pointerEvents: "auto" as const, cursor: "pointer" }, onClick: (event: { stopPropagation: () => void }) => event.stopPropagation() }
+        : {})}
+    >
+      {tip}
+      {children}
+    </a>
+  );
+}
 
 /** The attribute a body still waiting for its faces carries (the print waits on it). */
 export const PRESENTATION_TEXT_ENGINE_ATTRIBUTE = "data-text-engine";
@@ -215,6 +298,8 @@ export function presentationEngineBodyInput(args: {
   lineBox?: unknown;
   /** `source.nativeMarkLines` (readings row 1013): each paragraph's empty last line's mark ({@link presentationEmptyLineFonts}). */
   markLines?: unknown;
+  /** `source.nativeBreakLineFaces` (readings row 1042): a line ending at a line break is laid with the break's face. */
+  breakLines?: unknown;
   /** A flat body (no `paragraphs`): its text and runs, whose breaks set its empty rows (row 1013). */
   flatText?: string;
   flatRuns?: unknown;
@@ -249,6 +334,10 @@ export function presentationEngineBodyInput(args: {
     // Under it, an empty line a paragraph ends on is laid in its mark's (or its break's) size and face.
     const emptyLineFonts = windowsLineBox
       ? presentationEmptyLineFonts({ markLines: args.markLines, flatText: args.flatText, flatRuns: args.flatRuns, rowCount: rows.length })
+      : [];
+    // Under row 1042 a flat body's rows that end at its line breaks are laid with the breaks' faces.
+    const breakFaces = presentationBreakLinesOn(args.lineBox, args.breakLines)
+      ? presentationBreakLineFaces({ flatText: args.flatText, flatRuns: args.flatRuns, rowCount: rows.length })
       : [];
     const eastAsianLines = rowsCarryEastAsianLines || bodyEastAsianLines !== null;
     const eastAsianRow = (key: keyof ParagraphEastAsianLines, row: PresentationParagraphRowPlan): unknown => {
@@ -297,8 +386,10 @@ export function presentationEngineBodyInput(args: {
       const runs: OfficeTextRunInput[] = displayed.map((run) => {
         if (run.math) throw new Unsupported("equation");
         // WordArt on a run (gradient fills, outlines, effects) and symbol-font
-        // characters are the browser drawing's.
-        if (run.style?.textPaint) throw new Unsupported("run WordArt");
+        // characters are the browser drawing's. A run's colour seen through
+        // (Text Fill > Transparency, readings row 1052) is the engine's: its
+        // fill is drawn at that opacity over what is under it (tp-textalpha).
+        if (run.style?.textPaint && !officeTextPaintFlatFill(run.style.textPaint)) throw new Unsupported("run WordArt");
         if (/[\uf000-\uf0ff]/.test(run.text)) throw new Unsupported("symbol-font characters");
         const css = scriptRunCss(run, row.runs ? runStyleCss(run.style, fontSizeUnit, fontAliases, autofitScale) : {}, rowFontPx);
         const font = fontOf(css);
@@ -394,6 +485,9 @@ export function presentationEngineBodyInput(args: {
           ? { markLatinFont: fontOf({ fontFamily: runStyleCss({ fontFamily: row.endLatinFace }, fontSizeUnit, fontAliases, autofitScale).fontFamily }) }
           : {}),
         ...(row.endsInLineBreak ? { endsInLineBreak: true as const } : {}),
+        ...(breakFaces[row.index]
+          ? { breakLatinFont: fontOf({ fontFamily: runStyleCss({ fontFamily: powerPointWindowsLineEndFace(breakFaces[row.index]!) }, fontSizeUnit, fontAliases, autofitScale).fontFamily }) }
+          : {}),
         align,
         marginLeftPt: start * PT_PER_PX,
         marginRightPt: end * PT_PER_PX,
@@ -472,6 +566,8 @@ export function usePresentationEngineBody(args: {
   lineBox?: unknown;
   /** `source.nativeMarkLines` and a flat body's text and runs (readings row 1013, {@link presentationEmptyLineFonts}). */
   markLines?: unknown;
+  /** `source.nativeBreakLineFaces` (readings row 1042). */
+  breakLines?: unknown;
   flatText?: string;
   flatRuns?: unknown;
   widthPx: number | null;
@@ -485,19 +581,20 @@ export function usePresentationEngineBody(args: {
   const slideNumber = useContext(PresentationSlideNumberContext);
   const active = args.enabled && surface && args.rows !== null && args.widthPx !== null && textEngineOn("slides");
   const epoch = useTextEngineEpoch(active);
-  const { rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, tabStops, defaultTabPx, kerning, eastAsianLines, lineBox, markLines, flatText, flatRuns, widthPx, wrap } = args;
+  const { rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, tabStops, defaultTabPx, kerning, eastAsianLines, lineBox, markLines, breakLines, flatText, flatRuns, widthPx, wrap } = args;
   const naturalLines = args.naturalLines === true;
   return useMemo((): PresentationEngineBodyAnswer => {
     void epoch;
     if (!surface) return { status: "off" };
     if (!active || !rows || widthPx === null) return noteEngine("off", !args.enabled ? "not a candidate" : !rows ? "no rows" : widthPx === null ? "no width" : "switched off");
-    const input = presentationEngineBodyInput({ rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, slideNumber, tabStops, defaultTabPx, kerning, eastAsianLines, lineBox, markLines, flatText, flatRuns });
+    const input = presentationEngineBodyInput({ rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, slideNumber, tabStops, defaultTabPx, kerning, eastAsianLines, lineBox, markLines, breakLines, flatText, flatRuns });
     if ("unsupported" in input) return noteEngine("off", input.unsupported);
-    const layout = layoutOfficeTextBody({ widthPt: widthPx * PT_PER_PX, wrap, paragraphs: input.paragraphs, naturalLines, ...(presentationWindowsLineBox(lineBox) ? { windowsLineBox: true } : {}) }, pageOfficeTextMeasurer);
+    const bodyInput = { widthPt: widthPx * PT_PER_PX, wrap, paragraphs: input.paragraphs, naturalLines, ...(presentationWindowsLineBox(lineBox) ? { windowsLineBox: true } : {}), ...(presentationBreakLinesOn(lineBox, breakLines) ? { breakLineFaces: true } : {}) };
+    const layout = keptBodyLayout(bodyInput);
     if (layout.status === "pending") return noteEngine("pending", "pending");
     if (layout.status === "unsupported") return noteEngine("off", layout.reason);
     return noteEngine("ok", "laid", { status: "ok", layout, input });
-  }, [surface, active, args.enabled, epoch, rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, slideNumber, tabStops, defaultTabPx, kerning, eastAsianLines, lineBox, markLines, flatText, flatRuns, widthPx, wrap, naturalLines]);
+  }, [surface, active, args.enabled, epoch, rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, slideNumber, tabStops, defaultTabPx, kerning, eastAsianLines, lineBox, markLines, breakLines, flatText, flatRuns, widthPx, wrap, naturalLines]);
 }
 
 /** The size (pt) and Latin face an empty line is laid in. */
@@ -575,6 +672,52 @@ export function presentationEmptyLineFonts(args: {
   return out;
 }
 
+/**
+ * Readings row 1042: per planned row of a flat body (one paragraph, its line
+ * breaks split into rows), the Latin face of the break a row WITH words ends
+ * at -- the run that holds its "\n", the break's own `a:rPr` as read --, else
+ * undefined (the last row, which holds the mark; an empty row, whose line is
+ * its break's alone: {@link presentationEmptyLineFonts}). The engine lays such
+ * a row's line with it beside its words' faces (office-truth/probes/
+ * tp-markface: a break stating only its size, under a Calibri theme, set Arial
+ * words' line 0.9425 em under its top, the text box's as the table cell's). A
+ * paragraph's own rows reach the engine with their breaks' runs.
+ */
+export function presentationBreakLineFaces(args: { flatText?: string; flatRuns?: unknown; rowCount: number }): (string | undefined)[] {
+  const out: (string | undefined)[] = new Array(args.rowCount).fill(undefined);
+  if (typeof args.flatText !== "string") return out;
+  const rows = args.flatText.split("\n");
+  if (rows.length !== args.rowCount) return out;
+  const runText = (run: unknown): string =>
+    run && typeof run === "object" && typeof (run as { text?: unknown }).text === "string" ? (run as { text: string }).text : "";
+  // Runs that are not the text's own (a stale copy) say nothing of its breaks.
+  if (!Array.isArray(args.flatRuns) || args.flatRuns.map(runText).join("") !== args.flatText) return out;
+  const faceAt = (offset: number): string | undefined => {
+    let start = 0;
+    for (const run of args.flatRuns as unknown[]) {
+      const text = runText(run);
+      if (offset >= start && offset < start + text.length) {
+        const face = (run as { style?: { fontFamily?: unknown } }).style?.fontFamily;
+        return typeof face === "string" && face.trim() ? face.trim() : undefined;
+      }
+      start += text.length;
+    }
+    return undefined;
+  };
+  let offset = 0;
+  rows.forEach((row, index) => {
+    const breakAt = offset + row.length;
+    if (index < rows.length - 1 && row !== "") out[index] = faceAt(breakAt);
+    offset = breakAt + 1;
+  });
+  return out;
+}
+
+/** Whether a body's receipts say its lines that end at line breaks are laid with the breaks' faces (readings row 1042, under row 1013). */
+export function presentationBreakLinesOn(lineBox: unknown, breakLines: unknown): boolean {
+  return presentationWindowsLineBox(lineBox) && breakLines === 1042;
+}
+
 /** Whether a body's receipt says its lines stand as PowerPoint for Windows stands them (readings row 1013). */
 export function presentationWindowsLineBox(value: unknown): boolean {
   return value === 1013;
@@ -608,6 +751,63 @@ export function presentationEngineLineStarts(answer: Extract<PresentationEngineB
  * (`window.__mraiSlidesEngine`): the probes read it to see which bodies are
  * still drawn the browser's way, and why.
  */
+
+
+
+
+
+
+
+
+const keptBodies = new Map<string, OfficeTextBodyLayout>();
+function keptBodyLayout(input: Parameters<typeof layoutOfficeTextBody>[0]): OfficeTextBodyLayout {
+  const key = `${textEngineEpoch()}\u0000${bodyKeyHash(JSON.stringify(input))}`;
+  const hit = keptBodies.get(key);
+  if (hit) {
+    touchLayout(hit);
+    noteBodyHit();
+    return hit;
+  }
+  const laidAt = typeof performance === "undefined" ? 0 : performance.now();
+  const layout = layoutOfficeTextBody(input, pageOfficeTextMeasurer);
+  noteBodyLayout(laidAt);
+  if (layout.status === "ok") {
+    let glyphs = 1;
+    for (const paragraph of layout.paragraphs) for (const line of paragraph.lines) for (const segment of line.segments) glyphs += segment.glyphs.length;
+    keptBodies.set(key, layout);
+    keepLayout(layout, glyphs, () => keptBodies.delete(key));
+  }
+  return layout;
+}
+
+/** FNV-1a 32-bit over a string's UTF-16 units, with its length: a content key, not a secret. */
+function bodyKeyHash(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `${text.length.toString(36)}.${hash.toString(36)}`;
+}
+
+/** A body laid out: count and ms, and the kept layouts used (`window.__mraiSlidesEngineBodies`, the probes' view of where a flip's time goes). */
+function bodyTally(): { count: number; ms: number; maxMs: number; hits: number } | null {
+  if (typeof window === "undefined") return null;
+  return ((window as unknown as { __mraiSlidesEngineBodies?: { count: number; ms: number; maxMs: number; hits: number } }).__mraiSlidesEngineBodies ??= { count: 0, ms: 0, maxMs: 0, hits: 0 });
+}
+function noteBodyHit(): void {
+  const seen = bodyTally();
+  if (seen) seen.hits += 1;
+}
+function noteBodyLayout(started: number): void {
+  const seen = bodyTally();
+  if (!seen || typeof performance === "undefined") return;
+  const ms = performance.now() - started;
+  seen.count += 1;
+  seen.ms += ms;
+  seen.maxMs = Math.max(seen.maxMs, ms);
+}
+
 function noteEngine(status: "ok" | "pending" | "off", reason: string, answer?: PresentationEngineBodyAnswer): PresentationEngineBodyAnswer {
   if (typeof window !== "undefined") {
     const tally = ((window as unknown as { __mraiSlidesEngine?: Record<string, number> }).__mraiSlidesEngine ??= {});
@@ -631,8 +831,12 @@ export function svgTextPaint(css: CSSProperties, colorOverride: string | undefin
     textDecoration: css.textDecoration,
     textDecorationStyle: css.textDecorationStyle,
   };
-  const color = colorOverride ?? css.color;
+  // A run's colour seen through (readings row 1052) is its rgb at the exact
+  // opacity (`officeTextSvgFill`): a colour's own alpha prints to 8 bits.
+  const seen = colorOverride === undefined ? officeTextSvgFill(css) : {};
+  const color = colorOverride ?? seen.fill ?? css.color;
   if (color !== undefined) out.fill = color as CSSProperties["fill"];
+  if (seen.fillOpacity !== undefined) out.fillOpacity = seen.fillOpacity;
   const outline = outlineOf(css);
   if (outline) {
     // SVG text takes no -webkit-text-stroke: Office's outline as SVG's
@@ -893,6 +1097,8 @@ const PresentationEngineLine = memo(
   function PresentationEngineLine({ line, lineIndex, row, runs, runInputs, shadows, fontSizeUnit, fontAliases, autofitScale, colorOverride }: EngineLineProps) {
     // Drawn again when glyph outlines a run's outline waits on come.
     useSyncExternalStore(subscribeOfficeTextOutlineGlyphs, officeTextOutlineGlyphsEpoch, officeTextOutlineGlyphsEpoch);
+    const linkSurface = useContext(PresentationEngineLinkSurfaceContext);
+    const links = useContext(PresentationEngineLinksContext);
     const shadowId = useId().replace(/[^A-Za-z0-9_-]/g, "");
     const rowStyle = row?.rowTextStyle ?? {};
     const rowPaint = svgTextPaint(rowStyle, colorOverride ?? (rowStyle.color as string | undefined));
@@ -947,7 +1153,8 @@ const PresentationEngineLine = memo(
           : null;
       if (underline) {
         paint.textDecoration = decoration.replace(/\bunderline\b/, "").trim() || "none";
-        const color = String(paint.fill ?? rowPaint.fill ?? "currentColor");
+        // A colour seen through draws its underline seen through too (its `#rrggbbaa`).
+        const color = paint.fillOpacity !== undefined && typeof css.color === "string" ? css.color : String(paint.fill ?? rowPaint.fill ?? "currentColor");
         const top = segmentBaseline + underline.topPt - (scriptShiftPt.get(run) ?? 0);
         const last = underlines[underlines.length - 1];
         if (last && last.color === color && last.top === top && last.height === underline.thicknessPt && Math.abs(last.x1 - segment.x) < 0.5) {
@@ -974,6 +1181,8 @@ const PresentationEngineLine = memo(
       const firstCode = glyphs.find((glyph) => glyph.text.trim())?.text.codePointAt(0);
       if (measured && paint.stroke === undefined && firstCode !== undefined) {
         Object.assign(paint, engineFauxBoldPaint(measured, firstCode, paint.fill ?? rowPaint.fill));
+        // Its stroke as see-through as its fill.
+        if (paint.stroke !== undefined && paint.fillOpacity !== undefined) paint.strokeOpacity = paint.fillOpacity;
       }
       // Office's outline: one stroke along each glyph's merged outline,
       // centred and round, over the fill, at the engine's own positions;
@@ -1008,21 +1217,26 @@ const PresentationEngineLine = memo(
           if (fill) paint.fill = "transparent";
         }
       }
+      const segmentSpans: ReactElement[] = [];
       if (glyphs.every((glyph) => shown(glyph.text).length === 1)) {
-        spans.push(
+        segmentSpans.push(
           <tspan key={segmentIndex} data-run-index={segment.run} x={glyphs.map((glyph) => px(glyph.x)).join(" ")} y={segmentY} style={paint}>
             {glyphs.map((glyph) => shown(glyph.text)).join("")}
           </tspan>,
         );
       } else {
         glyphs.forEach((glyph, glyphIndex) => {
-          spans.push(
+          segmentSpans.push(
             <tspan key={`${segmentIndex}-${glyphIndex}`} data-run-index={segment.run} x={px(glyph.x)} y={segmentY} style={paint}>
               {shown(glyph.text)}
             </tspan>,
           );
         });
       }
+      // A run's hyperlink: its stretch inside the link (TRIAGE 181: the show's links, the print's PDF links).
+      const link = engineRunLink(run, links, linkSurface);
+      if (link) spans.push(<EngineRunLinkAnchor key={`a${segmentIndex}`} link={link}>{segmentSpans}</EngineRunLinkAnchor>);
+      else spans.push(...segmentSpans);
     });
     if (!chunks.some((chunk) => chunk.spans.length)) return null;
     const textStyle = { ...SVG_TEXT_STYLE, ...rowPaint };
@@ -1130,6 +1344,7 @@ export function PresentationEngineTextBody({
   autofitScale,
   colorOverride,
   overlay = false,
+  links,
 }: {
   answer: Extract<PresentationEngineBodyAnswer, { status: "ok" }>;
   rows: readonly PresentationParagraphRowPlan[];
@@ -1141,6 +1356,8 @@ export function PresentationEngineTextBody({
    * rows are the text the readers read, so this drawing carries none of a
    * row's reading marks, takes no caret and is no part of the body's text. */
   overlay?: boolean;
+  /** The slides a run's link may name and the show's jump (drawn as links where `PresentationEngineLinkSurfaceContext` says). */
+  links?: PresentationEngineLinks;
 }): ReactElement {
   const { layout, input } = answer;
   const parts = engineDrawingParts(answer, rows);
@@ -1230,7 +1447,9 @@ export function PresentationEngineTextBody({
       
       style={{ position: "relative", width: "100%", height: px(layout.height), flexShrink: 0, ...(overlay ? { userSelect: "none" as const } : {}) }}
     >
-      <EngineSvgRoot testId="presentation-engine-text-svg">{nodes}</EngineSvgRoot>
+      <PresentationEngineLinksContext.Provider value={overlay ? null : (links ?? null)}>
+        <EngineSvgRoot testId="presentation-engine-text-svg">{nodes}</EngineSvgRoot>
+      </PresentationEngineLinksContext.Provider>
     </div>
   );
 }
@@ -1251,12 +1470,14 @@ export function PresentationEngineOrFallback({
   eastAsianLines,
   lineBox,
   markLines,
+  breakLines,
   flatText,
   flatRuns,
   widthPx,
   wrap,
   colorOverride,
   naturalLines,
+  links,
   fallback,
 }: {
   rows: readonly PresentationParagraphRowPlan[] | null;
@@ -1272,6 +1493,8 @@ export function PresentationEngineOrFallback({
   lineBox?: unknown;
   /** `source.nativeMarkLines` and a flat body's text and runs (readings row 1013, {@link presentationEmptyLineFonts}). */
   markLines?: unknown;
+  /** `source.nativeBreakLineFaces` (readings row 1042). */
+  breakLines?: unknown;
   flatText?: string;
   flatRuns?: unknown;
   widthPx: number | null;
@@ -1279,6 +1502,8 @@ export function PresentationEngineOrFallback({
   colorOverride?: string;
   /** A SmartArt diagram's label (`usePresentationEngineBody`). */
   naturalLines?: boolean;
+  /** A run's link's slides and jump (`PresentationEngineTextBody`'s `links`). */
+  links?: PresentationEngineLinks;
   fallback: ReactElement;
 }): ReactElement {
   const fontAliases = useContext(PresentationFontAliasesContext);
@@ -1295,6 +1520,7 @@ export function PresentationEngineOrFallback({
     eastAsianLines,
     lineBox,
     markLines,
+    breakLines,
     flatText,
     flatRuns,
     widthPx,
@@ -1310,6 +1536,7 @@ export function PresentationEngineOrFallback({
         fontAliases={fontAliases}
         autofitScale={autofitScale}
         colorOverride={colorOverride}
+        links={links}
       />
     );
   }

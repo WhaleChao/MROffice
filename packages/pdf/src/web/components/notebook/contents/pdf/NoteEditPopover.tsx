@@ -25,8 +25,10 @@ import {
 
 import {
   MAX_REPLY_TEXT,
+  pdfReplyDisplayText,
   type PdfAnnotationReply,
 } from "@mrnote/core/web/lib/pdf/annotation-replies.ts";
+import { usePdfReviewStateLabel } from "./pdfReviewStateLabel";
 import {
   DEFAULT_NOTE_COLOR,
   PDF_NOTE_COLORS,
@@ -145,6 +147,7 @@ export default function NoteEditPopover({
   mentions = null,
 }: NoteEditPopoverProps) {
   const t = useTranslations("console-notebooks");
+  const reviewStateLabel = usePdfReviewStateLabel(t);
   // A new note has no text yet, so jump straight into editing. State is seeded
   // once from props; the parent remounts this component (via a per-note `key`)
   // when it points the popover at a different note, so no prop->state sync
@@ -251,11 +254,11 @@ export default function NoteEditPopover({
       getKey: (message) => (message.kind === "root" ? "root" : message.reply.id),
       // Plain text nodes, never HTML: the thread draws them as text.
       getText: (message) =>
-        message.kind === "root" ? text || emptyLabel : message.reply.text,
+        message.kind === "root" ? text || emptyLabel : pdfReplyDisplayText(message.reply, reviewStateLabel),
       getTimeLabel: (message) =>
         message.kind === "root" ? null : replyTimeLabel(message.reply.createdAt),
     }),
-    [anonymous, authorName, emptyLabel, text],
+    [anonymous, authorName, emptyLabel, reviewStateLabel, text],
   );
   const threadAdapter = useMemo<OfficeCommentThreadAdapter<NoteThread, NoteThreadMessage>>(
     () => ({

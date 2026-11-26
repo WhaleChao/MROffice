@@ -10,7 +10,7 @@
  * be pinned either way for a comparison with `?textEngine=on|off` (kept for
  * the tab in sessionStorage) or `localStorage["mrai.textEngine"] = "on"|"off"`.
  */
-export type TextEngineSurface = "spreadsheet" | "code" | "pdf" | "presentation" | "slides" | "docs" | "docs-layout" | "docs-hollow" | "docs-formula-boxes" | "docs-layout-snapshot" | "docs-ink-light" | "slides-edit";
+export type TextEngineSurface = "spreadsheet" | "code" | "pdf" | "presentation" | "slides" | "docs" | "docs-layout" | "docs-hollow" | "docs-formula-boxes" | "docs-layout-snapshot" | "docs-ink-light" | "slides-edit" | "slides-present";
 
 const DEFAULTS: Readonly<Record<TextEngineSurface, boolean>> = {
   // Phase 2: each editor off until its comparisons pass (PLAN-phase2.md).
@@ -31,6 +31,15 @@ const DEFAULTS: Readonly<Record<TextEngineSurface, boolean>> = {
   // misplaced letters with it and not without it; on again once that is 0.
   // By name only: `?textEngine=slides-edit` turns it on for a tab.
   "slides-edit": false,
+  // The slide show drawn as the printed deck draws it: an imported body (and
+  // an imported table) laid out by the engine in the show's audience and
+  
+  // every word was the browser's -- the show placed words where neither the
+  // print nor the canvas at rest did (TRIAGE 181). Needs `slides` too. By
+  // name: `?textEngine=-slides-present` gives a tab the browser's show again;
+  // a build with NEXT_PUBLIC_PRESENT_TEXT_ENGINE=0 gives everyone the
+  // browser's show without a code change (presentTextEngineByDefault).
+  "slides-present": true,
   // A paragraph's lines broken where Word breaks them (docs-lines.ts; the page
   // follows by documentEngineLineBreaks), its height and its cut across pages
   
@@ -107,7 +116,7 @@ function readOverride(): boolean | null {
 
 export function textEngineEnabled(surface: TextEngineSurface): boolean {
   if (override === undefined) override = readOverride();
-  const byName = surface === "docs-layout" || surface === "docs-hollow" || surface === "docs-formula-boxes" || surface === "docs-layout-snapshot" || surface === "docs-ink-light" || surface === "slides-edit";
+  const byName = surface === "docs-layout" || surface === "docs-hollow" || surface === "docs-formula-boxes" || surface === "docs-layout-snapshot" || surface === "docs-ink-light" || surface === "slides-edit" || surface === "slides-present";
   if (byName || override === null) {
     if (surfaceOverrides === undefined) surfaceOverrides = readSurfaceOverrides();
   }
@@ -116,6 +125,7 @@ export function textEngineEnabled(surface: TextEngineSurface): boolean {
   if (byName) {
     const fallback = surface === "docs-formula-boxes" ? DEFAULTS[surface] && formulaBoxesByDefault()
       : surface === "docs-layout-snapshot" ? DEFAULTS[surface] && layoutSnapshotByDefault()
+      : surface === "slides-present" ? DEFAULTS[surface] && presentTextEngineByDefault()
       : DEFAULTS[surface];
     return surfaceOverrides?.get(surface) ?? (override === false ? false : fallback);
   }
@@ -141,6 +151,12 @@ export function layoutSnapshotByDefault(userAgent: string | null = typeof naviga
   return formulaBoxesByDefault(userAgent);
 }
 
+/** The show's engine unless the build switched it off: `NEXT_PUBLIC_PRESENT_TEXT_ENGINE=0` (exactly "0", as the
+ * presentation editor's other deploy-time switches, lib/presentation-flags.ts). */
+export function presentTextEngineByDefault(value: string | undefined = process.env.NEXT_PUBLIC_PRESENT_TEXT_ENGINE): boolean {
+  return value !== "0";
+}
+
 let surfaceOverrides: Map<TextEngineSurface, boolean> | null | undefined;
 /** `?textEngine=code,pdf` (or "-pdf" to switch one off), kept for the tab. */
 function readSurfaceOverrides(): Map<TextEngineSurface, boolean> | null {
@@ -151,7 +167,7 @@ function readSurfaceOverrides(): Map<TextEngineSurface, boolean> | null {
     if (raw) window.sessionStorage.setItem(KEY + ".surfaces", raw);
     else raw = window.sessionStorage.getItem(KEY + ".surfaces");
   } catch { /* storage refused */ }
-  if (!raw || !raw.includes(",") && !/^-?(spreadsheet|code|pdf|presentation|slides|docs|docs-layout|docs-hollow|docs-formula-boxes|docs-layout-snapshot|docs-ink-light|slides-edit)$/.test(raw)) return null;
+  if (!raw || !raw.includes(",") && !/^-?(spreadsheet|code|pdf|presentation|slides|docs|docs-layout|docs-hollow|docs-formula-boxes|docs-layout-snapshot|docs-ink-light|slides-edit|slides-present)$/.test(raw)) return null;
   const out = new Map<TextEngineSurface, boolean>();
   for (const token of raw.split(",")) {
     const off = token.startsWith("-");

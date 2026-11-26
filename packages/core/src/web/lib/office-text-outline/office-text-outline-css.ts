@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { afterCanvasGesture } from "../canvas-gesture";
 import { officeDashLengthsWithCaps, officeDashUnits } from "../office-stroke-dash";
 
 /** The outline's colour (#rrggbb; #rrggbbaa when it is see-through). */
@@ -329,9 +330,19 @@ export function setOfficeTextOutlineGlyphLookup(lookup: GlyphLookup): void {
 
 /** The overlay's: glyph outlines asked for have come. */
 export function noteOfficeTextOutlineGlyphs(): void {
-  glyphEpoch += 1;
-  for (const listener of [...glyphListeners]) listener();
+  // Outlines landing while a canvas window or the desk moves redraw every
+  // slide text that waited on them (a synchronous render, each body's SVG
+  // snap reading its place): told once the gesture is over, all at once
+  // (lib/canvas-gesture; `window.__canvasGestureHoldOff`: at once, as before).
+  if (glyphNewsHeld) return;
+  glyphNewsHeld = true;
+  afterCanvasGesture(() => {
+    glyphNewsHeld = false;
+    glyphEpoch += 1;
+    for (const listener of [...glyphListeners]) listener();
+  });
 }
+let glyphNewsHeld = false;
 
 /** For a drawing that waits on glyph outlines (useSyncExternalStore). */
 export function subscribeOfficeTextOutlineGlyphs(listener: () => void): () => void {

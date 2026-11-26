@@ -43,8 +43,11 @@ import type {
 import type { LetterPlay } from "../../components/notebook/contents/presentation/PresentationRunsText";
 import {
   effectSmoothEasing,
+  MAX_EFFECT_SHARE,
   type PresentationAnimationEffectSettings,
+  effectGrowScale,
 } from "@mrnote/core/web/lib/presentation-anim-effect-settings.ts";
+import { smoothKeyframeBody, smoothShares } from "@mrnote/core/web/lib/presentation-smooth-timing.ts";
 import { effectSettingsDefaults } from "@mrnote/core/web/lib/presentation-anim-effect-defaults.ts";
 import { blockGeometryStyle } from "./selection-geometry";
 
@@ -413,6 +416,8 @@ export function presentationParagraphFlyOffsetVars(
     "--mrai-ppt-fly-right": `${round(100 - left)}cqw`,
     "--mrai-ppt-fly-top": `${round(-(top + height))}cqh`,
     "--mrai-ppt-fly-bottom": `${round(100 - top)}cqh`,
+    "--mrai-ppt-fly-slide-w": "100cqw",
+    "--mrai-ppt-fly-slide-h": "100cqh",
   };
 }
 
@@ -429,6 +434,23 @@ export interface EffectCssTiming {
   direction: "normal" | "alternate";
   /** Rewind when done playing: the end frame is not held. */
   rewind: boolean;
+}
+
+/**
+ * A step's Smooth start / Smooth end as shares of its duration (its stated
+ * accel / decel, else its effect's): what a player that bakes the easing into
+ * its frames (a motion path, a keyframe with stops between its ends) eases by.
+ */
+export function stepSmoothShares(step: {
+  animation: TimelineAnimation;
+  effectOption?: PresentationAnimationEffectOption;
+  effectSettings?: PresentationAnimationEffectSettings;
+}): { accel: number; decel: number } {
+  const defaults = effectSettingsDefaults(step.animation, step.effectOption);
+  return smoothShares(
+    (step.effectSettings?.accel ?? defaults.accel) / MAX_EFFECT_SHARE,
+    (step.effectSettings?.decel ?? defaults.decel) / MAX_EFFECT_SHARE,
+  );
 }
 
 /** The CSS timing of a step's Effect Options, or undefined for the defaults. */
@@ -661,6 +683,9 @@ export function presentationFlyOffsetVars(
     "--mrai-ppt-fly-right": own(100 - left, width),
     "--mrai-ppt-fly-top": own(-(top + height), height),
     "--mrai-ppt-fly-bottom": own(100 - top, height),
+    // One whole slide, for a Fly In from a slide away (row 1096).
+    "--mrai-ppt-fly-slide-w": own(100, width),
+    "--mrai-ppt-fly-slide-h": own(100, height),
   };
 }
 
@@ -690,7 +715,7 @@ const PRESENTATION_TIMELINE_EFFECT_KEYFRAME_BODIES = Object.freeze({
   "font-color": "0%,100%{filter:none}",
   disappear: "0%,99.9%{opacity:1}100%{opacity:0}",
   "fade-out": "0%{opacity:1}100%{opacity:0}",
-  "fly-out": `0%{transform:none}100%{transform:${presentationFlyOffsetTransform("from-bottom")}}`,
+  "fly-out": `0%{transform:none}100%{transform:${presentationFlyOffsetTransform("from-bottom")};visibility:hidden}`,
   "split-out": "0%{clip-path:inset(0)}100%{clip-path:inset(50% 0)}",
   "wipe-out": "0%{clip-path:inset(0)}100%{clip-path:inset(0 0 0 100%)}",
   "random-bars-out": patternRevealKeyframeBody("random-bars", "horizontal", false),
@@ -703,6 +728,9 @@ const PRESENTATION_TIMELINE_EFFECT_KEYFRAME_BODIES = Object.freeze({
   "stretchy-out": "0%{opacity:1;transform:none}100%{opacity:0;transform:scaleX(1.3)}",
   "stretch-out": "0%{transform:none}100%{transform:scaleX(0)}",
   "strips-out": "0%{clip-path:polygon(0 0,100% 0,100% 100%,0 100%)}100%{clip-path:polygon(100% 0,100% 0,100% 100%,100% 100%)}",
+  // Random Effects: the show plays a picked basic entrance instead
+  // (`resolveRandomEffectSteps`); a fade if ever drawn as itself.
+  "random-effects": "0%{opacity:0}100%{opacity:1}",
   // A media call plays or pauses its clip; nothing about the clip moves.
   "media-play": "0%,100%{}",
   "media-pause": "0%,100%{}",
@@ -813,11 +841,13 @@ export function animationEffectOptionKeyframeBody(
   if (animation.startsWith("fly-")) {
     const offset = presentationFlyOffsetTransform(option);
     // Fly In / Out travels to or from just past the slide's edge and does not
-    // fade (PPT-B139).
+    // fade (PPT-B139). Fly Out ends hidden, as PowerPoint's does (its
+    // visibility set at the end): the object stops with its edge on the
+    // slide's, and a rounded pixel row of it stayed on the stage.
     return offset
       ? entering
         ? `0%{transform:${offset}}100%{transform:none}`
-        : `0%{transform:none}100%{transform:${offset}}`
+        : `0%{transform:none}100%{transform:${offset};visibility:hidden}`
       : null;
   }
   if (animation === "stretch-in" || animation === "stretch-out") {
@@ -962,9 +992,12 @@ export const PRESENTATION_TIMELINE_EFFECT_KEYFRAMES_CSS = withBlockBaseTransform
 export function settledEmphasisFrame(
   animation: TimelineAnimation,
   effectOption?: PresentationAnimationEffectOption,
+  settings?: PresentationAnimationEffectSettings,
 ): { transform?: string; opacity?: string } | null {
   const effect = presentationAnimationEffect(animation);
   if (!effect) return null;
+  const grow = animation === "grow-shrink" ? growShrinkScaleCss(settings) : null;
+  if (grow) return { transform: grow };
   const option = effectOption ?? effect.defaultOption;
   const body =
     (option ? animationEffectOptionKeyframeBody(effect.id, option) : null) ??
@@ -982,6 +1015,118 @@ export function settledEmphasisFrame(
   return frame.transform || frame.opacity ? frame : null;
 }
 
+/** The scale a Grow/Shrink of a Size and Direction other than Larger both
+ * ways ends at, as CSS, or null for the gallery's own (row 1094). */
+function growShrinkScaleCss(
+  settings: PresentationAnimationEffectSettings | undefined,
+): string | null {
+  if (settings?.growSize === undefined && settings?.growDirection === undefined) return null;
+  const { x, y } = effectGrowScale(settings);
+  return `scale(${x},${y})`;
+}
+
+/**
+ * The keyframe of a Grow/Shrink of a Size and Direction other than Larger
+ * both ways (row 1094): its name and its CSS, injected with the slide's
+ * other built keyframes; null for the gallery's own (the static keyframe).
+ * PowerPoint ends it at p:by on each axis and holds it there (truth
+ * anim-grow-size-show: 1.5 s and 3 s frames are the stated size).
+ */
+export function growShrinkKeyframe(
+  settings: PresentationAnimationEffectSettings | undefined,
+): { name: string; css: string } | null {
+  const scale = growShrinkScaleCss(settings);
+  if (!scale) return null;
+  const { x, y } = effectGrowScale(settings);
+  const token = (value: number) => String(value).replace("-", "m").replace(".", "_");
+  const name = `mrai-ppt-effect-grow-shrink-by-${token(x)}-${token(y)}`;
+  return {
+    name,
+    css: `@keyframes ${name}{${withBlockBaseTransform(`0%{transform:none}100%{transform:${scale}}`)}}`,
+  };
+}
+
+/** A Fly In from a whole slide away's start, per direction (row 1096). */
+const PRESENTATION_FLY_OFF_SLIDE = {
+  "from-bottom": "translateY(var(--mrai-ppt-fly-slide-h,100cqh))",
+  "from-left": "translateX(calc(-1 * var(--mrai-ppt-fly-slide-w,100cqw)))",
+  "from-right": "translateX(var(--mrai-ppt-fly-slide-w,100cqw))",
+} as const;
+
+/**
+ * The keyframe of a Fly In written from a whole slide away (row 1096,
+ * effectSettings.flyStart "offSlide"): from one slide's width or height off
+ * its place, at an even pace, to its place -- as PowerPoint plays the Mac
+ * spelling (truth anim-flyin-axis-show: out of view until half way, in place
+ * at the end). Null for any other step.
+ */
+export function flyOffSlideKeyframe(
+  animation: TimelineAnimation | undefined,
+  effectOption: PresentationAnimationEffectOption | undefined,
+  settings: PresentationAnimationEffectSettings | undefined,
+): { name: string; css: string } | null {
+  if (animation !== "fly-in" || settings?.flyStart !== "offSlide") return null;
+  const option = (effectOption ?? "from-bottom") as keyof typeof PRESENTATION_FLY_OFF_SLIDE;
+  const start = PRESENTATION_FLY_OFF_SLIDE[option];
+  if (!start) return null;
+  const name = `mrai-ppt-effect-fly-in-offslide-${option}`;
+  return {
+    name,
+    css: `@keyframes ${name}{${withBlockBaseTransform(`0%{transform:${start}}100%{transform:none}`)}}`,
+  };
+}
+
+let handDrawnKeyframeBodies: Map<string, string> | null = null;
+
+/** The bodies of the hand-drawn `@keyframes` (PRESENTATION_TIMELINE_EFFECT_KEYFRAMES_CSS), by name. */
+function handDrawnKeyframeBodyByName(name: string): string | undefined {
+  if (!handDrawnKeyframeBodies) {
+    const bodies = new Map<string, string>();
+    const css = PRESENTATION_TIMELINE_EFFECT_KEYFRAMES_CSS;
+    let at = css.indexOf("@keyframes ");
+    while (at >= 0) {
+      const open = css.indexOf("{", at);
+      if (open < 0) break;
+      let depth = 0;
+      let close = open;
+      for (; close < css.length; close += 1) {
+        if (css[close] === "{") depth += 1;
+        else if (css[close] === "}") {
+          depth -= 1;
+          if (depth === 0) break;
+        }
+      }
+      bodies.set(css.slice(at + "@keyframes ".length, open).trim(), css.slice(open + 1, close));
+      at = css.indexOf("@keyframes ", close);
+    }
+    handDrawnKeyframeBodies = bodies;
+  }
+  return handDrawnKeyframeBodies.get(name);
+}
+
+/**
+ * A hand-drawn keyframe with stops between its start and end, under a name of
+ * its own, with Smooth start / end (`accel`, `decel` as shares) baked in:
+ * each stop at the time the whole effect's eased progress reaches it
+ * (`smoothKeyframeBody`), to be played linearly. Null when the keyframe has no
+ * such stop (its easing is the plain one), is not hand-drawn, or the step
+ * runs at an even pace.
+ */
+export function smoothHandDrawnKeyframe(
+  name: string,
+  accel: number,
+  decel: number,
+): { name: string; css: string } | null {
+  // Appear / Disappear are instant (PowerPoint gives them no duration to
+  // smooth): their one step stays where it is.
+  if (name === "mrai-ppt-effect-appear" || name === "mrai-ppt-effect-disappear") return null;
+  const body = handDrawnKeyframeBodyByName(name);
+  const baked = body ? smoothKeyframeBody(body, accel, decel) : null;
+  if (!baked) return null;
+  const variant = `${name}-s${Math.round(accel * MAX_EFFECT_SHARE)}-${Math.round(decel * MAX_EFFECT_SHARE)}`;
+  return { name: variant, css: `@keyframes ${variant}{${baked}}` };
+}
+
 export function timelineAnimationKeyframeName(
   animation: TimelineAnimation | undefined,
   effectOption?: PresentationAnimationEffectOption,
@@ -989,7 +1134,12 @@ export function timelineAnimationKeyframeName(
   const effect = presentationAnimationEffect(animation);
   if (effect?.defaultOption || effect?.nativeBehavior === "zoom" ||
       effect?.id === "spin" || effect?.id === "grow-shrink") {
-    return `mrai-ppt-effect-${effect.id}${effectOption ? `-${effectOption.replace(".", "_")}` : ""}`;
+    // The default option's keyframes carry the effect's bare name (see
+    // PRESENTATION_TIMELINE_EFFECT_KEYFRAMES_CSS): a step that states it --
+    // a Random Effects pick, Wipe From Bottom or Blinds Horizontal (row
+    // 1041) -- plays them, not a keyframe that does not exist.
+    const stated = effectOption && effectOption !== effect.defaultOption ? effectOption : undefined;
+    return `mrai-ppt-effect-${effect.id}${stated ? `-${stated.replace(".", "_")}` : ""}`;
   }
   return isBlockAnimation(animation)
     ? blockAnimationKeyframeName(animation)

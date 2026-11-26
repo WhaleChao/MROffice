@@ -658,6 +658,8 @@ export function patchOfficeTextPaint(
     outline?: string;
     outlineWidthPt?: number;
     effect?: string;
+    /** Text Fill > Transparency as an opacity (1: opaque, taken off). */
+    fillOpacity?: number;
   },
 ): OfficeTextPaint {
   const next = { ...normalizeOfficeTextPaint(value)! };
@@ -668,6 +670,13 @@ export function patchOfficeTextPaint(
     next.fill = patch.fill;
     delete next.fillGradient;
     delete next.fillPattern;
+    // A new solid colour keeps its Transparency, as PowerPoint's Text Fill
+    // colour does (tp-alpharecolor); No Fill has none.
+    if (patch.fill === "none") delete next.fillOpacity;
+  }
+  if (patch.fillOpacity !== undefined) {
+    if (patch.fillOpacity >= 1) delete next.fillOpacity;
+    else next.fillOpacity = Math.max(0, patch.fillOpacity);
   }
   if (patch.outline !== undefined) {
     next.outline = patch.outline;
@@ -711,7 +720,57 @@ export function patchOfficeTextPaint(
   return normalizeOfficeTextPaint(next)!;
 }
 
-/** One effect of a text paint, or null to take it off (`patchOfficeTextPaintParts`). */
+/**
+ * The paint when it is only a colour seen through: a flat `fill` with a
+ * `fillOpacity` below 1 and nothing else (no outline, gradient, pattern,
+ * effect or statement) -- PowerPoint's Text Fill > Transparency on a run's
+ * own colour (readings row 1052). Such a paint is not WordArt: it is the
+ * run's colour (`style.color`, the same rgb) drawn at an opacity, drawn by
+ * the text engine and written back as the colour's `a:alpha`. Null for any
+ * other paint or none.
+ */
+export function officeTextPaintFlatFill(value: unknown): { fill: string; opacity: number } | null {
+  if (!value || typeof value !== "object") return null;
+  if (Object.keys(value).some((key) => !["fill", "fillOpacity", "outline", "outlineWidthPt"].includes(key))) return null;
+  let paint: OfficeTextPaint | undefined;
+  try {
+    paint = normalizeOfficeTextPaint(value);
+  } catch {
+    return null;
+  }
+  if (!paint || paint.fill === "none" || paint.outline !== "none" || paint.fillOpacity === undefined) return null;
+  return { fill: paint.fill, opacity: paint.fillOpacity };
+}
+
+/** A flat see-through paint's colour as CSS (`#rrggbbaa`). */
+export function officeTextPaintFlatFillCss(flat: { fill: string; opacity: number }): string {
+  return alpha(flat.fill, flat.opacity);
+}
+
+/**
+ * The custom properties a flat see-through paint's CSS carries beside its
+ * `#rrggbbaa` colour: the rgb and the exact opacity, which SVG text takes as
+ * `fill` + `fill-opacity`. A colour's alpha is kept to 8 bits by the browser
+ * (0.7 prints as /ca .702) where `fill-opacity` prints as stated (/ca .7):
+ * the text engine's words blend at PowerPoint's opacity (tp-textalpha).
+ */
+export const OFFICE_TEXT_FILL_RGB = "--office-text-fill-rgb";
+export const OFFICE_TEXT_FILL_OPACITY = "--office-text-fill-opacity";
+
+/** A flat see-through paint as CSS: the colour, and its rgb and exact opacity for SVG. */
+export function officeTextPaintFlatFillStyle(flat: { fill: string; opacity: number }): CSSProperties {
+  return { color: alpha(flat.fill, flat.opacity), [OFFICE_TEXT_FILL_RGB]: flat.fill, [OFFICE_TEXT_FILL_OPACITY]: String(flat.opacity) } as CSSProperties;
+}
+
+/** The SVG fill of a run's CSS: its colour, or a flat see-through paint's rgb at its exact opacity. */
+export function officeTextSvgFill(css: CSSProperties): { fill?: string; fillOpacity?: number } {
+  const record = css as Record<string, unknown>;
+  const rgb = record[OFFICE_TEXT_FILL_RGB];
+  const opacity = Number(record[OFFICE_TEXT_FILL_OPACITY]);
+  if (typeof rgb === "string" && Number.isFinite(opacity) && opacity >= 0 && opacity < 1) return { fill: rgb, fillOpacity: opacity };
+  return typeof css.color === "string" ? { fill: css.color } : {};
+}
+
 /**
  * Font Color on characters that wear a paint: the colour IS their fill.
  *
@@ -733,11 +792,25 @@ export function patchOfficeTextPaint(
 export function officeTextPaintWithFontColor(
   paint: OfficeTextPaint,
   color: string | undefined,
-  options: { readonly automaticFill?: string; readonly keepBare?: boolean } = {},
+  options: {
+    readonly automaticFill?: string;
+    readonly keepBare?: boolean;
+    
+
+
+
+
+
+
+    readonly keepFillOpacity?: boolean;
+  } = {},
 ): OfficeTextPaint | null {
   const fill = color ?? options.automaticFill;
+  // Automatic on a colour seen through and nothing else: the words take the
+  // host's colour, the colour's transparency going with the colour.
+  if (fill === undefined && options.keepFillOpacity && officeTextPaintFlatFill(paint)) return null;
   const next = { ...(fill === undefined ? normalizeOfficeTextPaint(paint)! : patchOfficeTextPaint(paint, { fill })) };
-  if (fill !== undefined) delete next.fillOpacity;
+  if (fill !== undefined && !options.keepFillOpacity) delete next.fillOpacity;
   // Font Color changes the ink and nothing else: what Office states of the
   
   

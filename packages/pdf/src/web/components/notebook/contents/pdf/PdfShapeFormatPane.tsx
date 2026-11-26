@@ -27,6 +27,7 @@ import { SHAPE_LINE_ENDINGS, SHAPE_LINE_STYLES } from "@mrnote/core/web/lib/pdf/
 import {
   PDF_SHAPE_LINE_CAPS,
   PDF_SHAPE_LINE_JOINS,
+  pdfObjectLengthField,
   type PdfAnnotationFormatContextRibbonLabels,
   type PdfAnnotationFormatContextRibbonModel,
   type PdfAnnotationStyleChange,
@@ -233,20 +234,23 @@ export function PdfShapeFormatPane({
     ],
   };
 
+  // In the ribbon's unit (the locale's length unit), as its Size group.
+  const length = pdfObjectLengthField(labels);
   const sizeField = (axis: "width" | "height", value: number | undefined): OfficeShapeFormatPaneField => ({
     kind: "number",
     id: axis,
     label: axis === "width" ? labels.width : labels.height,
-    value: value === undefined ? "" : Math.round(value * 100) / 100,
-    min: 1,
-    max: 14400,
-    step: 1,
-    unit: labels.points,
+    value: value === undefined ? "" : length.show(value),
+    min: length.min,
+    max: length.max,
+    step: length.step,
+    unit: length.unitLabel,
     disabled: sizeDisabled,
     disabledReason: model.sizeDisabledReason,
     onCommit: (raw) => {
-      const next = number(raw, 1, 14400);
+      const next = length.parse(raw);
       if (next === null || !onSizeChange) return false;
+      if (value !== undefined && Math.abs(next - value) < length.tolerancePoints) return true;
       onSizeChange(axis, next, lockAspectRatio);
       return true;
     },

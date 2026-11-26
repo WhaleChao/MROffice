@@ -99,6 +99,9 @@ export interface RichClipboardCell {
   hyperlink?: string;
   hyperlinkTooltip?: string;
   hyperlinkDisplay?: string;
+  /** A link the page holds inert (`inertHyperlink`, a relative path or
+   *  file: address): a full paste takes it along, Paste Values does not. */
+  inertHyperlink?: string;
   /** The area the copied link is (hyperlink-areas `areaLinkSourceOf`): a paste
    *  inside that same area deletes it and takes the link beneath instead. */
   hyperlinkFrom?: AreaLinkSource;
@@ -207,6 +210,7 @@ export function detachRichClipboardCell(
     hyperlink: cell.hyperlink,
     hyperlinkTooltip: cell.hyperlinkTooltip,
     hyperlinkDisplay: cell.hyperlinkDisplay,
+    ...(cell.inertHyperlink ? { inertHyperlink: cell.inertHyperlink } : {}),
     ...(cell.hyperlinkFrom
       ? {
           hyperlinkFrom: {
@@ -260,6 +264,7 @@ export function richClipboardCellHasTransferableContent(
       cell.hyperlink ||
       cell.hyperlinkTooltip ||
       cell.hyperlinkDisplay ||
+      cell.inertHyperlink ||
       cell.comment ||
       cell.sparkline,
   );

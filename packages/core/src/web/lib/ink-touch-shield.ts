@@ -549,6 +549,8 @@ const TRACED_EVENTS = [
   "touchcancel",
   "click",
   "gesturestart",
+  // A pinch's end: the zoom it set off is timed after it (ink-input-trace, js/rf).
+  "gestureend",
 ] as const;
 
 function traceState(): string {
@@ -1050,15 +1052,29 @@ export function keepScribbleOff(surface: HTMLElement): () => void {
     }
     event.preventDefault();
   };
-  // Safari's pinch and rotate gestures over the page, as Excalidraw and
-  // tldraw cancel them: the editors zoom themselves.
-  const doc = surface.ownerDocument;
+  // Safari's pinch and rotate gestures that start on the surface, as
+  // Excalidraw and tldraw cancel them: the editors zoom themselves. On the
+  // surface, never on the document. WebKit asks, for every touch, whether
+  // the page listens to gesturestart / gesturechange / gestureend where it
+  // lands (WebPageProxy::updateTouchEventTracking), and a listener on the
+  // document or window counts for every element of the page
+  // (Style::Adjuster::computeEventListenerRegionTypes, the root's types
+  // inherited). Cancelling there answered "prevented" for every touch of a
+  // two-contact sequence anywhere on the page -- a hand on the ribbon and a
+  // finger on the scroll bar, a resting palm beside the Pencil -- after its
+  // touchstart had been answered "not prevented": the answer switching
+  // mid-sequence is the state WebKit's touch race (PR #59255) loses, the
+  // deferring recognizers then held until GestureRecognizerConsistencyEnforcer
+  // forces them ended a second later, and the Pencil's contacts are not
+  // delivered meanwhile while its hover still is (InkInputStall "deaf",
+  
+  // gesture cancelled there gives WebKit the same answer twice.
   const onGesture = (event: Event) => event.preventDefault();
   surface.addEventListener("touchstart", onTouchStart, { passive: false });
-  for (const type of GESTURE_EVENTS) doc.addEventListener(type, onGesture, { passive: false });
+  for (const type of GESTURE_EVENTS) surface.addEventListener(type, onGesture, { passive: false });
   return () => {
     surface.removeEventListener("touchstart", onTouchStart);
-    for (const type of GESTURE_EVENTS) doc.removeEventListener(type, onGesture);
+    for (const type of GESTURE_EVENTS) surface.removeEventListener(type, onGesture);
     const count = (heldScribbleSurfaces.get(surface) ?? 1) - 1;
     if (count > 0) heldScribbleSurfaces.set(surface, count);
     else heldScribbleSurfaces.delete(surface);

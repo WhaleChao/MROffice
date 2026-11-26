@@ -502,9 +502,25 @@ export function sanitizeNativePdfTextAnnotationSource(
   ) {
     return undefined;
   }
+  // How the note is drawn, as the reader read it: kept with the stored row.
+  // Dropped here, a note without an /AP that had been answered or given a
+  // state lost the icon the viewer draws for it once the page was opened
+  // again (PdfViewerPages draws it when hasAppearance === false; notion-lab
+  
+  // changes how a note is written or guarded (flags, rich text, nested
+  // replies, truncated text) is read from the file each time, as before.
+  const appearance: Pick<NativePdfTextAnnotationSource, "hasAppearance" | "icon" | "color"> = {};
+  if (typeof source.hasAppearance === "boolean") appearance.hasAppearance = source.hasAppearance;
+  if (typeof source.icon === "string" && /^[A-Za-z][A-Za-z0-9]{0,31}$/.test(source.icon)) {
+    appearance.icon = source.icon;
+  }
+  if (typeof source.color === "string" && /^#[0-9A-Fa-f]{6}$/.test(source.color)) {
+    appearance.color = source.color.toUpperCase();
+  }
   return {
     kind: NATIVE_PDF_TEXT_SOURCE_KIND,
     objectRef,
+    ...appearance,
   };
 }
 

@@ -35,6 +35,9 @@ import {
   MANUAL_TOC_GALLERY,
   createHeadingListNumberer,
   headingListNumbers,
+  headingsCountBodyRestartsOff,
+  noteOrderedListRestart,
+  type ListRestartSinceHeading,
   isManualTocTitle,
   manualTocTitleListNumbering,
 } from "./headingListNumbers";
@@ -859,7 +862,13 @@ function walkJsonHeadings(
     headingNumbers = computeHeadingNumbers(levels);
   }
   // Otherwise the numbers a Word numbering gives imported headings.
-  const listNumberer = headingNumbers === null ? createHeadingListNumberer() : null;
+  // The body lists a Restart Numbering made count in the headings after them,
+  // as the headings draw them (headingListNumbers).
+  const restarts =
+    headingNumbers === null && !headingsCountBodyRestartsOff() ? new Map<string, ListRestartSinceHeading>() : null;
+  const lastList = { chain: null as string | null };
+  let listDepth = 0;
+  const listNumberer = headingNumbers === null ? createHeadingListNumberer(restarts ?? undefined) : null;
   let headingOrdinal = -1;
   // A manual table's numbered title counts in its numbering, as Word counts
   // it (manualTocTitleListNumbering): the headings after it read one more.
@@ -937,9 +946,20 @@ function walkJsonHeadings(
         : null;
       if (attrs) listNumberer(attrs);
     }
+    const isList = node.type === "orderedList" || node.type === "bulletList" || node.type === "taskList";
+    if (restarts && node.type === "orderedList" && listDepth === 0) {
+      noteOrderedListRestart(
+        node.attrs as Record<string, unknown> | undefined,
+        (node.content ?? []).map((item) => item?.attrs as Record<string, unknown> | undefined),
+        restarts,
+        lastList,
+      );
+    }
+    if (isList) listDepth += 1;
     if (Array.isArray(node.content)) {
       for (const child of node.content) visit(child);
     }
+    if (isList) listDepth -= 1;
   };
 
   if (doc && typeof doc === "object") {

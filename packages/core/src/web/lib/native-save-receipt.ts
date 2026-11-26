@@ -12,6 +12,8 @@ export interface NativeSaveReceiptSnapshot {
   readonly patchedAnchorCount: unknown;
   readonly lossEntryCount: unknown;
   readonly reason: unknown;
+  /** The server proved the file already is the page and wrote it unchanged. */
+  readonly verifiedUnchanged?: unknown;
 }
 
 export interface LosslessDurableNativeSaveReceiptOptions {
@@ -21,6 +23,13 @@ export interface LosslessDurableNativeSaveReceiptOptions {
   readonly previousResourceVersionId?: string;
   /** Defaults to 1. Explicit 0 requires all three expected native identities. */
   readonly minimumPatchedAnchorCount?: number;
+  /**
+   * With `minimumPatchedAnchorCount: 0`, stands in for `expectedOutputSha256`:
+   * the receipt itself must say the server proved the file unchanged
+   * (`verified_unchanged: true`) and name a well-formed output digest. A
+   * zero-anchor receipt without that proof still fails (TRIAGE 159).
+   */
+  readonly acceptVerifiedUnchanged?: boolean;
 }
 
 type OwnDataProperty =
@@ -100,6 +109,7 @@ export function readNativeSaveReceiptSnapshot(
       patchedAnchorCount: readSnapshotValue(receipt, "patched_anchor_count"),
       lossEntryCount: readSnapshotValue(receipt, "loss_entry_count"),
       reason: readSnapshotValue(receipt, "reason"),
+      verifiedUnchanged: readSnapshotValue(receipt, "verified_unchanged"),
     });
   } catch {
     return null;
@@ -155,15 +165,23 @@ export function isLosslessDurableNativeSaveReceipt(
       options,
       "minimumPatchedAnchorCount",
     );
+    const acceptVerifiedUnchangedProperty = readOption(
+      options,
+      "acceptVerifiedUnchanged",
+    );
     if (
       expectedAdapterProperty.kind === "invalid" ||
       expectedResourceProperty.kind === "invalid" ||
       expectedOutputSha256Property.kind === "invalid" ||
       previousResourceVersionProperty.kind === "invalid" ||
-      minimumAnchorProperty.kind === "invalid"
+      minimumAnchorProperty.kind === "invalid" ||
+      acceptVerifiedUnchangedProperty.kind === "invalid"
     ) {
       return false;
     }
+    const acceptVerifiedUnchanged =
+      acceptVerifiedUnchangedProperty.kind === "value" &&
+      acceptVerifiedUnchangedProperty.value === true;
 
     const expectedAdapter =
       expectedAdapterProperty.kind === "value"
@@ -196,11 +214,12 @@ export function isLosslessDurableNativeSaveReceipt(
         !isNonblankIdentifier(previousResourceVersionId)) ||
       !Number.isSafeInteger(minimumPatchedAnchorCount) ||
       (minimumPatchedAnchorCount as number) < 0 ||
-      // A zero-change export can only prove a known original byte sequence.
+      // A zero-change export can only prove a known original byte sequence,
+      // or carry the server's own proof that the file is unchanged.
       // Keep ordinary mutation checks at the default positive anchor count.
       (minimumPatchedAnchorCount === 0 &&
         (expectedAdapter === undefined || expectedResourceId === undefined ||
-          expectedOutputSha256 === undefined))
+          (expectedOutputSha256 === undefined && !acceptVerifiedUnchanged)))
     ) {
       return false;
     }
@@ -224,6 +243,24 @@ export function isLosslessDurableNativeSaveReceipt(
       snapshot,
       "lossEntryCount",
     );
+    const verifiedUnchanged = readOwnEnumerableDataProperty(
+      snapshot,
+      "verifiedUnchanged",
+    );
+    // Zero anchors with no expected digest: only the server's proof that the
+    // file already is the page, on a receipt naming a well-formed digest.
+    if (
+      minimumPatchedAnchorCount === 0 &&
+      expectedOutputSha256 === undefined &&
+      !(
+        verifiedUnchanged.kind === "value" &&
+        verifiedUnchanged.value === true &&
+        outputSha256.kind === "value" &&
+        isSha256(outputSha256.value)
+      )
+    ) {
+      return false;
+    }
     if (
       status.kind !== "value" ||
       adapter.kind !== "value" ||

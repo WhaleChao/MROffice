@@ -141,6 +141,32 @@ export function presentationTextOptionsTab(input: PresentationTextOptionsInput):
   const fillType = base.fillGradient ? "gradient" : base.fill === "none" ? "none" : "solid";
   const outlineOn = base.outline !== "none";
 
+  const numberField = (
+    id: string,
+    labelKey: string,
+    value: number,
+    unit: string,
+    range: [number, number],
+    write: (value: number) => void,
+    disabled: boolean,
+  ): OfficeShapeFormatPaneField => ({
+    kind: "number",
+    id,
+    label: t(labelKey),
+    value,
+    min: range[0],
+    max: range[1],
+    step: 1,
+    unit,
+    disabled: disabledPaint || disabled,
+    disabledReason: paintReason,
+    onCommit: (raw) => {
+      const parsed = parseNumber(raw);
+      if (parsed === null) return false;
+      write(clamp(parsed, range[0], range[1]));
+      return true;
+    },
+  });
   const fillOutline: OfficeShapeFormatPaneField[] = [
     {
       kind: "select",
@@ -180,6 +206,29 @@ export function presentationTextOptionsTab(input: PresentationTextOptionsInput):
         if (color !== "none") input.editPaint((own) => patchOfficeTextPaint(own, { fill: color }));
       },
     },
+    // Text Fill > Transparency (PowerPoint's Format Shape pane, Text Options
+    // > Text Fill > Solid fill): the solid colour's opacity, 0-100 %, by the
+    // same field builder as the shadow's and glow's. Written back as the
+    // colour's `a:alpha` (readings row 1052).
+    numberField(
+      "text-fill-transparency",
+      "presentation.textOptions.transparency",
+      fillType === "solid" ? Math.round((1 - (base.fillOpacity ?? 1)) * 100) : 0,
+      "%",
+      [0, 100],
+      (value) =>
+        input.editPaint((own) => {
+          if (own.fill === "none" || own.fillGradient || own.fillPattern) return own;
+          const next = patchOfficeTextPaint(own, { fillOpacity: (100 - Math.round(value)) / 100 });
+          // Back to opaque with nothing else: no paint, the words' plain colour.
+          const bare =
+            next.fillOpacity === undefined &&
+            next.outline === "none" &&
+            Object.keys(next).every((key) => key === "fill" || key === "outline" || key === "outlineWidthPt");
+          return bare ? null : next;
+        }),
+      fillType !== "solid",
+    ),
     {
       kind: "select",
       id: "text-outline-type",
@@ -236,32 +285,6 @@ export function presentationTextOptionsTab(input: PresentationTextOptionsInput):
   const shadow = base.innerShadow ?? base.shadow;
   const writeShadow = (next: OfficeTextShadow) =>
     writeParts(shadowKind === "inner" ? { innerShadow: next } : { shadow: next });
-  const numberField = (
-    id: string,
-    labelKey: string,
-    value: number,
-    unit: string,
-    range: [number, number],
-    write: (value: number) => void,
-    disabled: boolean,
-  ): OfficeShapeFormatPaneField => ({
-    kind: "number",
-    id,
-    label: t(labelKey),
-    value,
-    min: range[0],
-    max: range[1],
-    step: 1,
-    unit,
-    disabled: disabledPaint || disabled,
-    disabledReason: paintReason,
-    onCommit: (raw) => {
-      const parsed = parseNumber(raw);
-      if (parsed === null) return false;
-      write(clamp(parsed, range[0], range[1]));
-      return true;
-    },
-  });
   const pt = t("presentation.home.pointsUnit");
   // Text Effects' shared fields over the words' paint (the deck's and the
   // sheet's panes and the ribbon's menu read and write the same way).

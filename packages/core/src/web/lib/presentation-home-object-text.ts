@@ -112,6 +112,25 @@ export interface PresentationHomeObjectTargets {
  * every selected chart. Pictures, tables and media carry nothing Home's Font
  * group formats.
  */
+
+
+
+
+
+
+
+
+
+export function presentationFirstSelectedChartId(
+  blocks: readonly PresentationBlock[],
+  selectedIds: readonly string[],
+): string | undefined {
+  if (selectedIds.length === 0) return undefined;
+  const byId = new Map<string, PresentationBlock>();
+  for (const block of blocks) if (!byId.has(block.id)) byId.set(block.id, block);
+  return selectedIds.find((id) => byId.get(id)?.type === "chart");
+}
+
 export function presentationHomeObjectTargets(
   blocks: readonly PresentationBlock[],
   selectedIds: readonly string[],

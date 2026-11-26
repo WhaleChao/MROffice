@@ -85,6 +85,11 @@ function mediaBytes(media: Rec, sha: string): string | undefined {
  * Changes whenever an expansion put back a picture whose entry the page had
  * lost: the editor then writes the page again, which stores the entry anew.
  */
+/** The bytes this session read for the picture `sha`, or undefined. */
+export function knownPresentationMediaBytes(sha: string): string | undefined {
+  return sessionMediaBytes.get(sha);
+}
+
 export function presentationMediaRestoredCount(): number {
   return restoredFromSession;
 }

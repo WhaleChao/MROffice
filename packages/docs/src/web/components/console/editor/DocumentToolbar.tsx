@@ -108,7 +108,7 @@ import {
 import {
   documentDefaultShapeStyleFromAttrs,
 } from "@mrnote/core/web/lib/document-wordart-style-adapter.ts";
-import { Children, Fragment, cloneElement, createContext, createElement, isValidElement, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
+import { Children, Fragment, cloneElement, createContext, createElement, isValidElement, memo, startTransition, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useScrollportToolbarInset } from "@mrnote/core/web/components/console/editor/scrollportToolbarInset.ts";
 import {
@@ -1035,7 +1035,7 @@ import {
   copyPrintTypographyVariables,
   stripPrintEditorChrome,
 } from "./native-document/printDocument";
-import { printWindowWhenReady, PRINT_ASSET_TIMEOUT_MS, renderPrintReadinessFailure, waitForDocumentPrintSource } from "./native-document/printReadiness";
+import { documentPrintFailureMessages, printWindowWhenReady, PRINT_ASSET_TIMEOUT_MS, PrintReadinessError, renderPrintReadinessFailure, waitForDocumentPrintSource } from "./native-document/printReadiness";
 import { getTrackedChangeMarkupFilter, getShownTrackedChanges, getTrackedChanges, trackedChangeIsShown, getTrackChangesMode, hasShownTrackedChanges, isSuggestingActive, type TrackedChangeMarkupFilter } from "@mrnote/core/web/components/console/editor/native-document/trackChangesExtension.ts";
 import type { TrackChangesMode } from "@mrnote/core/web/components/console/editor/native-document/trackChangesMode.ts";
 import {
@@ -9446,7 +9446,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
   // NodeSelection takes activation priority over a containing table, while the
   // table tabs remain visible. Remember the last base tab separately so a
   // contextual tab can never become hidden or sticky after selection leaves.
-  const [ribbonTabStateUnchecked, setRibbonTabState] = useState<RibbonTabId>(
+  const [ribbonTabStateUnchecked, setRibbonTabStateNow] = useState<RibbonTabId>(
     () => initialRibbonTab ?? "home",
   );
   const ribbonTabState = (["home","insert"] as readonly unknown[]).includes(ribbonTabStateUnchecked) ? ribbonTabStateUnchecked : "home";
@@ -10078,8 +10078,28 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     false,
     lastBaseRibbonTabRef.current,
   );
+  // A tab chosen renders the toolbar again (its tab state is the whole
+  // toolbar's): ~0.1 s of one task in Chromium on a desk of windows, 0.3-0.5 s
+  // in WebKit, the press waiting for it. A transition: the press and the
+  // pointer are answered first, the tab's controls follow, interruptible
+  
+  // in the press's own task, as before.
+  // Only a tab the person picks on the tab strip: a command that opens a tab
+  // (Chart Design for a chart inserted, a dialog's own tab) renders it in the
+  // same task, its focus and its dialog following it.
+  const setRibbonTabState = useCallback((next: RibbonTabId, picked = false) => {
+    if (
+      !picked ||
+      (typeof window !== "undefined" &&
+        (window as Window & { __docsRibbonTabTransitionOff?: boolean }).__docsRibbonTabTransitionOff === true)
+    ) {
+      setRibbonTabStateNow(next);
+      return;
+    }
+    startTransition(() => setRibbonTabStateNow(next));
+  }, []);
   const setRibbonTab = useCallback(
-    (next: RibbonTabId) => {
+    (next: RibbonTabId, picked = false) => {
       {
         setShapeFillPaletteOpen(false);
         setShapeOutlinePaletteOpen(false);
@@ -10090,7 +10110,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
       }
       if (isBaseRibbonTab(next)) {
         lastBaseRibbonTabRef.current = next;
-        setRibbonTabState(next);
+        setRibbonTabState(next, picked);
         return;
       }
     },
@@ -10104,6 +10124,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
       false,
     ],
   );
+  const pickRibbonTab = useCallback((next: RibbonTabId) => setRibbonTab(next, true), [setRibbonTab]);
   // Draw tab ink (Word: Draw, an Eraser of three kinds, a gallery of pens
   // the user adds to and deletes from, Esc stops inking, Draw with Trackpad).
   // On a handwriting document's dark paper a black pen writes, and is shown
@@ -10404,7 +10425,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
       smartArtContextSelectionIdentity;
     previousHeaderFooterContextIdentityRef.current =
       headerFooterContextIdentity;
-    setRibbonTabState((current) => {
+    setRibbonTabStateNow((current) => {
       return normalizeWebRibbonTab(
         current,
         false,
@@ -21364,7 +21385,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
       await waitForDocumentPrintSource(dom, {cancelled: () => printWindow.closed});
     } catch (error) {
       releaseWholePages();
-      if (!printWindow.closed) renderPrintReadinessFailure(doc, t("toolbar.printReadinessFailed"));
+      if (!printWindow.closed) renderPrintReadinessFailure(doc, t("toolbar.printReadinessFailed"), error instanceof PrintReadinessError ? error : undefined, documentPrintFailureMessages(t));
       throw error;
     }
 
@@ -21498,11 +21519,12 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
     try {
       await installDocumentFontRules(clone, doc, {timeoutMs:PRINT_ASSET_TIMEOUT_MS});
     } catch (error) {
-      if (!printWindow.closed) renderPrintReadinessFailure(doc, t("toolbar.printReadinessFailed"));
+      if (!printWindow.closed) renderPrintReadinessFailure(doc, t("toolbar.printReadinessFailed"), error instanceof PrintReadinessError ? error : undefined, documentPrintFailureMessages(t));
       throw error;
     }
     const result = await printWindowWhenReady(printWindow, doc.body, {
       errorMessage: t("toolbar.printReadinessFailed"),
+      errorMessages: documentPrintFailureMessages(t),
       timeoutMs: Math.max(1, PRINT_ASSET_TIMEOUT_MS - (performance.now() - fontReadinessStartedAt)),
     });
     if (result.status === "failed") throw result.error;
@@ -23171,7 +23193,7 @@ function DocumentToolbar({ editor: documentEditor, footerPortalTarget, liveInkAw
               : [{ key: "home", label: t("toolbar.ribbonHome") }, { key: "insert", label: t("toolbar.ribbonInsert") }] satisfies ReadonlyArray<OfficeRibbonTabDescriptor<RibbonTabId>>
           }
           activeTab={ribbonTab}
-          onSelect={setRibbonTab}
+          onSelect={pickRibbonTab}
           testIdPrefix="document-toolbar"
           tabTestId={(key) => `document-toolbar-ribbon-tab-${key}`}
           onTabPointerDown={rememberEditorSelection}

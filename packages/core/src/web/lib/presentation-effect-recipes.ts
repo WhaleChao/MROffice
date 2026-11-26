@@ -21,6 +21,7 @@
  * `$`, the interpolated key value of a formula key.
  */
 import recipesJson from "./presentation-effect-recipes.json";
+import type { EffectTrackColor } from "./presentation-anim-effect-settings";
 import {
   effectSettingsPlayDurationMs,
   effectTextUnitCount,
@@ -28,6 +29,7 @@ import {
 } from "./presentation-anim-effect-settings";
 import { RUN_FONT_FAMILIES, runFontFamilyName } from "./presentation-runs";
 import { cssFontFamilyList } from "./css-font-family";
+import { smoothProgress } from "./presentation-smooth-timing";
 
 export interface EffectRecipeBox {
   /** Centre and size as fractions of the slide. */
@@ -98,6 +100,51 @@ interface EffectRecipe {
 }
 
 const RECIPES = recipesJson as unknown as Record<string, EffectRecipe>;
+
+/**
+ * The CSS colour of one colour-track colour in the file's form (row 1308):
+ * sRGB as is, a theme colour through the show's theme variables, its
+ * luminance modifiers and alpha applied as PowerPoint applies them
+ * (L' = L x lumMod + lumOff; alpha the colour's opacity).
+ */
+export function effectTrackColorCss(color: EffectTrackColor): string {
+  let css =
+    color.kind === "srgbClr"
+      ? `#${color.val.toLowerCase()}`
+      : color.kind === "schemeClr"
+        ? effectRecipeSchemeColor(color.val)
+        : color.val;
+  const mods = new Map((color.mods ?? []).map(([name, value]) => [name, Number(value) / 100_000]));
+  const lumMod = mods.get("lumMod");
+  const lumOff = mods.get("lumOff");
+  if (lumMod !== undefined || lumOff !== undefined) {
+    css = `hsl(from ${css} h s calc(l * ${lumMod ?? 1} + ${(lumOff ?? 0) * 100}))`;
+  }
+  const alpha = mods.get("alpha");
+  if (alpha !== undefined) css = `rgb(from ${css} r g b / ${alpha})`;
+  return css;
+}
+
+/** A recipe whose text colour track (style.color) takes the step's own two colours (row 1308). */
+export function withRecipeTextColors(
+  recipe: EffectRecipeVariant,
+  colors: readonly EffectTrackColor[] | undefined,
+): EffectRecipeVariant {
+  if (!colors || colors.length === 0) return recipe;
+  return {
+    ...recipe,
+    tracks: recipe.tracks.map((track) =>
+      track.k === "prop" && track.p === "style.color" && track.keys
+        ? {
+            ...track,
+            keys: track.keys.map((key, index) =>
+              colors[index] ? ([key[0], effectTrackColorCss(colors[index])] as RecipeKey) : key,
+            ),
+          }
+        : track,
+    ),
+  };
+}
 
 /** The recipe of an effect and option, or `null` for an effect drawn another way. */
 export function effectRecipe(
@@ -268,17 +315,9 @@ export function evaluateRecipeExpression(source: string, scope: Scope): number {
 // ── timing ─────────────────────────────────────────────────────────────────
 
 /** PowerPoint's accelerate / decelerate: a share of the time speeding up, a share slowing down. */
+/** Smooth start / end (SMIL accelerate / decelerate): the deck's one mapping. */
 function ease(t: number, accel = 0, decel = 0): number {
-  const a = Math.max(0, Math.min(1, accel));
-  const d = Math.max(0, Math.min(1 - a, decel));
-  if (a === 0 && d === 0) return t;
-  const speed = 1 / (1 - a / 2 - d / 2);
-  if (t < a) return (speed * t * t) / (2 * a);
-  if (t > 1 - d) {
-    const rest = 1 - t;
-    return 1 - (speed * rest * rest) / (2 * d);
-  }
-  return speed * (t - a / 2);
+  return accel > 0 || decel > 0 ? smoothProgress(t, accel, decel) : t;
 }
 
 function timeFilter(t: number, points: number[][] | undefined): number {
@@ -600,6 +639,18 @@ function pathPoint(path: string, progress: number): [number, number] {
 }
 
 /**
+ * The `p:animMotion` path a motion-path effect writes (its recipe's, which is
+ * the measured template's), or `null` for an effect that follows no path.
+ */
+export function effectRecipeMotionPath(
+  effect: string | undefined,
+  option?: string | null,
+): string | null {
+  const track = effectRecipe(effect, option)?.tracks.find((candidate) => candidate.k === "motion");
+  return track && track.k === "motion" ? track.path : null;
+}
+
+/**
  * The line a motion-path effect travels, as points in slide fractions from
  * the object's place; `null` for an effect that follows no path. For drawing
  * the path (the gallery's glyph), not for playing it.
@@ -835,8 +886,9 @@ const SCHEME_FALLBACK: Readonly<Record<string, string>> = {
   tx1: "#000000",
 };
 
-/** The CSS colour of a theme colour an effect names. */
+/** The CSS colour of a theme colour an effect names (or a CSS colour a step states, row 1308). */
 export function effectRecipeSchemeColor(scheme: string): string {
+  if (scheme.startsWith("#") || scheme.includes("(")) return scheme;
   const fallback = SCHEME_FALLBACK[scheme] ?? "currentColor";
   return /^[A-Za-z0-9]+$/.test(scheme)
     ? `var(--mrai-ppt-fx-${scheme},${fallback})`
@@ -1137,15 +1189,22 @@ export function effectPlayDurationMs(
   }
   const recipe = effectRecipe(step.animation, step.effectOption);
   const stepMs = recipe ? effectRecipeLetterStepMs(recipe, step.durationMs) : null;
-  if (stepMs === null || step.paragraphs) return step.durationMs;
-  const text =
+  if (stepMs === null || !recipe) return step.durationMs;
+  // An effect that iterates by itself (Color Typewriter): the click's next run
+  // starts once the last of the units PowerPoint counts has started -- every
+  // character that is not white space (or each word), over the step's own
+  
+  let text =
     block && (block.type === "text" || block.type === "shape") && typeof block.text === "string"
       ? block.text
       : "";
-  let letters = 0;
-  for (const character of text) if (character !== "\n") letters += 1;
-  if (letters === 0) return step.durationMs;
-  return step.durationMs + stepMs * (letters - 1);
+  const range = step.paragraphs as { start?: unknown; end?: unknown } | undefined;
+  if (range && typeof range.start === "number" && typeof range.end === "number") {
+    text = text.split("\n").slice(range.start, range.end + 1).join("\n");
+  }
+  const units = effectTextUnitCount(text, recipe.it?.type === "wd" ? "word" : "letter");
+  if (units <= 1) return step.durationMs;
+  return step.durationMs + Math.floor(stepMs * (units - 1));
 }
 
 export function effectRecipeLetterStepMs(

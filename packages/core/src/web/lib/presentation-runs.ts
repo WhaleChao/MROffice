@@ -1254,6 +1254,24 @@ export function applyRunFormat(
   return mergeRuns(out, options);
 }
 
+/** The style of the first run `start`..`end` covers (or of the run at `start`). */
+function firstStyleInRange(
+  runs: readonly TextRun[],
+  start: number,
+  end: number,
+  options?: RunNormalizationOptions,
+): RunStyle | undefined {
+  let cursor = 0;
+  let found: RunStyle | undefined;
+  for (const run of mergeRuns(runs, options)) {
+    const runEnd = cursor + run.text.length;
+    if (runEnd > start && cursor < Math.max(end, start + 1)) return run.style;
+    if (found === undefined && runEnd >= start) found = run.style;
+    cursor = runEnd;
+  }
+  return found;
+}
+
 /** The keys of a run style that name its face. */
 const FACE_KEYS = ["fontFamily", "themeFontRole"] as const;
 
@@ -1311,8 +1329,10 @@ export function applyFontBoxRunFormat(
   options?: RunNormalizationOptions,
 ): TextRun[] {
   // A patch made per run (a link's colour beside the face) states its face
-  // alike for every run: read it off a run with no style of its own.
-  const stated = typeof patch === "function" ? patch(undefined) : patch;
+  // alike for every run: read it off the first run the range covers -- a
+  // real run's style, since a per-run patch may read it (Text Fill over two
+  // styles patches each run's own paint, and has none to patch without one).
+  const stated = typeof patch === "function" ? patch(firstStyleInRange(runs, start, end, options)) : patch;
   if (!fontBoxFaceSkipsEastAsian(stated, stated.fontFamily)) return applyRunFormat(runs, start, end, patch, options);
   const face: Partial<RunStyle> = {};
   for (const key of FACE_KEYS) {

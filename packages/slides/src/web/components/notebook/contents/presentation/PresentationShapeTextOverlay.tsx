@@ -18,7 +18,7 @@ import {
   normalizeOfficeShapeEffectPreset,
   officeShapeEffectInsetLayerReflectionCss,
 } from "@mrnote/core/web/lib/office-shape-effects.ts";
-import { memo, useCallback, useContext, type CSSProperties, type HTMLAttributes, type ReactElement, type Ref } from "react";
+import { memo, useCallback, useContext, useMemo, type CSSProperties, type HTMLAttributes, type ReactElement, type Ref } from "react";
 import { usePowerPointLineFit } from "./usePowerPointLineFit";
 import { PresentationFontAliasesContext } from "./usePresentationFontFaces";
 import { normalizeNativeBulletReceipt, paragraphStatesIndent } from "@mrnote/core/web/lib/presentation-paragraphs.ts";
@@ -116,6 +116,8 @@ function ShapeTextOverlayDrawing({
   onNavigateToSlide?: (slideId: string) => void;
 }): ReactElement | null {
   const fontAliases = useContext(PresentationFontAliasesContext);
+  // A word's link where the engine draws the label (the show, the print).
+  const engineLinks = useMemo(() => ({ slideIds, onNavigateToSlide }), [slideIds, onNavigateToSlide]);
   // A By Paragraph build plays row by row (PPT-B370).
   const paragraphPlay = useContext(PresentationParagraphPlayContext);
   // A flat label ends its lines where PowerPoint does, as a structured
@@ -579,6 +581,7 @@ function ShapeTextOverlayDrawing({
       />
       {engineEligible ? (
         <PresentationEngineOrFallback
+          links={engineLinks}
           rows={engineRows}
           bodyStyle={textCss}
           fontSizeUnit={fontSizeUnit}
@@ -589,6 +592,7 @@ function ShapeTextOverlayDrawing({
           eastAsianLines={asRecord(block.source)?.nativeEastAsianLines}
           lineBox={asRecord(block.source)?.nativeLineBox}
           markLines={asRecord(block.source)?.nativeMarkLines}
+          breakLines={asRecord(block.source)?.nativeBreakLineFaces}
           {...(labelParagraphs ? {} : { flatText: text, flatRuns: block.runs })}
           widthPx={engineWidthEmu === null ? null : engineWidthEmu / AUTOFIT_EMU_PER_PX}
           wrap={shapeTextWraps}

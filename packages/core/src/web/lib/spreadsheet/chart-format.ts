@@ -164,8 +164,19 @@ export function normalizeSpreadsheetChartFormat(value: unknown): SpreadsheetChar
     } else if (key === "seriesStyles" || key === "sliceStyles" || key === "axisStyles") {
       const normalized = key === "seriesStyles" ? normalizePresentationChartSeriesStyles(atom)
         : key === "sliceStyles" ? normalizePresentationChartSliceStyles(atom) : normalizePresentationChartAxisStyles(atom);
+      // An axis style is held against its own axis's: the axes' list comes
+      // back in the API's order (category, value, secondary value) while a
+      // part may state the secondary axis's text second (R490-X01 Figure 1:
+      // the third style's outline looked lost, the whole format went and the
+      // chart printed without its data labels).
+      const counterpart = (entry: Record<string, unknown>, index: number): object | undefined =>
+        key === "axisStyles" ? (normalized as readonly { axis: unknown }[] | undefined)?.find(item => item.axis === entry.axis) : normalized?.[index];
       if (!normalized || !Array.isArray(atom) || normalized.length !== atom.length ||
-        atom.some((entry, index) => !record(entry) || Object.keys(entry).some(field => !Object.hasOwn(normalized[index], field)))) return undefined;
+        atom.some((entry, index) => {
+          if (!record(entry)) return true;
+          const kept = counterpart(entry, index);
+          return !kept || Object.keys(entry).some(field => !Object.hasOwn(kept, field));
+        })) return undefined;
       result[key] = normalized;
     } else return undefined;
   }

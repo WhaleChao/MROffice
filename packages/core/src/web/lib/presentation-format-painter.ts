@@ -41,6 +41,7 @@ import type {
   ParagraphBullet,
 } from "./presentation-paragraphs";
 import type { OfficeShapeShadow } from "./office-shape-paint";
+import { officeTextPaintFlatFill } from "./office-text-paint";
 import type { PresentationLevelStyle } from "./presentation-level-styles";
 import { PRESENTATION_LEVEL_STYLE_KEYS, type PresentationLevelStyleKey } from "./presentation-runs";
 
@@ -465,7 +466,11 @@ function captureRunStyle(block: PaintableBlock): RunStyle | undefined {
   const first = runs[0] as TextRun | undefined;
   const style = first?.style;
   if (!style || typeof style !== "object") return undefined;
-  const picked = pickStyle(style as Record<string, unknown>, RUN_STYLE_KEYS) as RunStyle | undefined;
+  let picked = pickStyle(style as Record<string, unknown>, RUN_STYLE_KEYS) as RunStyle | undefined;
+  // The colour's Transparency (readings row 1052) goes with the colour, as
+  // PowerPoint's Format Painter copies a run's whole character format.
+  const flat = officeTextPaintFlatFill((style as { textPaint?: unknown }).textPaint);
+  if (flat && picked?.color) picked = { ...picked, textPaint: { fill: flat.fill, fillOpacity: flat.opacity, outline: "none", outlineWidthPt: 0 } };
   // A face that follows the theme's heading or body font goes as that
   // reference, so the painted words follow the theme as the source's do.
   const role = (style as { themeFontRole?: unknown }).themeFontRole;
@@ -597,6 +602,16 @@ export function captureTextSelectionFormatSnapshot(
         Record<keyof RunStyle, RunStyle[keyof RunStyle] | null>
       >
     )[key] = first ?? null;
+  }
+  // A colour seen through, alike on every selected run, goes with the colour.
+  const flats = styles.map((style) => officeTextPaintFlatFill(style?.textPaint));
+  const firstFlat = flats[0];
+  if (
+    typeof patch.color === "string" &&
+    firstFlat &&
+    flats.every((flat) => flat && flat.fill === firstFlat.fill && flat.opacity === firstFlat.opacity)
+  ) {
+    patch.textPaint = { fill: firstFlat.fill, fillOpacity: firstFlat.opacity, outline: "none", outlineWidthPt: 0 };
   }
   if (Object.keys(patch).length === 0 && !paragraph) return null;
   return {

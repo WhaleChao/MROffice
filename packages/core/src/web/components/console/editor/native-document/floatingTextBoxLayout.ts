@@ -92,6 +92,7 @@ import {
   type FloatAnchor,
   type FloatKeepOnPage,
   type FloatPageGeometry,
+  type FloatPlacement,
 } from "../../../../lib/office-float-anchor";
 import { documentFloatingStack } from "../../../../lib/document-shapes";
 import { measureFloatPaint, type FloatPaint } from "../../../../lib/office-float-anchor-edit";
@@ -112,6 +113,7 @@ import { SHEET_DORMANT_ATTR } from "./paged/sheetDormancy";
 import { measureOutsideEditorObservation } from "./documentLayoutStatus";
 import { COLUMN_BAND_EXCLUSION_ATTR, COLUMN_REGIONS_ATTR, FLOAT_HOST_BEFORE_ATTR, unequalColumnPlacementForBlock, type UnequalColumnPlacement } from "./paged/unequalColumnProjection";
 import { TextBoxFrameChromeView, recordTextBoxFramePaint } from "./textBoxFrameChrome";
+import { requestQuietFrame } from "../../../../lib/canvas-gesture";
 
 export const FLOATING_TEXT_BOX_META = "floatingTextBoxFlow";
 
@@ -359,6 +361,33 @@ function layoutObjects(root: HTMLElement): LayoutObjects {
 /** The inline declarations a picture's placement wrote, as one string the
  * node view puts back after it resets the wrapper's style. */
 export const PICTURE_FLOAT_CSS_ATTR = "data-picture-float-css";
+/** The inset an overlay picture's drawing is cut to at the paper's edge. */
+export const PAPER_CLIP_VAR = "--picture-paper-clip";
+
+
+
+function pictureClipOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsPictureClipOff?: boolean }).__docsPictureClipOff === true;
+}
+
+/**
+ * The inset that keeps an overlay picture's drawing on the paper: what it
+ * runs past each edge of the page, in its own box. Null when it stays on
+ * the paper, or when it is turned (a turned raster's own box is turned with
+ * it, so an inset of the box is not the paper's edge).
+ */
+export function paperClipInset(wrapper: HTMLElement, placement: FloatPlacement, geometry: FloatPageGeometry): string | null {
+  if (pictureClipOff()) return null;
+  if (wrapper.style.getPropertyValue("--picture-rotate").trim() || wrapper.style.getPropertyValue("--picture-3d-transform").trim()) return null;
+  const top = Math.max(0, -placement.topPx);
+  const left = Math.max(0, -placement.leftPx);
+  const bottom = Math.max(0, placement.topPx + placement.heightPx - geometry.pageHeightPx);
+  const right = Math.max(0, placement.leftPx + placement.widthPx - geometry.pageWidthPx);
+  if (top < 0.5 && left < 0.5 && bottom < 0.5 && right < 0.5) return null;
+  if (top + bottom >= placement.heightPx || left + right >= placement.widthPx) return null;
+  const px = (value: number) => `${Math.round(value * 100) / 100}px`;
+  return `inset(${px(top)} ${px(right)} ${px(bottom)} ${px(left)})`;
+}
 
 /**
  * Place one floating picture, the way a floating shape is placed. Square /
@@ -447,6 +476,13 @@ function applyPicturePlacement(
     set("margin", "0");
     set("float", "none");
     set("max-width", "none");
+    // At its own size, not the room left beside it: an absolute box shrinks
+    // to the containing block's width less its left, and the raster (its
+    // max-width is the wrapper's) was drawn narrower -- R286's 797 px page
+    // backgrounds at 793.8, a 801 px one placed 6.7 px left of the paper at
+    // 800.5. Word keeps the picture's size and the paper cuts it (below).
+    // `window.__docsPictureClipOff = true` leaves the shrink, as before.
+    if (!pictureClipOff()) set("width", "max-content");
     // The rank is a variable the raster and its drawings paint with
     // (note-editor.css), never the wrapper's own z-index: a ranked wrapper
     // is a stacking context, and the selection chrome inside it could then
@@ -454,6 +490,15 @@ function applyPicturePlacement(
     set("--picture-float-rank", String(floatStackZIndex(anchor, stack)));
     set("pointer-events", "auto");
     set("shape-outside", "none");
+    // Word cuts a drawing at the paper's edge: what runs past it is not
+    // drawn on the page or in print. Its raster, style and border are cut
+    // here (note-editor.css), never the wrapper, so the selection chrome and
+    // its handles stay where they can be reached. Corpus R286: full-page
+    // Behind Text backgrounds 4-17 px taller than the paper ran into the gap
+    // under ten pages.
+    const clip = paperClipInset(wrapper, placement, geometry);
+    if (clip) set(PAPER_CLIP_VAR, clip);
+    else wrapper.style.removeProperty(PAPER_CLIP_VAR);
   } else if (mode === "band") {
     clearOverlayOffsets(wrapper);
     set("position", "relative");
@@ -532,6 +577,10 @@ function applyPicturePlacement(
 function clearOverlayOffsets(wrapper: HTMLElement): void {
   wrapper.style.removeProperty("left");
   wrapper.style.removeProperty("top");
+  // An overlay's own-size width and paper cut (applyPicturePlacement): a
+  // picture back in the flow takes neither.
+  if (wrapper.style.getPropertyValue("width") === "max-content") wrapper.style.removeProperty("width");
+  wrapper.style.removeProperty(PAPER_CLIP_VAR);
 }
 
 /**
@@ -4157,6 +4206,7 @@ export const FloatingTextBoxLayout = Extension.create({
         key: floatingTextBoxLayoutKey,
         view: (view) => {
           let frame = 0;
+          let cancelFrame: (() => void) | null = null;
           const shadowBudget = { count: 0, windowStart: 0 };
           const overhangOrder: { style: HTMLStyleElement | null; text: string } = { style: null, text: "" };
           // Body objects over a page's header or footer: the bands are cut
@@ -4214,8 +4264,13 @@ export const FloatingTextBoxLayout = Extension.create({
           };
           const schedule = () => {
             if (frame) return;
-            frame = requestAnimationFrame(() => {
+            // A frame of its own after a canvas gesture, not during it
+            // (lib/canvas-gesture): the pass lays out every object of the
+            // document, 0.1-0.7 s in WebKit with a page of ink strokes.
+            frame = 1;
+            cancelFrame = requestQuietFrame(window, () => {
               frame = 0;
+              cancelFrame = null;
               if (!sweeping && typedInPlace()) return;
               const passStarted = performance.now();
               let objects: LayoutObjects | null = null;
@@ -4275,7 +4330,9 @@ export const FloatingTextBoxLayout = Extension.create({
             update: schedule,
             destroy: () => {
               setInkLayerSettler(view, null);
-              if (frame) cancelAnimationFrame(frame);
+              cancelFrame?.();
+              cancelFrame = null;
+              frame = 0;
               if (sweepTimer !== null) clearTimeout(sweepTimer);
               if (typingTimer !== null) clearTimeout(typingTimer);
               inkAtRestByView.get(view)?.disconnect();

@@ -31,6 +31,8 @@ import {
 import type { PresentationImageBlock, PresentationBlock } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
 import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import type { KeyboardEvent, PointerEvent } from "react";
+import { memo } from "react";
+import { shallowEqualRecords } from "@mrnote/core/web/lib/shallow-equal.ts";
 import type { OfficeThemeGridColors } from "@mrnote/core/web/lib/office-theme-color-grid.ts";
 
 /** The window bindings this tab reads, passed through unchanged. */
@@ -59,7 +61,7 @@ export interface PresentationCanvasImageBlockCtl {
   model3dFailureNotice?: string | null;
 }
 
-export function PresentationCanvasImageBlock({ ctl }: { ctl: PresentationCanvasImageBlockCtl }) {
+function PresentationCanvasImageBlockBody({ ctl }: { ctl: PresentationCanvasImageBlockCtl }) {
   const {
     t,
     cropEditingId,
@@ -266,3 +268,18 @@ export function PresentationCanvasImageBlock({ ctl }: { ctl: PresentationCanvasI
                     </figure>
   );
 }
+
+/**
+ * A picture on the editing canvas, drawn again only when a value of its `ctl`
+ * changes (TRIAGE 155): the canvas slot gives it the window's stable
+ * handlers and the values filtered to this block, so a change of selection
+ * elsewhere on the slide does not draw it again.
+ */
+export const PresentationCanvasImageBlock = memo(
+  PresentationCanvasImageBlockBody,
+  (previous, next) =>
+    shallowEqualRecords(
+      previous.ctl as unknown as Record<string, unknown>,
+      next.ctl as unknown as Record<string, unknown>,
+    ),
+);

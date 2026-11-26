@@ -26,6 +26,7 @@
  *    restoredLayoutMark), and a sample of far pages, drawn on an idle moment,
  *    stand at the heights kept.
  */
+import { assertPageKey } from "../../../../../lib/page-key-guard";
 import type { JSONContent } from "@tiptap/core";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import type { EditorView } from "@tiptap/pm/view";
@@ -800,6 +801,7 @@ function samePages(a: readonly (readonly PmNode[])[], b: readonly (readonly PmNo
 
 /** This part's pages are what its row says (just restored from it). */
 export function noteRestoredPart(pageId: string, part: number, pages: readonly (readonly PmNode[])[]): void {
+  assertPageKey(pageId, "layoutSnapshot noteRestoredPart");
   let parts = capturedParts.get(pageId);
   if (!parts) capturedParts.set(pageId, (parts = new Map()));
   parts.set(part, pages);

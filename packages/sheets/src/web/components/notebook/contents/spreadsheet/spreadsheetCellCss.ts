@@ -553,6 +553,9 @@ export function shrinkToFitFontSizePx(
   // sheet on its native grid has Excel's 2px, not the stylesheet's 9px, and
   // fitting into the narrower box shrank the text well past Excel's (X-327).
   sidePaddingPx: number = CELL_BASE_PADDING_X_PX,
+  // The fitted size unrounded (a printed cell takes Excel's printed sizes
+  // from it, officeShrunkPrintedDots).
+  exact = false,
 ): number | undefined {
   if (!style?.shrinkToFit || style.wrapText || !displayText) return undefined;
   const fontSize = typeof effectiveFontStyle?.fontSize === "number" && Number.isFinite(effectiveFontStyle.fontSize) && effectiveFontStyle.fontSize > 0
@@ -576,10 +579,44 @@ export function shrinkToFitFontSizePx(
   );
   if (width === null) return undefined;
   const available = cellWidthPx - 2 * sidePaddingPx;
-  const scale = shrinkToFitFontScale(width, available);
+  // Printed, Excel takes the text down to its two-dot floor
+  // (officeShrunkPrintedDots), not the screen's 30 %.
+  const scale = shrinkToFitFontScale(width, available, exact ? 1e-6 : undefined);
   if (scale >= 1) return undefined;
+  if (exact) return fontSize * scale;
   // Excel keeps whole/half sizes; round down so the fitted text never clips.
   return Math.max(4, Math.floor(fontSize * scale * 2) / 2);
+}
+
+/**
+ * A printed rich text's Shrink to Fit fit: the room over its runs' width, each
+ * run measured in its own font (Windows Excel takes every run to the one zoom,
+ * officeShrunkPrintedDots; lookwin p117-lw shr r19). Undefined when it fits.
+ */
+export function shrinkToFitRunsFit(
+  parts: readonly { text: string; style?: CSSProperties }[],
+  cellWidthPx: number,
+  fontAliases: Readonly<Record<string,string>> | undefined,
+  base: CSSProperties | undefined,
+  sidePaddingPx: number,
+): number | undefined {
+  let width = 0;
+  for (const part of parts) {
+    if (!part.text) continue;
+    const css: CSSProperties = { ...(base ?? {}), ...(part.style ?? {}) };
+    const size = typeof css.fontSize === "number" && Number.isFinite(css.fontSize) && css.fontSize > 0 ? css.fontSize : SPREADSHEET_DEFAULT_FONT_SIZE;
+    const bold = css.fontWeight === "bold" || Number(css.fontWeight) >= 600;
+    const italic = css.fontStyle === "italic";
+    // A run names its face bare (ＭＳ Ｐゴシック): measured in its stack, as a
+    // cell's face is, not as an unquoted name the canvas cannot read.
+    const named = typeof css.fontFamily === "string" ? css.fontFamily.trim() : "";
+    const face = !named ? SHRINK_MEASURE_STACK : /[,"']/.test(named) ? named : spreadsheetFontStackWithAssets(named, fontAliases, { bold, italic });
+    const measured = measureTextWidthPx(part.text, size, bold, italic, spreadsheetFontFamilyWithAssets(face, fontAliases) ?? face, css);
+    if (measured === null) return undefined;
+    width += measured;
+  }
+  const available = cellWidthPx - 2 * sidePaddingPx;
+  return width > available && available > 0 ? available / width : undefined;
 }
 
 /**

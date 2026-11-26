@@ -24,12 +24,21 @@ import {
   normalizePresentationUnderlineStyle,
   presentationTextDecorationCss,
 } from "./presentation-text-decoration";
-import { officeTextPaintCss, officeTextPaintWithFontColor, type OfficeTextPaint } from "./office-text-paint";
+import {
+  officeTextPaintCss,
+  officeTextPaintFlatFill,
+  officeTextPaintFlatFillStyle,
+  officeTextPaintWithFontColor,
+  type OfficeTextPaint,
+} from "./office-text-paint";
 import { powerPointFaceName } from "./office-fonts/powerpoint-face-name";
 
 /** A run's own WordArt as CSS (none, or not a valid paint: drawn plain). */
 function cellRunTextPaintCss(style: RunStyle | undefined): CSSProperties {
   if (!style?.textPaint) return {};
+  // The run's colour seen through (readings row 1052): the colour alone.
+  const flat = officeTextPaintFlatFill(style.textPaint);
+  if (flat) return officeTextPaintFlatFillStyle(flat);
   try {
     return officeTextPaintCss(style.textPaint);
   } catch {
@@ -255,7 +264,10 @@ export function patchCellCharacterStyle(
     // over the cell's; Automatic gives them back the cell's.
     const color = patch.color || undefined;
     const worn = next.textPaint ?? (color ? cellPaint : null) ?? null;
-    const paint = worn ? officeTextPaintWithFontColor(worn, color, { keepBare: Boolean(cellPaint) && color !== undefined }) : null;
+    // A colour seen through keeps its Transparency (tp-alpharecolor).
+    const paint = worn
+      ? officeTextPaintWithFontColor(worn, color, { keepBare: Boolean(cellPaint) && color !== undefined, keepFillOpacity: true })
+      : null;
     if (paint) next.textPaint = paint;
     else delete next.textPaint;
   }

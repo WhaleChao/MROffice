@@ -1057,6 +1057,7 @@ import {
   resolvePdfDecorationPageSizes,
   normalizePdfTextBoxEdits,
 } from "../../../lib/pdf/page-content-model";
+import { insertedPageAnchorPage, pdfVisiblePageOrdinals } from "@mrnote/core/web/lib/pdf/inserted-page-identity.ts";
 import {
   appendReply,
   type PdfAnnotationAuthor,
@@ -2629,6 +2630,29 @@ function notePdfCopyWriteHoldPhase(hold: PdfCopyWriteHold | undefined, phase: st
   hold.phase = phase;
   hold.trail.push(`${phase}@${Date.now() - hold.at}`);
 }
+
+// How many times an export refused because a save landed while it was being
+// rendered is asked again (runServerExport).
+const PDF_SERVER_EXPORT_CONFLICT_RETRIES = 3;
+
+/** A managed sticky note's place on a page's content: its page and PDF rect,
+ *  or null when the page holds no such note. */
+function managedNotePlaceOnPage(
+  contentJson: unknown,
+  noteId: string,
+): { page: number; rect: readonly [number, number, number, number] } | null {
+  const annotations = (contentJson as { annotations?: unknown } | null | undefined)?.annotations;
+  if (!Array.isArray(annotations)) return null;
+  const note = annotations.find(
+    (entry): entry is { page?: unknown; rect?: unknown; managedMarkup?: unknown } =>
+      Boolean(entry) && typeof entry === "object" && (entry as { id?: unknown }).id === noteId,
+  );
+  if (!note || note.managedMarkup || typeof note.page !== "number" || !Number.isInteger(note.page) || note.page < 1) return null;
+  const rect = note.rect;
+  if (!Array.isArray(rect) || rect.length !== 4 || !rect.every((value) => typeof value === "number" && Number.isFinite(value))) return null;
+  return { page: note.page, rect: [rect[0], rect[1], rect[2], rect[3]] as const };
+}
+
 
 export default function PdfPageWindow({
   pageId,
@@ -14882,6 +14906,27 @@ export default function PdfPageWindow({
   };
   const projectFileManagedOutlineRef = useRef(projectFileManagedOutline);
   projectFileManagedOutlineRef.current = projectFileManagedOutline;
+  // Where the page holds each note (its page and PDF rectangle): what the
+  // reader draws a managed sticky note from when its own row says otherwise.
+  // The page and the file are written together; the row is a second write
+  
+  
+  // other's, and every new window drew the row's).
+  const pageNotePlaces = useMemo(() => {
+    const annotations = (autosavePage?.content_json as { annotations?: unknown } | null | undefined)?.annotations;
+    const places = new Map<string, { page: number; rect: readonly [number, number, number, number] }>();
+    if (!Array.isArray(annotations)) return places;
+    for (const entry of annotations) {
+      if (!entry || typeof entry !== "object") continue;
+      const note = entry as { id?: unknown; page?: unknown; rect?: unknown; managedMarkup?: unknown };
+      if (typeof note.id !== "string" || note.managedMarkup || typeof note.page !== "number" ||
+          !Number.isInteger(note.page) || note.page < 1) continue;
+      const rect = note.rect;
+      if (!Array.isArray(rect) || rect.length !== 4 || !rect.every((value) => typeof value === "number" && Number.isFinite(value))) continue;
+      places.set(note.id, { page: note.page, rect: [rect[0], rect[1], rect[2], rect[3]] as const });
+    }
+    return places;
+  }, [autosavePage?.content_json]);
   const displayedManagedOutline = useMemo(() => {
     void heldOutlineTick;
     const held = heldOutlineTreesRef.current;
@@ -32331,6 +32376,12 @@ export default function PdfPageWindow({
     canReadSavedNativeBytes,
     documentAuthority: savePolicyDocumentAuthority,
   };
+  // What every editor save-policy request reads as `documentReady` (from the
+  // ref above), for a decision memoised from such a request to read from this
+  // render and list, as it lists `editorSavePolicySource`.
+  const editorSavePolicyDocumentReady = Boolean(
+    editorSavePolicyRuntimeRef.current.source && editorSavePolicyRuntimeRef.current.previewUrl,
+  );
   const currentEditorSavePolicyEditRevision = useCallback((): string => {
     const risk = viewerVisualMaskOutputRiskRef.current;
     return `${editorSavePolicyRuntimeRef.current.editRevision}:visual-mask:${risk.present ? "present" : "none"}:${risk.revision ?? "unknown"}`;
@@ -32491,46 +32542,68 @@ export default function PdfPageWindow({
             nativePdfPatchbackReady &&
             windowSaveStatus === "saved" &&
             page);
-        const savedPage = canReuseVerifiedPage
-          ? page
-          : await saveCurrentDraftForServerExport();
-        if (options.requireNativePdfPatchback) {
-          const patchback = readPdfPatchbackReceiptSnapshot(savedPage);
-          const patchbackReason =
-            typeof patchback?.reason === "string" && patchback.reason.trim()
-              ? patchback.reason.replaceAll("_", " ")
-              : t("pdf.downloadEditedUnavailable");
-          if (patchback?.status === "failed") {
-            throw new ServerExportReason(
-              t("importStatus.patchbackFailed", { reason: patchbackReason }),
-            );
-          }
-          if (patchback?.status === "skipped") {
-            throw new ServerExportReason(
-              t("importStatus.patchbackSkipped", { reason: patchbackReason }),
-            );
-          }
-          const nativeWritebackReady =
-            patchback?.status === "succeeded" &&
-            typeof patchback.adapter === "string" &&
-            patchback.adapter.toLowerCase() === "pdf" &&
-            patchback.lossEntryCount === 0 &&
-            typeof patchback.resourceVersionId === "string" &&
-            patchback.resourceVersionId.length > 0 &&
-            typeof patchback.patchedAnchorCount === "number" &&
-            patchback.patchedAnchorCount > 0;
-          if (!nativeWritebackReady) {
-            throw new ServerExportReason(t("pdf.downloadEditedUnavailable"));
-          }
+        // A save that lands while the server is rendering (the window's own
+        // autosave of a change made just before the click, a review status, a
+        // property) refuses the export with `page_version_conflict`: the file
+        // would not be the page now saved. That is not a failure of the
+        // export -- the page is saved again and the export asked again, from
+        // the save on, so the native checks below read the newer version too
+        
+        // flight, four "could not be exported").
+        for (let attempt = 0; ; attempt += 1) {
+          const savedPage = canReuseVerifiedPage && attempt === 0
+            ? page
+            : await saveCurrentDraftForServerExport();
+          if (options.requireNativePdfPatchback) {
+            const patchback = readPdfPatchbackReceiptSnapshot(savedPage);
+            const patchbackReason =
+              typeof patchback?.reason === "string" && patchback.reason.trim()
+                ? patchback.reason.replaceAll("_", " ")
+                : t("pdf.downloadEditedUnavailable");
+            if (patchback?.status === "failed") {
+              throw new ServerExportReason(
+                t("importStatus.patchbackFailed", { reason: patchbackReason }),
+              );
+            }
+            if (patchback?.status === "skipped") {
+              throw new ServerExportReason(
+                t("importStatus.patchbackSkipped", { reason: patchbackReason }),
+              );
+            }
+            const nativeWritebackReady =
+              patchback?.status === "succeeded" &&
+              typeof patchback.adapter === "string" &&
+              patchback.adapter.toLowerCase() === "pdf" &&
+              patchback.lossEntryCount === 0 &&
+              typeof patchback.resourceVersionId === "string" &&
+              patchback.resourceVersionId.length > 0 &&
+              typeof patchback.patchedAnchorCount === "number" &&
+              patchback.patchedAnchorCount > 0;
+            if (!nativeWritebackReady) {
+              throw new ServerExportReason(t("pdf.downloadEditedUnavailable"));
+            }
 
-          // Reader annotations are stored on the data item, not in the native
-          // page model consumed by original-package patchback. Re-check the
-          // authoritative endpoint at click time so async hydration or a hidden
-          // OCR/bookmark record cannot be silently omitted. A `pdf_shapes` row
-          // is safe only when its exact id is represented in the native shadow.
-          await assertNativeDownloadHasNoUnmirroredReaderEdits();
+            // Reader annotations are stored on the data item, not in the native
+            // page model consumed by original-package patchback. Re-check the
+            // authoritative endpoint at click time so async hydration or a hidden
+            // OCR/bookmark record cannot be silently omitted. A `pdf_shapes` row
+            // is safe only when its exact id is represented in the native shadow.
+            await assertNativeDownloadHasNoUnmirroredReaderEdits();
+          }
+          try {
+            await downloadPageExport({ pageId, format });
+            break;
+          } catch (error) {
+            if (
+              attempt >= PDF_SERVER_EXPORT_CONFLICT_RETRIES ||
+              !isApiRequestError(error) ||
+              error.code !== "page_version_conflict"
+            ) {
+              throw error;
+            }
+            await new Promise<void>((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+          }
         }
-        await downloadPageExport({ pageId, format });
         toast({
           title: t("toolbar.exportReady", { format: format.toUpperCase() }),
         });
@@ -49152,11 +49225,20 @@ export default function PdfPageWindow({
   const replaceSourceRuntimeDecision = useMemo<PdfRuntimeFeatureDecision>(
     () =>
       withEditorSavePolicy(
-        createEditorSavePolicyRequest({
-          action: "replace-source",
-          disposition: "native",
-          hasEdits: false,
-        }),
+        {
+          ...createEditorSavePolicyRequest({
+            action: "replace-source",
+            disposition: "native",
+            hasEdits: false,
+          }),
+          // Read from this render, as Save As and the download decisions do:
+          // the request helper reads them from a ref, and this decision, made
+          // while a just-uploaded PDF was still loading, kept
+          // "documentLoading" -- 「替换 PDF 源文件」 grey for minutes, until
+          
+          documentReady: editorSavePolicyDocumentReady,
+          source: editorSavePolicySource,
+        },
         {
           enabled: workspaceWritable && !uploading,
           disposition: "native",
@@ -49168,6 +49250,8 @@ export default function PdfPageWindow({
       ),
     [
       createEditorSavePolicyRequest,
+      editorSavePolicyDocumentReady,
+      editorSavePolicySource,
       t,
       uploading,
       withEditorSavePolicy,
@@ -50213,6 +50297,26 @@ export default function PdfPageWindow({
     [autosave, executeManagedAnnotationCommit, pageId, t],
   );
   upsertManagedNoteRef.current = upsertManagedNote;
+  // Where the page holds a managed note now (the reader puts a refused move's
+  // row there): the page read again from the server, its note's rectangle.
+  const readManagedNotePlace = useCallback(
+    async (noteId: string): Promise<{ page: number; rect: readonly [number, number, number, number] } | null> => {
+      const reloaded = await autosave.reload().catch(() => null);
+      const held = reloaded && reloaded.id === pageId ? reloaded : livePageRef.current;
+      return managedNotePlaceOnPage(held?.content_json, noteId);
+    },
+    [autosave, pageId],
+  );
+  // Where the server's page holds a note now, read without moving this
+  // window's page: a row is put there only when this window's page says the
+  // same (a window behind a newer save would put it back to an older place).
+  const readStoredManagedNotePlace = useCallback(
+    async (noteId: string): Promise<{ page: number; rect: readonly [number, number, number, number] } | null> => {
+      const stored = await notebookSDK.getPage(pageId).catch(() => null);
+      return stored && stored.id === pageId ? managedNotePlaceOnPage(stored.content_json, noteId) : null;
+    },
+    [pageId],
+  );
 
   const deleteManagedNote = useCallback(
     async (annotationId: string) => {
@@ -50435,13 +50539,21 @@ export default function PdfPageWindow({
       });
       return;
     }
+    // A note written while an inserted page is shown is that page's (as
+    // Acrobat comments a page added through Organize Pages), not the page
+    // before it: stored as that page and the inserted page's id
+    // (lib/pdf/inserted-page-identity).
+    const onInserted = previous?.page === undefined ? currentInsertedPage : null;
     const draft: PdfOrdinaryNoteInputDraft = {
       ...(previous ?? { id: crypto.randomUUID(), text }), text: previous?.text ?? text,
-      page: previous?.page ?? currentPage, createdAt: previous?.createdAt ?? new Date().toISOString(), submittedText: text,
+      page: previous?.page ?? (onInserted ? insertedPageAnchorPage(onInserted.afterPage) : currentPage),
+      ...(onInserted ? { insertedPageId: onInserted.id } : {}),
+      createdAt: previous?.createdAt ?? new Date().toISOString(), submittedText: text,
     };
     annotationInputRef.current = draft;
     setAnnotationInputStorageFailed(!writePdfOrdinaryNoteInput(annotationInputBindingRef.current, draft));
-    const next = [{ ...existing, id: draft.id, text, page: draft.page!, createdAt: draft.createdAt! },
+    const next = [{ ...existing, id: draft.id, text, page: draft.page!, createdAt: draft.createdAt!,
+      ...(draft.insertedPageId ? { insertedPageId: draft.insertedPageId } : {}) },
       ...annotationsRef.current.filter(note => note.id !== draft.id)];
     noteInFlightRef.current = { id: draft.id, text };
     await saveVisibleAnnotationDraft(next, () => {
@@ -50461,6 +50573,7 @@ export default function PdfPageWindow({
     awaitAnnotationMutationIdle,
     captureOrdinaryNoteReceiptOwner,
     commentMentions,
+    currentInsertedPage,
     currentPage,
     embedCommentSession,
     writeEmbedPdfComment,
@@ -61524,6 +61637,30 @@ export default function PdfPageWindow({
     ordinal: number;
     requestId: number;
   } | null>(null);
+  // "Page N" in the comments pane is the page as read, an inserted page
+  // included (lib/pdf/inserted-page-identity): a note made on the page
+  // inserted after page 1 is on page 2, as the reader counts it.
+  const annotationPageOrdinals = useMemo(
+    () => pdfVisiblePageOrdinals({ deletedPages, pageMoves, insertedPages }, pdfPageCount),
+    [deletedPages, insertedPages, pageMoves, pdfPageCount],
+  );
+  const annotationVisiblePageOf = useCallback(
+    (page: number | null, insertedPageId?: string): number | null => {
+      if (insertedPageId) return annotationPageOrdinals.ofInserted.get(insertedPageId) ?? null;
+      return page === null ? null : (annotationPageOrdinals.ofOriginal.get(page) ?? page);
+    },
+    [annotationPageOrdinals],
+  );
+  const annotationCurrentVisiblePage = annotationVisiblePageOf(currentPage, currentInsertedPageId ?? undefined);
+  const openAnnotationInsertedPage = useCallback((insertedPageId: string) => {
+    const ordinal = annotationPageOrdinals.ofInserted.get(insertedPageId);
+    if (!ordinal) return;
+    setShowPageSlotRequest((previous) => ({
+      slot: { kind: "inserted", id: insertedPageId },
+      ordinal,
+      requestId: (previous?.requestId ?? 0) + 1,
+    }));
+  }, [annotationPageOrdinals]);
   const movePageBy = useCallback(
     (offset: -1 | 1) => {
       const sequence = swapPageSlot(currentPageSlots, currentPageSlotIndex, offset);
@@ -63985,6 +64122,13 @@ export default function PdfPageWindow({
       : null;
     let cleanupHandleForCompensation = retainedCleanupHandle;
     let replacementPublished = false;
+    // Set when the replacement's own save was refused (not published): what
+    // the dialog then says depends on whether the page moved on elsewhere.
+    let replacementSaveRefused: {
+      baseVersion: number | null;
+      conflict: boolean;
+      dataItemId: string | null;
+    } | null = null;
     let sourceSaveAttempted = false;
     try {
       let historySnapshot = pending.historySnapshot;
@@ -64126,6 +64270,8 @@ export default function PdfPageWindow({
         );
       }
       sourceSaveAttempted = true;
+      const replacementBaseVersion =
+        typeof page.content_version === "number" ? page.content_version : null;
       const savedPage = await autosave.saveNow({
         title: page.title,
         content_json: nextContent,
@@ -64148,6 +64294,11 @@ export default function PdfPageWindow({
         // still-open loss dialog. The saved preflight page remains authoritative
         // and the user can explicitly retry this same snapshot/upload.
         autosave.replacePendingDraft(null);
+        replacementSaveRefused = {
+          baseVersion: replacementBaseVersion,
+          conflict: autosave.getLastSaveFailureCode?.() === "page_version_conflict",
+          dataItemId: nextDataItemId,
+        };
         throw new Error(
           autosave.getLastSaveFailureMessage?.() || t("pages.saveFailed"),
         );
@@ -64247,16 +64398,49 @@ export default function PdfPageWindow({
                 }
               : current,
           );
-          const cleanupMessage =
-            cleanupError instanceof Error
-              ? cleanupError.message
-              : t("pages.saveFailed");
-          surfacedError = new Error(
-            `${surfacedError.message} ${
-              t("pdf.pageWindow.uploadedFileNotClientDeletable", { orphanedDataItemId, cleanupMessage })
-            }`,
+          // The upload is kept on purpose (only the server may decide it is
+          // unattached) and its handle stays in the cleanup ledger and on the
+          // pending replacement, which a retry uses. That is bookkeeping, not
+          // something the person can act on: the dialog says why the
+          // replacement did not happen, and the retained file is told to the
+          // console. Appended to the reason, it read "Uploaded file
+          // 6501da93-… is not client-deletable; its file and cleanup handle
+          // were retained: … atomic server custody check …" (3610,
+          
+          console.warn(
+            "[pdf-replace-source] replacement upload retained for retry",
+            {
+              uploadedDataItemId: orphanedDataItemId,
+              reason:
+                cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+            },
           );
         }
+      }
+      // Said as what happened. A page that moved on elsewhere (409
+      // page_version_conflict) is the window's conflict, in the words of its
+      // conflict banner -- not "Save failed. Please retry.", which a retry
+      // against the same version can only repeat (notion-lab 3610,
+      
+      // path answers such a save with neither a code nor a message, so the
+      // page is read once, after the reconciliation above has found the
+      // replacement unpublished: past the version the save was made on and
+      // not on this replacement's file, it moved on elsewhere.
+      if (replacementSaveRefused && !replacementPublished) {
+        let movedOnElsewhere = replacementSaveRefused.conflict;
+        const baseVersion = replacementSaveRefused.baseVersion;
+        if (!movedOnElsewhere && baseVersion !== null) {
+          try {
+            const latest = await notebookSDK.getPage(pageId);
+            movedOnElsewhere =
+              typeof latest.content_version === "number" &&
+              latest.content_version > baseVersion &&
+              getDataItemId(latest.content_json) !== replacementSaveRefused.dataItemId;
+          } catch {
+            // Unknown: said as the failed save it is.
+          }
+        }
+        if (movedOnElsewhere) surfacedError = new Error(t("pages.conflictBody"));
       }
       setSourceReplacementError(surfacedError.message);
     } finally {
@@ -66580,6 +66764,13 @@ export default function PdfPageWindow({
             onManagedNoteUpsert={
               nativeAnnotationWriteAuthority ? upsertManagedNote : undefined
             }
+            onManagedNotePlaceRead={
+              nativeAnnotationWriteAuthority ? readManagedNotePlace : undefined
+            }
+            managedNotePlaces={pageNotePlaces}
+            onStoredManagedNotePlaceRead={
+              nativeAnnotationWriteAuthority ? readStoredManagedNotePlace : undefined
+            }
             onManagedNoteDelete={
               nativeAnnotationWriteAuthority ? deleteManagedNote : undefined
             }
@@ -66903,6 +67094,9 @@ export default function PdfPageWindow({
               commentPermission: annotationCommentPermission,
               viewerList: viewerAnnotationList,
               currentPage,
+              currentVisiblePage: annotationCurrentVisiblePage ?? undefined,
+              visiblePageOf: annotationVisiblePageOf,
+              openInsertedPage: openAnnotationInsertedPage,
               selectedKey: selectedAnnotationKey,
               // A comment session writes comments (through its route) on a
               // page it otherwise reads.

@@ -24,6 +24,7 @@ import {
   type OfficePictureEffectValues,
 } from "@mrnote/core/web/lib/office-picture-effects.ts";
 import { officePictureStyleEffectKinds } from "@mrnote/core/web/lib/office-picture-styles/native.ts";
+import { normalizeImageBorderColor, normalizeImageBorderStyle, normalizeImageBorderWidth } from "@mrnote/core/web/lib/presentation-image-effects.ts";
 
 /** The Picture Effects menu's categories on a worksheet picture (its Shadow is the sheet's own). */
 export const SPREADSHEET_PICTURE_EFFECT_MENU_KINDS = [
@@ -140,4 +141,25 @@ export function spreadsheetPictureEffectFromParameter(
   } catch {
     return null;
   }
+}
+
+/**
+ * Picture Border as the file states it on a worksheet picture (`a:ln` on
+ * `xdr:pic/xdr:spPr`, readings row 1030): the slide picture's frame fields
+ * (`borderColor` / `borderStyle` / `borderWidth` px), drawn outside the
+ * picture as Office draws a picture's line (R484-X24: a 6 pt frame leaves
+ * the picture its size). `scale` is the frame's drawn px per sheet px (Page
+ * Layout's print scale, the grid's zoom). None without a visible line, or
+ * where a Picture Style draws the picture's line instead.
+ */
+export function spreadsheetPictureBorderOutline(
+  object: { borderColor?: unknown; borderStyle?: unknown; borderWidth?: unknown; pictureStyle?: unknown },
+  scale = 1,
+): { outline: string; outlineOffset: number } | undefined {
+  if (object.pictureStyle) return undefined;
+  const style = normalizeImageBorderStyle(object.borderStyle);
+  const color = normalizeImageBorderColor(object.borderColor, null);
+  const width = normalizeImageBorderWidth(object.borderWidth) * (Number.isFinite(scale) && scale > 0 ? scale : 1);
+  if (style === "none" || color === null || !(width > 0)) return undefined;
+  return { outline: `${Math.round(width * 1000) / 1000}px ${style} ${color}`, outlineOffset: 0 };
 }

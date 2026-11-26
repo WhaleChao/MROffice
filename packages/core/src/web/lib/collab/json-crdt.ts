@@ -31,6 +31,8 @@
 
 import * as Y from "yjs";
 
+import { isWholeValuePath, mayBeWholeValueIndex, mayBeWholeValueKey } from "./whole-value-paths";
+
 export type JsonValue =
   | string
   | number
@@ -3264,6 +3266,29 @@ export function watchConcurrentKeyedCreations(
   };
 }
 
+/**
+ * A map's or an array's path in the page's JSON, read up its parents: a key of a map, an index of an array, the id
+ * of a keyed list's entry (the list's own inner maps are not segments of the JSON).
+ */
+function jsonPathOf(map: Y.Map<unknown> | Y.Array<unknown>): string[] {
+  type Node = { _item?: { parentSub?: string | null; parent?: unknown } | null };
+  const path: string[] = [];
+  let node: unknown = map;
+  while (node) {
+    const item = (node as Node)._item;
+    if (!item) break;
+    const parent = item.parent ?? null;
+    if (parent instanceof Y.Map && parent.get(LIST_MARKER) === true && item.parentSub === LIST_ITEMS) {
+      node = parent; // a keyed list's items map: its key is no segment (the entry's id is)
+      continue;
+    }
+    if (item.parentSub !== null && item.parentSub !== undefined) path.unshift(item.parentSub);
+    else if (parent instanceof Y.Array) path.unshift(String(parent.toArray().indexOf(node)));
+    node = parent;
+  }
+  return path;
+}
+
 /** `itemOf` / `parentItemOf`: as for `applyJsonEntry`. */
 function applyJsonDeltaEntry(
   parent: Y.Map<unknown>,
@@ -3274,6 +3299,14 @@ function applyJsonDeltaEntry(
   parentItemOf?: string,
 ): boolean {
   const current = parent.get(key);
+  // A value registered to be written whole (`whole-value-paths`: a chart's data, a rectangle): last writer wins,
+  // never merged entry by entry -- merged, two members replacing an entry of the same index each inserted theirs
+  
+  if (mayBeWholeValueKey(key) && isWholeValuePath([...jsonPathOf(parent), key])) {
+    if (current !== undefined && jsonEquals(yToJson(current), next)) return false;
+    parent.set(key, toYValue(next, key, itemOf));
+    return true;
+  }
   const nextIds =
     keyedListIds(next, key) ??
     (Array.isArray(next) && next.length === 0 && isListMap(current)
@@ -3448,6 +3481,10 @@ function applyArrayInPlace(
     if (!jsonEquals(next[index], previous[index])) changed.push(index);
   }
   if (changed.length === 0) return false;
+  // An entry registered to be written whole (`whole-value-paths`, a pattern ending at an index): the array is
+  // written whole by the caller, last writer wins over it -- replaced on its own the entry would be deleted and
+  // inserted again, and two members doing that at once would leave both.
+  if (mayBeWholeValueIndex() && changesWholeValueEntry(current, next, previous, changed)) return false;
   const entryOf = arrayEntryContext(context);
   // Every entry about to be written must still be what the author changed.
   // A table's rows and cells are merged instead (a peer typing in the same
@@ -3494,6 +3531,22 @@ function applyArrayInPlace(
     current.insert(index, [toYValue(after, undefined, entryOf)]);
   }
   return true;
+}
+
+/** Whether a changed entry of `current` -- or of a plain array inside it, written in place with it -- is a value
+ *  registered to be written whole. */
+function changesWholeValueEntry(current: Y.Array<unknown>, next: JsonValue[], previous: JsonValue[], changed: readonly number[], path?: string[]): boolean {
+  const at = path ?? jsonPathOf(current);
+  for (const index of changed) {
+    if (isWholeValuePath([...at, String(index)])) return true;
+    const after = next[index], before = previous[index], entry = current.get(index);
+    if (Array.isArray(after) && Array.isArray(before) && entry instanceof Y.Array && after.length === before.length) {
+      const inner: number[] = [];
+      for (let child = 0; child < after.length; child += 1) if (!jsonEquals(after[child], before[child])) inner.push(child);
+      if (changesWholeValueEntry(entry, after, before, inner, [...at, String(index)])) return true;
+    }
+  }
+  return false;
 }
 
 /**

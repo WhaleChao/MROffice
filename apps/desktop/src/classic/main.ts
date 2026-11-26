@@ -51,7 +51,8 @@ import { LaunchOffer, readDefaultAppChoice, shouldOfferDefaultApp, writeDefaultA
 import { isOpenablePath, MAX_OPEN_FILE_PART_BYTES, openablePathsFromArgv, readOpenedFiles, readOpenFilePart } from "../files";
 import { loadBundledPage } from "../bundled-page";
 import { FocusOrder } from "../document-target";
-import { aiScreenEnabled, autoSaveToOriginalEnabled, readLanding, writeLanding, writeSettings } from "./desktop-settings";
+import { aiScreenEnabled, autoSaveToOriginalEnabled, readLanding, readSettings, writeLanding, writeSettings } from "./desktop-settings";
+import { chosenByCookieChange, isLocale, LOCALE_CHOSEN_COOKIE, launchLocale, localizedRoute, shownLocale, stripLocale, type Locale } from "./locale";
 import { registerAiScreen } from "./ai-screen";
 import {
   countOpened,
@@ -90,6 +91,7 @@ import {
   updateStatus,
 } from "../updates";
 import { setUpdateLocale } from "../update-text";
+import { appLocale, appSpeaksChinese, onAppLocaleChange, setAppLocale, systemLanguageTags } from "../app-locale";
 import {
   type AiAccount,
   challengeFor,
@@ -165,7 +167,7 @@ import {
   prelaunchEnabled,
 } from "./prelaunch";
 import { backgroundRestartAllowed, backgroundRestartArgs } from "./prelaunch-agent";
-import { keepInTrayOnClose, setKeepInTrayOnClose, showTray, trayAvailable } from "./tray";
+import { keepInTrayOnClose, relabelTray, setKeepInTrayOnClose, showTray, trayAvailable } from "./tray";
 import { launchCacheKey, usableLaunchCache } from "./launch-cache";
 import {
   coverWindow,
@@ -197,7 +199,7 @@ const NOTEBOOK_WARM_ROUTE = onSurface("/app/notebooks/00000000-0000-4000-8000-00
 /** How often a running app asks the site for its switches again. */
 const PROFILE_REFRESH_MS = 30 * 60_000;
 
-const zh = () => app.getLocale().toLowerCase().startsWith("zh");
+const zh = appSpeaksChinese;
 /** Automated checks: windows render but never come on screen. */
 const HIDDEN = process.env.MRAI_CLASSIC_HIDDEN === "1";
 const say = (zhText: string, enText: string) => (zh() ? zhText : enText);
@@ -241,11 +243,71 @@ const reopenedByContents = new Map<number, Map<string, string>>();
 
 // --- windows -----------------------------------------------------------------
 
-const appUrl = (route: string) => `${launch!.webOrigin}${route}`;
+/**
+ * The language the app's pages are shown in (./locale.ts): every route the
+ * shell loads carries it. The person's choice is the site's language cookie
+ * in the app's session, which the language picker writes; a copy is kept in
+ * desktop-settings.json, read at the app's ready before the session is
+ * (resolveAppLocale), then the cookie itself (adoptLocaleCookie), then
+ * followed as the picker changes it (followLocaleCookie).
+ */
+/** The route in the app's language (../app-locale.ts: its words follow the same one). */
+const localized = (route: string) => localizedRoute(route, appLocale());
+const appUrl = (route: string) => `${launch!.webOrigin}${localized(route)}`;
+
+/** The app's language at its ready: the choice kept, else the computer's (./locale.ts). */
+function resolveAppLocale(): void {
+  const chosen = readSettings().locale;
+  // The system's list first (the language and region as set: en-AU, sr-Latn-RS),
+  // then the app's own locale (--lang, or what Chromium made of the list).
+  setAppLocale(launchLocale({ chosen, system: systemLanguageTags() }));
+  console.log(`[classic] pages in ${appLocale()} (${isLocale(chosen) ? "chosen" : "this computer's languages"})`);
+}
+
+/** The choice the person made, kept beside the settings (a copy of the cookie). */
+function keepLocaleChoice(locale: Locale): void {
+  if (readSettings().locale === locale) return;
+  try {
+    writeSettings({ locale });
+  } catch (error) {
+    console.warn(`[classic] language not kept: ${error instanceof Error ? error.message : error}`);
+  }
+}
+
+/** The site's language cookie in the app's session, read before the first page is loaded: it is the choice. */
+async function adoptLocaleCookie(ses: Session): Promise<void> {
+  if (!launch) return;
+  try {
+    const [cookie] = await ses.cookies.get({ url: launch.webOrigin, name: LOCALE_CHOSEN_COOKIE });
+    const chosen = cookie ? chosenByCookieChange(cookie, false, new URL(launch.webOrigin).hostname) : null;
+    if (!chosen) return;
+    if (chosen !== appLocale()) console.log(`[classic] pages in ${chosen} (chosen)`);
+    setAppLocale(chosen);
+    keepLocaleChoice(chosen);
+  } catch {
+    // Not read: the kept choice, or the computer's languages, stand.
+  }
+}
+
+/** The picker changed the language (its cookie): the app's pages are in it from now on, at every launch. */
+function followLocaleCookie(ses: Session): void {
+  ses.cookies.on("changed", (_event, cookie, _cause, removed) => {
+    if (!launch) return;
+    const chosen = chosenByCookieChange(cookie, removed, new URL(launch.webOrigin).hostname);
+    if (!chosen) return;
+    if (chosen !== appLocale()) console.log(`[classic] pages in ${chosen} from now on`);
+    setAppLocale(chosen);
+    keepLocaleChoice(chosen);
+  });
+}
 
 /** The app's tray icon (Windows, ./tray.ts): opens a window, or quits. */
 function showAppTray(): Promise<void> {
-  return showTray({
+  return showTray(appTrayActions());
+}
+
+function appTrayActions(): Parameters<typeof showTray>[0] {
+  return {
     name: APP_NAME,
     openLabel: say(`打开 ${appName()}`, `Open ${APP_NAME}`),
     quitLabel: say("退出", "Quit"),
@@ -255,7 +317,7 @@ function showAppTray(): Promise<void> {
       else if (ready) openHomeWindow();
     },
     quit: () => app.quit(),
-  });
+  };
 }
 
 /** Started at login to be ready in the background (./prelaunch.ts), with
@@ -332,7 +394,7 @@ function earlyWindow(): { window: BrowserWindow; route: string; documents: strin
     documents.length === 1 && instantDocument(documents[0]) && (documentThumbnail(documents[0]) || process.platform === "darwin")
       ? documents[0]
       : undefined;
-  const kind: InstantKind | null = deck ? "deck" : hasHomeSnapshot(where.webDir) ? "home" : null;
+  const kind: InstantKind | null = deck ? "deck" : hasHomeSnapshot(where.webDir, appLocale()) ? "home" : null;
   if (!kind) return null;
   const route = documents.length ? OPEN_ROUTE : HOME_ROUTE;
   const window = createWindow(route, documents, { load: false });
@@ -365,7 +427,7 @@ function earlyWindow(): { window: BrowserWindow; route: string; documents: strin
 /** The pages an instant view stands in for: the open page, the home, a notebook (a deck opens in it). */
 function coveredPath(url: string): boolean {
   try {
-    return /^\/(?:open|app\/recent|app\/notebooks)(?:\/|$)/.test(new URL(url).pathname);
+    return /^\/(?:open|app\/recent|app\/notebooks)(?:\/|$)/.test(stripLocale(new URL(url).pathname));
   } catch {
     return false;
   }
@@ -477,6 +539,12 @@ function showDockIcon(): void {
 /** The spare, shown (null when there is none). */
 function takeSpare(): BrowserWindow | null {
   const window = spare && !spare.isDestroyed() ? spare : null;
+  if (window && launch && shownLocale(window.webContents.getURL(), launch.webOrigin) !== appLocale()) {
+    // Made before the pages' language was switched: a new window instead.
+    spare = null;
+    window.destroy();
+    return null;
+  }
   if (window) bringForward(window);
   return window;
 }
@@ -1244,7 +1312,7 @@ function openConnectPage(): Promise<boolean> {
   if (connectSweep) clearTimeout(connectSweep);
   connectSweep = setTimeout(() => pendingConnect.sweep(), CONNECT_TTL_MS + 1_000);
   connectSweep.unref?.();
-  const url = connectUrl(cloudOrigin(), challenge);
+  const url = connectUrl(cloudOrigin(), challenge, appLocale());
   // Automated checks open the page themselves (the challenge only; the
   // verifier never leaves this process).
   if (HIDDEN) console.log(`[classic] connect: ${url}`);
@@ -1781,7 +1849,7 @@ function startServices(known: Promise<void>, early: boolean): { spawned: Promise
           // notebook, ../../web/lib/desktop-landing.ts): its server code
           // loaded before the window asks for it. Any id: the page is drawn
           // in the window.
-          ...webEnv(where, at, firstRoute, firstRoute === OPEN_ROUTE || firstRoute === HOME_ROUTE ? [NOTEBOOK_WARM_ROUTE] : []),
+          ...webEnv(where, at, localized(firstRoute), firstRoute === OPEN_ROUTE || firstRoute === HOME_ROUTE ? [localized(NOTEBOOK_WARM_ROUTE)] : []),
           ...(launchCache ? { MRAI_DESKTOP_LAUNCH_CACHE: launchCache } : {}),
         },
       };
@@ -1939,6 +2007,62 @@ function stopServices(): void {
   for (const service of [web, api]) if (service) stopService(service);
   // Quit while the API was still starting: it goes as soon as it has.
   if (!api && apiStarting) void apiStarting.then(stopService, () => undefined);
+}
+
+/** The app menu, in the app's language (built again when it changes). */
+function installAppMenu(): void {
+  Menu.setApplicationMenu(
+    buildMenu({
+      origin: launch!.webOrigin,
+      pageUrl: (route) => appUrl(onSurface(route)),
+      appName: APP_NAME,
+      openInBrowser: false,
+      newWindow: (route) => openHomeWindow(route === "/app" ? HOME_ROUTE : route),
+      checkForUpdates: checkForUpdatesNow,
+      appItems: [
+        ...(prelaunchAvailable()
+          ? [
+              {
+                type: "checkbox" as const,
+                label: say("登录时在后台准备好（打开更快）", "Ready in the Background at Login"),
+                checked: prelaunchEnabled(APP_ID),
+                click: (item: Electron.MenuItem) => {
+                  try {
+                    choosePrelaunch(APP_ID, item.checked);
+                  } catch (error) {
+                    console.error(`[classic] login item not changed: ${error instanceof Error ? error.message : error}`);
+                    item.checked = !item.checked;
+                  }
+                },
+              },
+            ]
+          : []),
+        ...(trayAvailable()
+          ? [
+              {
+                type: "checkbox" as const,
+                label: say("关闭窗口后在托盘中继续运行（打开更快）", "Keep Running in the Tray When Closed"),
+                checked: keepInTrayOnClose(),
+                click: (item: Electron.MenuItem) => {
+                  try {
+                    setKeepInTrayOnClose(item.checked);
+                  } catch (error) {
+                    console.error(`[classic] tray setting not saved: ${error instanceof Error ? error.message : error}`);
+                    item.checked = !item.checked;
+                  }
+                },
+              },
+            ]
+          : []),
+      ],
+      helpItems: [
+        {
+          label: say("许可证", "License"),
+          click: () => void shell.openExternal("https://www.gnu.org/licenses/agpl-3.0.html"),
+        },
+      ],
+    }),
+  );
 }
 
 // --- session ---------------------------------------------------------------------------
@@ -2179,6 +2303,8 @@ function pinOfficeSurface(ses: Session): void {
     void integrateLinuxDesktop();
     startOndemand();
     console.log(`[classic] starting ${PRODUCT.id} (${where.development ? "development" : "packaged layout"}, data in ${app.getPath("userData")})`);
+    // The pages' language, before any route is made (the services' first page included).
+    resolveAppLocale();
     // The AI screen's endpoint at once (an AI app started with the app waits
     // for it, some only 10 s): its tools wait for the windows.
     void aiScreen.start().catch((error: unknown) =>
@@ -2270,6 +2396,8 @@ function pinOfficeSurface(ses: Session): void {
     // A profile fetched while the services started: the API takes it now.
     void profileRefresh.then((saved) => (saved ? reloadProfile() : undefined));
     await configureSession(session.defaultSession);
+    await adoptLocaleCookie(session.defaultSession);
+    followLocaleCookie(session.defaultSession);
     // The API's PDF exports, drawn by the editor in this app's Chromium (./printer.ts).
     if (printerEnabled()) void startPrinter(launch!);
     // The AI's windows checked, and shared windows' actions run, in this app's Chromium (./vibe-checker.ts).
@@ -2277,57 +2405,12 @@ function pinOfficeSurface(ses: Session): void {
     if (vibeCheckerEnabled()) stopVibeChecker = startVibeCheckerProcess(launch!, where.vibeRuntimeDir, where.pyodideDir);
     void startAgentControl(launch!);
     ready = true;
-    Menu.setApplicationMenu(
-      buildMenu({
-        origin: launch!.webOrigin,
-        appName: APP_NAME,
-        openInBrowser: false,
-        newWindow: (route) => openHomeWindow(route === "/app" ? HOME_ROUTE : route),
-        checkForUpdates: checkForUpdatesNow,
-        appItems: [
-          ...(prelaunchAvailable()
-            ? [
-                {
-                  type: "checkbox" as const,
-                  label: say("登录时在后台准备好（打开更快）", "Ready in the Background at Login"),
-                  checked: prelaunchEnabled(APP_ID),
-                  click: (item: Electron.MenuItem) => {
-                    try {
-                      choosePrelaunch(APP_ID, item.checked);
-                    } catch (error) {
-                      console.error(`[classic] login item not changed: ${error instanceof Error ? error.message : error}`);
-                      item.checked = !item.checked;
-                    }
-                  },
-                },
-              ]
-            : []),
-          ...(trayAvailable()
-            ? [
-                {
-                  type: "checkbox" as const,
-                  label: say("关闭窗口后在托盘中继续运行（打开更快）", "Keep Running in the Tray When Closed"),
-                  checked: keepInTrayOnClose(),
-                  click: (item: Electron.MenuItem) => {
-                    try {
-                      setKeepInTrayOnClose(item.checked);
-                    } catch (error) {
-                      console.error(`[classic] tray setting not saved: ${error instanceof Error ? error.message : error}`);
-                      item.checked = !item.checked;
-                    }
-                  },
-                },
-              ]
-            : []),
-        ],
-        helpItems: [
-          {
-            label: say("许可证", "License"),
-            click: () => void shell.openExternal("https://www.gnu.org/licenses/agpl-3.0.html"),
-          },
-        ],
-      }),
-    );
+    installAppMenu();
+    // The menus in the language the person switches to (../app-locale.ts).
+    onAppLocaleChange(() => {
+      installAppMenu();
+      relabelTray(appTrayActions());
+    });
     const launchDocuments = pendingAtLaunch;
     const links = linksAtLaunch;
     pendingAtLaunch = [];

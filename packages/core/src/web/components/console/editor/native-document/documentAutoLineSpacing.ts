@@ -43,12 +43,13 @@ import { cssFontFamilyList } from "../../../../lib/css-font-family";
 import { officeFontMetricMatchesWidths, officeFontSubstitution } from "../../../../lib/office-fonts/substitutes";
 import { projectionCoversHorizon, recordProjectedHorizon, sheetsWithinMeasureHorizon } from "./paged/measureHorizon";
 import { measureLineMetrics } from "../../../../lib/text-engine/measure";
-import { DOCS_ENGINE_TAB_BREAK_CLASS, engineBreakStrutOff } from "../../../../lib/text-engine/docs-lines";
+import { DOCS_ENGINE_JOINER_CLASS, DOCS_ENGINE_TAB_BREAK_CLASS, engineBreakStrutOff } from "../../../../lib/text-engine/docs-lines";
 import { pageEngineFont, textEngineOn } from "../../../../lib/text-engine/page-adapter";
 import { textEngineEnabled } from "../../../../lib/text-engine/flags";
 import { offLineGridAt, sectionsOffLineGrid } from "./sectionLineGrid";
 import { fragmentCarries } from "./paged/fragmentRoles";
 import { autoLinesKeptOn, noteDrawnAutoLines, retireSeededLines, seededAutoLinesFor } from "./engineLinesKept";
+import { tabMeasureMutation } from "./paged/tabMeasureMark";
 
 /** This projection's coverage record in measureHorizon. */
 const AUTO_LINE_HORIZON_KEY = "auto-line-spacing";
@@ -199,6 +200,12 @@ function lineSpacingIdentityBlock(
  * 11pt Arial body at "at least 12pt" advanced 13.2pt a line where Word's
  * advance 12.65pt (R02-D05, two pages added over 23).
  */
+/** Harness switch (`window.__docsLeadingSpacesLineOff = true`): spaces that
+ * open a line before its words set no height, as other spaces (A/B). */
+function leadingSpacesLineOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsLeadingSpacesLineOff?: boolean }).__docsLeadingSpacesLineOff === true;
+}
+
 export function documentAutoLineFloorPx(block: ProseMirrorNode): number {
   if (block.attrs.lineHeightRule !== "atLeast") return 0;
   const pt = Number(block.attrs.lineHeightPt);
@@ -789,10 +796,23 @@ function sourceTextDOM(view: EditorView, dom: HTMLElement, position: number, blo
   // stand 13.81, and the same headings without a subscript 13.81.
   const scriptRun = (element: Element) =>
     !scriptProofOff() && element.matches("sub, sup") && !element.matches(".mrnote-footnote-ref") && dom.contains(element);
+  // The line engine's word joiner (documentEngineLineBreaks: U+2060 between
+  // closing punctuation and an opening bracket Word keeps together): no run
+  // of the source, its one character no source text, and under the proof it
+  // takes no line height like any wrapper. Rejected, a paragraph holding one
+  // kept its own strut on every line while its others did not: 27 of R461's
+  // code-listing pieces drew each line 1.4 px taller than the same
+  // paragraph's other pieces, which pieces did depending on where the pages
+  // cut it (the joiner comes with the lines of the piece that holds it).
+  const engineJoiner = (element: Element) => {
+    if (joinerProofOff()) return false;
+    const joiner = element.closest(`span.${DOCS_ENGINE_JOINER_CLASS}`);
+    return joiner !== null && dom.contains(joiner);
+  };
   for (const element of dom.querySelectorAll(nonTextLayout)) {
     if (!zeroLayoutMark(element) && !listMarker(element) && !inlinePicture(element) &&
       !controlAnchor(element) && !pageBreakMark(element) && !textOnlyFieldView(element) && !noteRef(element) &&
-      !inlineFormula(element) && !ownStrut(element) && !scriptRun(element)) return false;
+      !inlineFormula(element) && !ownStrut(element) && !scriptRun(element) && !engineJoiner(element)) return false;
   }
   // Never neutralize an authored inline line-height, or an unmapped label
   // supplied by a NodeView. This is a paragraph-source proof, not text matching
@@ -809,7 +829,7 @@ function sourceTextDOM(view: EditorView, dom: HTMLElement, position: number, blo
     if (!text.length) continue;
     if (text.parentElement && (listMarker(text.parentElement) || inlinePicture(text.parentElement) ||
       controlAnchor(text.parentElement) || noteRef(text.parentElement) || inlineFormula(text.parentElement) ||
-      ownStrut(text.parentElement))) continue;
+      ownStrut(text.parentElement) || engineJoiner(text.parentElement))) continue;
     // A field's result text is its view's, not the paragraph's: the field
     // carries its own leaf (`fieldLeaf`).
     if (text.parentElement && textOnlyFieldView(text.parentElement)) continue;
@@ -1081,6 +1101,12 @@ interface BlockDecoration {
 const AUTO_LINE_STRUT_SELECTOR = "span.document-auto-line-strut";
 
 
+
+
+
+function joinerProofOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsJoinerProofOff?: boolean}).__docsJoinerProofOff === true;
+}
 function strutProofOff(): boolean {
   return typeof window !== "undefined" && (window as Window & {__docsStrutProofOff?: boolean}).__docsStrutProofOff === true;
 }
@@ -1236,6 +1262,7 @@ export class AutoLineBlockCache {
 
   private note(records: readonly MutationRecord[]): void {
     for (const record of records) {
+      if (tabMeasureMutation(record)) continue;
       if (record.target === this.root) {
         // The root's own attributes: its classes and style are the cache's
         // context; the rest are status flags. A sheet put in is new DOM.
@@ -2133,6 +2160,13 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
       const after = textOf(to, blockTo, leafText);
       return `${before.slice(before.lastIndexOf("\n") + 1)}${after.split("\n")[0]}`.trim() === "";
     };
+    // Spaces with nothing but spaces before them on their source line, and
+    // something to show after them on it.
+    const opensItsLine = (from: number, to: number) => {
+      const before = textOf(blockFrom, from, leafText);
+      const after = textOf(to, blockTo, leafText).split("\n")[0];
+      return before.slice(before.lastIndexOf("\n") + 1).trim() === "" && after.trim() !== "";
+    };
     // Spaces alone on the paragraph's last line share it with the mark only:
     // the mark sets that line (markLineOf), they set nothing.
     const aloneOnMarkLine = (from: number, to: number) =>
@@ -2166,7 +2200,16 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
         const spaces = /^ +$/.test(textOf(part.from, part.to));
         const markLine = spaces && !blockHasWords && aloneOnMarkLine(part.from, part.to) ? markLineOf(element) : null;
         if (markLine !== null) markLineStrut = markLine;
-        if (spaces && ((blockHasWords && !aloneOnItsLine(part.from, part.to)) || markLine !== null)) {
+        // Spaces that open a line, before its words, stand on a line of their
+        // own when the word after them wraps (Word breaks after them: the
+        // spaces keep a full line, the word goes down; docx-look/merged/synth/
+        // wrap). A zero box set that line nothing: about 2 px high, one line
+        // short of Word's (corpus R461-D71 p13, 18 spaces before a 63-character
+        // R argument; every page after it opened a line later than Word's).
+        // They keep their face's line, which is the line's own where they
+        // share it with the word after them.
+        const opensLine = spaces && blockHasWords && markLine === null && !leadingSpacesLineOff() && opensItsLine(part.from, part.to);
+        if (spaces && !opensLine && ((blockHasWords && !aloneOnItsLine(part.from, part.to)) || markLine !== null)) {
           // Aligned to the line's top, a zero box cannot reach above it.
           leaves.push(Decoration.inline(part.from, part.to,
             {class: "document-auto-linebox", style: "--document-auto-line-height:0px;vertical-align:top"},

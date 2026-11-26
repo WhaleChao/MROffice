@@ -9,15 +9,22 @@
  * engine's fit (`ms-engine/latin-face`).
  */
 
-export interface OfficeKerningStyle {
-  readonly unitsPerEm: number;
+export interface OfficeKerningTable {
   readonly left: readonly string[];
   readonly right: readonly string[];
   readonly pairs: readonly string[];
 }
 
+export interface OfficeKerningStyle extends OfficeKerningTable {
+  readonly unitsPerEm: number;
+  /** The pairs PowerPoint for Windows kerns a slide's text by (the face's
+   * legacy `kern` table as Windows' GDI names its pairs; triage TRIAGE 120):
+   * `"same"` when they are `pairs`; absent in a file recorded before them. */
+  readonly slides?: (OfficeKerningTable & { readonly source?: string; readonly version?: string }) | "same";
+}
+
 /** Font units by left and right code point. */
-export function compileOfficeKerningUnits(style: OfficeKerningStyle): (left: number, right: number) => number {
+export function compileOfficeKerningUnits(style: OfficeKerningTable): (left: number, right: number) => number {
   const leftClass = new Map<number, number>();
   style.left.forEach((members, n) => members.split(" ").forEach((hex) => leftClass.set(parseInt(hex, 16), n)));
   const rightClass = new Map<number, number>();

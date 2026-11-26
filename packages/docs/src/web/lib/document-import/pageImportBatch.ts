@@ -7,6 +7,7 @@
  */
 import { apiFetchRaw, apiGet, isApiRequestError } from "@mrnote/core/web/lib/api.ts";
 import { preloadPageEditorCode } from "@mrnote/core/web/lib/editor-code-preload.ts";
+import { isRetryableReadingInterruption } from "@mrnote/core/web/lib/page-file-import-errors.ts";
 import { desktopLocalUploadPart, linkDesktopOriginal } from "@mrnote/core/web/lib/desktop-local-files.ts";
 import {
   PageImportProjectionBudget,
@@ -19,6 +20,9 @@ const UUID_PATTERN =
 const MAX_BATCH_ITEMS = 20;
 const MAX_RECOVERY_POLLS = 8;
 const DEFAULT_RECOVERY_DELAY_MS = 250;
+/** The wait before the one automatic retry of an import the server could not
+ * read just now (503 ``source_reading_interrupted``, retryable). */
+const READING_INTERRUPTED_RETRY_DELAY_MS = 5_000;
 /** How long a probe waits on a batch the server is still converting. A long
  * document's conversion outlives the request that started it (a proxy cuts
  * the connection, the server carries on and commits); the page is waited
@@ -166,7 +170,15 @@ interface SubmitPageImportBatchInput {
    * included), once, as it goes out: the page a source operation makes is
    * named by it (the API's ``_deterministic_import_page_id``). */
   onSubmitting?: (batchId: string) => void;
+  /** Told once the PUT itself has gone out (its body built, its request made),
+   * on a task of its own after it: what waited for the import's request to
+   * leave starts then (lib/document-import/pending-document-host). */
+  onSent?: () => void;
+  /** Test seam: the wait before the automatic retry of a reading the server
+   * could not finish just now; production waits 5 s. */
+  readingRetryDelayMs?: number;
 }
+
 
 function protocolError(message: string): never {
   throw new PageImportBatchProtocolError(message);
@@ -1021,6 +1033,7 @@ export async function submitPageImportBatch(
   }
 
   let lastError: unknown;
+  let readingRetried = false;
   try {
     let putAttempt = 0;
     while (putAttempt < 2) {
@@ -1028,15 +1041,21 @@ export async function submitPageImportBatch(
         if (putAttempt === 0 && input.onSubmitting) {
           try { input.onSubmitting(effectiveBatchId); } catch { /* an observer never stops the import */ }
         }
-        const response = await apiFetchRaw(
+        const body = await buildMultipart(manifestJson, input.files);
+        const sending = apiFetchRaw(
           path,
           {
             method: "PUT",
-            body: await buildMultipart(manifestJson, input.files),
+            body,
             signal: input.signal,
           },
           { contentType: "" },
         );
+        if (putAttempt === 0 && input.onSent) {
+          const sent = input.onSent;
+          setTimeout(() => { try { sent(); } catch { /* an observer never stops the import */ } }, 0);
+        }
+        const response = await sending;
         const receipt = validateReceipt(await response.json(), {
           expectedBatchId: effectiveBatchId,
           manifest: input.manifest,
@@ -1051,6 +1070,21 @@ export async function submitPageImportBatch(
       } catch (error) {
         if (error instanceof PageImportBatchProtocolError) throw error;
         if (error instanceof PageImportBatchFailedError) throw error;
+        if (isRetryableReadingInterruption(error)) {
+          // The server answered: this batch failed for a reason of its own
+          // (its receipt is terminal), so the probe below has nothing to
+          // find. Once, after a pause, under a fresh id; then the answer
+          // itself, which names the server's moment.
+          if (readingRetried || input.signal?.aborted) throw error;
+          readingRetried = true;
+          await wait(
+            Math.max(0, Math.min(10_000, input.readingRetryDelayMs ?? READING_INTERRUPTED_RETRY_DELAY_MS)),
+          );
+          if (input.signal?.aborted) throw error;
+          replaceRecoveredBatchId();
+          putAttempt = 0;
+          continue;
+        }
         if (
           requiresRecoveredByteVerification &&
           isRecoveredBatchIdentityConflict(error)

@@ -10,7 +10,9 @@ import { usePdfRibbonGroupCommands } from "./PdfOfficeRibbon";
 import { PdfRibbonGroupFlyout } from "./PdfRibbonGroupFlyout";
 import {
   PDF_RIBBON_COLLAPSIBLE_ATTRIBUTE,
+  PDF_RIBBON_COMPACTABLE_ATTRIBUTE,
   usePdfRibbonGroupCollapsed,
+  usePdfRibbonGroupCompact,
 } from "./pdfRibbonFit";
 
 import {
@@ -42,6 +44,7 @@ export function PdfSurfaceRibbonGroup({
   children,
   className,
   collapsedIcon,
+  compact,
   controlId,
   dataAttributes,
   eager = false,
@@ -55,6 +58,9 @@ export function PdfSurfaceRibbonGroup({
   /** The 24px glyph of the group's one button when the band is too narrow
    * for it (pdfRibbonFit): naming one lets the group collapse. */
   collapsedIcon?: ReactNode;
+  /** The group's middle form (Office's medium scale), drawn before it
+   * folds: as PdfFoldingRibbonGroup's `compact`. Needs `collapsedIcon`. */
+  compact?: ReactNode;
   controlId?: string;
   /** Extra `data-*` attributes on the group (a state a walkthrough reads). */
   dataAttributes?: Record<`data-${string}`, string | undefined>;
@@ -72,6 +78,8 @@ export function PdfSurfaceRibbonGroup({
   const commands = eager ? children : keptCommands;
   const collapseId = collapsedIcon === undefined ? undefined : (testId ?? label);
   const collapsed = usePdfRibbonGroupCollapsed(collapseId);
+  const compacted =
+    usePdfRibbonGroupCompact(collapseId) && compact !== undefined && collapseId !== undefined;
   const group = (content: ReactNode, flyout = false) => (
     <OfficeHomeRibbonGroup
       ariaBusy={ariaBusy}
@@ -84,6 +92,10 @@ export function PdfSurfaceRibbonGroup({
         ...(collapseId !== undefined && !flyout
           ? { [PDF_RIBBON_COLLAPSIBLE_ATTRIBUTE]: collapseId }
           : {}),
+        ...(compact !== undefined && collapseId !== undefined && !flyout
+          ? { [PDF_RIBBON_COMPACTABLE_ATTRIBUTE]: "" }
+          : {}),
+        ...(compacted && !collapsed && !flyout ? { "data-pdf-ribbon-compact": "true" } : {}),
         ...(collapsed && !flyout ? { "data-pdf-ribbon-collapsed": "true" } : {}),
       }}
       label={label}
@@ -121,7 +133,7 @@ export function PdfSurfaceRibbonGroup({
       </PdfRibbonGroupFlyout>,
     );
   }
-  return group(commands);
+  return group(compacted ? compact : commands);
 }
 
 
@@ -138,25 +150,36 @@ export function PdfSurfaceRibbonGroup({
 export function PdfFoldingRibbonGroup({
   children,
   collapsedIcon,
+  compact,
   ...group
 }: ComponentProps<typeof OfficeHomeRibbonGroup> & {
   /** The 24px glyph of the group's one button when it folds. */
   collapsedIcon: ReactNode;
+  /**
+   * The group's middle form (Office's medium scale): its frequent commands,
+   * drawn on a band too narrow for it in full before it folds. What it
+   * leaves out must be reachable from the group's launcher (its pane).
+   * The folded group's panel shows it in full.
+   */
+  compact?: ReactNode;
 }) {
   const collapseId = group.testId ?? group.label;
   const collapsed = usePdfRibbonGroupCollapsed(collapseId);
+  const compacted = usePdfRibbonGroupCompact(collapseId) && compact !== undefined;
   const dataAttributes = {
     ...group.dataAttributes,
     ...(group.label !== undefined && group.dataAttributes?.["data-pdf-ribbon-label"] === undefined
       ? { "data-pdf-ribbon-label": group.label }
       : {}),
     ...(collapseId !== undefined ? { [PDF_RIBBON_COLLAPSIBLE_ATTRIBUTE]: collapseId } : {}),
+    ...(compact !== undefined && collapseId !== undefined ? { [PDF_RIBBON_COMPACTABLE_ATTRIBUTE]: "" } : {}),
+    ...(compacted && !collapsed ? { "data-pdf-ribbon-compact": "true" } : {}),
     ...(collapsed ? { "data-pdf-ribbon-collapsed": "true" } : {}),
   };
   if (!collapsed || collapseId === undefined) {
     return (
       <OfficeHomeRibbonGroup {...group} dataAttributes={dataAttributes}>
-        {children}
+        {compacted ? compact : children}
       </OfficeHomeRibbonGroup>
     );
   }

@@ -45,7 +45,15 @@ export interface OversizedImportOriginal {
 }
 
 /** Why an original-only page shows none of its file. */
-export type OversizedImportOriginalReason = `encrypted:${string}` | "too_large" | "not_convertible" | "unreadable" | "workspace_full";
+export type OversizedImportOriginalReason =
+  | `encrypted:${string}`
+  | "too_large"
+  | "not_convertible"
+  | "unreadable"
+  // Read, but the page made of it was refused by our own validator: the
+  // file is intact and the conversion is ours to fix (TRIAGE 163).
+  | "conversion_incomplete"
+  | "workspace_full";
 
 export interface OversizedImportSheetCut {
   readonly sheetId: string;
@@ -70,6 +78,9 @@ export interface OversizedImportPreview {
   readonly original: OversizedImportOriginal | null;
   /** Original-only pages: why nothing of the file is shown. */
   readonly reason: OversizedImportOriginalReason | null;
+  /** Documents: a preview because one of its tables is too large to edit
+   * here (the server's `table_too_large`), not because of its size alone. */
+  readonly tableTooLarge: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -88,6 +99,7 @@ const EMPTY_PREVIEW: OversizedImportPreview = Object.freeze({
   total: null,
   original: null,
   reason: null,
+  tableTooLarge: false,
 });
 
 function readOriginal(value: unknown): OversizedImportOriginal | null {
@@ -174,6 +186,7 @@ export function readOversizedImportPreview(
       marker.reason === "too_large" ||
       marker.reason === "not_convertible" ||
       marker.reason === "unreadable" ||
+      marker.reason === "conversion_incomplete" ||
       marker.reason === "workspace_full" ||
       (typeof marker.reason === "string" && /^encrypted:[a-z0-9_]{1,64}$/.test(marker.reason))
         ? (marker.reason as OversizedImportOriginalReason)
@@ -192,6 +205,7 @@ export function readOversizedImportPreview(
       shown: counts.shown,
       total: counts.total,
       original,
+      tableTooLarge: marker.sourceKind === "docx" && marker.reason === "table_too_large",
     });
   }
   if (

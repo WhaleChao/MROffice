@@ -27,6 +27,11 @@ export interface DesktopSettings {
   /** AI apps on this computer may use the app as their screen through its
    * local MCP endpoint (./ai-screen, Settings › General); absent: on. */
   aiScreen?: boolean;
+  /** The language the person chose for the app (Settings › Language): a
+   * copy of the site's language cookie the picker writes, read before the
+   * session is, a web app locale ("en", "zh", "pt-BR"); absent: never
+   * chosen (./locale.ts). */
+  locale?: string;
 }
 
 const settingsFile = () => path.join(app.getPath("userData"), "desktop-settings.json");

@@ -733,12 +733,16 @@ function presentationGroupIsFiles(
   // The editor's own ids are `grp-`; the import names the file's groups
   // `native-group-` / `group-` (a Regroup restores that id).
   if (!groupId || groupId.startsWith("grp-")) return false;
-  return blocks.some(
+  return presentationGroupMembersAreFiles(blocks.filter((member) => blockGroupId(member) === groupId));
+}
+
+/** Whether a group whose members are `members` is one the file owns (`presentationGroupIsFiles`). */
+function presentationGroupMembersAreFiles(members: readonly PresentationBlock[]): boolean {
+  return members.some(
     (member) =>
-      blockGroupId(member) === groupId &&
-      (blockClaimsNativeGroup(member) ||
-        blockNativeGroupMoveAuthority(member as unknown as Record<string, unknown>) !== null ||
-        isImportedPptxBlock(member)),
+      blockClaimsNativeGroup(member) ||
+      blockNativeGroupMoveAuthority(member as unknown as Record<string, unknown>) !== null ||
+      isImportedPptxBlock(member),
   );
 }
 
@@ -776,12 +780,30 @@ export function presentationGroupRefusal(
   }
   if (slideBlocks) {
     // A group of the file is taken whole or not at all: the save cannot move
-    // some of its members into another group.
+    // some of its members into another group. Each group asked once, from one
+    // walk of the slide (TRIAGE 151: per target, a walk to ask whether its
+    // group is the file's and another for its members -- Select All on
+    
     const chosen = new Set(targets.map((block) => block.id));
+    const asked = new Set<string>();
+    let groups: Map<string, PresentationBlock[]> | null = null;
     for (const block of targets) {
       const groupId = blockGroupId(block);
-      if (!groupId || !presentationGroupIsFiles(slideBlocks, block)) continue;
-      if (blocksInGroup(slideBlocks, groupId).some((member) => !chosen.has(member.id))) return "imported";
+      if (!groupId || groupId.startsWith("grp-") || asked.has(groupId)) continue;
+      asked.add(groupId);
+      if (!groups) {
+        groups = new Map();
+        for (const member of slideBlocks) {
+          const id = blockGroupId(member);
+          if (!id) continue;
+          const list = groups.get(id);
+          if (list) list.push(member);
+          else groups.set(id, [member]);
+        }
+      }
+      const members = groups.get(groupId) ?? [];
+      if (!presentationGroupMembersAreFiles(members)) continue;
+      if (members.some((member) => !chosen.has(member.id))) return "imported";
     }
   }
   return null;
@@ -940,14 +962,29 @@ function presentationReorderUnits(
   const targetIds = new Set(targets.map((block) => block.id));
   const inGroup = new Map<string, Set<string>>();
   const inGroupTargetIds = new Set<string>();
+  // Each group (by its chain, joined by NUL): how many of the slide's blocks
+  // it holds at any depth, and how many of those are targets -- one walk of
+  // the slide, not one per target and level (TRIAGE 145: Select All on a slide
+  // of 2,351 objects spent a third of its 0.8 s here).
+  const held = new Map<string, number>();
+  const selected = new Map<string, number>();
+  for (const block of blocks) {
+    const chain = blockGroupChain(block);
+    const target = targetIds.has(block.id);
+    for (let depth = 1; depth <= chain.length; depth += 1) {
+      const key = chain.slice(0, depth).join("\u0000");
+      held.set(key, (held.get(key) ?? 0) + 1);
+      if (target) selected.set(key, (selected.get(key) ?? 0) + 1);
+    }
+  }
   for (const target of targets) {
     const chain = blockGroupChain(target);
     if (chain.length === 0) continue;
     // The outermost group of the chain selected whole names the object.
     let level = -1;
     for (let depth = 1; depth <= chain.length; depth += 1) {
-      const prefix = chain.slice(0, depth);
-      if (blocks.every((block) => !chainStartsWith(blockGroupChain(block), prefix) || targetIds.has(block.id))) {
+      const key = chain.slice(0, depth).join("\u0000");
+      if ((held.get(key) ?? 0) === (selected.get(key) ?? 0)) {
         level = depth;
         break;
       }

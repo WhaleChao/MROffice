@@ -97,8 +97,11 @@ export function powerPointSyntheticBoldExtraPt(stack: string, sizePt: number): n
  * (`followLocalOnly`); where it does, the text is the browser's.
  */
 function engineFont(font: OfficeTextFont): EngineFont {
-  return { stack: font.stack, weight: font.weight, italic: font.italic, sizePx: font.sizePt / PT_PER_PX, followLocalOnly: true, ...(font.kerning ? { kerning: true } : {}) };
+  return { stack: font.stack, weight: font.weight, italic: font.italic, sizePx: font.sizePt / PT_PER_PX, followLocalOnly: true, advanceQuantumPx: ADVANCE_QUANTUM_PX, ...(font.kerning ? { kerning: true, kerningTable: "slides" as const } : {}) };
 }
+
+/** PowerPoint for Windows' advance grid: 1/8 pt, in CSS px (TRIAGE 178). */
+const ADVANCE_QUANTUM_PX = 1 / 8 / PT_PER_PX;
 
 
 

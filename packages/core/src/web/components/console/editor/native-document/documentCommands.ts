@@ -105,7 +105,7 @@ import {
 import type { TextRun } from "../../../../lib/presentation-runs";
 import { readNativeSmartArtGroup, updateNativeSmartArtText } from "../../../../lib/presentation-native-smartart";
 import {
-  assignTimelineStepIds,
+  identifyRewrittenTimelineSteps,
   type TimelineStep,
 } from "../../../../lib/presentation-anim-timeline";
 import { buildOccupancyGrid } from "../../../../lib/presentation-table-merge";
@@ -3408,7 +3408,10 @@ export function applyPresentationPageCommandWithResult(
         // step, so a collaborator's concurrent timing edit on another object
         // merges per step instead of the whole list being overwritten.
         // The records were validated as steps by the command schema.
-        slide.animationSequence = assignTimelineStepIds(
+        // A step the slide had keeps its identity (row 1095: the save pairs
+        // it with the file's effect); a new one gets one of its own.
+        slide.animationSequence = identifyRewrittenTimelineSteps(
+          slide.animationSequence as TimelineStep[] | undefined,
           operation.animations.map((item) => ({ ...item })) as unknown as TimelineStep[],
           slide.id,
         );

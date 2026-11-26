@@ -793,6 +793,19 @@ function patchbackSummaryIssue(
     // needs no changed anchor and is not a sync error.
     return null;
   }
+  if (
+    isLosslessDurableNativeSaveReceipt(snapshot, {
+      expectedAdapter: resource.kind,
+      expectedResourceId: resource.id,
+      minimumPatchedAnchorCount: 0,
+      acceptVerifiedUnchanged: true,
+    })
+  ) {
+    // The server proved the file already is the page and wrote it unchanged
+    // (a save of editor-only fields after an earlier save wrote the change,
+    // TRIAGE 159). A zero-anchor receipt without that proof still warns.
+    return null;
+  }
   // The writer's own reason code is for the logs and the ledger, not the reader.
   return {
     key: "patchback",
@@ -959,7 +972,7 @@ const DECLINED_REASONS: ReadonlySet<string> = new Set([
   "no_place", "not_yet", "source_unwritable", "readback_mismatch", "internal_error", "conflict",
 ]);
 const DECLINED_REMEDIES: ReadonlySet<string> = new Set([
-  "kept_on_page", "redo_with_command", "download_rebuilt", "retry", "rebuilt_from_page",
+  "kept_on_page", "redo_with_command", "download_rebuilt", "retry", "rebuilt_from_page", "replaced_removed",
 ]);
 
 function declinedReasonDetail(
@@ -1021,8 +1034,13 @@ function declinedChangeItems(
     let text: string | null = null;
     let target: DeclinedChangeTarget | null = null;
     if (Number.isSafeInteger(block) && (block as number) >= 1) {
-      // A document block the file kept as it was, counted from 1.
-      text = t("importStatus.declinedBlockItem", { block: block as number, control: controlLabel });
+      // A document block the file kept as it was, counted from 1; or a new
+      // one the file has no place for that stands where the save removed
+      // the file's own blocks (`replaced_removed`): the file has neither.
+      text = t(
+        entry.remedy === "replaced_removed" ? "importStatus.declinedBlockReplacedItem" : "importStatus.declinedBlockItem",
+        { block: block as number, control: controlLabel },
+      );
       target = { kind: "block", block: block as number, control };
     } else if (Number.isSafeInteger(slide) && (slide as number) >= 1) {
       // A deck's declined pick of an older save is in its download: the

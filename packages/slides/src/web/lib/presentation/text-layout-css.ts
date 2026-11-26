@@ -27,7 +27,7 @@ import {
   presentationOfficeLightFontWeight,
   type PresentationFontAliases,
 } from "@mrnote/core/web/lib/presentation-font-face-reads.ts";
-import { officeTextPaintCss, type OfficeTextPaint } from "@mrnote/core/web/lib/office-text-paint.ts";
+import { officeTextPaintCss, officeTextPaintFlatFill, officeTextPaintFlatFillStyle, type OfficeTextPaint } from "@mrnote/core/web/lib/office-text-paint.ts";
 import {
   normalizeOfficeShapeShadow,
   OFFICE_SHADOW_DEFAULT_DIRECTION,
@@ -144,6 +144,11 @@ export function presentationTextPaintOwnsShadow(paint: unknown): boolean {
 export function runTextPaintCss(style: { textPaint?: unknown } | undefined): CSSProperties | null {
   const paint = style?.textPaint;
   if (!paint) return null;
+  // The run's own colour seen through (Text Fill > Transparency, readings
+  // row 1052): only the colour, at its opacity -- no WordArt layer, so its
+  // shadow, outline and highlight draw as the run's own.
+  const flat = officeTextPaintFlatFill(paint);
+  if (flat) return officeTextPaintFlatFillStyle(flat);
   try {
     return officeTextPaintCss(paint as OfficeTextPaint);
   } catch {

@@ -9,6 +9,7 @@ import { paginationLayoutRect, paginationLayoutScale } from "./paginationGeometr
 import { COLUMN_REGIONS_ATTR, unequalColumnCount } from "./unequalColumnProjection";
 import { measurementRange } from "./measurementRange";
 import { clearPageEdgeMarks } from "./paginationProjectionKeys";
+import { tabMeasureMutation } from "./tabMeasureMark";
 
 /**
  * The head fragment a text cut produces, rendered before it exists.
@@ -146,6 +147,7 @@ const stateByRoot = new WeakMap<HTMLElement, RootState>();
 
 function forgetMutated(state: RootState, root: HTMLElement, records: readonly MutationRecord[]): void {
   for (const record of records) {
+    if (tabMeasureMutation(record)) continue;
     // A projection re-stamping the value already there (a layout pass
     // writing a frame's mode and style every transaction) changed nothing
     // the head was measured from.

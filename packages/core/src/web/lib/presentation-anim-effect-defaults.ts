@@ -36,5 +36,12 @@ export function effectSettingsDefaults(
     decel: recipe ? Math.round((recipe.dc ?? 0) * MAX_EFFECT_SHARE) : 0,
     iterates: Boolean(recipe?.it),
     rewindable: !PRESENTATION_EFFECTS_WITHOUT_REWIND.has(animation),
+    sizable: animation === "grow-shrink",
+    fliesFromOffSlide:
+      animation === "fly-in" &&
+      (effectOption === undefined ||
+        effectOption === "from-bottom" ||
+        effectOption === "from-left" ||
+        effectOption === "from-right"),
   };
 }

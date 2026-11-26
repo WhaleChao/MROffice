@@ -512,12 +512,16 @@ export function autoFitTableColumnWidths(
 
 
 
-
 function storedAxisSize(value: unknown): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  const rounded = roundToTenths(value);
-  if (rounded <= 0) return null;
-  return Math.min(MAX_TABLE_AXIS_PX, rounded);
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return null;
+  // As the page holds it, unrounded: an imported size is its EMU / 9525
+  
+  // and a 19-row table ran 0.8 px short of PowerPoint by its last row
+  
+  // the person did not touch also goes back to the save exactly as the page
+  // holds it, so neither this release's API nor the one before reads an
+  // edit. Tenths stay the step a person drags or types (`clampAxisSize`).
+  return Math.min(MAX_TABLE_AXIS_PX, value);
 }
 
 function storedAxisSizeAt(value: unknown, index: number): number | null {
@@ -530,6 +534,34 @@ export function clampAxisSize(value: unknown): number | null {
   const rounded = roundToTenths(value);
   if (rounded <= 0) return null;
   return Math.min(MAX_TABLE_AXIS_PX, Math.max(MIN_TABLE_AXIS_PX, rounded));
+}
+
+/**
+ * Row heights as the browser's table lays them without losing a fraction per
+ * row: Chromium sets a row's height in LayoutUnits (1/64 px) and drops what
+ * is below one, so a 19.2889 px row drew 19.2813 and a table of 30 such rows
+ * ended 0.23 px short of PowerPoint's, which draws the stated EMU exactly
+ * (tp-rowquant, TRIAGE 143). Each row here is the difference of its rounded
+ * running total, so every row line stands within 1/128 px of where the
+ * stated heights put it and no row is cut more than the one before gave it.
+ * Non-number slots (auto rows) pass through and restart the running total.
+ */
+export function layoutUnitAxisSizes<T>(sizes: readonly (number | T)[]): (number | T)[] {
+  const unit = 64;
+  let total = 0;
+  let placed = 0;
+  return sizes.map((size) => {
+    if (typeof size !== "number" || !Number.isFinite(size) || size <= 0) {
+      total = 0;
+      placed = 0;
+      return size;
+    }
+    total += size;
+    const end = Math.round(total * unit) / unit;
+    const height = end - placed;
+    placed = end;
+    return height;
+  });
 }
 
 /**
@@ -684,7 +716,11 @@ export function setAxisSizeRange(
  */
 export function axisSizeAt(value: unknown, index: number): number | null {
   if (!Array.isArray(value) || index < 0 || index >= value.length) return null;
-  return clampAxisSize(value[index]);
+  const entry = value[index];
+  if (typeof entry !== "number" || !Number.isFinite(entry) || entry <= 0) return null;
+  // The size the page holds, unrounded (`storedAxisSize`), within the bounds a
+  // person can set.
+  return Math.min(MAX_TABLE_AXIS_PX, Math.max(MIN_TABLE_AXIS_PX, entry));
 }
 
 export interface TableAxisSizeSelectionState {

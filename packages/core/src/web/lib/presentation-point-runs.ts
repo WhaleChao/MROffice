@@ -20,6 +20,15 @@ export const applyRunFormat = (
   end: number,
   patch: Partial<shared.RunStyle> | ((style: shared.RunStyle | undefined) => Partial<shared.RunStyle>),
 ) => shared.applyRunFormat(runs, start, end, patch, POINTS);
+// The font box's own format (TRIAGE 54) at the same point precision: without
+// it a size the box sets in hundredths (44 pt = 58.67 design px) came out of
+// the shared default rounded to whole px (59).
+export const applyFontBoxRunFormat = (
+  runs: readonly shared.TextRun[],
+  start: number,
+  end: number,
+  patch: Partial<shared.RunStyle> | ((style: shared.RunStyle | undefined) => Partial<shared.RunStyle>),
+) => shared.applyFontBoxRunFormat(runs, start, end, patch, POINTS);
 export const applyRunField = (runs: readonly shared.TextRun[], start: number, end: number, field: shared.RunField) =>
   shared.applyRunField(runs, start, end, field, POINTS);
 export const applyStylePatch = (base: shared.RunStyle | undefined, patch: Partial<shared.RunStyle>) => shared.applyStylePatch(base, patch, POINTS);
@@ -39,6 +48,13 @@ export type TextEditDelta = Readonly<{
 export type TextEditSelection = Readonly<{
   start: number;
   end: number;
+  /** The words the field showed when the key went in (read at its
+   * beforeinput), when the field said: a typing burst's own letters may be
+   * shown there while the drawn words still lack them. */
+  shown?: string;
+  /** Where in `shown` the key went (an input method's composition: where it
+   * began, the words its marked letters replace), when not `start`/`end`. */
+  shownRange?: Readonly<{ start: number; end: number }>;
 }>;
 
 /** The single minimal replacement that changes ``previous`` into ``next``. */

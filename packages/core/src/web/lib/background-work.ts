@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { canvasGestureActive, onCanvasGestureEnd } from "./canvas-gesture";
 import { requestQuietCallback } from "./quiet-callback";
 
  
@@ -106,6 +107,7 @@ type GlobalSwitches = typeof globalThis & {
   /** A probe's A/B switch: true schedules as before this scheduler (every
    * turn at once; the page ledger's own earlier rule for its passes). */
   __backgroundWorkOff?: boolean;
+  __backgroundHoverOff?: boolean;
   __backgroundWork?: Stats;
   scheduler?: { yield?: () => Promise<void> };
   navigator?: Navigator & { scheduling?: { isInputPending?: (options?: { includeContinuous?: boolean }) => boolean } };
@@ -162,7 +164,16 @@ function onInput(event: Event): void {
   if (event.type === "pointermove") {
     const pointer = event as PointerEvent;
     // A hover is not work the person waits on; a drag, a pen or a finger is.
-    if (pointer.buttons === 0 && pointer.pointerType === "mouse") return;
+    
+    
+    // title bar pressed right after a 0.5-1.5 s WebKit step began waited
+    // for all of it). Nobody's own work (never an "own" boost), and the
+    // deferral cap still grants turns. `window.__backgroundHoverOff = true`:
+    // hovering is nothing, as before.
+    if (pointer.buttons === 0 && pointer.pointerType === "mouse") {
+      if (!g.__backgroundHoverOff) noteHover();
+      return;
+    }
   }
   noteInput(event.target instanceof Node ? event.target : null, LEGACY_INPUT.has(event.type));
 }
@@ -186,9 +197,23 @@ function noteInput(target: Node | null, legacy = true): void {
   }
 }
 
+
+
+export const HOVER_QUIET_MS = 700;
+
+function noteHover(): void {
+  const now = clock();
+  lastInputAt = Math.max(lastInputAt, now);
+  // Held as input ending HOVER_QUIET_MS - INPUT_QUIET_MS from now.
+  const until = now + HOVER_QUIET_MS - INPUT_QUIET_MS;
+  for (const lane of lanes) lane.lastForeignInputAt = Math.max(lane.lastForeignInputAt, until);
+}
+
 function listen(): void {
   if (listening || typeof window === "undefined") return;
   listening = true;
+  
+  onCanvasGestureEnd(schedulePump);
   const options = { capture: true, passive: true } as const;
   for (const type of ["keydown", "beforeinput", "compositionupdate", "pointerdown", "pointermove", "wheel", "touchstart", "touchmove"]) {
     window.addEventListener(type, onInput, options);
@@ -209,6 +234,9 @@ function legacyVerdict(lane: LaneState, now: number): Verdict {
 
 function verdict(lane: LaneState, now: number, afterPaint: boolean): Verdict {
   if (g.__backgroundWorkOff) return legacyVerdict(lane, now);
+  
+  // whatever its priority, until the gesture ends (lib/canvas-gesture).
+  if (canvasGestureActive()) return "hold";
   if (lane.priority === "first-screen") return "first-screen";
   if (now - lane.lastOwnInputAt < OWN_INPUT_BOOST_MS && lane.lastOwnInputAt >= lane.lastForeignInputAt) return "own";
   // A hidden page takes no input: nothing to wait for.
@@ -309,6 +337,8 @@ function pump(afterPaint: boolean): void {
     return;
   }
   if (held) {
+    // Held by a canvas gesture: its end pumps (listen()).
+    if (canvasGestureActive()) return;
     // Right after the next frame paints: the shared turn; at the latest when
     // the quiet period or the deferral cap ends.
     scheduleFrame();

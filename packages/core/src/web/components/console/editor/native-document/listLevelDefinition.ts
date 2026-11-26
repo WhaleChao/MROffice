@@ -565,6 +565,16 @@ export class ListCounterState {
       this.counters[level] = undefined;
   }
 
+  /**
+   * Take the counts of the levels above `level` from `from` (Word's one count
+   * of a numbering's instances): a list that restarts a deeper level goes on
+   * under the shallower items before it, "2.1." under "2." (truth H).
+   */
+  adoptLevelsAbove(from: ListCounterState, level: number): void {
+    const safe = Math.min(Math.max(Math.floor(level), 0), LIST_DEFINITION_LEVELS - 1);
+    for (let above = 0; above < safe; above += 1) this.counters[above] = from.counters[above];
+  }
+
   /** Seed `level` so its next item reads `ordinal`; deeper levels restart. */
   seedLevel(level: number, ordinal: number): void {
     const safe = Math.min(Math.max(Math.floor(level), 0), LIST_DEFINITION_LEVELS - 1);

@@ -19,6 +19,7 @@ import path from "node:path";
 import fs from "node:fs";
 
 import { PRODUCT } from "./product";
+import { appSpeaksChinese } from "../app-locale";
 
 const PARTITION = "persist:mrnote-agent-browser";
 const WIDTH = 1280;
@@ -43,7 +44,7 @@ function downloadFolder(): string {
 
 // Read when the window is made: the locale is known only once the app is ready.
 function windowTitle(): string {
-  const name = app.getLocale().toLowerCase().startsWith("zh") ? "AI 联网窗口" : "AI Web Window";
+  const name = appSpeaksChinese() ? "AI 联网窗口" : "AI Web Window";
   return `${PRODUCT.id === "office" ? "MR Office" : "MR Note"} · ${name}`;
 }
 

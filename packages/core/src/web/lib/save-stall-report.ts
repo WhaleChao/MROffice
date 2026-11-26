@@ -128,15 +128,22 @@ export function docsSaveStallFace(input: {
     ps: input.partsSaving, local: input.local, cc: input.conflictCopy, dirty: input.dirty } };
 }
 
-/** Sheets (SpreadsheetWindow's save face). */
+
+
+
+
+
+
 export function sheetSaveStallFace(input: {
   saveStatus: string; hasConflict: boolean; syncedToServer: boolean; notConnected: boolean; error: boolean;
   saveSlow: boolean; dirty: boolean; catchingUp: boolean; roomsAhead: boolean; retrying: string | false;
+  preparing?: boolean; validating?: boolean; retained?: number; tiles?: boolean; source?: string; guest?: boolean;
 }): { face: string; inputs: StallInputs } {
   const face = input.hasConflict || input.notConnected || (input.syncedToServer && input.saveStatus === "unsaved")
     || (input.error && input.saveStatus === "unsaved") ? SETTLED : input.saveSlow ? "saving" : input.saveStatus;
   return { face, inputs: { raw: input.saveStatus, slow: input.saveSlow, cu: input.catchingUp, ra: input.roomsAhead,
-    gr: input.retrying, dirty: input.dirty } };
+    gr: input.retrying, dirty: input.dirty, sp: input.preparing, vd: input.validating, rv: input.retained ?? 0,
+    td: input.tiles, src: input.source ?? "na", gm: input.guest } };
 }
 
 /** PDF (PdfPageWindow's save face). */

@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { assertPageKey } from "./page-key-guard";
 /**
  * What a window closing on a page still has to say, and the word it leaves for
  * the window opened next, for every editor that sends one:
@@ -84,6 +85,7 @@ export function noteClosingEditsSent(
   now = Date.now(),
   request: { id?: string; tab?: string } = {},
 ): void {
+  assertPageKey(pageId, "page-closing-edits noteClosingEditsSent");
   try {
     window.localStorage.setItem(
       CLOSING_EDITS_SENT_PREFIX + pageId,

@@ -923,7 +923,7 @@ import {
   sanitizeNotePayload,
   type StickyNoteAnnotation,
 } from "@mrnote/core/web/lib/pdf/sticky-notes.ts";
-import { DEFAULT_INK_COLOR, DEFAULT_INK_WIDTH, buildInkPayload, capStrokesPerPage, clampInkWidth, inkWidthPagePercent, isInkColor, normalizeStroke, sanitizeInkPayload, type InkAnnotation, type InkPoint } from "@mrnote/core/web/lib/pdf/ink.ts";
+import { DEFAULT_INK_COLOR, DEFAULT_INK_WIDTH, buildReaderInkPayload, capStrokesPerPage, clampInkWidth, inkWidthPagePercent, isInkColor, normalizeStroke, sanitizeInkPayload, type InkAnnotation, type InkPoint } from "@mrnote/core/web/lib/pdf/ink.ts";
 import { sanitizeCropBox } from "../../../lib/pdf/crop-box";
 import {
   createPdfPrintPageInventory,
@@ -1092,6 +1092,12 @@ import {
   type PageEditState,
   type PdfRotation,
 } from "@mrnote/core/web/lib/pdf/page-ops.ts";
+import {
+  onInsertedReaderPages,
+  pdfInsertedReaderPages,
+  pdfVisiblePageOrdinals,
+  readerPageOfRecord,
+} from "@mrnote/core/web/lib/pdf/inserted-page-identity.ts";
 // The bake, the measurement annotations and the redacted-page swap run on the
 
 import {
@@ -2043,7 +2049,12 @@ type PreparedNativeTextOfPage = Readonly<{ pageNumber: number; scale: number; ro
   /** The page's own layer is this revision's: nothing goes on the page. */
   kept?: boolean }>;
 
-export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewDownloadUrl, deterministicPreview = false, ribbonQuickActions, ribbonActionRail, documentFind, nativeTextOpener, ribbonQuickActionTail, ribbonQuickOverflowOnlyTail, ribbonSaveStatus, ribbonSaveStatusLabel, annotationContextWritable = true, nativeAnnotationWriteGeneration = "standalone", ribbonInsertPageCommands, onPageOrganizerApply, managedOutline, onManagedOutlineMutation, onSourceOutlineEdit, managedOutlineBusy, managedOutlineDisabledReason, onDownload, onDownloadSavedRevision, onGuestExportRequest, preferAnnotatedDownload, annotatedDownloadEnabled = true, onReaderExportEditsChange, onReaderExportEditCountChange, onVisualMaskOutputRiskChange, nativeFormWriteAuthority, nativeFormFields, onNativeFormFieldChange, onNativeFormAuthoringChange, nativeFormAuthoringDisabledReason, onNativeFormPendingChange, onCopilotFormInventory, onNativeFormFlushReady, downloadWithAnnotationsRequestId, downloadWithAnnotationsPolicyAction, onDownloadWithAnnotationsSettled, onPageChange, onCurrentInsertedPageChange, onNavigationPanelChange, navigationPanelCloseRequest, annotationListHost, onNativePageRotationsChange, notebookId, pageId, livePageId, liveTransformRoom, ocrSourcePageId, initialPage, initialPageIntentGeneration, navigateToPageRequest, showPageSlotRequest, onRequestPageSummary, onPageTextChange, onNativeListTextSelectionChange, onPlacedAnnotationSelectionChange, onNativeListTextExtraTargetsChange, onNativeTextAnnotationsChange, onNativeFreeTextCandidatePage, onNativeTextMarkupAnnotationsChange, onNativeInkAnnotationsChange, onManagedInkUpsert, onManagedInkDelete, onManagedInkErase, liveInkAwareness = null, taskPaneDocks = null, nativeSourceInkStrokes = EMPTY_NATIVE_SOURCE_INK_STROKES, onNativeSourceInkDelete, onNativeSourceInkTransform, onNativeSourceInkStyle, onNativeShapeAnnotationsChange, onManagedShapeUpsert, onManagedAreaHighlightUpsert, onManagedShapeDelete, nativeShapes, heldNativeAnnotations: heldNativeAnnotationsProp = null, heldManagedInkStrokes, discardedReaderRowIds, onManagedMeasurementUpsert, onManagedMeasurementDelete, nativeMeasurements, onManagedSignatureUpsert, onManagedSignatureDelete, nativeSignatures, managedSignatureAppearanceReady = false, onNativeStampAnnotationsChange, onManagedStampUpsert, onNativeImageInsert, onManagedStampDelete, nativeStamps, onManagedLinkUpsert, onManagedLinkDelete, nativeLinks, onNativeLinkAnnotationsChange, nativeSourceLinks, nativeSourceLinkDisabledReason, onNativeSourceLinkUpsert, onNativeSourceLinkTransform, onNativeSourceLinkDelete, onNativeSourceLinksDeleteAll, nativeSourceStamps, onNativeSourceStampTransform, onNativeSourceStampDelete, onNativeFreeTextAnnotationsChange, nativeSourceFreeTexts, onNativeSourceFreeTextTransform, onNativeSourceFreeTextDelete, onNativeSourceFreeTextEdit, managedStampAppearanceReady = false, nativeSourceShapes, onNativeSourceShapeTransform, onNativeSourceShapeDelete, onNativeSourceShapeStyle, managedShapeAppearanceReady = false, nativeTextMarkups, nativeSourceTextMarkups = EMPTY_NATIVE_SOURCE_TEXT_MARKUPS, onNativeSourceTextMarkupSelect, nativeSourceTextNotes = EMPTY_NATIVE_SOURCE_TEXT_NOTES, onNativeSourceTextNoteSelect, onManagedTextMarkupUpsert, onManagedTextMarkupUpsertGroups, onManagedTextMarkupUpsertMany, onManagedTextMarkupDelete, onManagedProofingUpsert, onManagedNoteUpsert, onManagedNoteDelete, onManagedCommentBatchDelete, managedTextMarkupAppearanceReady = false, onPageTextBoxesChange, documentTitle, dataItemId, engineReaderResourceId = null, nativePlanners: hostNativePlanners, annotationReadScope, sourceDocumentRevision: savedDocumentRevision, onOrdinaryNoteSourcePrepareReady, sourceByteGenerationKey: savedByteGenerationKey, sourceSha256: savedSha256, workingSource, documentPageStructure, onDocumentPageStructureRejected, onDocumentPageMapChange, nativeTextSourceHandoff, initialRibbonTab, onRibbonTabChange, entryPainting, onFirstVisiblePaint, onPageSourcePainted, onSourceRiskSnapshotChange, lossyCompressionSource, lossyCompressionWritable = false, pageRotations, deletedPages, insertedPages, pageMoves, textBoxEdits, nativeTextBoxLayouts, readNativeKeptTextBlocks, cropBoxes, documentDecorations, documentDecorationsNative = false, documentDecorationsNativeAppearanceReady = false, onDocumentDecorationsChange, onDocumentDecorationsDraftDiscard, nativePageLabelRanges, onNativePageLabelRangesApply, onUploadWatermarkImage, nativeFileAttachments = [], onNativeFileAttachmentUpsert, onNativeFileAttachmentMove, onNativeFileAttachmentDelete, nativeFileAttachmentBusy = false, nativeFileAttachmentDisabledReason, onNativePageImport, onNativePageReplace, nativePageImportBusy = false, nativePageImportDisabledReason, nativePageReplaceDisabledReason, nativeInkStrokes, nativeImageOverlays, resolveNativeImageOverlayUrl, resolveNativeImageOverlayBytes, enablePageOps = false, onEditContent, onPrepareNativeTextEdit, onWarmNativeTextEdit, nativeTextWarmHold = false, onNativeVectorGeometryCommit, onNativeImageActivate, onNativePictureCommit, onNativePictureOriginal, onNativePictureAltRead, onNativePictureOriginRead, onNativeVectorDeleteCommit, onNativeVectorDuplicateCommit, onNativeVectorReorderCommit, onNativeVectorReorderCommitAll, onNativeContentReorderCommit, onNativeVectorStyleCommitAll, onNativeVectorDeleteCommitAll, onNativeVectorGeometryCommitAll, onNativeVectorMergeCommit, onNativeVectorDuplicateCommitAll, onNativeVectorPasteContent, nativeVectorGeometryBusy = false, nativeVectorGeometryDisabledReason, nativeVectorWriteSettling = false, nativeDocumentWriteBusy = false, nativeVectorWriterSourceSha256 = null, nativeVectorProvisionalTargetSinkRef, nativeVectorPageShapeBoxesRef, nativeGestureWritePendingRef, nativeCachedPaintShowRef, onNativeVectorSelectionActiveChange, onNativeVectorStyleCommit, nativeVectorStyleBusy = false, nativeVectorStyleDisabledReason, nativeTextEditingActive = false, onNativeTextContinuationCaptureChange, onNativeTextQueuedOpen, onNativeTextKeptDrag, onNativeTextEditModeActiveChange, contentEditExitSignal = 0, lineAnnotateRequest = null, contentEditEnterSignal = 0, handToolSignal = 0, insertTextSignal = 0, onContentEditModeExit, onCurrentAuthorChange, editContentDisabledReason, editContentModeDisabledReason, editContentModeDisabledTransient = false, editContentBusy = false, onInsertText, onInsertBlankPageBeside, textBoxAuthoring, tableAuthoring, chartAuthoring, nativeImageInsertRequestId = 0, onCropPage, onPageSizeApply, onTaggedTextApply, heldPageLabelRanges, heldPageGeometries: heldPageGeometriesProp, heldPageImports, pageSizeOriginalSizes, pageSizeDisabledReason, onEraseRegion, onSplitPages, splitPageDisabledReason, onOpenPageBackground, pageBackgroundOpen = false, pageBackgroundBusy = false, pageBackgroundDisabledReason, onCreateEditableVersion, onConvertToSpreadsheet, onConvertToPresentation, onOpenOfficeConversion, onOfficeConversionPrepare, officeProjectionDisabledReason, isCreatingEditableVersion, rangeSource }: PDFViewerProps) {
+/** Two note places (percent of the page) within a twentieth of a percent. */
+function samePlace(a: { x: number; y: number }, b: { x: number; y: number }): boolean {
+  return Math.abs(a.x - b.x) <= 0.05 && Math.abs(a.y - b.y) <= 0.05;
+}
+
+export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewDownloadUrl, deterministicPreview = false, ribbonQuickActions, ribbonActionRail, documentFind, nativeTextOpener, ribbonQuickActionTail, ribbonQuickOverflowOnlyTail, ribbonSaveStatus, ribbonSaveStatusLabel, annotationContextWritable = true, nativeAnnotationWriteGeneration = "standalone", ribbonInsertPageCommands, onPageOrganizerApply, managedOutline, onManagedOutlineMutation, onSourceOutlineEdit, managedOutlineBusy, managedOutlineDisabledReason, onDownload, onDownloadSavedRevision, onGuestExportRequest, preferAnnotatedDownload, annotatedDownloadEnabled = true, onReaderExportEditsChange, onReaderExportEditCountChange, onVisualMaskOutputRiskChange, nativeFormWriteAuthority, nativeFormFields, onNativeFormFieldChange, onNativeFormAuthoringChange, nativeFormAuthoringDisabledReason, onNativeFormPendingChange, onCopilotFormInventory, onNativeFormFlushReady, downloadWithAnnotationsRequestId, downloadWithAnnotationsPolicyAction, onDownloadWithAnnotationsSettled, onPageChange, onCurrentInsertedPageChange, onNavigationPanelChange, navigationPanelCloseRequest, annotationListHost, onNativePageRotationsChange, notebookId, pageId, livePageId, liveTransformRoom, ocrSourcePageId, initialPage, initialPageIntentGeneration, navigateToPageRequest, showPageSlotRequest, onRequestPageSummary, onPageTextChange, onNativeListTextSelectionChange, onPlacedAnnotationSelectionChange, onNativeListTextExtraTargetsChange, onNativeTextAnnotationsChange, onNativeFreeTextCandidatePage, onNativeTextMarkupAnnotationsChange, onNativeInkAnnotationsChange, onManagedInkUpsert, onManagedInkDelete, onManagedInkErase, liveInkAwareness = null, taskPaneDocks = null, nativeSourceInkStrokes = EMPTY_NATIVE_SOURCE_INK_STROKES, onNativeSourceInkDelete, onNativeSourceInkTransform, onNativeSourceInkStyle, onNativeShapeAnnotationsChange, onManagedShapeUpsert, onManagedAreaHighlightUpsert, onManagedShapeDelete, nativeShapes, heldNativeAnnotations: heldNativeAnnotationsProp = null, heldManagedInkStrokes, discardedReaderRowIds, onManagedMeasurementUpsert, onManagedMeasurementDelete, nativeMeasurements, onManagedSignatureUpsert, onManagedSignatureDelete, nativeSignatures, managedSignatureAppearanceReady = false, onNativeStampAnnotationsChange, onManagedStampUpsert, onNativeImageInsert, onManagedStampDelete, nativeStamps, onManagedLinkUpsert, onManagedLinkDelete, nativeLinks, onNativeLinkAnnotationsChange, nativeSourceLinks, nativeSourceLinkDisabledReason, onNativeSourceLinkUpsert, onNativeSourceLinkTransform, onNativeSourceLinkDelete, onNativeSourceLinksDeleteAll, nativeSourceStamps, onNativeSourceStampTransform, onNativeSourceStampDelete, onNativeFreeTextAnnotationsChange, nativeSourceFreeTexts, onNativeSourceFreeTextTransform, onNativeSourceFreeTextDelete, onNativeSourceFreeTextEdit, managedStampAppearanceReady = false, nativeSourceShapes, onNativeSourceShapeTransform, onNativeSourceShapeDelete, onNativeSourceShapeStyle, managedShapeAppearanceReady = false, nativeTextMarkups, nativeSourceTextMarkups = EMPTY_NATIVE_SOURCE_TEXT_MARKUPS, onNativeSourceTextMarkupSelect, nativeSourceTextNotes = EMPTY_NATIVE_SOURCE_TEXT_NOTES, onNativeSourceTextNoteSelect, onManagedTextMarkupUpsert, onManagedTextMarkupUpsertGroups, onManagedTextMarkupUpsertMany, onManagedTextMarkupDelete, onManagedProofingUpsert, onManagedNoteUpsert, onManagedNotePlaceRead, managedNotePlaces, onStoredManagedNotePlaceRead, onManagedNoteDelete, onManagedCommentBatchDelete, managedTextMarkupAppearanceReady = false, onPageTextBoxesChange, documentTitle, dataItemId, engineReaderResourceId = null, nativePlanners: hostNativePlanners, annotationReadScope, sourceDocumentRevision: savedDocumentRevision, onOrdinaryNoteSourcePrepareReady, sourceByteGenerationKey: savedByteGenerationKey, sourceSha256: savedSha256, workingSource, documentPageStructure, onDocumentPageStructureRejected, onDocumentPageMapChange, nativeTextSourceHandoff, initialRibbonTab, onRibbonTabChange, entryPainting, onFirstVisiblePaint, onPageSourcePainted, onSourceRiskSnapshotChange, lossyCompressionSource, lossyCompressionWritable = false, pageRotations, deletedPages, insertedPages, pageMoves, textBoxEdits, nativeTextBoxLayouts, readNativeKeptTextBlocks, cropBoxes, documentDecorations, documentDecorationsNative = false, documentDecorationsNativeAppearanceReady = false, onDocumentDecorationsChange, onDocumentDecorationsDraftDiscard, nativePageLabelRanges, onNativePageLabelRangesApply, onUploadWatermarkImage, nativeFileAttachments = [], onNativeFileAttachmentUpsert, onNativeFileAttachmentMove, onNativeFileAttachmentDelete, nativeFileAttachmentBusy = false, nativeFileAttachmentDisabledReason, onNativePageImport, onNativePageReplace, nativePageImportBusy = false, nativePageImportDisabledReason, nativePageReplaceDisabledReason, nativeInkStrokes, nativeImageOverlays, resolveNativeImageOverlayUrl, resolveNativeImageOverlayBytes, enablePageOps = false, onEditContent, onPrepareNativeTextEdit, onWarmNativeTextEdit, nativeTextWarmHold = false, onNativeVectorGeometryCommit, onNativeImageActivate, onNativePictureCommit, onNativePictureOriginal, onNativePictureAltRead, onNativePictureOriginRead, onNativeVectorDeleteCommit, onNativeVectorDuplicateCommit, onNativeVectorReorderCommit, onNativeVectorReorderCommitAll, onNativeContentReorderCommit, onNativeVectorStyleCommitAll, onNativeVectorDeleteCommitAll, onNativeVectorGeometryCommitAll, onNativeVectorMergeCommit, onNativeVectorDuplicateCommitAll, onNativeVectorPasteContent, nativeVectorGeometryBusy = false, nativeVectorGeometryDisabledReason, nativeVectorWriteSettling = false, nativeDocumentWriteBusy = false, nativeVectorWriterSourceSha256 = null, nativeVectorProvisionalTargetSinkRef, nativeVectorPageShapeBoxesRef, nativeGestureWritePendingRef, nativeCachedPaintShowRef, onNativeVectorSelectionActiveChange, onNativeVectorStyleCommit, nativeVectorStyleBusy = false, nativeVectorStyleDisabledReason, nativeTextEditingActive = false, onNativeTextContinuationCaptureChange, onNativeTextQueuedOpen, onNativeTextKeptDrag, onNativeTextEditModeActiveChange, contentEditExitSignal = 0, lineAnnotateRequest = null, contentEditEnterSignal = 0, handToolSignal = 0, insertTextSignal = 0, onContentEditModeExit, onCurrentAuthorChange, editContentDisabledReason, editContentModeDisabledReason, editContentModeDisabledTransient = false, editContentBusy = false, onInsertText, onInsertBlankPageBeside, textBoxAuthoring, tableAuthoring, chartAuthoring, nativeImageInsertRequestId = 0, onCropPage, onPageSizeApply, onTaggedTextApply, heldPageLabelRanges, heldPageGeometries: heldPageGeometriesProp, heldPageImports, pageSizeOriginalSizes, pageSizeDisabledReason, onEraseRegion, onSplitPages, splitPageDisabledReason, onOpenPageBackground, pageBackgroundOpen = false, pageBackgroundBusy = false, pageBackgroundDisabledReason, onCreateEditableVersion, onConvertToSpreadsheet, onConvertToPresentation, onOpenOfficeConversion, onOfficeConversionPrepare, officeProjectionDisabledReason, isCreatingEditableVersion, rangeSource }: PDFViewerProps) {
   // The planners and writers this viewer's engine calls go through: the
   // editing host's own page, else a reader's (its head is registered under
   // the reader page), else none (answered only for bytes one page holds).
@@ -9757,6 +9768,16 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         .sort((a, b) => a.afterPage - b.afterPage || a.order - b.order),
     [effectiveInsertedPages, heldPageImports],
   );
+  // Each inserted page's reader number: its layers are keyed by it as a file
+  // page's are by its number, and what is made on it is stored under the
+  // page's id (lib/pdf/inserted-page-identity), as Acrobat annotates a page
+  // added through Organize Pages at once.
+  const insertedReaderPages = useMemo(
+    () => pdfInsertedReaderPages(normalizedInsertedPages),
+    [normalizedInsertedPages],
+  );
+  const insertedReaderPagesRef = useRef(insertedReaderPages);
+  insertedReaderPagesRef.current = insertedReaderPages;
   const visiblePageItems = useMemo(() => {
     const items: Array<
       | { kind: "original"; page: PageRecord }
@@ -11841,8 +11862,16 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
             // until the rebuilt layer has its own, as it keeps its bitmaps:
             // emptied outright, every dashed frame went out after a save the
             
-            if (keepBitmaps) emptyPdfTextLayerForRebuild(layer, performance.now());
-            else layer?.replaceChildren();
+            // are, selectable, until the rebuild puts the revision's up in
+            // one step (built off the page): emptied here, a drag over the
+            // next line after a saved mark selected nothing for 0.3-1.2 s
+            
+            // emptied as before (its editor's box is carried across).
+            if (keepBitmaps) {
+              if (layer?.querySelector(NATIVE_TEXT_TRANSIENT_EDIT_STATE)) {
+                emptyPdfTextLayerForRebuild(layer, performance.now());
+              }
+            } else layer?.replaceChildren();
           }
         });
       }
@@ -13326,11 +13355,39 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
           nativeTextItemsByPageRef.current.delete(pageNumber);
           nativeTextParagraphsByPageRef.current.delete(pageNumber);
           nativeTextLayoutBoxesByPageRef.current.delete(pageNumber);
-          emptyPdfTextLayerForRebuild(textLayer, textSourceSwapStartedAtRef.current);
+          // Built off the page and put up in one step, as a published
+          // revision's prepared text is: emptied first, the page had no text
+          // to select for the time the revision's text took to read and lay
+          // out -- after every saved mark, 0.3-1.2 s in which a drag over the
+          
+          // WebKit, all 13 lines gone 0.34 s after Highlight). A layer a
+          // line's editor is open in, or an edit is on its way through, is
+          // still emptied in place: that keeps the editor's box across the
+          // rebuild (emptyPdfTextLayerForRebuild). So is a layer laid out at
+          // another scale (a zoom): its words would stand over the wrong
+          // places of the page redrawn under them until the swap.
+          const layerScale = textLayer.style.getPropertyValue("--total-scale-factor");
+          const pageScale = String(cssViewport.scale * (Number.isFinite(cssViewport.userUnit) && cssViewport.userUnit > 0
+            ? cssViewport.userUnit : 1));
+          // The scale and the turn the layer was laid out at are the whole of
+          // its geometry (its width and height are written from the scale).
+          const sameGeometry = layerScale === pageScale &&
+            textLayer.getAttribute("data-pdf-text-layer-rotation") === String(rotation);
+          const offPage = sameGeometry && textLayer.childElementCount > 0 &&
+            !textLayer.querySelector(NATIVE_TEXT_TRANSIENT_EDIT_STATE)
+            ? textLayer.cloneNode(false) as HTMLDivElement : null;
+          if (!offPage) emptyPdfTextLayerForRebuild(textLayer, textSourceSwapStartedAtRef.current);
           shownTextLayerBuildsRef.current.delete(textLayer);
-          const built = await buildNativeTextOfPage({ page, pdfDocument: activePdfDoc, pageNumber, textLayer,
+          const built = await buildNativeTextOfPage({ page, pdfDocument: activePdfDoc, pageNumber, textLayer: offPage ?? textLayer,
             cssViewport, isCurrent: renderIsCurrent, trackTask: renderLifecycleV2 });
           if (built === undefined) return;
+          // The turn the layer was laid out at, read by the next rebuild.
+          (offPage ?? textLayer).setAttribute("data-pdf-text-layer-rotation", String(rotation));
+          if (offPage) {
+            recordPdfNativeTextLineLineage(textLayer);
+            for (const attribute of offPage.attributes) textLayer.setAttribute(attribute.name, attribute.value);
+            replacePdfTextLayerChildren(textLayer, [...offPage.childNodes]);
+          }
           commitNativeTextOfPage(pageNumber, built, retainedPdfPrintSourceBytesRef.current?.sha256 ?? null);
           builtSignature = built.signature;
           if (built.signature && textLayer === publishedTextLayer) {
@@ -14119,10 +14176,16 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
       // stands. Emptied here, the text just built off the page was built again
       // with a paint, and the next revision found only the page edited.)
       const wrapperPage = Number(wrapper.dataset.pageNumber);
+      const shownLayer = wrapper.querySelector<HTMLDivElement>("div[data-pdf-text-layer]");
+      // The next revision of the same pages at the same size (a saved mark)
+      // keeps the page's words selectable until its own are built off the
+      // page and put up in one step (the paint's rebuild): emptied here, a
+      // drag over the next line selected nothing for 0.3-1.2 s (3609 = main,
+      
+      const keepWordsUp = revisionSwap && !shownLayer?.querySelector(NATIVE_TEXT_TRANSIENT_EDIT_STATE);
       if (activeTextSourceHandoffRef.current?.pageNumber !== wrapperPage &&
-        preparedNativeTextRef.current.get(wrapperPage)?.document !== pdfDoc) {
-        emptyPdfTextLayerForRebuild(
-          wrapper.querySelector<HTMLDivElement>("div[data-pdf-text-layer]"), textSourceSwapStartedAtRef.current);
+        preparedNativeTextRef.current.get(wrapperPage)?.document !== pdfDoc && !keepWordsUp) {
+        emptyPdfTextLayerForRebuild(shownLayer, textSourceSwapStartedAtRef.current);
       }
     });
     if (process.env.NODE_ENV !== "production" && releasedPainted.length) {
@@ -18068,6 +18131,38 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     [createPageHighlights],
   );
 
+  // Why a highlight was not made, as the person can read it: the mark's
+  // geometry could not be measured or written (the viewer's own words),
+  // else the generic failure -- never a pdf.js or transport error's text.
+  const highlightFailureReason = useCallback(
+    (error: unknown): string => {
+      const known = [
+        t("pdf.viewer.notice.markupGeometryUnavailable"),
+        t("pdf.viewer.notice.markupGeometryUnwritable"),
+      ];
+      return error instanceof Error && known.includes(error.message)
+        ? error.message
+        : t("pdfSelection.highlightFailed");
+    },
+    [t],
+  );
+  // The selection toolbar's and the context menu's presses: a refused mark is
+  // said in the viewer's feedback toast, whichever ribbon tab is up (the
+  // Comment tab's status line, where the ribbon's own press says it, is not
+  // on screen from the Home tab). They fired the request with `void`, so a
+  // refusal -- "The selected text's position can't be written into the
+  // original PDF." -- was an unhandled promise rejection nobody saw (WebKit,
+  
+  const requestHighlightFromSelection = useCallback(
+    (...args: Parameters<typeof handleHighlightRequest>) => {
+      handleHighlightRequest(...args).catch((error: unknown) => {
+        if (viewerUnmountedRef.current) return;
+        setSnapshotToast(highlightFailureReason(error));
+      });
+    },
+    [handleHighlightRequest, highlightFailureReason, setSnapshotToast],
+  );
+
   const handleHighlightSaved = useCallback(
     async (next: HighlightDraft) => {
       if (highlightMutationRef.current) {
@@ -18350,6 +18445,76 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     },
     [managedNoteSyncForReaderNote, onManagedNoteUpsert],
   );
+  /** Where the page holds a managed note now, in the reader's note
+   *  coordinates (percent of the page's top-left corner): the inverse of
+   *  managedNoteSyncForReaderNote. Null when the page does not say. */
+  const notePlaceFromPdfRect = useCallback(
+    async (held: { page: number; rect: readonly number[] }): Promise<{ x: number; y: number } | null> => {
+      if (!pdfDoc || !held.rect.every((value) => Number.isFinite(value))) return null;
+      const pdfPage = await pdfDoc.getPage(held.page);
+      const viewport = pdfPage.getViewport({
+        scale: 1,
+        rotation: resolvedPageRotation(held.page),
+      });
+      if (typeof viewport.convertToViewportRectangle !== "function") return null;
+      const [x1, y1, x2, y2] = viewport.convertToViewportRectangle([...held.rect]) as number[];
+      const left = Math.min(x1, x2);
+      const top = Math.min(y1, y2);
+      if (![left, top, viewport.width, viewport.height].every(Number.isFinite) ||
+          viewport.width <= 0 || viewport.height <= 0) return null;
+      const percent = (value: number, extent: number) =>
+        Math.min(100, Math.max(0, Math.round((value / extent) * 100 * 10_000) / 10_000));
+      return { x: percent(left, viewport.width), y: percent(top, viewport.height) };
+    },
+    [pdfDoc, resolvedPageRotation],
+  );
+  const managedNotePlaceNow = useCallback(
+    async (noteId: string): Promise<{ x: number; y: number } | null> => {
+      if (!onManagedNotePlaceRead) return null;
+      const held = await onManagedNotePlaceRead(noteId);
+      return held ? notePlaceFromPdfRect(held) : null;
+    },
+    [notePlaceFromPdfRect, onManagedNotePlaceRead],
+  );
+  // A managed note whose row says another place than the page: drawn where
+  // the page (and the file) hold it, and its row put there too -- once the
+  // server's page says the same place, so a window behind a newer save never
+  // moves a row back. Only the row's place is written (the other fields stay
+  // as stored); once per place, so a refused or failed write is not looped.
+  const notePlaceRepairsRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!managedNotePlaces || managedNotePlaces.size === 0 || !pdfDoc) return;
+    let live = true;
+    void (async () => {
+      const moved = new Map<string, { note: StickyNoteAnnotation; x: number; y: number }>();
+      for (const note of notes) {
+        const held = managedNotePlaces.get(note.id);
+        if (!held || held.page !== note.page) continue;
+        const place = await notePlaceFromPdfRect(held).catch(() => null);
+        if (!place) continue;
+        if (!samePlace(place, note)) moved.set(note.id, { note, ...place });
+      }
+      if (!live || moved.size === 0 || noteSavingRef.current) return;
+      setNotes((prev) => prev.map((n) => {
+        const place = moved.get(n.id);
+        return place ? { ...n, x: place.x, y: place.y } : n;
+      }));
+      if (!onStoredManagedNotePlaceRead) return;
+      for (const [noteId, { note, x, y }] of moved) {
+        const key = `${noteId}:${note.page}:${x}:${y}`;
+        if (notePlaceRepairsRef.current.has(key)) continue;
+        notePlaceRepairsRef.current.add(key);
+        const stored = await onStoredManagedNotePlaceRead(noteId).catch(() => null);
+        const storedPlace = stored && stored.page === note.page
+          ? await notePlaceFromPdfRect(stored).catch(() => null) : null;
+        if (!storedPlace || !samePlace(storedPlace, { x, y }) || noteSavingRef.current) continue;
+        await threadWriter
+          .write(noteId, buildNotePayload({ ...note, x, y }), "place")
+          .catch(() => undefined);
+      }
+    })();
+    return () => { live = false; };
+  }, [managedNotePlaces, notePlaceFromPdfRect, notes, onStoredManagedNotePlaceRead, pdfDoc, threadWriter]);
 
   // Persist a freshly-placed note (pendingNote) and open its popover; or update
   // an existing note in place. Position/text/color are normalized by the helper.
@@ -19023,7 +19188,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
       setInkSaving(true);
       let landed: PdfWetInkWrite = "failed";
       try {
-        const payload = buildInkPayload({
+        const payload = buildReaderInkPayload(insertedReaderPagesRef.current, {
           page,
           color: normalized.color,
           width: normalized.width,
@@ -19036,6 +19201,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         const created: InkAnnotation = {
           id: result.annotation.id,
           page: payload.page,
+          ...(payload.insertedPageId ? { insertedPageId: payload.insertedPageId } : {}),
           color: payload.color,
           width: payload.width,
           points: payload.points,
@@ -19159,7 +19325,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
           return null;
         }
         perPage.set(stroke.page, count + 1);
-        return buildInkPayload({
+        return buildReaderInkPayload(insertedReaderPagesRef.current, {
           page: stroke.page,
           color: normalized.color,
           width: normalized.width,
@@ -19181,6 +19347,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
               const row: InkAnnotation = {
                 id: result.annotation.id,
                 page: payload.page,
+                ...(payload.insertedPageId ? { insertedPageId: payload.insertedPageId } : {}),
                 color: payload.color,
                 width: payload.width,
                 points: payload.points,
@@ -20274,7 +20441,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
       try {
         const rows = await Promise.allSettled(
           pieceRows.map(async ({ piece, normalized }) => {
-            const payload = buildInkPayload({
+            const payload = buildReaderInkPayload(insertedReaderPagesRef.current, {
               page: pageNumber,
               color: normalized.color,
               width: normalized.width,
@@ -20287,6 +20454,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
             const row: InkAnnotation = {
               id: result.annotation.id,
               page: payload.page,
+              ...(payload.insertedPageId ? { insertedPageId: payload.insertedPageId } : {}),
               color: payload.color,
               width: payload.width,
               points: payload.points,
@@ -20631,12 +20799,13 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         const rows = updates.flatMap((update) => {
           const stroke = byId.get(update.id);
           if (!stroke?.row) return [];
-          const payload = buildInkPayload({
+          const payload = buildReaderInkPayload(insertedReaderPagesRef.current, {
             page: stroke.row.page,
             color: stroke.row.color,
             width: update.width,
             points: update.points,
             xfdfSourceId: stroke.row.xfdfSourceId,
+            insertedPageId: stroke.row.insertedPageId,
           });
           return [{ before: stroke.row, payload, row: { id: stroke.row.id, ...payload } as InkAnnotation }];
         });
@@ -20674,7 +20843,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
       } catch {
         await Promise.allSettled(
           patched.map((entry) =>
-            apiPatch(`/api/v1/annotations/${entry.before.id}`, { payload_json: buildInkPayload(entry.before) }),
+            apiPatch(`/api/v1/annotations/${entry.before.id}`, { payload_json: buildReaderInkPayload(insertedReaderPagesRef.current, entry.before) }),
           ),
         );
         setNoteActionError(saveFailedReason());
@@ -23149,7 +23318,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         }
         case "ink": {
           if (!onManagedInkUpsert) throw refused();
-          await apiPatch(row, { payload_json: buildInkPayload(change.object) });
+          await apiPatch(row, { payload_json: buildReaderInkPayload(insertedReaderPagesRef.current, change.object) });
           await onManagedInkUpsert(change.object);
           return;
         }
@@ -23664,12 +23833,13 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
       }
       const current = inksRef.current.find((stroke) => stroke.id === selected.id);
       if (!current) return;
-      const payload = buildInkPayload({
+      const payload = buildReaderInkPayload(insertedReaderPagesRef.current, {
         page: current.page,
         color: change.outlineColor ?? current.color,
         width: change.lineWidth ?? current.width,
         points: current.points,
         xfdfSourceId: current.xfdfSourceId,
+        insertedPageId: current.insertedPageId,
       });
       const updated: InkAnnotation = {
         id: current.id,
@@ -24121,9 +24291,22 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         try {
           await syncManagedNote(updatedNote);
         } catch (error) {
-          await threadWriter
-            .write(noteId, rollbackPayload, "mine")
-            .catch(() => undefined);
+          // Refused: the row goes where the page now holds the note. When a
+          // collaborator moved the same note and saved first, that is their
+          // place, not where this reader had it before the move -- written
+          // back there, the row undid their move in what every newly opened
+          // window draws the note from, while the page and the file kept it
+          
+          const placed = await managedNotePlaceNow(noteId).catch(() => null);
+          const back = placed
+            ? buildNotePayload({ ...current, x: placed.x, y: placed.y })
+            : rollbackPayload;
+          await threadWriter.write(noteId, back, "mine").catch(() => undefined);
+          if (placed) {
+            setNotes((prev) =>
+              prev.map((n) => (n.id === noteId ? { ...n, x: placed.x, y: placed.y } : n)),
+            );
+          }
           throw error;
         }
         setNotes((prev) =>
@@ -24148,7 +24331,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         setNoteSaving(false);
       }
     },
-    [notes, syncManagedNote, t, threadWriter],
+    [managedNotePlaceNow, notes, syncManagedNote, t, threadWriter],
   );
 
   const handleNativeSourceInkDelete = useCallback(
@@ -25789,9 +25972,19 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
   // Jump to an annotation's page (reuses the shared goToPage navigation path).
   const handleAnnotationNavigate = useCallback(
     (item: AnnotationListItem) => {
+      // One on an inserted page opens that page, not the page before it.
+      if (item.insertedPageId) {
+        const index = visiblePageItemsRef.current.findIndex(
+          (entry) => entry.kind === "inserted" && entry.page.id === item.insertedPageId,
+        );
+        if (index >= 0) {
+          goToVisibleOrdinal(index + 1);
+          return;
+        }
+      }
       goToPage(item.page, { locate: true });
     },
-    [goToPage],
+    [goToPage, goToVisibleOrdinal],
   );
   const annotationExportBase = useMemo(
     () => (filename || "document.pdf").replace(/\.pdf$/i, ""),
@@ -26026,12 +26219,13 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
             exactItems.push({
               id: current.id,
               type: "pdf_ink",
-              payload_json: buildInkPayload({
+              payload_json: buildReaderInkPayload(insertedReaderPagesRef.current, {
                 page: current.page,
                 color: current.color,
                 width: current.width,
                 points: current.points,
                 xfdfSourceId: current.xfdfSourceId,
+                insertedPageId: current.insertedPageId,
               }),
             });
             nativeTargets.push({
@@ -27717,8 +27911,15 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         : inks.filter(
             (ink) => !inkErasedIds.has(ink.id) && !previewRemoved?.has(ink.id),
           );
-    return groupAnnotationsByPage(shown);
-  }, [inkErasePreview, inkErasedIds, inks]);
+    // A stroke on an inserted page is drawn on it, under its reader number;
+    // one whose page is gone is not drawn (it went with the page).
+    const placed = shown.flatMap((ink) => {
+      if (!ink.insertedPageId) return [ink];
+      const page = readerPageOfRecord(ink, insertedReaderPages);
+      return page === null ? [] : [{ ...ink, page }];
+    });
+    return groupAnnotationsByPage(placed);
+  }, [inkErasePreview, inkErasedIds, inks, insertedReaderPages]);
   // ...and what a point eraser leaves, drawn as wet ink while it drags (the
   // pen's wet strokes are drawn by the pages' wet layers, outside React).
   const inkWetShown = useMemo(() => {
@@ -27844,8 +28045,8 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
             !nativeInkStrokes?.some((drawn) => drawn.id === stroke.id)),
         ]
       : nativeInkStrokes;
-    return groupNativeInkStrokesByPage(shown);
-  }, [heldManagedInkStrokes, heldNativeAnnotations, nativeInkStrokes]);
+    return groupNativeInkStrokesByPage(onInsertedReaderPages(shown, insertedReaderPages));
+  }, [heldManagedInkStrokes, heldNativeAnnotations, insertedReaderPages, nativeInkStrokes]);
   const nativeSourceInkStrokesShownByPage = useMemo(
     () => groupNativeInkStrokesByPage(nativeSourceInkStrokes),
     [nativeSourceInkStrokes],
@@ -27857,8 +28058,8 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     for (const stroke of [...(nativeInkStrokes ?? []), ...(heldManagedInkStrokes ?? [])]) {
       if (typeof stroke.id === "string" && !all.has(stroke.id)) all.set(stroke.id, stroke);
     }
-    return groupNativeInkStrokesByPage([...all.values()]);
-  }, [heldManagedInkStrokes, nativeInkStrokes]);
+    return groupNativeInkStrokesByPage(onInsertedReaderPages([...all.values()], insertedReaderPages));
+  }, [heldManagedInkStrokes, insertedReaderPages, nativeInkStrokes]);
   nativeInkStrokesForEraseRef.current = nativeInkStrokesForEraseByPage;
   nativeInkListedRef.current = nativeInkStrokes !== undefined || heldManagedInkStrokes !== undefined;
   nativeSourceInkStrokesForEraseRef.current = nativeSourceInkStrokesShownByPage;
@@ -29428,7 +29629,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
                 points.push({ x: gesture[at], y: gesture[at + 1] });
               }
               if (points.length < 2) continue;
-              const payload = buildInkPayload({
+              const payload = buildReaderInkPayload(insertedReaderPagesRef.current, {
                 page: item.page,
                 color: item.color,
                 width: item.width,
@@ -29920,9 +30121,15 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
             
             width: inkWidthPagePercent(stroke.width, pageSizes[stroke.page - 1]),
             points: stroke.points,
+            // Drawn on an inserted page: baked on it (lib/pdf/flatten-apply).
+            ...(stroke.insertedPageId ? { insertedPageId: stroke.insertedPageId } : {}),
           })),
           ...(nativeInkStrokes ?? [])
-            .map((stroke) => nativeInkToFlattenInk(stroke, pageSizes))
+            .map((stroke) => {
+              const flat = nativeInkToFlattenInk(stroke, pageSizes);
+              const insertedPageId = (stroke as { insertedPageId?: unknown }).insertedPageId;
+              return flat && typeof insertedPageId === "string" ? { ...flat, insertedPageId } : flat;
+            })
             .filter((stroke): stroke is NonNullable<typeof stroke> =>
               Boolean(stroke),
             ),
@@ -29995,7 +30202,18 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
             ...annotations,
             highlights: onFilePages(annotations.highlights),
             notes: onFilePages(annotations.notes),
-            inks: onFilePages(annotations.inks),
+            // Ink on an inserted page goes on that page of the file, which
+            // holds it where the page's structure put it.
+            inks: annotations.inks?.flatMap((ink) => {
+              if (!ink.insertedPageId) {
+                const page = filePageOf(ink.page);
+                return page === null ? [] : [{ ...ink, page }];
+              }
+              const page = heldStructure
+                ? pdfVisiblePageOrdinals(heldStructure, exportMap.originalPageCount).ofInserted.get(ink.insertedPageId)
+                : undefined;
+              return page === undefined ? [] : [{ ...ink, page, insertedPageId: undefined }];
+            }),
             redactions: onFilePages(annotations.redactions),
             textBoxes: onFilePages(annotations.textBoxes),
             images: onFilePages(annotations.images),
@@ -43233,8 +43451,8 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
         setPendingRibbonMarkupStyle(null);
         dismissSelection();
       })
-      .catch(() => {
-        setRibbonMarkupError(t("pdfSelection.highlightFailed"));
+      .catch((error: unknown) => {
+        setRibbonMarkupError(highlightFailureReason(error));
       })
       .finally(() => {
         ribbonMarkupBusyRef.current = false;
@@ -43244,6 +43462,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     dataItemId,
     dismissSelection,
     handleHighlightRequest,
+    highlightFailureReason,
     null,
     selection,
     t,
@@ -50407,8 +50626,8 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
   // the viewer (closing a typed line renders it about twenty times: 26 ms of
   // the translator, measured in a development build).
   const annotationContextLabels = useMemo(
-    () => createPdfAnnotationFormatContextRibbonLabels(t),
-    [t],
+    () => createPdfAnnotationFormatContextRibbonLabels(t, locale),
+    [locale, t],
   );
   const annotationContextModel = selectedPlacedContext
     ? (() => {
@@ -51860,7 +52079,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
           disabled: commentMarkupDisabled,
           disabledReason: commentMarkupDisabledReason,
           onSelect: () => {
-            void handleHighlightRequest(
+            requestHighlightFromSelection(
               selectedText,
               selection.pageNumber,
               selection.rects ?? [],
@@ -51938,7 +52157,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
     fitPage,
     editPageTextAt,
     fitWidth,
-    handleHighlightRequest,
+    requestHighlightFromSelection,
     handleQuoteRequest,
     readerContextMenu?.textAt,
     ribbonLoading,
@@ -53675,6 +53894,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
             prewarmPlacedObjectLayers,
             visiblePages,
             visiblePageItems,
+            insertedReaderPages,
             visiblePageCount,
             visibleOrdinalForOriginal,
             previousVisibleOrdinal,
@@ -53936,7 +54156,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
             disabled={commentMarkupDisabled}
             testId="pdf-selection-highlight"
             onClick={() => {
-              void handleHighlightRequest(
+              requestHighlightFromSelection(
                 selection.text.trim(),
                 selection.pageNumber,
                 selection.rects ?? [],
@@ -53952,7 +54172,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
             disabled={commentMarkupDisabled}
             testId="pdf-selection-underline"
             onClick={() => {
-              void handleHighlightRequest(
+              requestHighlightFromSelection(
                 selection.text.trim(),
                 selection.pageNumber,
                 selection.rects ?? [],
@@ -53968,7 +54188,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
             disabled={commentMarkupDisabled}
             testId="pdf-selection-strikeout"
             onClick={() => {
-              void handleHighlightRequest(
+              requestHighlightFromSelection(
                 selection.text.trim(),
                 selection.pageNumber,
                 selection.rects ?? [],
@@ -53984,7 +54204,7 @@ export default function PDFViewer({ url: savedUrl, filename, downloadUrl, renewD
             disabled={commentMarkupDisabled}
             testId="pdf-selection-squiggly"
             onClick={() => {
-              void handleHighlightRequest(
+              requestHighlightFromSelection(
                 selection.text.trim(),
                 selection.pageNumber,
                 selection.rects ?? [],

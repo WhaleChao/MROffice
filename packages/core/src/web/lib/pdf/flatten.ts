@@ -982,6 +982,12 @@ export interface FlattenInk {
    * PDF_HIGHLIGHTER_OPACITY so the export matches the translucent overlay.
    */
   opacity?: number;
+  /**
+   * Drawn on a page inserted in MR Office (lib/pdf/inserted-page-identity):
+   * baked on that page once the page operations have put it in the file
+   * (flattenPdf); `page` is then ignored.
+   */
+  insertedPageId?: string;
 }
 
 export interface FlattenRedaction {

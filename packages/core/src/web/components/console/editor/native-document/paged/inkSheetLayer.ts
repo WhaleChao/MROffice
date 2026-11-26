@@ -29,6 +29,7 @@ import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 import { inkLightWanted } from "./inkLightSwitch";
+import { tabMeasureMutation } from "./tabMeasureMark";
 
 export const INK_MERGED_ATTR = "data-ink-merged";
 const LAYER_ATTR = "data-ink-sheet-layer";
@@ -231,6 +232,7 @@ class InkSheetLayers {
     if (this.drawn.size === 0 && records.every((record) => record.type !== "childList")) return;
     let changed = false;
     for (const record of records) {
+      if (tabMeasureMutation(record)) continue;
       if (record.type === "attributes") {
         const name = record.attributeName ?? "";
         const element = record.target as Element;

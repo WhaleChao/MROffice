@@ -34,6 +34,7 @@ import {
   presentationChartDataTableBasis,
   presentationChartFallbackPicture,
 } from "../../../../lib/presentation/chart-picture-request";
+import { POWERPOINT_SHADOW_BLUR_DEVIATION } from "@mrnote/core/web/lib/office-shadow-effects.ts";
 
 export function presentationChartAreaFillState(block: PresentationChartBlock): "none" | "set" {
   const attrs = readPresentationChartV2(block.chartV2);
@@ -123,7 +124,7 @@ export function PresentationChartVisual({
             data-office-chart-title-shape="title"
             style={{
               fontSize: 14,
-              ...presentationChartAreaStyleCss(fallbackAttrs?.format?.chartTitleStyle),
+              ...presentationChartAreaStyleCss(fallbackAttrs?.format?.chartTitleStyle, { shadowBlurDeviation: POWERPOINT_SHADOW_BLUR_DEVIATION }),
             }}
           >
             <span style={presentationChartTitleWordsCss(fallbackAttrs?.format?.chartTitleStyle)}>{fallbackTitle}</span>

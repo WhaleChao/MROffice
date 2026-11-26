@@ -1737,7 +1737,12 @@ export class Parser {
     // anchor scalar (Excel 365).
     if (this.peek()?.type === "op" && this.peek()!.value === "@") {
       this.next();
-      return { kind: "unary", op: "@", operand: this.parseNegation() };
+      const operand = this.parseNegation();
+      // `@INDIRECT(a):@INDIRECT(b)` is the range between the two cells, not
+      // the intersection of that range: the `@` is the left endpoint's
+      // (see parseRangeRight).
+      if (operand.kind === "rangeExpr" && operand.left.kind === "call") return operand;
+      return { kind: "unary", op: "@", operand };
     }
     return this.parseIntersection();
   }
@@ -1785,7 +1790,7 @@ export class Parser {
     // range operator (live audit B096).
     if (expr.kind === "call" && this.peek()?.type === "colon") {
       this.next();
-      expr = { kind: "rangeExpr", left: expr, right: this.parsePrimary() };
+      expr = { kind: "rangeExpr", left: expr, right: this.parseRangeRight() };
     }
     return expr;
   }
@@ -1799,7 +1804,20 @@ export class Parser {
   private rangeTail(left: Node): Node {
     if (this.peek()?.type !== "colon") return left;
     this.next();
-    return { kind: "rangeExpr", left, right: this.parsePrimary() };
+    return { kind: "rangeExpr", left, right: this.parseRangeRight() };
+  }
+
+  
+
+
+
+
+
+
+
+  private parseRangeRight(): Node {
+    if (this.peek()?.type === "op" && this.peek()!.value === "@") this.next();
+    return this.parsePrimary();
   }
 
   private parsePrimary(): Node {
@@ -1917,7 +1935,7 @@ export class Parser {
         if (rightIsCall) {
           const left: Node = { kind: "ref", ref: t.value };
           if (t.sheet !== undefined) left.sheet = t.sheet;
-          return { kind: "rangeExpr", left, right: this.parsePrimary() };
+          return { kind: "rangeExpr", left, right: this.parseRangeRight() };
         }
         const to = this.expect("ref");
         // `Data!D3:Data!D99`: the same sheet named on both ends is the ordinary range,

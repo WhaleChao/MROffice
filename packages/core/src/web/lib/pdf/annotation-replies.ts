@@ -130,3 +130,21 @@ export function appendReply<
     return { ...annotation, replies };
   });
 }
+
+/**
+ * What a reply shows in the comments pane. A reply that carries a review
+ * state is that author's state record (ISO 32000-1 12.5.6.10, Table 172:
+ * /State, /StateModel): it shows as the state, never as a chat message. Its
+ * /Contents is the producer's own wording of the change -- Acrobat writes
+ * "<State> set by <author>" (in its UI language) on every state record and
+ * offers no way to add words to one -- so that wording is not repeated
+ * under the state. The reply's data is untouched: it still round-trips as
+ * the file wrote it, and the comment can still be answered.
+ */
+export function pdfReplyDisplayText(
+  reply: Pick<PdfAnnotationReply, "text" | "reviewState">,
+  stateLabel: (state: PdfAnnotationReviewState) => string,
+): string {
+  if (reply.reviewState) return stateLabel(reply.reviewState);
+  return reply.text;
+}

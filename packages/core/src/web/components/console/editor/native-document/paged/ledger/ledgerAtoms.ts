@@ -3026,6 +3026,12 @@ function planTextHeadOnce(
       before = view.state.doc.resolve(cutPos).nodeBefore) {
       cutPos -= before.nodeSize;
     }
+    // A row a line break opens begins at the break, its leading spaces and
+    // tabs with it: Word moves them on with the row. Read from the first
+    // glyph drawn, the cut fell after them on one pass and before them on the
+    // next, and the two cuts went round for good (R461's R listings: page 48
+    // opening at "135+text:6510" or 6512, two spaces apart, 162 or 163 pages).
+    cutPos = cutAtRowStart(view.state.doc, cutPos, partFrom);
     if (cutPos <= partFrom || cutPos >= partTo) { trace(partIndex, atSeam, "edge"); return atSeam; }
     const logicalOffset = contentOffsetBefore(block, partIndex) + (cutPos - partFrom);
     const headInPart = gridHeadPx ?? cut.rowTop - fromTop;
@@ -3242,6 +3248,8 @@ function seamRebreakCut(
   const ownIndex = read.side === "head" ? partIndex : partIndex + 1;
   const from = own.pos + 1;
   const to = own.pos + own.node.nodeSize - 1;
+  // (As a page's cut: the row's leading spaces go with the row.)
+  if (cutPos > from) cutPos = cutAtRowStart(view.state.doc, cutPos, from);
   if (read.side === "tail" && cutPos <= from) return "stands";
   if (cutPos <= from || cutPos >= to) return why(`outside ${read.side} ${cutPos} ${from}..${to}`);
   const logicalOffset = contentOffsetBefore(block, ownIndex) + (cutPos - from);
@@ -3865,6 +3873,25 @@ export function refuseTableRowCut(view: EditorView, opening: string, stillCurren
   if (held.keys.has(key)) return false;
   held.keys.add(key);
   return true;
+}
+
+/** The start of the row a cut at `cutPos` opens, when the row begins at a
+ * line break and only spaces or tabs stand between the break and the cut:
+ * just after the break (`window.__docsCutAtRowStartOff = true`: the cut as
+ * read). */
+export function cutAtRowStart(doc: PmNode, cutPos: number, partFrom: number): number {
+  if (typeof window !== "undefined" && (window as Window & { __docsCutAtRowStartOff?: boolean }).__docsCutAtRowStartOff === true) return cutPos;
+  let at = cutPos;
+  while (at > partFrom) {
+    const before = doc.resolve(at).nodeBefore;
+    if (!before) return cutPos;
+    if (!before.isText) return before.type.name === "hardBreak" && at !== cutPos ? at : cutPos;
+    const char = doc.textBetween(at - 1, at);
+    if (char === " " || char === "\t") { at -= 1; continue; }
+    // A code block's own line break, as text.
+    return char === "\n" && at !== cutPos ? at : cutPos;
+  }
+  return cutPos;
 }
 
 function tableRowCutRefused(view: EditorView, atomIndex: number, key: string): boolean {

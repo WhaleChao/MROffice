@@ -114,7 +114,7 @@ function readMeasurements(
   const text = JSON.stringify(measurements);
   const measurementKey = contentKey(text);
   if (into.current?.key !== measurementKey) {
-    into.current = { key: measurementKey, list: JSON.parse(text) as AutoRowMeasurement[] };
+    into.current = { key: measurementKey, list: withRowBaselineFonts(JSON.parse(text) as AutoRowMeasurement[]) };
   }
   return measurementKey;
 }
@@ -211,6 +211,59 @@ function officeLineFaces(item: AutoRowMeasurement): { height: number; fonts: Off
     height = Math.max(height, officeRowHeight(font));
   }
   return height ? { height, fonts } : undefined;
+}
+
+/**
+ * A row's bottom-aligned cells stand on one baseline: each cell's lines are
+ * set with the other such cells' faces among the row's (`rowFonts`), so the
+ * row is the tallest ascent over the deepest descent of them all, not its
+ * tallest cell (lookwin p314-lw, Normal Arial 10: Arial 12 alone 20 px,
+ * Calibri 11 alone 20 px, the two in one row 21 px, the Calibri cell top or
+ * centred 20 px; R484-X90's rows of an Arial 12 cell and a Calibri 11 date).
+ * The server's printed rows take the same rule.
+ */
+export function withRowBaselineFonts(items: readonly AutoRowMeasurement[]): AutoRowMeasurement[] {
+  const byRow = new Map<number, { index: number; fonts: NonNullable<AutoRowMeasurement["rowFonts"]> }[]>();
+  items.forEach((item, index) => {
+    if (item.baseline === false || item.rotation || item.stacked || item.baseHeightOnly) return;
+    const faces = officeLineFaces(item);
+    if (!faces) return;
+    const fonts = faces.fonts.flatMap((font) => font.family && typeof font.sizePt === "number"
+      ? [{ family: font.family, sizePt: font.sizePt, ...(font.bold ? { bold: true } : {}), ...(font.record ? { record: font.record } : {}) }]
+      : []);
+    const entries = byRow.get(item.row);
+    if (entries) entries.push({ index, fonts });
+    else byRow.set(item.row, [{ index, fonts }]);
+  });
+  let out: AutoRowMeasurement[] | null = null;
+  // Each distinct face once: the row's faces are only ever read for their
+  // tallest ascent and deepest descent (officeCombinedRowParts), and every
+  // other cell's faces written out for every cell of a row of thousands
+  // (R492-X08's title sheet, a white fill over every column to XFD) took
+  // gigabytes and passed the print's 420 s ceiling.
+  const faceKey = (font: NonNullable<AutoRowMeasurement["rowFonts"]>[number]) =>
+    `${font.family}\u0000${font.sizePt}\u0000${font.bold === true}\u0000${font.record === undefined ? "" : JSON.stringify(font.record)}`;
+  for (const entries of byRow.values()) {
+    if (entries.length < 2) continue;
+    const next = (out ??= items.slice());
+    const faces = new Map<string, { font: NonNullable<AutoRowMeasurement["rowFonts"]>[number]; count: number }>();
+    const entryKeys = entries.map((entry) => entry.fonts.map((font) => {
+      const key = faceKey(font);
+      const known = faces.get(key);
+      if (known) known.count += 1;
+      else faces.set(key, { font, count: 1 });
+      return key;
+    }));
+    entries.forEach((entry, at) => {
+      const own = new Map<string, number>();
+      for (const key of entryKeys[at] ?? []) own.set(key, (own.get(key) ?? 0) + 1);
+      const others: NonNullable<AutoRowMeasurement["rowFonts"]> = [];
+      for (const [key, face] of faces) if (face.count > (own.get(key) ?? 0)) others.push(face.font);
+      const item = items[entry.index];
+      if (item && others.length) next[entry.index] = { ...item, rowFonts: [...(item.rowFonts ?? []), ...others] };
+    });
+  }
+  return out ?? items.slice();
 }
 
 /**
@@ -568,9 +621,10 @@ function createAutoRowProbe(parent: HTMLElement) {
  * The automatic heights these cells ask of their rows, now, as the hook below
  * would arrive at them: for a preview, which cannot wait for its chunks.
  */
-export function measureAutoRowsNow(parent: HTMLElement, items: readonly AutoRowMeasurement[], defaultHeight: number): Record<string, number> {
+export function measureAutoRowsNow(parent: HTMLElement, given: readonly AutoRowMeasurement[], defaultHeight: number): Record<string, number> {
   const heights: Record<string, number> = {};
-  if (items.length === 0) return heights;
+  if (given.length === 0) return heights;
+  const items = withRowBaselineFonts(given);
   const { probe, text } = createAutoRowProbe(parent);
   try {
     measureNativeTextHeightBatch(items.flatMap((item) => !item.nativeParagraph || !item.dpi || item.baseHeightOnly ? [] : [

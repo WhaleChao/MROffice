@@ -22,6 +22,7 @@
 import { isDocumentLayoutStatusAttribute } from "../documentLayoutStatus";
 import { inkLayerMutation } from "./inkSheetLayer";
 import { SHEET_STAMPS, sameLayoutClasses } from "./sheetMeasureMemo";
+import { tabMeasureMutation } from "./tabMeasureMark";
 
 const SHEET_SELECTOR = "article[data-page-sheet]";
 const STROKE_SELECTOR = 'figure[data-ink-tool][data-float-mode="overlay"]';
@@ -112,7 +113,7 @@ export class InkAtRest {
 
   private record(records: readonly MutationRecord[]): void {
     for (const record of records) {
-      if (inkLayerMutation(record)) continue;
+      if (inkLayerMutation(record) || tabMeasureMutation(record)) continue;
       const target = record.target;
       if (record.type === "attributes") {
         const element = target as Element;

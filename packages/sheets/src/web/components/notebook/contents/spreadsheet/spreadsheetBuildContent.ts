@@ -7,7 +7,7 @@ import { spreadsheetPersistenceJson } from "@mrnote/core/web/lib/spreadsheet/per
 import { withDisplayCache, withSheetChartModels, type DisplayCacheCandidates, type SpillTargetsBeyondCells } from "@mrnote/core/web/lib/spreadsheet/display-cache.ts";
 import { workbookImportsRanges } from "@mrnote/core/web/lib/spreadsheet/external-data.ts";
 import { pivotChartReportForSave } from "../../../../lib/spreadsheet/pivot-buttons";
-import { asLoadedSpelling } from "../../../../lib/spreadsheet/loaded-spelling";
+import { asLoadedSpelling } from "@mrnote/core/web/lib/spreadsheet/loaded-spelling.ts";
 import { type SpreadsheetDateSystem } from "@mrnote/core/web/lib/spreadsheet/excel-1900-calendar.ts";
 import { SPREADSHEET_CONTENT_TYPE } from "@mrnote/core/web/lib/native-page-content-types.ts";
 import type { SpreadsheetDataSourceInventory } from "../../../../lib/spreadsheet/workbook-import-client";

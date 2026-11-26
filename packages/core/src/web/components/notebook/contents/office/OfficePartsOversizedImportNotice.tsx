@@ -40,7 +40,9 @@ export const OfficePartsOversizedImportNotice = memo(
         body={t(
           presentation
             ? "oversizedImport.presentationBody"
-            : "oversizedImport.documentBody",
+            : preview.tableTooLarge
+              ? "oversizedImport.documentTableTooLargeBody"
+              : "oversizedImport.documentBody",
         )}
         details={
           presentation ? (

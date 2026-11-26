@@ -47,6 +47,11 @@ export function chartVisiblePointIndices(chart: { chartVisibility?: unknown; cha
   for (const ref of refs) {
     for (const formula of [ref.categories, ref.values, ref.xValues, ref.bubbleSizes]) {
       if (!formula) continue;
+      // A reference Excel lost ('Table 2'!#REF!: its rows deleted) holds no
+      // source cell to hide; the series plots its cache, as Excel draws it
+      // (R490-X01's Figure 2: a fourth line of one cached point, legend entry
+      // deleted, printed here as "cannot verify the chart's visibility").
+      if (/^(?:(?:'(?:[^']|'')*'|[^'!]+)!)?#REF!$/i.test(formula.trim())) continue;
       const areas = parseChartRefAreas(formula);
       // A sheet's name may start or end with a space (R295-X02's " Global IDP"),
       // which the reference parser trims off: compare both trimmed. Two sheets

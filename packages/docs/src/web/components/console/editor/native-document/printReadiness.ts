@@ -33,20 +33,102 @@ export type PrintReadinessErrorCode =
   // The browser refused to open the print window (a pop-up blocker).
   | "popup-blocked";
 
+/** What a "timeout" waited for: the document's own layout to settle (the
+ * source), or the print copy's pictures and fonts (its assets). */
+export type PrintReadinessStage = "layout" | "assets";
+
 export class PrintReadinessError extends Error {
   readonly code: PrintReadinessErrorCode;
   readonly detail?: unknown;
+  readonly stage?: PrintReadinessStage;
 
   constructor(
     code: PrintReadinessErrorCode,
     message: string,
     detail?: unknown,
+    stage?: PrintReadinessStage,
   ) {
     super(message);
     this.name = "PrintReadinessError";
     this.code = code;
     this.detail = detail;
+    if (stage) this.stage = stage;
   }
+}
+
+/** The reason a failed print tells the reader, one message each. */
+export type PrintFailureReason =
+  | "layout"
+  | "timeout"
+  | "font"
+  | "image-load"
+  | "image-decode"
+  | "chart"
+  | "changed"
+  | "other";
+
+/** The message for each reason; a reason without one shows the caller's
+ * single message. */
+export type PrintFailureMessages = Partial<Record<PrintFailureReason, string>>;
+
+/** The reason of a print failure, from its code (and, for a timeout, what it
+ * waited for). */
+export function printFailureReason(error: PrintReadinessError): PrintFailureReason {
+  switch (error.code) {
+    case "timeout":
+      return error.stage === "layout" ? "layout" : "timeout";
+    case "font-load":
+      return "font";
+    case "image-load":
+      return "image-load";
+    case "image-decode":
+      return "image-decode";
+    case "chart-render":
+      return "chart";
+    case "aborted":
+      return "changed";
+    default:
+      return "other";
+  }
+}
+
+/** The console-notebooks message keys of the failure reasons. */
+export type PrintFailureMessageKey =
+  | "toolbar.printFailedLayout"
+  | "toolbar.printFailedTimeout"
+  | "toolbar.printFailedFont"
+  | "toolbar.printFailedImageLoad"
+  | "toolbar.printFailedImageDecode"
+  | "toolbar.printFailedChart"
+  | "toolbar.printFailedChanged"
+  | "toolbar.printFailedOther";
+
+/** What stopped a print, in the reader's language: one message per reason
+ * (printFailureReason), not one sentence for every cause. */
+export function documentPrintFailureMessages(t: (key: PrintFailureMessageKey) => string): PrintFailureMessages {
+  return {
+    layout: t("toolbar.printFailedLayout"),
+    timeout: t("toolbar.printFailedTimeout"),
+    font: t("toolbar.printFailedFont"),
+    "image-load": t("toolbar.printFailedImageLoad"),
+    "image-decode": t("toolbar.printFailedImageDecode"),
+    chart: t("toolbar.printFailedChart"),
+    changed: t("toolbar.printFailedChanged"),
+    other: t("toolbar.printFailedOther"),
+  };
+}
+
+/** The message a failed print shows: its reason's, unless
+ * `window.__docsPrintFailureReasonOff = true` (A/B) or none was given. */
+export function printFailureMessage(
+  error: PrintReadinessError | undefined,
+  fallback: string,
+  messages?: PrintFailureMessages,
+  win: Window | null = typeof window === "undefined" ? null : window,
+): string {
+  if (!error || !messages) return fallback;
+  if ((win as (Window & { __docsPrintFailureReasonOff?: boolean }) | null)?.__docsPrintFailureReasonOff === true) return fallback;
+  return messages[printFailureReason(error)] ?? fallback;
 }
 
 export interface PrintReadinessOptions {
@@ -58,6 +140,8 @@ export interface PrintReadinessOptions {
 
 export interface PrintWindowReadinessOptions extends PrintReadinessOptions {
   errorMessage?: string;
+  /** Each failure reason's own message (printFailureMessages). */
+  errorMessages?: PrintFailureMessages;
   onError?: (error: PrintReadinessError) => void;
   printDelayMs?: number;
   /**
@@ -119,10 +203,111 @@ export function documentPrintSourceReadiness(root: HTMLElement): "ready" | "pend
   return root.matches("[data-docs-exact-line-pending],[data-docs-auto-line-spacing-pending],[data-docs-display-fonts-pending],[data-docs-display-fonts-settling],[data-pagination-initial-settling],[data-pagination-background],[data-paged-bulk-filling],[data-pagination-stalled],[data-docs-page-bands-pending],[data-docs-word-cjk-spacing-pending]") ? "pending" : "ready";
 }
 
+/** How the print source came to be copied: settled, or taken as it stands
+ * when the wait ran out with every block placed (`printUnsettled`). */
+export type PrintSourceState = "settled" | "unsettled";
+
+/** `window.__docsPrintUnsettledOff = true` (A/B): a source that has not
+ * settled by the deadline fails the print, as before. */
+function printUnsettledOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsPrintUnsettledOff?: boolean }).__docsPrintUnsettledOff === true;
+}
+
+/** Markers that say content is still to be placed on pages (not only laid
+ * out again): a copy taken now would miss some of it. */
+const UNPLACED_CONTENT = "[data-pagination-initial-settling],[data-pagination-background],[data-paged-bulk-filling],[data-pagination-stalled]";
+
+/**
+ * Whether the pages as they stand are a whole copy of the document: every
+ * block placed (no marker of content still to place, no hollow sheet, and
+ * every top-level block of the document counted on a sheet, its split pieces
+ * as one), no sheet's content past its paper's foot, and no block on two
+ * sheets but as the pieces of one split. A copy that fails any of these is
+ * not printed.
+ */
+export function printSourceWhole(root: HTMLElement): boolean {
+  if (root.matches(UNPLACED_CONTENT)) return false;
+  const sheets = Array.from(root.querySelectorAll<HTMLElement>(":scope > article[data-page-sheet]"));
+  if (sheets.length === 0) return false;
+  const seen = new Set<string>();
+  for (const sheet of sheets) {
+    if (sheet.hasAttribute("data-page-hollow")) return false;
+    const rect = sheet.getBoundingClientRect();
+    const style = getComputedStyle(sheet);
+    const paper = Number.parseFloat(style.getPropertyValue("--page-height-px")) || rect.height;
+    const foot = rect.top + Math.min(rect.height, paper) - (Number.parseFloat(style.paddingBottom) || 0);
+    for (const child of Array.from(sheet.children) as HTMLElement[]) {
+      if (child.matches("[data-float], [data-float-mode], .note-editor-image-resizable, [data-sheet-print-part]")) continue;
+      const box = child.getBoundingClientRect();
+      if (box.height > 0 && box.bottom - foot > 2) return false;
+      const node = (child as HTMLElement & { pmViewDesc?: ViewDescLike }).pmViewDesc?.node;
+      const attrs = node?.attrs;
+      if (!attrs || attrs.pageSplitPieceOf || child.getAttribute("data-page-split-continuation") === "true") continue;
+      const id = typeof attrs.block_id === "string" ? attrs.block_id : null;
+      if (!id) continue;
+      if (seen.has(id)) return false;
+      seen.add(id);
+    }
+  }
+  // Nor a block missing: every top-level block of the document (its split
+  // pieces counted once) stands on a sheet.
+  const drawn = new Set<string>();
+  for (const sheet of sheets) {
+    for (const child of Array.from(sheet.children)) {
+      const id = blockRootId((child as HTMLElement & { pmViewDesc?: ViewDescLike }).pmViewDesc?.node);
+      if (id) drawn.add(id);
+    }
+  }
+  const doc = (root as HTMLElement & { pmViewDesc?: ViewDescLike }).pmViewDesc?.node;
+  if (doc?.forEach) {
+    let missing = false;
+    doc.forEach((child) => {
+      const blocks = child.type?.name === "pageBlock" ? child : null;
+      const visit = (block: NodeLike) => {
+        const id = blockRootId(block);
+        if (id && !drawn.has(id)) missing = true;
+      };
+      if (blocks?.forEach) blocks.forEach(visit);
+      else visit(child);
+    });
+    if (missing) return false;
+  }
+  return true;
+}
+
+interface NodeLike {
+  attrs?: Record<string, unknown>;
+  type?: { name?: string };
+  forEach?: (callback: (child: NodeLike) => void) => void;
+}
+interface ViewDescLike { node?: NodeLike }
+
+/** A top-level block's identity, its split pieces counted as the block. */
+function blockRootId(node: NodeLike | undefined): string | null {
+  const attrs = node?.attrs;
+  if (!attrs) return null;
+  const piece = attrs.pageSplitPieceOf;
+  if (typeof piece === "string" && piece) return piece;
+  return typeof attrs.block_id === "string" && attrs.block_id ? attrs.block_id : null;
+}
+
+/** After the layout's next commit: two frames, so a dispatch under way has
+ * drawn its pages before they are read. */
+function afterNextCommit(win: Window | null): Promise<void> {
+  if (!win || typeof win.requestAnimationFrame !== "function") return new Promise((resolve) => setTimeout(resolve, 32));
+  return new Promise((resolve) => win.requestAnimationFrame(() => win.requestAnimationFrame(() => resolve())));
+}
+
 export function waitForDocumentPrintSource(
   root: HTMLElement,
-  options: PrintReadinessOptions & { cancelled?: () => boolean } = {},
-): Promise<void> {
+  options: PrintReadinessOptions & {
+    cancelled?: () => boolean;
+    /** At the deadline, a source whose blocks are all placed is copied as
+     * it stands ("unsettled") instead of failing: a page whose layout never
+     * settles still prints, as Word prints what it shows. */
+    printUnsettled?: boolean;
+  } = {},
+): Promise<PrintSourceState> {
   const deadline = Date.now() + (options.timeoutMs ?? PRINT_ASSET_TIMEOUT_MS);
   const connected = root.isConnected;
   return new Promise((resolve, reject) => {
@@ -136,10 +321,21 @@ export function waitForDocumentPrintSource(
       lastChange = Date.now();
     });
     changes?.observe(root, { subtree: true, childList: true, attributes: true, characterData: true });
-    const finish = (error?: PrintReadinessError) => {
+    const finish = (error?: PrintReadinessError, state: PrintSourceState = "settled") => {
       changes?.disconnect();
       clearTimeout(timer); options.signal?.removeEventListener("abort", abort);
-      if (error) reject(error); else resolve();
+      if (error) reject(error); else resolve(state);
+    };
+    // The deadline with every block placed: the pages as the next commit
+    // leaves them, if they are a whole copy (printSourceWhole).
+    const asItStands = () => {
+      const timedOut = new PrintReadinessError("timeout", "Document layout did not settle before printing.", undefined, "layout");
+      if (!options.printUnsettled || printUnsettledOff() || root.matches(UNPLACED_CONTENT)) return finish(timedOut);
+      void afterNextCommit(root.ownerDocument.defaultView).then(() => {
+        if (options.signal?.aborted || options.cancelled?.() || (connected && !root.isConnected)) return abort();
+        if (printSourceWhole(root)) finish(undefined, "unsettled");
+        else finish(timedOut);
+      });
     };
     const abort = () => finish(abortedError());
     const check = () => {
@@ -161,7 +357,7 @@ export function waitForDocumentPrintSource(
       } else unavailableSince = null;
       if (state === "ready" && ++readySamples >= 2 && now - lastChange >= PRINT_SOURCE_QUIET_MS) return finish();
       if (state !== "ready") readySamples = 0;
-      if (now >= deadline) return finish(new PrintReadinessError("timeout", "Document layout did not settle before printing."));
+      if (now >= deadline) return asItStands();
       timer = setTimeout(check, 32);
     };
     options.signal?.addEventListener("abort", abort, {once:true});
@@ -331,6 +527,7 @@ export async function waitForPrintReadiness(
         "timeout",
         `Print assets did not become ready within ${timeoutMs} ms.`,
         error,
+        "assets",
       );
     }
     if (options.signal?.aborted) throw abortedError();
@@ -352,18 +549,23 @@ export function renderPrintReadinessFailure(
   doc: Document,
   message = DEFAULT_FAILURE_MESSAGE,
   error?: PrintReadinessError,
+  /** Each reason's own message (printFailureMessages): the reader is told
+   * what stopped the print, not one sentence for every cause. */
+  messages?: PrintFailureMessages,
 ): void {
   const alert = doc.createElement("div");
   alert.setAttribute("role", "alert");
   alert.setAttribute("data-testid", "print-readiness-error");
-  // What stopped the copy, for support and probes: the message is one
-  // sentence for every cause (a layout that did not settle, a font, a picture).
-  if (error) alert.setAttribute("data-print-failure", `${error.code}: ${error.message}`.slice(0, 300));
+  // What stopped the copy, for support and probes.
+  if (error) {
+    alert.setAttribute("data-print-failure", `${error.code}${error.stage ? `/${error.stage}` : ""}: ${error.message}`.slice(0, 300));
+    alert.setAttribute("data-print-failure-reason", printFailureReason(error));
+  }
   alert.setAttribute(
     "style",
     "max-width:42rem;margin:10vh auto;padding:1.25rem 1.5rem;border:1px solid #c2413b;border-radius:.75rem;background:#fff7f6;color:#7f1d1d;font:600 16px/1.6 system-ui,sans-serif",
   );
-  alert.textContent = message;
+  alert.textContent = printFailureMessage(error, message, messages, doc.defaultView ?? (typeof window === "undefined" ? null : window));
   doc.body.replaceChildren(alert);
 }
 
@@ -434,6 +636,8 @@ export async function printWindowWhenReady(
       throw new PrintReadinessError(
         "timeout",
         `Print assets and dialog did not become ready within ${timeoutMs} ms.`,
+        undefined,
+        "assets",
       );
     }
     await waitForPrintDialogDelay(delayMs, options.signal);
@@ -444,7 +648,7 @@ export async function printWindowWhenReady(
   } catch (rawError) {
     const error = normalizeReadinessError(rawError);
     if (!printWindow.closed) {
-      renderPrintReadinessFailure(printWindow.document, options.errorMessage, error);
+      renderPrintReadinessFailure(printWindow.document, options.errorMessage, error, options.errorMessages);
     }
     options.onError?.(error);
     return { status: "failed", error };

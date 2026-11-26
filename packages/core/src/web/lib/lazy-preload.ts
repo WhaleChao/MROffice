@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { canvasGestureActive } from "./canvas-gesture";
 import { createElement, use, type ComponentType, type FunctionComponent } from "react";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- any component's props
@@ -113,6 +114,10 @@ export function preloadWhenIdle(
   const step = (deadline?: IdleDeadline) => {
     idle = null;
     if (cancelled) return;
+    // A window dragged or sized, the desk zoomed or panned (lib/canvas-gesture)
+    // is input too: a part arriving mid-drag is compiled in one task, and
+    // in WebKit the frames around it were 0.6-1 s with a deck open.
+    if (canvasGestureActive()) noteInput();
     const quietFor = performance.now() - lastInput;
     if (quietFor < PRELOAD_QUIET_MS) {
       schedule(PRELOAD_QUIET_MS - quietFor);

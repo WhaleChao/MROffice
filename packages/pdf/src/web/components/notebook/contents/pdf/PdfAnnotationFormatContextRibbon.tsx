@@ -9,6 +9,12 @@ import { type ShapeKind, type ShapeLineEnding, type ShapeLineStyle } from "@mrno
 import { type PdfStandardBlendMode } from "../../../../lib/pdf/blend-modes";
 import type { AlignEdge } from "@mrnote/core/web/lib/presentation-align.ts";
 import type { PdfRibbonTranslator } from "./pdfRibbonTranslator";
+import {
+  documentLengthUnit,
+  documentPxPerLengthUnit,
+  parseDocumentLengthPx,
+  type DocumentLengthUnit,
+} from "@mrnote/core/web/lib/document-length-fields.ts";
 
 export type PdfAnnotationContextKind =
   | "shape"
@@ -246,12 +252,77 @@ export interface PdfAnnotationFormatContextRibbonLabels {
   outlineStylesOnly: string;
   /** Format Shape (the pane the Shape Styles launcher opens). */
   formatShape: string;
+  /**
+   * The unit Height and Width are shown and typed in: the locale's length
+   * unit (cm in Chinese, inches in English), as the picture tab and Docs
+   * show them -- Office's sizes are in the system's unit, its line weights
+   * in points. Absent, points (a host that knows no locale).
+   */
+  lengthUnit?: DocumentLengthUnit;
+  lengthUnitLabel?: string;
+}
+
+const PT_PER_PX = 72 / 96;
+
+
+
+
+
+
+
+export function pdfObjectLengthField(
+  labels: Pick<PdfAnnotationFormatContextRibbonLabels, "lengthUnit" | "lengthUnitLabel" | "points">,
+): {
+  unitLabel: string;
+  show: (points: number) => string;
+  parse: (raw: string) => number | null;
+  step: number;
+  min: number;
+  max: number;
+  /** Half the shown resolution, in points: a value typed back as shown is no change. */
+  tolerancePoints: number;
+} {
+  const unit = labels.lengthUnit;
+  if (!unit) {
+    return {
+      unitLabel: labels.points,
+      show: (points) => (Math.round(points * 10) / 10).toFixed(1),
+      parse: (raw) => {
+        const value = Number.parseFloat(raw);
+        return Number.isFinite(value) && value > 0 ? value : null;
+      },
+      step: 0.1,
+      min: 0.1,
+      max: 100_000,
+      tolerancePoints: 0.05,
+    };
+  }
+  const pxPerUnit = documentPxPerLengthUnit(unit);
+  const decimals = unit === "cm" ? 2 : 3;
+  return {
+    unitLabel: labels.lengthUnitLabel ?? unit,
+    show: (points) => String(Number((points / PT_PER_PX / pxPerUnit).toFixed(decimals))),
+    parse: (raw) => {
+      const px = parseDocumentLengthPx(raw, unit);
+      return px !== null && px > 0 ? px * PT_PER_PX : null;
+    },
+    step: unit === "cm" ? 0.1 : 0.01,
+    min: unit === "cm" ? 0.01 : 0.001,
+    // A PDF page is at most 200 in (14400 pt) a side.
+    max: unit === "cm" ? 508 : 200,
+    tolerancePoints: (0.5 * 10 ** -decimals * pxPerUnit * PT_PER_PX),
+  };
 }
 
 export function createPdfAnnotationFormatContextRibbonLabels(
   t: PdfRibbonTranslator,
+  locale?: string,
 ): PdfAnnotationFormatContextRibbonLabels {
+  const lengthUnit = locale ? documentLengthUnit(locale) : undefined;
   return {
+    ...(lengthUnit
+      ? { lengthUnit, lengthUnitLabel: lengthUnit === "cm" ? t("toolbar.indentUnitCm") : "in" }
+      : {}),
     annotation: t("pdf.annotationFormat.annotation"),
     style: t("pdf.annotationFormat.style"),
     inkStyle: t("pdf.annotationFormat.inkStyle"),

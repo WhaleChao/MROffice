@@ -21,6 +21,7 @@
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { isDocumentLayoutStatusAttribute } from "../documentLayoutStatus";
 import { inkLayerMutation } from "./inkSheetLayer";
+import { tabMeasureMutation } from "./tabMeasureMark";
 
 /** What the page-span decorations and the ledger write on a sheet element:
  * a function of the measurement, never an input to it. */
@@ -82,6 +83,7 @@ class SheetChangeLog {
     const clock = ++this.clock;
     let last: Node | null = null;
     for (const record of records) {
+      if (tabMeasureMutation(record)) continue;
       if (inkLayerMutation(record)) continue;
       const target = record.target as Element;
       if (record.type === "attributes") {

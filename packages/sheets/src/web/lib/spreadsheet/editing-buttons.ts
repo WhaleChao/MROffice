@@ -165,6 +165,9 @@ export function updateCellHyperlink<S extends CellButtonsSheet>(
       delete (nextCell as { hyperlinkOwnUnder?: unknown }).hyperlinkOwnUnder;
       delete (nextCell as { hyperlinkUnderArea?: boolean }).hyperlinkUnderArea;
     }
+    // The link the cell held inert (a relative path, reading 1046) is
+    // replaced by the one inserted.
+    delete nextCell.inertHyperlink;
     nextCell.hyperlink = href;
     if (details) {
       const tooltip = normalizeHyperlinkDetail(details.tooltip);
@@ -220,6 +223,7 @@ export function updateCellHyperlink<S extends CellButtonsSheet>(
     delete nextCell.hyperlink;
     delete nextCell.hyperlinkTooltip;
     delete nextCell.hyperlinkDisplay;
+    delete nextCell.inertHyperlink;
     delete (nextCell as { hyperlinkInArea?: boolean }).hyperlinkInArea;
     delete (nextCell as { hyperlinkRank?: number }).hyperlinkRank;
     delete (nextCell as { hyperlinkOwnUnder?: unknown }).hyperlinkOwnUnder;

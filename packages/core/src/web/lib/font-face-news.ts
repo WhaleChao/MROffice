@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { afterCanvasGesture, canvasGestureActive } from "./canvas-gesture";
 export type FontFaceNews = "loading" | "settled";
 type FontFaceNewsListener = (faces: readonly FontFace[], news: FontFaceNews) => void;
 
@@ -40,8 +41,26 @@ function facesOf(event: Event): readonly FontFace[] | null {
 }
 
 const faceSettled = (face: FontFace) => face.status === "loaded" || face.status === "error";
-const faceKey = (face: FontFace) =>
+/**
+ * A face's description, read once per face object: an event the set must be
+ * walked for (a description seen before) read the five descriptors of every
+ * face in it, a binding call each, for every face landing (a Chinese face's
+ * slices landing one by one under a document's first layout: 0.2 s of the
+ * metrics wait for allometric.docx with 300 faces). A face's descriptors are
+ * never written after it is made. `window.__docsFirstScreenTrimOff = true`:
+ * read every time, as before.
+ */
+const faceKeys = new WeakMap<FontFace, string>();
+const describe = (face: FontFace) =>
   `${face.family}|${face.style}|${face.weight}|${face.stretch}|${face.unicodeRange}`;
+const faceKey = (face: FontFace) => {
+  if (typeof window !== "undefined" && (window as Window & { __docsFirstScreenTrimOff?: boolean }).__docsFirstScreenTrimOff === true) {
+    return describe(face);
+  }
+  let key = faceKeys.get(face);
+  if (key === undefined) faceKeys.set(face, (key = describe(face)));
+  return key;
+};
 
 /** How many faces of each description have started (loading or settled) and
  * have settled, in the set as it stands. */
@@ -155,11 +174,33 @@ function watchFontSet(document: Document, fonts: FontFaceSet): FontSetWatch {
       entry.listener(faces, news);
     }
   };
+  // News that came while a canvas window was dragged or the desk zoomed is
+  // told once the gesture ends: every listener lays text out again for it
+  // (up to a second of WebKit main thread a face while big files open), and
+  // the move under the pointer would wait for all of it (lib/canvas-gesture).
+  // Replayed as an event of the same type, so plain listeners hear it too.
+  const replayed = new WeakMap<Event, readonly FontFace[]>();
+  const held: Array<{ type: string; faces: readonly FontFace[] }> = [];
   const onEvent = (event: Event, news: FontFaceNews) => {
-    const faces = read(event, news);
+    const again = replayed.get(event);
+    const faces = again ?? read(event, news);
     if (faces.length === 0) {
       // Nothing new: the listeners registered after this one do not hear it.
       event.stopImmediatePropagation();
+      return;
+    }
+    if (!again && canvasGestureActive()) {
+      event.stopImmediatePropagation();
+      if (held.length === 0) {
+        afterCanvasGesture(() => {
+          for (const { type, faces: told } of held.splice(0)) {
+            const replay = new Event(type);
+            replayed.set(replay, told);
+            fonts.dispatchEvent(replay);
+          }
+        });
+      }
+      held.push({ type: event.type, faces });
       return;
     }
     newFacesByEvent.set(event, faces);

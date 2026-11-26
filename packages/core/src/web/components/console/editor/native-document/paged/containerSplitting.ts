@@ -2100,11 +2100,28 @@ function mergeTextblocks(head: PmNode, tail: PmNode): PmNode | null {
   return head.type.create(
     {
       ...stripRuntimePmAttrs(head),
+      // A head that is itself the rest of a block an earlier page began (the
+      // middle of a paragraph cut across three pages) stays that block's
+      // continuation once its own tail is joined to it.
+      ...(rejoinKeepsContinuation() ? { [SPLIT_CONTINUATION_ATTR]: head.attrs?.[SPLIT_CONTINUATION_ATTR] === true } : {}),
       [SPLIT_CONTINUES_ATTR]: tail.attrs?.[SPLIT_CONTINUES_ATTR] === true,
     },
     head.content.append(tail.content),
     head.marks,
   );
+}
+
+
+
+
+
+
+
+
+
+function rejoinKeepsContinuation(): boolean {
+  return typeof window === "undefined" ||
+    (window as Window & { __docsRejoinDropsContinuationOn?: boolean }).__docsRejoinDropsContinuationOn !== true;
 }
 
 /** The two halves a cut left at a seam inside a container: a split textblock
@@ -2150,6 +2167,9 @@ function mergeListItems(head: PmNode, tail: PmNode): PmNode | null {
   return head.type.create(
     {
       ...stripRuntimePmAttrs(head),
+      // (As a joined textblock: a head item that continues an earlier page's
+      // item stays its continuation.)
+      ...(rejoinKeepsContinuation() ? { [LIST_ITEM_SPLIT_CONTINUATION_ATTR]: head.attrs?.[LIST_ITEM_SPLIT_CONTINUATION_ATTR] === true } : {}),
       [LIST_ITEM_SPLIT_CONTINUES_ATTR]:
         tail.attrs?.[LIST_ITEM_SPLIT_CONTINUES_ATTR] === true,
     },

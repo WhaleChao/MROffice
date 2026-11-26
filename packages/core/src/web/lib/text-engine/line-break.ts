@@ -325,6 +325,16 @@ export function lineBreakOpportunities(graphemes: readonly string[], options: Li
     // has no QU SP* × OP (LB15a/b replaced it). Only a closing quote: a
     // straight one may open the bracket's quotation, and keeps the old rule.
     if (!out[i] && options.powerpoint && after === "OP" && before === "SP" && beforeSpaces === "QU" && FINAL_QUOTES.has(graphemes[lastNonSpace])) out[i] = true;
+    // PowerPoint for Windows breaks a Latin line at every space, a closing mark after it or not
+    // ("por CH |.", "word |)", "word |/": UAX #14's LB13 keeps them on the word's line), and after
+    // every "-" with something before it, a digit after it or not ("FSC-STD-40-|004", "x -|5",
+    // "(-|5)": LB25's HY x NU keeps them whole); a U+2010 HYPHEN before a digit it never leaves
+    // ("ABC‐123" goes down whole). office-truth/probes/tp-lbpunct (TRIAGE 48 / 186):
+    
+    // A "-" a paragraph opens with keeps its digit (not measured; UAX #14's way).
+    if (!out[i] && options.powerpoint && before === "SP" && (after === "IS" || after === "CL" || after === "CP" || after === "EX" || after === "SY")) out[i] = true;
+    if (!out[i] && options.powerpoint && before === "HY" && after === "NU" && i >= 2) out[i] = true;
+    if (out[i] && options.powerpoint && graphemes[i - 1] === "\u2010" && after === "NU") out[i] = false;
     // A hyphen is a minus sign only where a number starts ("-5", "(-5"):
     // after a word or a number it is a hyphen a line may break after
     // ("pre-|2025", "2025-|2027"), as Word and the browsers break it

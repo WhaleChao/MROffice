@@ -17,6 +17,7 @@ import {
   type ListStyleType,
 } from "@mrnote/core/web/components/console/editor/native-document/listNumbering.ts";
 import { fragmentCarries } from "@mrnote/core/web/components/console/editor/native-document/paged/fragmentRoles.ts";
+import { sourceContinuationListItems } from "@mrnote/core/web/components/console/editor/native-document/sourceHardBreakTail.ts";
 
 /**
  * The list labels a document draws, as text: textblock position → the number
@@ -83,7 +84,8 @@ export function documentListLabels(doc: PmNode): ReadonlyMap<number, string> {
     list.forEach((item, offset) => {
       if (item.type.name !== "listItem") return;
       const itemPos = listPos + 1 + offset;
-      const continuation = item.attrs.pageSplitItemContinuation === true;
+      const continuation =
+        item.attrs.pageSplitItemContinuation === true || sourceContinuationListItems(doc).has(itemPos);
       const own = ordinal;
       if (!continuation) {
         const first = item.firstChild;

@@ -297,6 +297,11 @@ export interface PresenterSyncSnapshot {
   running: boolean;
   /** Monotonic id of the present session (a new present run bumps it). */
   epoch: number;
+  /**
+   * The show's Random Effects seed (row 1041), fixed when the show starts:
+   * every window of the show picks the same effect for each step from it.
+   */
+  randomEffectSeed?: number;
 }
 
 /**
@@ -306,9 +311,23 @@ export interface PresenterSyncSnapshot {
  * converge. `index` carries an explicit target for `goto`.
  */
 export interface PresenterCommand {
-  action: "next" | "prev" | "first" | "last" | "goto" | "toggleTimer" | "resetTimer";
+  action:
+    | "next"
+    | "prev"
+    | "first"
+    | "last"
+    | "goto"
+    | "toggleTimer"
+    | "resetTimer"
+    // The magnifying glass (GAP 7): the console's Zoom into slide (armed / off), and its click on
+    // the current slide at (fx, fy), fractions of the slide.
+    | "toggleMagnify"
+    | "magnifyAt";
   /** Target slide index for `goto` (ignored otherwise). */
   index?: number;
+  /** The slide point of `magnifyAt` (fractions of the slide; ignored otherwise). */
+  fx?: number;
+  fy?: number;
 }
 
 /** The union of messages that flow over the presenter channel, both directions. */
@@ -332,8 +351,10 @@ export function buildSyncSnapshot(
     running: boolean;
   },
   epoch: number,
+  randomEffectSeed?: number,
 ): PresenterSyncSnapshot {
   return {
+    ...(randomEffectSeed !== undefined && Number.isInteger(randomEffectSeed) ? { randomEffectSeed } : {}),
     deck: projectDeck(slides),
     notes: slides.map((s) => (s.notes ?? "").trim()),
     index: Number.isFinite(index) ? Math.max(0, Math.floor(index)) : 0,
@@ -615,6 +636,16 @@ export interface PresenterDocStrings {
   elapsedLabel: (elapsed: string) => string;
   /** Slide-counter aria-label template ("Slide {current} of {total}"). */
   counterLabel: (current: number, total: number) => string;
+  /** The magnifying glass's label (PowerPoint's "Zoom into slide"); no glass without it. */
+  magnify?: string;
+}
+
+/** The show's magnifying glass as the console draws it (GAP 7). */
+export interface PresenterMagnifyState {
+  /** The glass is chosen: a click on the current slide magnifies there. */
+  readonly armed: boolean;
+  /** The slide is magnified. */
+  readonly on: boolean;
 }
 
 /** HTML-escape a string for safe interpolation into the popup document. */
@@ -684,6 +715,9 @@ body{display:flex;flex-direction:column;padding:18px;gap:14px}
   overflow:hidden;background:#000}
 .ps-stage--next[data-picture="true"]{max-height:none}
 .ps-picture{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}
+.ps-stage[data-magnify="armed"] .ps-picture{cursor:zoom-in}
+.ps-stage[data-magnify="on"] .ps-picture{cursor:grab}
+.ps-btn[aria-pressed="true"]{background:#2b3a52;border-color:#5b9dff}
 .ps-slide__title{margin:0 0 10px;font-size:22px;line-height:1.25}
 .ps-stage--next .ps-slide__title{font-size:15px}
 .ps-slide__line{margin:0 0 6px;font-size:16px;line-height:1.4;color:#cfd2d6}
@@ -716,7 +750,15 @@ export function renderPresenterConsoleHtml(
   vm: PresenterViewModel,
   strings: PresenterDocStrings,
   pictures: PresenterSlidePictures = {},
+  magnify: PresenterMagnifyState = { armed: false, on: false },
 ): string {
+  const glassPressed = magnify.armed || magnify.on;
+  const glass = strings.magnify
+    ? `
+  <button class="ps-btn" type="button" data-presenter-action="toggleMagnify"
+    aria-label="${escapeHtml(strings.magnify)}" title="${escapeHtml(strings.magnify)}"
+    aria-pressed="${glassPressed ? "true" : "false"}" data-testid="ps-magnify">&#x1F50D;&#xFE0E;</button>`
+    : "";
   const elapsed = formatElapsed(vm.elapsedMs);
   const nextInner =
     vm.next === null
@@ -734,7 +776,7 @@ export function renderPresenterConsoleHtml(
     <span class="ps-label">${escapeHtml(strings.current)}</span>
     <div class="ps-stage" data-testid="ps-current"${
       pictures.current ? ' data-picture="true"' : ""
-    }>${renderSlideBody(vm.current, pictures.current)}</div>
+    }${magnify.on ? ' data-magnify="on"' : magnify.armed ? ' data-magnify="armed"' : ""}>${renderSlideBody(vm.current, pictures.current)}</div>
   </section>
   <aside class="ps-side">
     <div>
@@ -765,7 +807,7 @@ export function renderPresenterConsoleHtml(
   <button class="ps-btn" type="button" data-presenter-action="resetTimer"
     aria-label="${escapeHtml(strings.resetTimer)}" title="${escapeHtml(
       strings.resetTimer,
-    )}">↺</button>
+    )}">↺</button>${glass}
   <span class="ps-counter" data-testid="ps-counter"
     data-current="${vm.counter.current}" data-total="${vm.counter.total}"
     aria-label="${escapeHtml(

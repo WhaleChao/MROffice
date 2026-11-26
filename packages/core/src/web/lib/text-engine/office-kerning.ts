@@ -17,6 +17,8 @@ interface RecordedFamily {
 interface StylePairs {
   readonly unitsPerEm: number;
   readonly value: (left: number, right: number) => number;
+  /** PowerPoint for Windows' pairs (`slides`); `value` where they are the same. */
+  readonly slides: (left: number, right: number) => number;
 }
 
 const families = index.families as Readonly<Record<string, string>>;
@@ -31,7 +33,9 @@ function parseRanges(text: string): (codePoint: number) => boolean {
 const recorded = parseRanges(index.characters);
 
 function compile(style: RecordedStyle): StylePairs {
-  return { unitsPerEm: style.unitsPerEm, value: compileOfficeKerningUnits(style) };
+  const value = compileOfficeKerningUnits(style);
+  const slides = style.slides && style.slides !== "same" ? compileOfficeKerningUnits(style.slides) : value;
+  return { unitsPerEm: style.unitsPerEm, value, slides };
 }
 
 type FamilyState = ReadonlyMap<string, StylePairs> | "pending" | "failed";
@@ -66,7 +70,9 @@ export type OfficeKerning = (left: number, right: number) => number;
  * characters (the face's own kerning then applies); "pending" while the
  * family's pairs load.
  */
-export function officePairKerning(face: FaceDeclaration, weight: number, italic: boolean, left: number, right: number): number | null | "pending" {
+export function officePairKerning(
+  face: FaceDeclaration, weight: number, italic: boolean, left: number, right: number, table?: "slides",
+): number | null | "pending" {
   if (!face.url || !face.url.includes("/fonts/office/")) return null;
   const slug = families[face.family];
   if (!slug || !recorded(left) || !recorded(right)) return null;
@@ -75,7 +81,7 @@ export function officePairKerning(face: FaceDeclaration, weight: number, italic:
   if (state === "failed") return null;
   const style = styleOf(state, weight, italic);
   if (!style) return null;
-  return style.value(left, right) / style.unitsPerEm;
+  return (table === "slides" ? style.slides : style.value)(left, right) / style.unitsPerEm;
 }
 
 /** Tests: prime a family's pairs. */

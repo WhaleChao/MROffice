@@ -36,6 +36,9 @@ export interface ManagedNativeInkStroke {
   deleted?: boolean;
   /** Exact third-party `/InkList` path identity discovered through pdf.js. */
   nativeSource?: NativePdfInkAnnotationSource;
+  /** The page inserted in MR Office it is drawn on (`page` is then the page
+   * before it): lib/pdf/inserted-page-identity. */
+  insertedPageId?: string;
 }
 
 export interface ManagedNativeInkAnnotationShadow {
@@ -43,6 +46,8 @@ export interface ManagedNativeInkAnnotationShadow {
   text: string;
   page: number;
   rect: [number, number, number, number];
+  /** Written on that inserted page, wherever it is in the file. */
+  insertedPageId?: string;
 }
 
 export interface ManagedNativeInkPlan {
@@ -288,7 +293,8 @@ export function planManagedNativeInkAnnotations(
       importedDeletes.set(source.objectRef, group);
       continue;
     }
-    const rotation = rotations.get(stroke.page + 1) ?? "auto";
+    // An inserted page is not turned with the page before it.
+    const rotation = stroke.insertedPageId ? "auto" : (rotations.get(stroke.page + 1) ?? "auto");
     const text = nativeInkDirective(stroke, rotation);
     if (!text) {
       return { annotations: [], supported: false, reason: "invalid_stroke" };
@@ -300,6 +306,7 @@ export function planManagedNativeInkAnnotations(
       // The native primitive derives the exact Rect from InkList. This bounded
       // placeholder only satisfies the shared annotation transport contract.
       rect: [24, 24, 44, 44],
+      ...(stroke.insertedPageId && !stroke.deleted ? { insertedPageId: stroke.insertedPageId } : {}),
     });
   }
   for (const [objectRef, group] of importedTransforms) {

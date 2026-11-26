@@ -1612,6 +1612,98 @@
   display: none;
 }
 
+/* Page Layout selects as the grid does: the same marks on its cells
+   (data-active, data-selected, data-selection-edges, written by the page's
+   render and by lib/spreadsheet/range-preview's paint and drag preview), the
+   same tint, the same 2px frame in the selection colour, the same gliding box
+   (lib/spreadsheet/selection-glide). A page's cell clips what it paints, so
+   its frame cannot reach out over the gridlines from inside the cell: the
+   page keeps the box as its frame once it lands (data-selection-frame) and
+   the cells' own frame, drawn just inside them, is only the fallback where
+   no box can stand (a range across a page break, a right-to-left sheet). */
+[data-page-layout-stage] {
+  --spreadsheet-selection-edge: var(--console-accent, #0d9488);
+  --spreadsheet-selection-tint: color-mix(
+    in srgb,
+    var(--console-accent, #0d9488) 12%,
+    transparent
+  );
+  --spreadsheet-selection-dir: 1;
+}
+
+[data-page-layout-stage][data-page-layout-rtl] {
+  --spreadsheet-selection-dir: -1;
+}
+
+[data-page-layout-stage] [data-page-layout-cell][data-selected="true"]:not([data-active="true"]) {
+  box-shadow: inset 0 0 0 9999px var(--spreadsheet-selection-tint);
+}
+
+[data-page-layout-stage] [data-page-layout-cell][data-active="true"]:not([data-selected="true"]) {
+  --spreadsheet-selection-top: 2px;
+  --spreadsheet-selection-bottom: 2px;
+  --spreadsheet-selection-start: 2px;
+  --spreadsheet-selection-end: 2px;
+}
+
+[data-page-layout-stage] [data-page-layout-cell][data-selection-edges~="top"] {
+  --spreadsheet-selection-top: 2px;
+}
+
+[data-page-layout-stage] [data-page-layout-cell][data-selection-edges~="bottom"] {
+  --spreadsheet-selection-bottom: 2px;
+}
+
+[data-page-layout-stage] [data-page-layout-cell][data-selection-edges~="start"] {
+  --spreadsheet-selection-start: 2px;
+}
+
+[data-page-layout-stage] [data-page-layout-cell][data-selection-edges~="end"] {
+  --spreadsheet-selection-end: 2px;
+}
+
+[data-page-layout-stage] [data-page-layout-cell]:is([data-selection-edges], [data-active="true"]:not([data-selected="true"]))::after {
+  box-shadow:
+    inset 0 var(--spreadsheet-selection-top, 0px) 0 0
+      var(--spreadsheet-selection-edge),
+    inset 0 calc(-1 * var(--spreadsheet-selection-bottom, 0px)) 0 0
+      var(--spreadsheet-selection-edge),
+    inset
+      calc(var(--spreadsheet-selection-dir) * var(--spreadsheet-selection-start, 0px))
+      0 0 0 var(--spreadsheet-selection-edge),
+    inset
+      calc(-1 * var(--spreadsheet-selection-dir) * var(--spreadsheet-selection-end, 0px))
+      0 0 0 var(--spreadsheet-selection-edge);
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
+
+[data-page-layout-stage]:is([data-selection-glide], [data-selection-frame]) [data-page-layout-cell]::after {
+  box-shadow: none;
+}
+
+/* The box draws the fill handle's look over the page; the cell's own handle
+   stays under it, invisible but still the grip a press takes. */
+[data-page-layout-stage]:is([data-selection-glide], [data-selection-frame]) .spreadsheet-window__fill-handle {
+  opacity: 0;
+}
+
+/* A fill drag's cells where its gliding frame cannot stand: the grid's mark. */
+.spreadsheet-window__page-fill-preview {
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--console-accent, #0d9488) 60%, transparent);
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+[data-page-layout-stage][data-fill-frame] .spreadsheet-window__page-fill-preview {
+  box-shadow: none;
+}
+
 /* A fill handle's or a moved range's target while it is dragged: Excel's one
    grey outline around the range, gliding with the pointer. It replaces the
    per-cell marks of the fill preview while it shows (a frozen or unrendered
@@ -4288,8 +4380,11 @@
 /* A table is the exception: a finger across its cells scrolls (PowerPoint for
    iPad), its range grows by the selection handles' own targets, and it moves
    by its frame's move button and grips, which take the finger themselves. */
-.presentation-window__block--geometry:is([data-selected="true"], [data-multiselected="true"]):not([data-table-block="true"]):not(:has(textarea:focus, [contenteditable="true"]:focus)) {
-  touch-action: none;
+ 
+@media (any-pointer: coarse), (hover: none) {
+  .presentation-window__block--geometry:is([data-selected="true"], [data-multiselected="true"]):not([data-table-block="true"]):not(:has(textarea:focus, [contenteditable="true"]:focus)) {
+    touch-action: none;
+  }
 }
 
  
@@ -5327,6 +5422,28 @@
   z-index: 2147483647;
 }
 
+/* The show's host (PresentationWindow): when the show is not in full screen
+   it is a manual popover in the page's top layer, so the fixed overlay above
+   fills the browser's window, not the slide window that held it. The host
+   itself draws nothing: no popover box, border, padding or backdrop. */
+.presentation-present-host:popover-open {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  height: 100%;
+  inset: 0;
+  margin: 0;
+  max-height: none;
+  max-width: none;
+  overflow: visible;
+  padding: 0;
+  width: 100%;
+}
+
+.presentation-present-host:popover-open::backdrop {
+  background: transparent;
+}
+
 .presentation-present__exit {
   align-items: center;
   background: rgba(255, 255, 255, 0.12);
@@ -5355,6 +5472,23 @@
   justify-content: center;
   min-height: 0;
   padding: 48px;
+}
+
+/* The magnifying glass (GAP 7, lib/presentation-show-magnify): armed, the
+   pointer is a magnifier; magnified, the projected slide is drawn larger
+   about the slide point at the stage's middle with the `translate` and
+   `scale` properties (they compose with the `transform` a transition
+   animates), the stage clipping it, the pointer a hand. */
+.presentation-present__stage[data-magnify="armed"] {
+  cursor: zoom-in;
+}
+.presentation-present__stage[data-magnify="on"] {
+  cursor: grab;
+  overflow: hidden;
+}
+.presentation-present__stage[data-magnify="on"] > [data-testid="presentation-present-slide"] {
+  scale: var(--show-magnify-scale);
+  translate: var(--show-magnify-translate);
 }
 
 .presentation-present__slide {
@@ -5956,6 +6090,89 @@
 
 .presentation-present__slide--enter-clock-eight-spokes {
   --presentation-transition-clock-sector: 45deg;
+}
+
+/*
+ * Clock's two other Effect Options (GAP 23). Counterclockwise
+ * (p14:wheelReverse) sweeps the same hand the other way; Wedge (p:wedge)
+ * opens from 12 o'clock both ways at once, as two hands meeting at 6.
+ */
+.presentation-present__slide--enter-clock-counterclockwise {
+  animation: presentation-present-slide-clock 320ms linear both;
+  --presentation-transition-clock-sector: 360deg;
+  -webkit-mask-image: conic-gradient(
+    from -90deg,
+    transparent 0deg calc(360deg - var(--presentation-transition-clock-sweep)),
+    #000 calc(360deg - var(--presentation-transition-clock-sweep)) 360deg
+  );
+  mask-image: conic-gradient(
+    from -90deg,
+    transparent 0deg calc(360deg - var(--presentation-transition-clock-sweep)),
+    #000 calc(360deg - var(--presentation-transition-clock-sweep)) 360deg
+  );
+}
+
+.presentation-present__slide--enter-clock-wedge {
+  animation: presentation-present-slide-clock 320ms linear both;
+  --presentation-transition-clock-sector: 180deg;
+  -webkit-mask-image: conic-gradient(
+    from -90deg,
+    #000 0deg var(--presentation-transition-clock-sweep),
+    transparent var(--presentation-transition-clock-sweep)
+      calc(360deg - var(--presentation-transition-clock-sweep)),
+    #000 calc(360deg - var(--presentation-transition-clock-sweep)) 360deg
+  );
+  mask-image: conic-gradient(
+    from -90deg,
+    #000 0deg var(--presentation-transition-clock-sweep),
+    transparent var(--presentation-transition-clock-sweep)
+      calc(360deg - var(--presentation-transition-clock-sweep)),
+    #000 calc(360deg - var(--presentation-transition-clock-sweep)) 360deg
+  );
+}
+
+/*
+ * Fade Through Black and Cut Through Black (GAP 23): the slide comes up out of
+ * black. The fade dips to black over its first half; the cut holds black for
+ * a beat and then shows the slide at once.
+ */
+.presentation-present__slide--enter-fade-through-black {
+  animation: presentation-present-fade-through-black 320ms ease-out both;
+}
+
+.presentation-present__slide--enter-cut-through-black {
+  animation: presentation-present-cut-through-black 320ms step-end both;
+}
+
+/* Zoom and Rotate (p:newsflash, GAP 23): the slide spins in from the centre. */
+.presentation-present__slide--enter-zoom-rotate {
+  animation: presentation-present-slide-zoom-rotate 320ms ease-out both;
+}
+
+/* Wipe's four corners (p:strips, GAP 23): a diagonal edge sweeps across. */
+.presentation-present__slide--enter-wipe-left-up {
+  animation: presentation-present-slide-wipe-left-up 320ms ease-out both;
+}
+
+.presentation-present__slide--enter-wipe-right-up {
+  animation: presentation-present-slide-wipe-right-up 320ms ease-out both;
+}
+
+.presentation-present__slide--enter-wipe-left-down {
+  animation: presentation-present-slide-wipe-left-down 320ms ease-out both;
+}
+
+.presentation-present__slide--enter-wipe-right-down {
+  animation: presentation-present-slide-wipe-right-down 320ms ease-out both;
+}
+
+/*
+ * Page Curl Double (pageCurlDouble, GAP 23): both halves of the page turn
+ * toward the named side at once, so the arriving slide opens from the middle.
+ */
+.presentation-present__slide--enter-page-curl-double-left,
+.presentation-present__slide--enter-page-curl-double-right {
+  animation: presentation-present-slide-page-curl-double 320ms ease-out both;
 }
 
 .presentation-present__slide--enter-reveal-left,
@@ -7384,6 +7601,95 @@
   }
 }
 
+@keyframes presentation-present-fade-through-black {
+  from {
+    opacity: 0;
+    filter: brightness(0);
+  }
+
+  50% {
+    opacity: 1;
+    filter: brightness(0);
+  }
+
+  to {
+    opacity: 1;
+    filter: brightness(1);
+  }
+}
+
+@keyframes presentation-present-cut-through-black {
+  from {
+    filter: brightness(0);
+  }
+
+  to {
+    filter: brightness(1);
+  }
+}
+
+@keyframes presentation-present-slide-zoom-rotate {
+  from {
+    opacity: 0;
+    transform: scale(0.05) rotate(-720deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes presentation-present-slide-wipe-left-up {
+  from {
+    clip-path: polygon(100% 100%, 100% 100%, 100% 100%, 100% 100%);
+  }
+
+  to {
+    clip-path: polygon(-100% 100%, 100% -100%, 100% 100%, 100% 100%);
+  }
+}
+
+@keyframes presentation-present-slide-wipe-right-up {
+  from {
+    clip-path: polygon(0 100%, 0 100%, 0 100%, 0 100%);
+  }
+
+  to {
+    clip-path: polygon(0 -100%, 200% 100%, 0 100%, 0 100%);
+  }
+}
+
+@keyframes presentation-present-slide-wipe-left-down {
+  from {
+    clip-path: polygon(100% 0, 100% 0, 100% 0, 100% 0);
+  }
+
+  to {
+    clip-path: polygon(-100% 0, 100% 200%, 100% 0, 100% 0);
+  }
+}
+
+@keyframes presentation-present-slide-wipe-right-down {
+  from {
+    clip-path: polygon(0 0, 0 0, 0 0, 0 0);
+  }
+
+  to {
+    clip-path: polygon(200% 0, 0 200%, 0 0, 0 0);
+  }
+}
+
+@keyframes presentation-present-slide-page-curl-double {
+  from {
+    clip-path: inset(0 50% 0 50%);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
 @keyframes presentation-present-slide-reveal {
   from {
     opacity: var(--presentation-transition-start-opacity, 1);
@@ -7683,7 +7989,18 @@
   .presentation-present__slide--enter-uncover-left-down,
   .presentation-present__slide--enter-uncover-left-up,
   .presentation-present__slide--enter-uncover-right-down,
-  .presentation-present__slide--enter-uncover-right-up {
+  .presentation-present__slide--enter-uncover-right-up,
+  .presentation-present__slide--enter-clock-counterclockwise,
+  .presentation-present__slide--enter-clock-wedge,
+  .presentation-present__slide--enter-fade-through-black,
+  .presentation-present__slide--enter-cut-through-black,
+  .presentation-present__slide--enter-zoom-rotate,
+  .presentation-present__slide--enter-wipe-left-up,
+  .presentation-present__slide--enter-wipe-right-up,
+  .presentation-present__slide--enter-wipe-left-down,
+  .presentation-present__slide--enter-wipe-right-down,
+  .presentation-present__slide--enter-page-curl-double-left,
+  .presentation-present__slide--enter-page-curl-double-right {
     animation: none;
   }
 
@@ -8466,6 +8783,248 @@
 .presentation-presenter__next-stage .presentation-present__slide {
   box-shadow: none;
   max-width: 100%;
+}
+
+/* The show's All Slides dialog box (Ctrl+S, PresentationShowGoToDialog) is
+   drawn in the show's host, over the show: the show's overlay sits at the
+   top of the stack (2147483647, above), so the dialog's z-50 put it under
+   the slide, open, focused and unseen. Level with the overlay and after it
+   in the host, it is drawn over it, as PowerPoint's dialog is over its show
+   (truth show-see-all 13, show-see-all-v2 02). */
+.presentation-present-host .presentation-show-goto {
+  z-index: 2147483647;
+}
+
+/* The show's See All Slides (PresentationShowAllSlides), GAP #6, as
+   PowerPoint draws it (truth office-truth/probes/show-see-all, PowerPoint for Windows at 100 %,
+   measured off its pixels): a #1a1a1a ground; the back arrow at the top left;
+   a Sections rail on the left, its entries plain grey words, the focused
+   slide's section lit in the accent (one entry); a 1px #444 rule between the
+   rail and the grid; each section's name over its slides; every thumbnail
+   ringed 1px #605e5c; the current slide's ring 3px #ed9583 and the focused
+   one's 2px #fdc9b5, each 1px off the slide; a hidden slide's paper #999 under
+   its ink, its number struck through; numbers and words #a8a8a8, the current
+   slide's number the accent; a zoom slider at the bottom right. Its own
+   colours: it is the show's, not the editor's theme, and every rule is scoped
+   to it -- the editor's Slide Sorter it is drawn with keeps its own look
+   (presentation-show-all-slides-scope.test). The window's button look (its
+   border, radius and height) is set aside for the grid's buttons here, with
+   the specificity it is written with, not by changing it. */
+.presentation-show-all {
+  --show-all-accent: #f07151;
+  --show-all-accent-edge: #f0623e;
+  --show-all-current: #ed9583;
+  --show-all-focus: #fdc9b5;
+  --show-all-current-number: #ee5908;
+  --show-all-ground: #1a1a1a;
+  --show-all-text: #a8a8a8;
+  background: var(--show-all-ground);
+  color: var(--show-all-text);
+  display: grid;
+  /* Measured off the truth at 100 % (show-see-all 02/03): the rail 202px to
+     its rule, the rule and the grid from y 75. */
+  grid-template-columns: 202px minmax(0, 1fr);
+  grid-template-rows: 75px minmax(0, 1fr) 36px;
+  inset: 0;
+  position: absolute;
+  z-index: 3;
+}
+.presentation-show-all[data-rail="closed"] {
+  grid-template-columns: 48px minmax(0, 1fr);
+}
+.presentation-show-all > [data-testid="presentation-sorter"] {
+  grid-column: 2;
+  grid-row: 2 / 4;
+  border-left: 1px solid #444444;
+}
+/* The grid's spacing, measured off the truth (show-see-all 02/03, 100 %):
+   a slide 37px right of the rule; a heading's words 42px under the grid's
+   top when its section is scrolled to the top (as the grid opens, the
+   current slide's); rows 202px apart, columns 290px; a slide's number 12px
+   under it; 88px from a section's last row to the next section's first. */
+.native-page-window .presentation-show-all [data-testid="presentation-sorter"] {
+  gap: 38px;
+  /* 60px under the last row: room for the last section to scroll its
+     heading to the top as PowerPoint's does (truth 02: End's last row
+     58px over the window's bottom with Body's heading at the top). */
+  padding: 36px 36px 60px;
+}
+.native-page-window .presentation-show-all [data-testid^="presentation-sorter-section-"]:not([data-testid="presentation-sorter-section-header"]) {
+  gap: 7px;
+  scroll-margin-top: 36px;
+}
+.native-page-window .presentation-show-all button,
+.native-page-window .presentation-show-all button:hover,
+.native-page-window .presentation-show-all button:focus-visible,
+.native-page-window .presentation-show-all button:active:not(:disabled) {
+  border: 0;
+  box-shadow: none;
+  min-height: 0;
+  transition: none;
+}
+.native-page-window .presentation-show-all .presentation-show-all__back {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  justify-self: start;
+  margin-left: 18px;
+  color: var(--show-all-text);
+  background: transparent;
+  border-radius: 50%;
+  padding: 2px;
+  cursor: pointer;
+}
+.native-page-window .presentation-show-all .presentation-show-all__back svg {
+  /* The arrow's ring 34px across, as the truth's (show-see-all 02). */
+  display: block;
+  height: 35px;
+  width: 35px;
+}
+.native-page-window .presentation-show-all .presentation-show-all__back:hover,
+.native-page-window .presentation-show-all .presentation-show-all__back:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+}
+.presentation-show-all__rail {
+  grid-column: 1;
+  grid-row: 2 / 4;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 20px 0 17px;
+  overflow: auto;
+}
+.presentation-show-all__rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 2px 0 10px;
+}
+.presentation-show-all__rail-title {
+  font-size: 20px;
+  color: var(--show-all-text);
+  padding-left: 3px;
+}
+.native-page-window .presentation-show-all .presentation-show-all__rail-toggle,
+.native-page-window .presentation-show-all .presentation-show-all__rail-item,
+.native-page-window .presentation-show-all .presentation-show-all__zoom button {
+  background: transparent;
+  color: var(--show-all-text);
+  cursor: pointer;
+  font: inherit;
+}
+.native-page-window .presentation-show-all .presentation-show-all__rail-item {
+  display: block;
+  text-align: left;
+  font-size: 12px;
+  /* 28px tall, 32px apart, the words 6px in (truth: the lit entry 165 x 28). */
+  padding: 5px 6px;
+  border-radius: 3px;
+}
+.native-page-window .presentation-show-all .presentation-show-all__rail-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.native-page-window .presentation-show-all .presentation-show-all__rail-item[aria-current="true"],
+.native-page-window .presentation-show-all .presentation-show-all__rail-item[aria-current="true"]:hover {
+  background: var(--show-all-accent);
+  box-shadow: inset 0 0 0 1px var(--show-all-accent-edge);
+  color: #ffffff;
+}
+/* Each section's name over its slides, as PowerPoint's grid writes it: no
+   collapse caret, no slide count. */
+.native-page-window .presentation-show-all [data-testid="presentation-sorter-section-header"] {
+  background: transparent;
+  color: var(--show-all-text);
+  cursor: default;
+  font-size: 12px;
+  padding-left: 0;
+}
+.presentation-show-all [data-testid="presentation-sorter-section-header"] > [data-sorter-part="chevron"],
+.presentation-show-all [data-testid="presentation-sorter-section-header"] > [data-sorter-part="count"] {
+  display: none;
+}
+.presentation-show-all [role="listbox"] {
+  grid-template-columns: repeat(auto-fill, minmax(calc(256px * var(--show-all-zoom, 1)), calc(256px * var(--show-all-zoom, 1))));
+  gap: 37px 34px;
+}
+.native-page-window .presentation-show-all [data-testid="presentation-sorter-cell"] {
+  border: 0;
+  box-shadow: none;
+  gap: 9px;
+  padding: 0;
+}
+/* The thumbnail: slide paper, no shadow, ringed 1px; a hidden one at full
+   strength (the editor's sorter fades it) under the grey below. */
+.native-page-window .presentation-show-all [data-testid="presentation-sorter-cell"] > :first-child {
+  border-radius: 4px;
+  box-shadow: none;
+  opacity: 1;
+  outline: 1px solid #605e5c;
+  outline-offset: 0;
+}
+/* The slide drawn in it is the show's own slide (PresentationPresentSlide),
+   which casts the show's deep drop shadow (0 24px 60px): in the grid it fell
+   on the paper of the thumbnail before it as a grey band down its right edge.
+   PowerPoint's thumbnails cast none, and their corners are round. */
+.presentation-show-all .presentation-present__slide {
+  border-radius: 4px;
+  box-shadow: none;
+}
+/* The focused slide: a 2px light ring a pixel off the slide. */
+.native-page-window .presentation-show-all [data-testid="presentation-sorter-cell"]:focus > :first-child {
+  outline: 2px solid var(--show-all-focus);
+  outline-offset: 1px;
+}
+/* The slide the show is on: a 3px accent ring a pixel off the slide, focused
+   or not. */
+.native-page-window .presentation-show-all [data-testid="presentation-sorter-cell"][aria-current="true"] > :first-child,
+.native-page-window .presentation-show-all [data-testid="presentation-sorter-cell"][aria-current="true"]:focus > :first-child {
+  outline: 3px solid var(--show-all-current);
+  outline-offset: 1px;
+}
+.native-page-window .presentation-show-all [data-testid="presentation-sorter-number"] {
+  color: var(--show-all-text);
+  font-size: 12px;
+}
+.native-page-window .presentation-show-all [aria-current="true"] [data-testid="presentation-sorter-number"] {
+  color: var(--show-all-current-number);
+}
+.presentation-show-all [data-hidden="true"] > :first-child::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* The slide's paper #999 and its ink kept: as PowerPoint greys a hidden one. */
+  background: #999999;
+  mix-blend-mode: multiply;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.presentation-show-all [data-hidden="true"] > :first-child {
+  position: relative;
+}
+.native-page-window .presentation-show-all [data-hidden="true"] [data-testid="presentation-sorter-number"] {
+  text-decoration: line-through;
+}
+.presentation-show-all__zoom {
+  grid-column: 2;
+  grid-row: 3;
+  justify-self: end;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 24px;
+  color: var(--show-all-text);
+  z-index: 1;
+}
+.presentation-show-all__zoom input[type="range"] {
+  width: 120px;
+  accent-color: var(--show-all-text);
+}
+.presentation-show-all__thumb {
+  display: block;
+  height: 100%;
+  position: relative;
+  width: 100%;
 }
 
 .presentation-presenter__next-end {

@@ -542,6 +542,16 @@ const PRESENTATION_HAND_DRAWN_EFFECT_IDENTITIES = [
     galleryHidden: true,
   },
   {
+    // Random Effects (row 1041): PowerPoint plays a basic entrance of its
+    // choosing each show; the server holds the file's spelling as a template.
+    // The show picks from RANDOM_EFFECT_PICKS (`presentation/random-effects`).
+    id: "random-effects",
+    category: "entrance",
+    nativePresetId: 24,
+    authoring: nativeRecipe(0),
+    galleryHidden: true,
+  },
+  {
     id: "media-play",
     category: "media",
     nativePresetId: 1,
@@ -670,6 +680,8 @@ export const HAND_DRAWN_EFFECT_POWERPOINT_DURATION_MS: Readonly<
   "strips-out": 500,
   // A media call lasts its clip's length (set from the clip when the step is
   // added); Pause a millisecond.
+  // Nominal: each show plays a picked effect at its own length.
+  "random-effects": 500,
   "media-play": 0,
   "media-pause": 1,
   // The corpus's Blinks last 0.5 s and 1 s; not offered as a new choice.
@@ -1515,6 +1527,12 @@ export type TimelineAnimationAuthoringRequest = Readonly<{
   blockSource: unknown;
   animation: TimelineAnimation;
   motionPathPreset?: MotionPathPreset;
+  /**
+   * An Effect Option of the path a step already travels (Reverse Path
+   * Direction, Path: Locked / Unlocked; GAP #10): allowed wherever the
+   * step's object can be addressed, whatever its effect.
+   */
+  editsMotionPath?: true;
 }>;
 
 export type TimelineAnimationAuthoringCapability = Readonly<
@@ -1833,7 +1851,10 @@ export function timelineAnimationAuthoringCapability(
   }
 
   const effect = presentationAnimationEffect(request.animation);
-  if (effect?.authoring === "native") {
+  if (
+    effect?.authoring === "native" ||
+    (request.editsMotionPath === true && (request.animation === "none" || effect?.motionPath === true))
+  ) {
     return {
       enabled: true,
       authority: local ? "from-scratch" : "imported-patchback",
@@ -2178,6 +2199,19 @@ export interface MotionPathNative {
   readonly ptsTypes: string;
   readonly rAng?: string;
   readonly rCtr?: readonly [string, string];
+  /**
+   * Effect Options > Path: Locked (`pathEditMode="fixed"`, row 1313): the
+   * path stays where it is on the slide when its object moves. Unlocked,
+   * PowerPoint's default (`relative`), is stated by leaving it out.
+   */
+  readonly pathEditMode?: "fixed";
+  /**
+   * Effect Options > Reverse Path Direction (row 1314): the object travels
+   * the path from its end to its start. PowerPoint leaves the path as it was
+   * and plays the motion backwards (`spd="-100000"` on the motion's own
+   * behaviour); forwards is stated by leaving it out.
+   */
+  readonly reversed?: true;
 }
 
 /** A well-formed `motionPathNative` (exactly as the server reads it), else null. */
@@ -2185,7 +2219,7 @@ export function normalizeMotionPathNative(value: unknown): MotionPathNative | nu
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record);
-  const allowed = new Set(["presetId", "presetSubtype", "path", "ptsTypes", "rAng", "rCtr"]);
+  const allowed = new Set(["presetId", "presetSubtype", "path", "ptsTypes", "rAng", "rCtr", "pathEditMode", "reversed"]);
   const whole = (raw: unknown) => typeof raw === "string" && /^-?\d+$/.test(raw);
   if (
     !keys.every((key) => allowed.has(key)) ||
@@ -2194,6 +2228,8 @@ export function normalizeMotionPathNative(value: unknown): MotionPathNative | nu
     typeof record.path !== "string" || !record.path.trim() || record.path.length > 20_000 ||
     typeof record.ptsTypes !== "string" || record.ptsTypes.length > 2_000 ||
     (record.rAng !== undefined && !whole(record.rAng)) ||
+    (record.pathEditMode !== undefined && record.pathEditMode !== "fixed") ||
+    (record.reversed !== undefined && record.reversed !== true) ||
     (record.rCtr !== undefined &&
       !(Array.isArray(record.rCtr) && record.rCtr.length === 2 && record.rCtr.every(whole)))
   ) {
@@ -2206,6 +2242,8 @@ export function normalizeMotionPathNative(value: unknown): MotionPathNative | nu
     ptsTypes: record.ptsTypes,
     ...(record.rAng !== undefined ? { rAng: record.rAng as string } : {}),
     ...(record.rCtr !== undefined ? { rCtr: [String((record.rCtr as unknown[])[0]), String((record.rCtr as unknown[])[1])] as const } : {}),
+    ...(record.pathEditMode === "fixed" ? { pathEditMode: "fixed" as const } : {}),
+    ...(record.reversed === true ? { reversed: true as const } : {}),
   };
 }
 
@@ -2213,6 +2251,15 @@ export function normalizeMotionPathNative(value: unknown): MotionPathNative | nu
 export const MAX_MEDIA_CALL_DURATION_MS = 86_400_000;
 
 /** A media call's command, or null when the effect is no media call. */
+/**
+ * Whether a step's duration is not the author's to set: a media call's is
+ * its clip's, Random Effects' that of the effect each show picks (row 1041;
+ * PowerPoint greys it out).
+ */
+export function timelineStepDurationIsFixed(animation: unknown): boolean {
+  return animation === "random-effects" || presentationMediaCallCommand(animation) !== null;
+}
+
 export function presentationMediaCallCommand(
   animation: unknown,
 ): "playFrom(0.0)" | "togglePause" | null {
@@ -2958,6 +3005,43 @@ export function assignTimelineStepIds(
   return changed ? next : [...sequence];
 }
 
+/**
+ * A slide's steps rewritten whole by a command (the assistant's
+ * apply_slide_effect) with each step's identity: one it states stays; one
+ * it does not takes the identity of an unclaimed step the slide had that is
+ * the same step (so the effect it is keeps its place in the file: row 1095,
+ * the save pairs steps with the file's effects by identity), and any other
+ * a fresh one of its own -- never one derived from its position, which
+ * would name a step of the file it is not. Duplicates are re-keyed as
+ * `assignTimelineStepIds` does.
+ */
+export function identifyRewrittenTimelineSteps(
+  previous: readonly TimelineStep[] | undefined,
+  incoming: readonly TimelineStep[],
+  scope: string,
+): TimelineStep[] {
+  const content = (step: TimelineStep): string => {
+    const { id: _id, ...rest } = step;
+    return JSON.stringify(rest, Object.keys(rest).sort());
+  };
+  const unclaimed = new Map<string, string[]>();
+  const stated = new Set(incoming.map((step) => step.id).filter(Boolean));
+  for (const step of previous ?? []) {
+    if (!step.id || stated.has(step.id)) continue;
+    const key = content(step);
+    unclaimed.set(key, [...(unclaimed.get(key) ?? []), step.id]);
+  }
+  return assignTimelineStepIds(
+    incoming.map((step) => {
+      if (step.id) return step;
+      const same = unclaimed.get(content(step));
+      const id = same?.shift() ?? newTimelineStepId();
+      return { ...step, id };
+    }),
+    scope,
+  );
+}
+
 /** Build one menu-authored step only after the shared capability gate passes. */
 export function createAuthorableTimelineStep(
   blockId: string,
@@ -3103,8 +3187,15 @@ export function editTimelineStepEffectOption(
   // every paragraph's step together (PowerPoint's Effect Options).
   const build = timelineTextBuildRange(steps, index) ?? { first: index, last: index };
   return steps.map((step, stepIndex) => {
-    const copy = copyTimelineStep(step);
+    let copy = copyTimelineStep(step);
     if (stepIndex < build.first || stepIndex > build.last) return copy;
+    if (copy.effectSettings?.flyStart) {
+      // A new direction is PowerPoint's own Fly In: the file's flight from
+      // a whole slide away (row 1096) was that direction's spelling only.
+      const { flyStart: _flyStart, ...rest } = copy.effectSettings;
+      const { effectSettings: _settings, ...withoutSettings } = copy;
+      copy = Object.keys(rest).length > 0 ? { ...withoutSettings, effectSettings: rest } : withoutSettings;
+    }
     if (resolution.effectOption === undefined) {
       const { effectOption: _effectOption, ...withoutOption } = copy;
       return withoutOption;
@@ -3387,8 +3478,9 @@ export function editTimelineStepTiming(
     !timelineStepsEqual(current, expectedStep) ||
     !isTimelineTrigger(value.trigger) ||
     !isEditableAnimationTimingMs(value.delayMs) ||
-    // A media call's duration is its clip's: it stays as it is.
-    (presentationMediaCallCommand(current.animation) !== null
+    // A media call's duration is its clip's, Random Effects' the picked
+    // effect's: it stays as it is.
+    (timelineStepDurationIsFixed(current.animation)
       ? value.durationMs !== current.durationMs
       : !isEditableAnimationDurationMs(value.durationMs)) ||
     (current.trigger === value.trigger &&

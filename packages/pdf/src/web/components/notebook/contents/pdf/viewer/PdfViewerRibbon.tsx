@@ -1319,7 +1319,7 @@ export function PdfViewerRibbon({ ribbon }: { ribbon: PdfViewerRibbonModel }) {
             ? {
                 active: armedTextOrigin === "annotate",
                 disabled: loading,
-                icon: "comment",
+                icon: "textBox",
                 label: t("pdfComment.textComment"),
                 onInvoke: () => void executeFreeTextActivation("annotate"),
                 testId: "pdf-insert-text-comment",
@@ -1351,7 +1351,9 @@ export function PdfViewerRibbon({ ribbon }: { ribbon: PdfViewerRibbonModel }) {
           decoration: t("pdfStamp.title"),
           pages: t("pdf.viewer.pages"),
           pageFiles: pdfHomeDisplayLabels.splitMergeGroup,
-          pageNavigation: t("toolbar.ribbonInsertPages"),
+          // Not 页面 (the tab's first group is 页面 too): the page box and its
+          
+          pageNavigation: t("pdf.viewer.pageNavigation"),
           pageRotate: t("toolbar.ribbonPageView"),
         }}
       />
@@ -1482,7 +1484,9 @@ export function PdfViewerRibbon({ ribbon }: { ribbon: PdfViewerRibbonModel }) {
           output: pdfHomeDisplayLabels.outputGroup,
           splitMerge: pdfHomeDisplayLabels.splitMergeGroup,
           reading: t("toolbar.ribbonView"),
-          pageNavigation: t("toolbar.ribbonInsertPages"),
+          // The page box and its arrows' name: page navigation, as on the
+          
+          pageNavigation: t("pdf.viewer.pageNavigation"),
           pageView: t("toolbar.ribbonPageView"),
           edit: pdfHomeDisplayLabels.editGroup,
           translation: t("toolbar.translate"),

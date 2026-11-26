@@ -131,6 +131,11 @@ function knownKey(value: object): string | null {
 }
 
 /** Test seam: forget every remembered entry. */
+/** The entry this session read under `key` (any page part's table), or undefined. */
+export function knownPresentationDeckReceipt(key: string): unknown {
+  return sessionValues.get(key);
+}
+
 export function resetPresentationDeckReceiptsForTests(): void {
   sessionValues.clear();
   keyOfJson.clear();

@@ -27,6 +27,7 @@ import { inkLightWanted } from "./inkLightSwitch";
 import { inkStrokeBoxOnSheet, inkStrokeCanvas, outOfFlowStrokeElement, type InkStrokeBox } from "./inkStrokePlacement";
 import { paginationLayoutScale } from "./paginationGeometry";
 import { SHEET_DORMANT_ATTR } from "./sheetDormancy";
+import { tabMeasureMutation } from "./tabMeasureMark";
 
 /** On a stroke's empty element while its sheet's layer draws it. */
 export const INK_LIGHT_ATTR = "data-ink-light";
@@ -937,6 +938,7 @@ class InkLightStore {
   private observe(records: readonly MutationRecord[]): void {
     let changed = false;
     for (const record of records) {
+      if (tabMeasureMutation(record)) continue;
       const target = record.target.nodeType === 1 ? (record.target as Element) : record.target.parentElement;
       if (!target) continue;
       if (record.type === "attributes" && target.matches(SHEET_SELECTOR) && target.parentElement === this.view.dom) {

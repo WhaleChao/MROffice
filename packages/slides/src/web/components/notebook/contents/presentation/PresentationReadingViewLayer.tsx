@@ -17,6 +17,8 @@
 
 import presentationChrome from "@mrnote/core/web/lib/presentation/presentation-window-shell.module.css";
 import { PresentationSlideView } from "./PresentationSlideView";
+import { PresentationEngineLinkSurfaceContext, PresentationTextEngineSurfaceContext } from "./PresentationEngineTextBody";
+import { textEngineEnabled } from "@mrnote/core/web/lib/text-engine/flags.ts";
 import {
   PresentationHeaderFooterOverlay,
   presentationHeaderFooterPlacement,
@@ -78,7 +80,10 @@ export function PresentationReadingViewLayer({ ctl }: { ctl: PresentationReading
                 {/* Links inside the slide work here as in the show (PPT-B065):
                     a link to a slide opens it, even a hidden one it names,
                     and Next / Previous / First / Last actions move through
-                    the deck. */}
+                    the deck. The slide's words as the show draws them, by the
+                    text engine (TRIAGE 181, `slides-present`). */}
+                <PresentationTextEngineSurfaceContext.Provider value={textEngineEnabled("slides-present")}>
+                <PresentationEngineLinkSurfaceContext.Provider value="show">
                 <PresentationSlideView
                   slide={activeSlide}
                   slideNumber={activeIndex + (activeSlideHeaderFooter?.firstSlideNumber ?? 1)}
@@ -143,6 +148,8 @@ export function PresentationReadingViewLayer({ ctl }: { ctl: PresentationReading
                     if (target >= 0 && target < live.length) setActiveIndex(target);
                   }}
                 />
+                </PresentationEngineLinkSurfaceContext.Provider>
+                </PresentationTextEngineSurfaceContext.Provider>
               </div>
               {/* WPS's reading view keeps a status bar rather than a floating
               HUD: the deck is being read beside other windows, not projected. */}

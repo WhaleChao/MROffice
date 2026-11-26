@@ -45,14 +45,23 @@ export function showTray(actions: TrayActions): Promise<void> {
     }
     tray = new Tray(icon);
     tray.setToolTip(actions.name);
-    tray.setContextMenu(
-      Menu.buildFromTemplate([
-        { label: actions.openLabel, click: () => actions.open() },
-        { type: "separator" },
-        { label: actions.quitLabel, click: () => actions.quit() },
-      ]),
-    );
+    setTrayMenu(actions);
     tray.on("click", () => actions.open());
   })();
   return showing;
+}
+
+function setTrayMenu(actions: TrayActions): void {
+  tray?.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: actions.openLabel, click: () => actions.open() },
+      { type: "separator" },
+      { label: actions.quitLabel, click: () => actions.quit() },
+    ]),
+  );
+}
+
+/** The tray's menu again, in the app's language now (a tray not shown: nothing). */
+export function relabelTray(actions: TrayActions): void {
+  if (tray && !tray.isDestroyed()) setTrayMenu(actions);
 }

@@ -21,6 +21,7 @@ import katex from "katex";
 import { KATEX_DRAWABLE_STRICT_CODES, katexStrict, prepareLatexForKatex } from "../../../../lib/katex-render";
 import { equationSlotTrust, latexWithSlotsDrawn } from "./equationLiveLatex";
 import { sheetsOf } from "../native-document/paged/sheetMeasureMemo";
+import { requestQuietFrame } from "../../../../lib/canvas-gesture";
 
 // Shared lazy-KaTeX machinery for the math node views.
 //
@@ -602,7 +603,11 @@ function sweepNearView(): void {
 function scheduleNearViewSweep(): void {
   if (sweepScheduled || typeof requestAnimationFrame === "undefined") return;
   sweepScheduled = true;
-  requestAnimationFrame(() => {
+  // Every scroll of the page asks for it, the canvas's pan and zoom too: it
+  // reads the boxes of every Word document's sheets (0.7 s of layout a frame
+  // in WebKit while a desk zooms). During a canvas gesture it waits for the
+  // first frame after it (lib/canvas-gesture).
+  requestQuietFrame(window, () => {
     sweepScheduled = false;
     sweepNearView();
   });

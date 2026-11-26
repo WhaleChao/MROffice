@@ -659,6 +659,26 @@ export function nativeBulletGlyph(
   return { text: isSymbolPrivateUse(char) ? "\u2022" : char };
 }
 
+/**
+ * Whether `nativeBulletGlyph` would GUESS the marker where its face is not
+ * drawn: a symbol-encoded face's character (Wingdings, Symbol, Webdings, or a
+ * private-use code point) with no stand-in measured against PowerPoint. The
+ * text engine's table cells refuse such a marker (readings row 1036) rather
+ * than draw a plain bullet or the character's Latin letter.
+ */
+export function nativeBulletGlyphIsGuess(
+  marker: Pick<NativeBulletMarker, "char" | "typeface">,
+  glyph: { text: string; fontFamily?: string } | undefined,
+): boolean {
+  if (marker.char === undefined || marker.typeface === undefined || glyph?.fontFamily !== undefined) return false;
+  const char = drawnBulletChar(marker.char);
+  if (SYMBOL_FONT_UNICODE_FALLBACK[`${marker.typeface}:${char}`] !== undefined) return false;
+  return isSymbolPrivateUse(char) || SYMBOL_ENCODED_FACE.test(marker.typeface.trim());
+}
+
+/** Faces whose characters are symbols stored at Latin code points. */
+const SYMBOL_ENCODED_FACE = /^(wingdings( 2| 3)?|webdings|symbol|marlett|mt extra|monotype sorts|zapf ?dingbats|starsymbol|opensymbol)$/i;
+
 /** One character in the range a symbol font's glyphs are stored shifted into (U+F020-U+F0FF). */
 function isSymbolPrivateUse(text: string): boolean {
   const code = text.length === 1 ? text.charCodeAt(0) : -1;

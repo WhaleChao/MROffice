@@ -5785,7 +5785,12 @@ textarea[data-pdf-native-text-format-preview="true"] + [data-office-inactive-sel
 
 .pdf-viewer__statusbar {
   position: absolute;
-  right: 16px;
+  /* Beside a card docked at the right (the Comments card, Format Shape),
+     not under it: the card runs to 8px above the window's bottom, over the
+     pill's place, and its z-index (30) took the page number and the zoom
+     dial from the pointer (a 1020px window with Comments open). The cards'
+     reach is published by useOfficeTaskPaneCover (pdfTaskPaneDock.tsx). */
+  right: calc(16px + var(--office-task-pane-cover-right, 0px));
   bottom: 10px;
   z-index: 6;
   margin: 0;

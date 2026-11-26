@@ -8,11 +8,15 @@ import {
   isSavedPageHotCacheScopeCurrent,
   type SavedPageHotCacheScope,
 } from "@mrnote/core/web/lib/saved-page-hot-cache.ts";
+import { sanitizeInsertedPageId } from "@mrnote/core/web/lib/pdf/inserted-page-identity.ts";
 
 export interface PdfOrdinaryNoteInputDraft {
   readonly id: string;
   readonly text: string;
   readonly page?: number;
+  /** The inserted page the note is on (`page` is then the page before it):
+   * lib/pdf/inserted-page-identity. */
+  readonly insertedPageId?: string;
   readonly createdAt?: string;
   readonly submittedText?: string;
 }
@@ -41,6 +45,7 @@ function validDraft(value: unknown): value is PdfOrdinaryNoteInputDraft {
   return typeof draft.id === "string" && /^[a-zA-Z0-9-]{1,128}$/.test(draft.id) &&
     typeof draft.text === "string" && draft.text.length <= MAX_TEXT &&
     (draft.page === undefined || (Number.isSafeInteger(draft.page) && draft.page > 0 && draft.page <= 10_000)) &&
+    (draft.insertedPageId === undefined || sanitizeInsertedPageId(draft.insertedPageId) !== null) &&
     (draft.createdAt === undefined || (typeof draft.createdAt === "string" && draft.createdAt.length <= 40 && Number.isFinite(Date.parse(draft.createdAt)))) &&
     (draft.submittedText === undefined || (typeof draft.submittedText === "string" && draft.submittedText.length <= MAX_TEXT));
 }

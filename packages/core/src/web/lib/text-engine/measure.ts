@@ -36,6 +36,12 @@ export interface EngineFont {
   /** Apply the faces' pair kerning (PowerPoint `kern`, Word `w:kern`);
    * Excel and Word body text by default do not. */
   readonly kerning?: boolean;
+  /** With `kerning`: which of Office's recorded pairs a served stand-in kerns
+   * by. `"slides"`: PowerPoint for Windows' (office-kerning's `slides` table:
+   * the face's legacy `kern` table as Windows' GDI names its pairs, triage
+   * TRIAGE 120, t27-t29); else the face's kern feature, as Word and Office for
+   * Mac apply it. */
+  readonly kerningTable?: "slides";
   /** Follow a local()-only face that is not installed to the family's
    * earlier faces, as the browser does (Docs); otherwise such a face leaves
    * the text to the browser. */
@@ -45,6 +51,11 @@ export interface EngineFont {
    * (the measurement says `approximate`), instead of leaving it to the
    * browser: a plan over pages not laid out yet, which the page corrects. */
   readonly approximateInstalled?: boolean;
+  /** Lay each glyph's own advance (hmtx x size, before kerning) on this grid, in
+   * CSS px: PowerPoint for Windows sets a glyph at its advance rounded to 1/8 pt
+   * and adds the pair's kerning unrounded (TRIAGE 178: t28/t28b/t28c, Aptos 28
+   * and 40 pt, every character's BoundLeft). */
+  readonly advanceQuantumPx?: number;
 }
 
 export interface MeasuredGrapheme {
@@ -267,8 +278,9 @@ export function graphemesOf(text: string): string[] {
 export function measureText(text: string, font: EngineFont): Measurement {
   refreshEpoch();
   const fontKey = `${font.stack}\u0000${font.weight}\u0000${font.italic ? 1 : 0}${font.followLocalOnly ? "\u0000l" : ""}${font.approximateInstalled ? "\u0000a" : ""}`;
-  const kerningKey = font.kerning ? "\u0000k" : "";
-  const textKey = `${fontKey}\u0000${font.sizePx}${kerningKey}\u0000${text}`;
+  const kerningKey = font.kerning ? (font.kerningTable === "slides" ? "\u0000ks" : "\u0000k") : "";
+  const quantumKey = font.advanceQuantumPx ? `\u0000q${font.advanceQuantumPx}` : "";
+  const textKey = `${fontKey}\u0000${font.sizePx}${kerningKey}${quantumKey}\u0000${text}`;
   const known = textCache.get(textKey);
   if (known) return known;
   let perFont = graphemeCache.get(fontKey);
@@ -295,13 +307,15 @@ export function measureText(text: string, font: EngineFont): Measurement {
       remember(textKey, result);
       return result;
     }
-    const advance = answer.em * font.sizePx + (answer.syntheticBold ? boldExtra : 0);
+    const own = answer.em * font.sizePx;
+    const quantum = font.advanceQuantumPx;
+    const advance = (quantum ? Math.round(own / quantum) * quantum : own) + (answer.syntheticBold ? boldExtra : 0);
     // Pair kerning moves the previous glyph's advance, within one face.
     if (font.kerning && previous?.metrics && previous.metrics === answer.metrics &&
         previous.lastGlyph !== undefined && answer.firstGlyph !== undefined && graphemes.length) {
       // A served stand-in of an Office family kerns by Office's pairs.
       const office = previous.face && previous.lastCode !== undefined && answer.firstCode !== undefined
-        ? officePairKerning(previous.face, font.weight, font.italic, previous.lastCode, answer.firstCode)
+        ? officePairKerning(previous.face, font.weight, font.italic, previous.lastCode, answer.firstCode, font.kerningTable)
         : null;
       if (office === "pending") pending = true;
       // A deck's embedded face (presentation-embedded-fonts' MRAI-Deck-*

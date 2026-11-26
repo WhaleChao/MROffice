@@ -30,7 +30,7 @@ import {
 } from "@mrnote/core/web/lib/presentation-format-painter.ts";
 import { applyRunFormat, normalizeRuns, runsFromText, textFromRuns, type RunStyle } from "@mrnote/core/web/lib/presentation-point-runs.ts";
 import { pictureBorderIsOpaque } from "./presentation-picture-effects";
-import { presentationBlockWithFontColor } from "@mrnote/core/web/lib/presentation-run-text-paint.ts";
+import { presentationBlockWithFontColor, presentationBlockWithoutFlatTextFills } from "@mrnote/core/web/lib/presentation-run-text-paint.ts";
 import { shapeBlockWithPatch } from "@mrnote/core/web/lib/presentation-shape-buttons.ts";
 import {
   flatRunsFromParagraphs,
@@ -174,6 +174,9 @@ export function paintPresentationBlockFormat(block: PresentationBlock, plan: For
     const runPatch = formatPaintRunStylePatch(plan);
     if (runPatch && Object.hasOwn(runPatch, "color")) {
       next = presentationBlockWithFontColor(next, runPatch.color || undefined);
+      // A source colour not seen through paints the target's opaque: its
+      // Transparency (readings row 1052) is the colour's, copied with it.
+      if (!runPatch.textPaint) next = presentationBlockWithoutFlatTextFills(next);
     }
   }
   // The source's whole text frame (`a:bodyPr`), the target's own taken off

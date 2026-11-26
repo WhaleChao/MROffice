@@ -22508,9 +22508,12 @@ html[data-reduce-motion] .cnd-template-thumb .book3d__cover {
 }
 
 /* Dark surfaces flip the fixed letter ink to paper so MR stays legible;
-   the hat keeps following the accent. */
+   the hat keeps following the accent. The notebook side panel holds MR
+   Office's lockup in its head (OfficeSidebarHead), drawn on the panel's
+   graphite as well. */
 [data-theme-mode="dark"] .global-sidebar-brand-mark,
-[data-theme-mode="high-contrast"] .global-sidebar-brand-mark {
+[data-theme-mode="high-contrast"] .global-sidebar-brand-mark,
+:is([data-theme-mode="dark"], [data-theme-mode="high-contrast"]) .notebook-side-panel {
   --logo-ink: #efe9e1;
 }
 .global-sidebar-brand-name {
@@ -29769,16 +29772,20 @@ html[data-platform="other"][data-theme-mode="high-contrast"] :is(.note-window-sc
 }
 
  
-html[data-ink-armed],
-html[data-ink-armed] *:not(input):not(textarea):not(select) {
-  -webkit-user-select: none !important;
-  user-select: none !important;
-  -webkit-touch-callout: none !important;
+@media (any-pointer: coarse) {
+  html[data-ink-armed],
+  html[data-ink-armed] *:not(input):not(textarea):not(select) {
+    -webkit-user-select: none !important;
+    user-select: none !important;
+    -webkit-touch-callout: none !important;
+  }
 }
 
  
-html[data-ink-armed] {
-  touch-action: manipulation;
+@media (any-pointer: coarse) {
+  html[data-ink-armed] {
+    touch-action: manipulation;
+  }
 }
 
  

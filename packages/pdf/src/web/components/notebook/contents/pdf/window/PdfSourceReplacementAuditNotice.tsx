@@ -42,6 +42,15 @@ export function PdfSourceReplacementAuditNotice({
         title={t("pdf.pageWindow.sourceReplacement")}
         label={t("pdf.pageWindow.sourceReplacement")}
         scopeKey={`${pageId}:${sourceReplacementAudit.replacement.filename}`}
+        // Information, not a question: shown as Word's message bar is, in the
+        // window's corner, without taking the keyboard or holding the window
+        // (as the recovered-copies and unsaved-ink notices are). As a dialog
+        // it made the whole PDF window inert on every open of a replaced PDF
+        // -- closing it did not keep it closed (each open remounts it) -- so
+        // the pages, the ribbon and a reference's "Pick again" card could not
+        // be pressed until it was dismissed again (notion-lab 3610,
+        
+        passive
       >
         <div
           className="pdf-page-window__source-replacement-status"

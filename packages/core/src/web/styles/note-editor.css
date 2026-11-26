@@ -546,6 +546,21 @@ img.ProseMirror-separator {
   z-index: var(--picture-float-rank, auto);
 }
 
+/* ...and cut at the paper's edge on screen, as Word draws it
+   (`--picture-paper-clip` from floatingTextBoxLayout: what the picture runs
+   past the page). The wrapper is not cut, so its selection chrome stays
+   whole. Not in print: the print copy ends such a picture's box at the
+   paper itself and the page box cuts the rest (structuralPrint's
+   pictureEndingAtPaper); cut here as well, the picture lost its last
+   2-17 px above the paper's edge (R286, sheets 22-31 printed). */
+@media screen {
+  .note-editor-image-resizable[data-float-mode="overlay"] > img,
+  .note-editor-image-resizable[data-float-mode="overlay"] > .note-editor-picture-style-layer,
+  .note-editor-image-resizable[data-float-mode="overlay"] > [data-picture-border] {
+    clip-path: var(--picture-paper-clip, none);
+  }
+}
+
 /* The generic note-image decoration gives the img itself 0.75rem of vertical
    margin; inside the inline wrapper that margin sat between the picture's
    bottom and the wrapper's bottom edge (its baseline), so the text line hung
@@ -4137,6 +4152,15 @@ body.note-editor-object-moving * {
 .ProseMirror .document-find-match.document-find-match--current,
 .office-find-highlights .document-find-match.document-find-match--current {
   background: #ff9632;
+}
+
+/* A Word preview's table too large to show: the sentence in the reader's
+   language stands in for the paragraph's English words (oversizedTablePlaceholder). */
+.ProseMirror .document-oversized-table-text {
+  display: none;
+}
+.ProseMirror .document-oversized-table-label {
+  font-style: italic;
 }
 
 /* Selection Pane > Hide: the object stays in the document, undrawn. */
@@ -17649,6 +17673,11 @@ html[data-mobile-layout="on"]
   position: relative;
   width: 100%;
   min-height: 0;
+  /* As in the web layout: the sheet's size containment keeps a page at its
+     paper height, and with min-height 0 here every sheet was 0px tall, each
+     page's lines painted over the first page's. This view has no paper; the
+     sheet is as tall as its lines. */
+  contain: none;
   max-height: none !important;
   margin: 0;
   padding: 0;
@@ -17777,6 +17806,11 @@ html[data-mobile-layout="on"]
   position: relative;
   width: 100%;
   min-height: 0;
+  /* As in the web layout: the sheet's size containment keeps a page at its
+     paper height, and with min-height 0 here every sheet was 0px tall, each
+     page's lines painted over the first page's. This view has no paper; the
+     sheet is as tall as its lines. */
+  contain: none;
   max-height: none !important;
   margin: 0;
   padding: 0;
@@ -25704,4 +25738,10 @@ button.office-ribbon-group-launcher.office-ribbon-group-launcher[aria-pressed="t
   .ai-panel-main[data-landing-motion] > :is(.ai-panel-landing-title, .ai-panel-composer) {
     transition: none;
   }
+}
+
+ 
+[data-tab-measure-unjustified] {
+  text-align: start !important;
+  text-align-last: start !important;
 }

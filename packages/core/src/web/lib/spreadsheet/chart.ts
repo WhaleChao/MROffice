@@ -2891,6 +2891,18 @@ function chartRefCellsGone(ref: unknown): boolean {
   return typeof ref === "string" && ref.includes("#REF!");
 }
 
+/** The category reference the chart's shown category axis reads: the first
+ * series', else -- that series on the secondary axis, stating none -- the
+ * first primary series' that states one. R490-X01's Figure 1: columns on the
+ * secondary axis (its category axis deleted) with no categories, and the
+ * primary line's 'Table 1'!$B$5:$M$5, which label Excel's bottom axis
+ * "Sep 22 .. Aug-23" where this drew 1 .. 12. */
+function chartAxisCategoryRef(refs: readonly SpreadsheetChartSeriesRef[]): string | undefined {
+  const first = refs[0];
+  if (!first || first.categories || first.axis !== "secondary") return first?.categories;
+  return refs.find((ref) => ref.axis !== "secondary" && ref.categories)?.categories;
+}
+
 export function buildChartSeriesFromRefs(
   rawRefs: unknown,
   chartType: SpreadsheetChartType,
@@ -2902,6 +2914,7 @@ export function buildChartSeriesFromRefs(
 ): string[][] {
   const refs = normalizeChartSeriesRefs(rawRefs);
   if (!refs) return [];
+  const axisCategories = chartAxisCategoryRef(refs);
   if (chartType === "scatter" || chartType === "bubble") {
     const xySeries = buildChartXYSeriesFromRefs(
       refs,
@@ -2976,7 +2989,7 @@ export function buildChartSeriesFromRefs(
   // serials), not the text their format writes ("10-May" names no year).
   // Cells that are not all dates keep their text, as Excel's axis falls back.
   const dateValues = options.dateCategories
-    ? valuesForChartRef(refs[0]?.categories, sheetName, valueCells, workbook?.value)
+    ? valuesForChartRef(axisCategories, sheetName, valueCells, workbook?.value)
     : null;
   const datedValues =
     dateValues && dateValues.every((value) => value.trim() === "" || /^\d+(\.\d+)?$/.test(value.trim()))
@@ -2985,17 +2998,17 @@ export function buildChartSeriesFromRefs(
   const statedCategories =
     datedValues ??
     (chartType === "treemap" || chartType === "sunburst"
-      ? hierarchyLabelsForChartRef(refs[0]?.categories, sheetName, displayCells, workbook?.display)
+      ? hierarchyLabelsForChartRef(axisCategories, sheetName, displayCells, workbook?.display)
       : null) ??
     valuesForChartRef(
-      refs[0]?.categories,
+      axisCategories,
       sheetName,
       displayCells,
       workbook?.display,
     ) ??
     // XLS-A107: a multi-level category area labels each point with its
     // innermost line; the outer lines are its levels.
-    multiLevelCategoriesForChartRef(refs[0]?.categories, sheetName, displayCells, workbook?.display)?.labels ??
+    multiLevelCategoriesForChartRef(axisCategories, sheetName, displayCells, workbook?.display)?.labels ??
     null;
   // A category range shorter than the longest series names the points it
   // reaches; the rest are numbered from their place, as with no categories.

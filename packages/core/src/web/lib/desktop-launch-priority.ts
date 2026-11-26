@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { holdKeysForOpeningDocument } from "./editor/held-keys";
 import { IS_DESKTOP_CLASSIC } from "./desktop-classic";
 import { documentShown, pageSpeaks } from "./desktop-instant";
 import { PRESENTATION_FIRST_SLIDE_PAINTED_EVENT } from "./presentation/first-slide-painted";
@@ -133,6 +134,9 @@ if (IS_DESKTOP_CLASSIC && typeof window !== "undefined") {
     // page) before it is drawn, and the reads let go then were answered on
     
     const named = typeof (first as { name?: unknown }).name === "string" ? (first as File).name : "";
+    // A Word document: what is typed from now on is held until its editor
+    // takes it, before even its window exists (lib/editor/held-keys).
+    if (/\.(docx?|dotx?|docm|dotm|rtf|odt)$/i.test(named)) holdKeysForOpeningDocument();
     if (/\.pdf$/i.test(named) || (first as { type?: unknown }).type === "application/pdf") return;
     holdReadsWhileDocumentOpens(typeof (first as { name?: unknown }).name === "string" ? (first as File).name : null, OPENING_IMPORT_HOLD_MS);
   }, true);

@@ -132,6 +132,15 @@ function markedSides(style: OwnEdgeCell["style"] | undefined): Side[] {
   return Array.isArray(raw) ? raw.filter((side): side is Side => side === "top" || side === "right" || side === "bottom" || side === "left") : [];
 }
 
+/** Whether a cell still carries sides a table laid on it (`tableEdges`):
+ *  copied or moved to where no table draws them, they come off there
+ *  (`cellsWithTableOwnEdges` with that place's tables, none at all on a sheet
+ *  without any). */
+export function cellHasTableEdgeMarks(cell: unknown): boolean {
+  if (!cell || typeof cell !== "object") return false;
+  return markedSides((cell as OwnEdgeCell).style).length > 0;
+}
+
 
 
 

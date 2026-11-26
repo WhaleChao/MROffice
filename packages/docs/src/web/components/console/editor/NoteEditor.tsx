@@ -144,6 +144,7 @@ import {
 } from "@mrnote/core/web/lib/page-import-capabilities.ts";
 import { useWindowManagerActions } from "@mrnote/core/web/components/notebook/WindowManager.tsx";
 import { EditorLoadingState } from "@mrnote/core/web/components/ui/editor-loading-state.tsx";
+import { useLocalFilePreviewInScope } from "@mrnote/core/web/components/ui/local-file-preview-context.ts";
 import BacklinksPanel from "@mrnote/core/web/components/console/editor/BacklinksPanel.tsx";
 import CommentsPanel from "@mrnote/core/web/components/console/editor/CommentsPanel.tsx";
 import DocumentOutlinePanel from "./DocumentOutlinePanel";
@@ -265,6 +266,7 @@ import { createNativeDocumentCommandBus } from "./native-document/commandBus";
 import { DocumentWorkbookPersistenceContext } from "./extensions/DocumentWorkbookPersistence";
 import { selectionNearInlineContent } from "@mrnote/core/web/components/console/editor/native-document/safeTextSelection.ts";
 import { documentCaretPlaceFrom, documentCaretPosition, documentCaretTopBlock, documentHandoverPlace, type DocumentCaretPlace } from "./native-document/documentCaretPlace";
+import { assertPageKey } from "@mrnote/core/web/lib/page-key-guard.ts";
 import { heldKeysFrom, heldKeysGiven, holdKeysThroughHandover, keyHeldForDocument, typeHeldKeys, viewTakesInputNow, type HandoverKeys, type HeldKeysTarget } from "@mrnote/core/web/lib/editor/held-keys.ts";
 import { hasPageReveal, subscribePageReveal, takePageReveal } from "@mrnote/core/web/lib/page-reveal.ts";
 import { trackInsertionRange, type LiveInsertionRange } from "./native-document/liveInsertionRange";
@@ -820,6 +822,7 @@ function readDocsRecoveryConflicts(pageId: string): DocsRecoveryConflict[] {
   }
 }
 function writeDocsRecoveryConflicts(pageId: string, conflicts: DocsRecoveryConflict[]): void {
+  assertPageKey(pageId, "NoteEditor writeDocsRecoveryConflicts");
   try {
     if (conflicts.length) window.localStorage.setItem(`${DOCS_CONFLICTS_PREFIX}${pageId}`, JSON.stringify(conflicts));
     else window.localStorage.removeItem(`${DOCS_CONFLICTS_PREFIX}${pageId}`);
@@ -849,6 +852,7 @@ const DOCS_CLOSING_SAVE_HEARD_MS = 8_000;
  * of the page (localStorage: written synchronously, as a closing tab must). */
 const DOCS_CLOSING_SAVE_KEY = "mrai.docs.closingSave:";
 function noteDocsClosingSave(pageId: string): void {
+  assertPageKey(pageId, "NoteEditor noteDocsClosingSave");
   try { window.localStorage.setItem(DOCS_CLOSING_SAVE_KEY + pageId, String(Date.now())); } catch { /* best effort */ }
 }
 function readDocsClosingSave(pageId: string): number | null {
@@ -908,6 +912,7 @@ function readPagePreviewPreference(pageId: string): boolean | null {
 }
 
 function writePagePreviewPreference(pageId: string, enabled: boolean): void {
+  assertPageKey(pageId, "NoteEditor writePagePreviewPreference");
   try {
     window.localStorage.setItem(
       pagePreviewStorageKey(pageId),
@@ -2259,6 +2264,24 @@ function runDocumentShortcut(editor: Editor, shortcut: "undo" | "redo" | "select
 const loadPageFileImport = () => import("@mrnote/core/web/lib/page-file-import.ts");
 const loadHtmlDocumentImport = () => import("../../../lib/document-import/htmlDocument");
 
+/**
+ * The editor's loading card. With no page yet (pagePending: a Word file's
+ * window while its import runs) it says the import's step, read here and not
+ * in the editor: the step changes a few times a second, and the whole editor
+ * re-rendered with it.
+ */
+function DocumentLoadingCard({ pagePending }: { pagePending: boolean }) {
+  const t = useTranslations("console-notebooks");
+  const importStatus = useLocalFilePreviewInScope()?.status ?? null;
+  return (
+    <EditorLoadingState
+      kind="document"
+      label={pagePending ? importStatus ?? t("pages.importMakingPage") : t("common.loadingDocument")}
+      testId="note-editor-loading"
+    />
+  );
+}
+
 export default function NoteEditor({
   pageId,
   surfaceMode = "editor",
@@ -2300,6 +2323,12 @@ export default function NoteEditor({
   // keeps the preview's refusals.
   const [chromeLocked] = useState(() => surfaceMode === "locked");
   const guestMode = previewMode || guestModeProp;
+  // No page yet: a Word file's window mounted its editor while the file is
+  // read (lib/document-import/pending-document-host). Until the page id
+  // arrives the editor shows its loading card, takes no input (the window
+  // holds what is typed, lib/editor/held-keys) and reads or writes nothing
+  // keyed by a page; the page id then binds through the page-change path.
+  const pagePending = !pageId && !guestMode;
   const onGuestExportRequest = guestMode ? onGuestExportRequestProp : undefined;
   const enableGuestBandEditing = !previewMode && enableGuestBandEditingProp;
   const t = useTranslations("console-notebooks");
@@ -2986,11 +3015,20 @@ export default function NoteEditor({
   // render (the read this editor takes): seen as an ordinary page until its
   // page was in, it built the editor three times (a room session for an
   // ordinary page, then none), each with every plugin view.
-  const [documentPartsPage, setDocumentPartsPage] = useState(() => {
-    if (knownDocumentPartsPage(pageId)) return true;
-    const prefetched = pageId ? settledEditorPageRead(pageId) : null;
+  const partsPageKnownFor = (id: string) => {
+    if (knownDocumentPartsPage(id)) return true;
+    const prefetched = id ? settledEditorPageRead(id) : null;
     return Boolean(prefetched && documentPartsCount(prefetched.content_json) > 1);
-  });
+  };
+  const [documentPartsPage, setDocumentPartsPage] = useState(() => partsPageKnownFor(pageId));
+  // An editor mounted before its page existed (pagePending) asks the same
+  // when the page id arrives, as a first render would have.
+  const [partsAskedFor, setPartsAskedFor] = useState(pageId);
+  if (partsAskedFor !== pageId) {
+    setPartsAskedFor(pageId);
+    const parts = !partsAskedFor && partsPageKnownFor(pageId);
+    if (parts && !documentPartsPage) setDocumentPartsPage(true);
+  }
   const layoutSnapshotsAskedFor = useRef<string | null>(null);
   // The rows a long document may open on are asked for beside the page
   // itself: asked once its content was in, they missed the opening's hold on
@@ -3050,7 +3088,7 @@ export default function NoteEditor({
         documentBodyCutNeedsSaying(documentPartsStoredBodyRef.current, prepared) ? { large_removal: true } : {}) };
   }, []);
   const documentCausalModel = useDocumentCausalModel({
-    enabled: USE_COLLAB_EDITING && !guestMode && !documentPartsPage,
+    enabled: USE_COLLAB_EDITING && !guestMode && !documentPartsPage && !pagePending,
     pageId,
     principalScope: principalScope?.principal
       ? JSON.stringify([workspaceId, principalScope.principal, principalScope.sessionEpoch]) : null,
@@ -3375,7 +3413,7 @@ export default function NoteEditor({
     USE_COLLAB_EDITING,
     guestMode,
     enableGuestBandEditing,
-  ) && !documentPartsPage;
+  ) && !documentPartsPage && !pagePending;
   const collabLocalOnly =
     guestMode ||
     autosave.isLocalAuthorityPending ||
@@ -4656,7 +4694,7 @@ export default function NoteEditor({
 
   // One live predicate owns every document write surface, including page
   // title and async imports that sit outside ProseMirror's transaction guard.
-  const underlyingShellWriteAllowed = !previewMode && documentShellWriteAllowed({
+  const underlyingShellWriteAllowed = !previewMode && !pagePending && documentShellWriteAllowed({
     collaborationEnabled,
     collaborationSessionReady: Boolean(collabSession),
     guestMode,
@@ -10835,11 +10873,37 @@ export default function NoteEditor({
   
   const saveCurrentDraftForServerExport =
     useCallback(async (): Promise<number> => {
-      const settledBlocks = readSettledDocumentContentVersion("document") ?? readSettledDocumentContentVersion("blocks");
-      if (settledBlocks !== null) return settledBlocks;
+      // A save made while the pen wrote left the pagination records out and
+      // owes the settle save, sent INK_LAYOUT_SETTLE_MS after the pen lifted.
+      // The export pinned the version before it and that save landed while
+      // the server printed: refused (page_version_conflict) and printed again
+      
+      // document, 8.4 s refused + 12.5 s printed). The person left the pen to
+      // ask for the file: the settle save owed (before this call, or by the
+      // flush it makes) is made now, with its records, and the export pins
+      // the version it leaves. Off: window.__docsExportSettlesInk = false.
+      const settleOwed = async (): Promise<number | null> => {
+        if (
+          !paginationDeferredRef.current ||
+          (typeof window !== "undefined" &&
+            (window as Window & { __docsExportSettlesInk?: boolean }).__docsExportSettlesInk === false)
+        ) return null;
+        if (paginationSettleTimerRef.current !== null) window.clearTimeout(paginationSettleTimerRef.current);
+        paginationSettleTimerRef.current = null;
+        paginationDeferredRef.current = false;
+        paginationSettleRetriesRef.current = 0;
+        const saved = await saveSettledCurrentDocument();
+        return saved && saved.contentVersion !== null ? saved.contentVersion : null;
+      };
       saveCallerRef.current = "export";
-      try { return await saveCurrentDraftForVersionWrite(); } finally { saveCallerRef.current = null; }
-    }, [readSettledDocumentContentVersion, saveCurrentDraftForVersionWrite]);
+      try {
+        const owed = await settleOwed();
+        if (owed !== null) return owed;
+        const version = readSettledDocumentContentVersion("document") ??
+          readSettledDocumentContentVersion("blocks") ?? await saveCurrentDraftForVersionWrite();
+        return (await settleOwed()) ?? version;
+      } finally { saveCallerRef.current = null; }
+    }, [readSettledDocumentContentVersion, saveCurrentDraftForVersionWrite, saveSettledCurrentDocument]);
 
   // The Copilot binds selected blocks at a saved version and nothing else, so
   // the root state an opened editor fills in by itself (schema defaults, the
@@ -12179,9 +12243,9 @@ export default function NoteEditor({
   // document's (WindowGlyph reads `pageVariant`). A window opened from a list
   // knows only the page type; the page's body says which document it is.
   useEffect(() => {
-    if (!windowId || !usableEditor || previewMode) return;
+    if (!windowId || !usableEditor || previewMode || pagePending) return;
     updateWindowMeta(windowId, { pageVariant: isHandwriting ? "handwriting" : null });
-  }, [isHandwriting, usableEditor, previewMode, updateWindowMeta, windowId]);
+  }, [isHandwriting, usableEditor, previewMode, pagePending, updateWindowMeta, windowId]);
   // Confirmed draft: the ribbon slides in over the page, the text stays put.
   const agentDraftRevealing = useAgentDraftRevealing(pageId);
   const getEditorDom = useCallback(
@@ -13103,18 +13167,13 @@ export default function NoteEditor({
   }
 
   if (
+    pagePending ||
     !usableEditor ||
     !editorHydrated ||
     (!guestMode && autosave.loading) ||
     !documentOfficeDataSettled
   ) {
-    return (
-      <EditorLoadingState
-        kind="document"
-        label={t("common.loadingDocument")}
-        testId="note-editor-loading"
-      />
-    );
+    return <DocumentLoadingCard pagePending={pagePending} />;
   }
 
   return (

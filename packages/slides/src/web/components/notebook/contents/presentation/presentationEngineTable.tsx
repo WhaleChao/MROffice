@@ -39,24 +39,30 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { useContext, useEffect, useMemo, useState, type CSSProperties, type ReactElement } from "react";
+import { officeTextPaintFlatFill, officeTextSvgFill } from "@mrnote/core/web/lib/office-text-paint.ts";
 import type { PresentationTableBlock, PresentationTableCell } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
 import { layoutOfficeTextBody, type OfficeParagraphInput, type OfficeTextBodyLayout, type OfficeTextFont } from "@mrnote/core/web/lib/text-engine/office-text-body.ts";
 import { pageOfficeTextMeasurer } from "@mrnote/core/web/lib/text-engine/office-text-measurer.ts";
 import { powerPointLineLanguage } from "@mrnote/core/web/lib/text-engine/powerpoint-east-asian.ts";
-import { normalizeParagraphEastAsianLines, type ParagraphEastAsianLines } from "@mrnote/core/web/lib/presentation-paragraphs.ts";
+import { nativeBulletGlyphIsGuess, normalizeParagraphEastAsianLines, type ParagraphEastAsianLines } from "@mrnote/core/web/lib/presentation-paragraphs.ts";
+import { presentationNativeMarkerFace } from "./presentationParagraphRows";
 import { onTextEngineChange, textEngineEpoch } from "@mrnote/core/web/lib/text-engine/measure.ts";
+import { forgetLayout, keepLayout, touchLayout } from "@mrnote/core/web/lib/text-engine/kept-layouts.ts";
 import { textEngineOn } from "@mrnote/core/web/lib/text-engine/page-adapter.ts";
 import { cellCharacterRuns, presentationCellTextRunCss } from "@mrnote/core/web/lib/presentation-cell-rich-text.ts";
 import { officeRowsUnderMerges } from "@mrnote/core/web/lib/office-table-merged-rows.ts";
 import { normalizeCellStyle } from "@mrnote/core/web/lib/presentation-table-style.ts";
+import { powerPointWindowsLineEndFace } from "@mrnote/core/web/lib/office-fonts/windows-office-faces.ts";
 import {
   presentationTableCellParagraphBreakStyles,
   presentationTableCellParagraphSpacing,
   presentationTableCellRunParagraphs,
   presentationTableCellTrailingParagraphStyle,
+  type CellParagraphMarker,
 } from "../../../../lib/presentation/table-cell-paragraphs";
 import {
   TABLE_CELL_NORMAL_MARGIN_PX,
+  tableCellTdStyle,
   tableCellVisualTextStyle,
   importedTableRowMinimums,
 } from "../../../../lib/presentation/table-canvas-layout";
@@ -64,7 +70,7 @@ import { logicalCellPositions, tableLogicalWidth } from "@mrnote/core/web/lib/pr
 import { asRecord } from "@mrnote/core/web/lib/presentation/deck-model.ts";
 import { isImportedPptxBlock } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
 import type { TextRun } from "@mrnote/core/web/lib/presentation-point-runs.ts";
-import { EngineSvgRoot, PRESENTATION_TEXT_ENGINE_ATTRIBUTE, PresentationTextEngineSurfaceContext } from "./PresentationEngineTextBody";
+import { EngineRunLinkAnchor, engineRunLink, EngineSvgRoot, PRESENTATION_TEXT_ENGINE_ATTRIBUTE, PresentationEngineLinkSurfaceContext, PresentationEngineLinksContext, PresentationTextEngineSurfaceContext } from "./PresentationEngineTextBody";
 
 const PT_PER_PX = 0.75;
 const EMU_PER_PX = 9_525;
@@ -101,12 +107,65 @@ export interface EngineTableCell {
   /** Each run's CSS, per paragraph, as the browser-flowed cell draws it. */
   readonly runCss: readonly (readonly CSSProperties[])[];
   readonly fonts: readonly (readonly OfficeTextFont[])[];
+  /** Each paragraph's bullet or number as painted (readings row 1036), null where it has none. */
+  readonly markers?: readonly (EngineCellMarker | null)[];
+}
+
+/** A cell paragraph's marker as the engine laid it out: its characters, face and colour. */
+export interface EngineCellMarker {
+  readonly text: string;
+  readonly font: OfficeTextFont;
+  readonly color?: string;
 }
 
 export type EngineTableAnswer =
   | { readonly status: "ok"; readonly rowHeightsPx: readonly number[]; readonly cells: readonly (readonly (EngineTableCell | null)[])[] }
   | { readonly status: "pending" }
   | { readonly status: "off" };
+
+
+
+
+
+
+
+
+
+
+
+
+
+function cellTdTextStyle(table: PresentationTableBlock, cell: PresentationTableCell, rowIndex: number, cellIndex: number): CSSProperties {
+  const td = tableCellTdStyle(table, cell, rowIndex, cellIndex) ?? {};
+  const out: CSSProperties = {};
+  if (td.color !== undefined) out.color = td.color;
+  if (td.fontWeight !== undefined) out.fontWeight = td.fontWeight;
+  if (td.fontStyle !== undefined) out.fontStyle = td.fontStyle;
+  if (td.fontFamily !== undefined) out.fontFamily = td.fontFamily;
+  return out;
+}
+
+/**
+ * Readings row 1042 (`source.nativeCellLineFaces[row][cell]`): per paragraph
+ * of a cell, `[mark, breaks]` -- the Latin face its mark is set in and each
+ * line break's, in order, null where it is the words' --, or null for a cell
+ * whose lines all end in their words' faces.
+ */
+type CellLineFaces = readonly (readonly [unknown, unknown])[] | null;
+
+/** A cell's row-1042 line-end faces, or null where the table says none for it. */
+function cellLineFacesOf(table: PresentationTableBlock, rowIndex: number, cellIndex: number): CellLineFaces {
+  const rows = asRecord(table.source)?.nativeCellLineFaces;
+  const row = Array.isArray(rows) ? rows[rowIndex] : undefined;
+  const cell = Array.isArray(row) ? row[cellIndex] : undefined;
+  return Array.isArray(cell) && cell.every((entry) => Array.isArray(entry) && entry.length === 2) ? (cell as CellLineFaces) : null;
+}
+
+/** A stated face of a row-1042 receipt, or undefined. */
+function lineEndFace(value: unknown): string | undefined {
+  // As PowerPoint for Windows measures it: a face it lacks by its substitute (`powerPointWindowsLineEndFace`).
+  return typeof value === "string" && value.trim() && value.length <= 200 ? powerPointWindowsLineEndFace(value.trim()) : undefined;
+}
 
 function cellInput(
   table: PresentationTableBlock,
@@ -115,7 +174,9 @@ function cellInput(
   kernFrom: number | null,
   tableFace: string | null,
   vertical = false,
-): { paragraphs: OfficeParagraphInput[]; drawn: TextRun[][]; css: CSSProperties[][]; fonts: OfficeTextFont[][] } {
+  cellIndex: number | null = null,
+  lineFaces: CellLineFaces = null,
+): { paragraphs: OfficeParagraphInput[]; drawn: TextRun[][]; css: CSSProperties[][]; fonts: OfficeTextFont[][]; markers: (EngineCellMarker | null)[] } {
   const style = normalizeCellStyle(cell);
   if (style.textDirection !== (vertical ? "eastAsianVertical" : "horizontal")) throw new Unsupported("turned words");
   if (style.textPaint) throw new Unsupported("cell WordArt");
@@ -127,13 +188,35 @@ function cellInput(
   // A paragraph's margin and first-line indent are the engine's as a text
   // box's are (in a vertical cell, where its columns start down the cell:
   
-  const spacing = presentationTableCellParagraphSpacing(cell, String(cell.text ?? ""), true);
+  // horizontal cell of a table read under readings row 1036
+  // (`source.cellMarkers`), as a text box draws them; else the browser's.
+  const markersDrawn = !vertical && (asRecord(table.source) as { cellMarkers?: unknown } | null)?.cellMarkers === true;
+  const spacing = presentationTableCellParagraphSpacing(cell, String(cell.text ?? ""), true, markersDrawn);
   if (spacing === "drawn") throw new Unsupported("cell markers or indents");
   const header = table.headerRow === true && rowIndex === 0;
-  const base = tableCellVisualTextStyle(table, { ...style, superscript: false, subscript: false }, header, false, cell);
+  // The cell's text box over its `<td>`'s words' look (colour, weight, slant, face), as the browser cascades them.
+  const visual = tableCellVisualTextStyle(table, { ...style, superscript: false, subscript: false }, header, false, cell);
+  const base: CSSProperties = {
+    ...(cellIndex === null ? {} : cellTdTextStyle(table, cell, rowIndex, cellIndex)),
+    ...Object.fromEntries(Object.entries(visual).filter(([, value]) => value !== undefined)),
+  };
   const baseSizePx = lengthPx(base.fontSize ?? 24, 16);
   const runs = cellCharacterRuns(String(cell.text ?? ""), (cell as { runs?: unknown }).runs);
-  const split = presentationTableCellRunParagraphs(runs);
+  const plainSplit = presentationTableCellRunParagraphs(runs);
+  // Readings row 1042: a receipt said of these paragraphs (an edit that adds or
+  // removes one leaves the cell's lines to its words' faces).
+  const faces = lineFaces && lineFaces.length === plainSplit.length ? lineFaces : null;
+  // Each line break ("\v") a run of its own, so the line it ends is laid with
+  // the break's face (`breakLineFaces`); drawn as before.
+  const split = faces
+    ? plainSplit.map((paragraph) =>
+        paragraph.flatMap((run) =>
+          run.text.includes("\v") && run.text !== "\v"
+            ? run.text.split(/(\v)/).filter(Boolean).map((piece) => ({ ...run, text: piece }))
+            : [run],
+        ),
+      )
+    : plainSplit;
   const breakStyles = presentationTableCellParagraphBreakStyles(runs);
   const lineHeight = typeof base.lineHeight === "number" ? base.lineHeight : 1.2;
   const align = base.textAlignLast === "justify" ? "dist" : base.textAlign === "center" ? "ctr" : base.textAlign === "right" ? "r" : base.textAlign === "justify" ? "just" : "l";
@@ -162,6 +245,7 @@ function cellInput(
   const drawn: TextRun[][] = [];
   const cssRows: CSSProperties[][] = [];
   const fontRows: OfficeTextFont[][] = [];
+  const markerRows: (EngineCellMarker | null)[] = [];
   const statedFontAlign = (cell as { fontAlign?: unknown }).fontAlign;
   const cellFontAlign =
     statedFontAlign === "auto" || statedFontAlign === "t" || statedFontAlign === "ctr" || statedFontAlign === "base" || statedFontAlign === "b"
@@ -177,14 +261,26 @@ function cellInput(
     const lines = eastAsianLines ? eastAsianLines[Math.min(paragraphIndex, eastAsianLines.length - 1)] : undefined;
     const css = paragraph.map((run) => {
       if ((run as { math?: unknown }).math) throw new Unsupported("equation");
-      if (run.style?.textPaint) throw new Unsupported("run WordArt");
+      // A run's colour seen through (readings row 1052) is drawn here, blended over the cell's fill (tp-textalpha).
+      if (run.style?.textPaint && !officeTextPaintFlatFill(run.style.textPaint)) throw new Unsupported("run WordArt");
       if (/[-]/.test(run.text)) throw new Unsupported("symbol-font characters");
       return { ...base, ...presentationCellTextRunCss(run.style, base, { superscript: style.superscript, subscript: style.subscript }) };
     });
-    const fonts = css.map(fontOf);
+    const breakFaces = faces && Array.isArray(faces[paragraphIndex]?.[1]) ? (faces[paragraphIndex]![1] as unknown[]) : [];
+    let breakOrdinal = 0;
+    const fonts = css.map((runCss, index) => {
+      if (paragraph[index]?.text !== "\v") return fontOf(runCss);
+      const face = lineEndFace(breakFaces[breakOrdinal]);
+      breakOrdinal += 1;
+      return fontOf(face ? { ...runCss, fontFamily: presentationCellTextRunCss({ fontFamily: face }, base, {}).fontFamily ?? runCss.fontFamily } : runCss);
+    });
+    const markFace = faces ? lineEndFace(faces[paragraphIndex]?.[0]) : undefined;
     drawn.push(paragraph);
     cssRows.push(css);
     fontRows.push(fonts);
+    // The paragraph's bullet or number (readings row 1036).
+    const marker = spaced?.marker ? cellMarkerInput(spaced.marker, paragraph, css, fonts, spaced) : undefined;
+    markerRows.push(marker ? { text: marker.text, font: marker.font, ...(marker.color !== undefined ? { color: marker.color } : {}) } : null);
     return {
       runs: paragraph.map((run, index) => ({
         text: run.text,
@@ -221,6 +317,7 @@ function cellInput(
       // browser's field pads them (`presentationTableCellParagraphStyles`).
       spaceBeforePt: paragraphIndex > 0 ? spaced?.spaceBeforePt ?? 0 : 0,
       spaceAfterPt: paragraphIndex < split.length - 1 ? spaced?.spaceAfterPt ?? 0 : 0,
+      ...(marker ? { marker: marker.input } : {}),
       kinsoku: "zh-CN",
       ...(lines
         ? {
@@ -233,9 +330,66 @@ function cellInput(
         : {}),
       // The cell's Text alignment (`a:pPr@fontAlgn` its rows state, readings row 513).
       ...(cellFontAlign ? { fontAlign: cellFontAlign } : {}),
+      // Readings row 1042: the mark's face, the line that holds it laid by it beside the words'.
+      ...(markFace
+        ? { markLatinFont: fontOf({ ...base, fontFamily: presentationCellTextRunCss({ fontFamily: markFace }, base, {}).fontFamily ?? markFace }) }
+        : {}),
     };
   });
-  return { paragraphs, drawn, css: cssRows, fonts: fontRows };
+  return { paragraphs, drawn, css: cssRows, fonts: fontRows, markers: markerRows };
+
+  /**
+   * A paragraph's marker as a text box's row lays it out
+   * (`planPresentationParagraphRows`, `PresentationEngineTextBody`): its glyph
+   * and face by `presentationNativeMarkerFace` (the package's `a:buFont`
+   * glyph where it is drawn, its stand-in, PowerPoint's fallback face), its
+   * size `a:buSzPts`, else `a:buSzPct` of the first run's, else the first
+   * run's (`a:buSzTx`), its weight, slant and colour the first run's unless
+   * `a:buClr` (`a:buFontTx` / `a:buClrTx`), hung at marL + indent in a box
+   * as wide as the hang. Never a guess: a symbol face's character with no
+   * drawn face or measured stand-in, or a marker that moves with centred or
+   * right-aligned words, leaves the table to the browser.
+   */
+  function cellMarkerInput(
+    stated: CellParagraphMarker,
+    paragraph: TextRun[],
+    css: CSSProperties[],
+    fonts: OfficeTextFont[],
+    spaced: { marginLeftPt: number; indentPt: number },
+  ): { input: NonNullable<OfficeParagraphInput["marker"]>; text: string; font: OfficeTextFont; color?: string } | undefined {
+    const firstIndex = paragraph.findIndex((run) => run.text.length > 0);
+    // PowerPoint draws no marker for an empty paragraph (`officeTextLayoutLines` states none).
+    if (firstIndex < 0) return undefined;
+    if (align !== "l" && align !== "just") throw new Unsupported("marker that moves with its text");
+    const firstFont = fonts[firstIndex];
+    const native = stated.bullet ? { char: stated.bullet.char, ...(stated.bullet.typeface !== undefined ? { typeface: stated.bullet.typeface } : {}) } : null;
+    const face = presentationNativeMarkerFace(native, firstFont.stack, paragraph[firstIndex].style?.fontFamily, {});
+    if (native && nativeBulletGlyphIsGuess(native, face.glyph)) throw new Unsupported("symbol bullet without its face");
+    const sizePt = stated.sizePt ?? (stated.scale !== undefined ? firstFont.sizePt * stated.scale : firstFont.sizePt);
+    const font: OfficeTextFont = {
+      stack: typeof face.fontFamily === "string" && face.fontFamily.trim() ? face.fontFamily : firstFont.stack,
+      weight: firstFont.weight,
+      italic: firstFont.italic,
+      sizePt: Math.round(sizePt * 100) / 100,
+    };
+    const text = face.glyph?.text ?? stated.text;
+    const color = stated.color ?? (typeof css[firstIndex].color === "string" ? (css[firstIndex].color as string) : undefined);
+    return {
+      input: {
+        text,
+        font,
+        ...(native?.typeface !== undefined ? { symbol: { family: native.typeface, char: native.char } } : {}),
+        ...(face.fallback ? { fallback: face.fallback } : {}),
+        leftPt: Math.max(0, spaced.marginLeftPt + Math.min(0, spaced.indentPt)),
+        boxPt: Math.abs(spaced.indentPt),
+        gapPt: 0,
+        hanging: true,
+      },
+      text,
+      font,
+      ...(color !== undefined ? { color } : {}),
+    };
+  }
 }
 
 /**
@@ -250,14 +404,21 @@ export function presentationTableCellEastAsianLines(cell: PresentationTableCell)
 }
 
 /**
- * Where a cell's last whole line ends (its last line's full pitch, not its descent), pt. For a row's height (`sizing`), the
- * last line's baseline and its single line's share under it, the spacing above single counted above it (TRIAGE 137,
- * tp-cellspc: rows the words size). The cell's own drawn box -- what a centred or bottom-anchored cell places in a taller
- * row -- and a vertical cell's columns keep the full pitch: not measured there (csab: centred rows moved away from Windows).
+ * Where a cell's last whole line ends (its last line's full pitch, not its descent), pt. For a row's height and the cell's
+ * drawn box (`sizing`), the last line's baseline and its single line's share under it, the spacing above single counted
+ * above it (TRIAGE 137, tp-cellspc: rows the words size): PowerPoint for Windows centres or bottom-aligns that same block in
+ * a taller row (TRIAGE 137e, tp-cellanchor: ctr / b x 100 / 120 / 168 % x Arial, Calibri, Times New Roman, with and
+ * without bullets, all within 0.1 pt; the full pitch stood 1-5.6 pt high above single). A vertical cell's columns keep
+ * the full pitch: not measured there.
  */
 function cellLinesBottomPt(layout: Extract<OfficeTextBodyLayout, { status: "ok" }>, sizing = false): number {
   const lastLines = layout.paragraphs.map((paragraph) => paragraph.lines[paragraph.lines.length - 1]).filter(Boolean);
   return lastLines.length ? Math.max(...lastLines.map((line) => (sizing ? line.cellBottom ?? line.bottom : line.bottom))) : layout.height;
+}
+
+/** The height of a horizontal cell's drawn box, pt: the block a centred or bottom-anchored cell places in a taller row. */
+export function engineTableCellBoxPt(layout: Extract<OfficeTextBodyLayout, { status: "ok" }>): number {
+  return cellLinesBottomPt(layout, true);
 }
 
 
@@ -305,6 +466,8 @@ export function layoutPresentationEngineTable(table: PresentationTableBlock): En
       return null;
     })();
     const kerning = asRecord(table.source)?.nativeKerning;
+    // A table read under readings row 1042 (`source.nativeCellLineBox`).
+    const cellLineBox = asRecord(table.source)?.nativeCellLineBox === 1042;
     const kernFrom = typeof kerning === "number" && kerning > 0 ? kerning : null;
     // Each row its stated height, a minimum its words grow (ECMA-376
     // 21.1.3.18 `a:tr@h`; `importedTableRowMinimums`, the browser's table
@@ -350,9 +513,21 @@ export function layoutPresentationEngineTable(table: PresentationTableBlock): En
         const marginRight = style.marginRight ?? TABLE_CELL_NORMAL_MARGIN_PX.horizontal;
         const marginTop = style.marginTop ?? TABLE_CELL_NORMAL_MARGIN_PX.vertical;
         const marginBottom = style.marginBottom ?? TABLE_CELL_NORMAL_MARGIN_PX.vertical;
-        const input = cellInput(table, cell, rowIndex, kernFrom, tableFace);
+        const input = cellInput(table, cell, rowIndex, kernFrom, tableFace, false, cellIndex, cellLineBox ? cellLineFacesOf(table, rowIndex, cellIndex) : null);
         const layout = layoutOfficeTextBody(
-          { widthPt: Math.max(0, widthPx - marginLeft - marginRight) * PT_PER_PX, wrap: true, keepLongWords: true, cellLines: true, paragraphs: input.paragraphs },
+          {
+            widthPt: Math.max(0, widthPx - marginLeft - marginRight) * PT_PER_PX,
+            wrap: true,
+            // A word wider than the cell breaks between characters, as a text box's does: PowerPoint for Windows breaks
+            // every kind of long word in a cell exactly as in a text box of its width (office-truth/probes/tp-longword:
+            
+            // header row two lines tall). A vertical cell keeps its words whole (not measured).
+            cellLines: true,
+            paragraphs: input.paragraphs,
+            // Readings row 1042: the lines stand as a text box's under row 1013, the faces of the marks and breaks
+            // that end them among their faces (office-truth/probes/tp-markface).
+            ...(cellLineBox ? { windowsLineBox: true, breakLineFaces: true } : {}),
+          },
           pageOfficeTextMeasurer,
         );
         if (layout.status === "pending") {
@@ -360,7 +535,10 @@ export function layoutPresentationEngineTable(table: PresentationTableBlock): En
           return;
         }
         if (layout.status === "unsupported") throw new Unsupported(`cell: ${layout.reason}`);
-        cells[rowIndex][cellIndex] = { layout, paragraphs: input.drawn, runCss: input.css, fonts: input.fonts };
+        cells[rowIndex][cellIndex] = {
+          layout, paragraphs: input.drawn, runCss: input.css, fonts: input.fonts,
+          ...(input.markers.some((marker) => marker !== null) ? { markers: input.markers } : {}),
+        };
         // A row is as tall as its tallest cell's lines, each a whole line
         // (the last one too, not cut at its descent as a text box's height
         
@@ -392,7 +570,7 @@ export function layoutPresentationEngineTable(table: PresentationTableBlock): En
       // browser's, as before; the table's other cells stay the engine's.
       let input: ReturnType<typeof cellInput>;
       try {
-        input = cellInput(table, cell, rowIndex, kernFrom, tableFace, true);
+        input = cellInput(table, cell, rowIndex, kernFrom, tableFace, true, cellIndex);
       } catch (error) {
         if (error instanceof Unsupported) {
           tableOff(`vertical cell: ${error.message}`);
@@ -466,12 +644,107 @@ export function usePresentationEngineTable(table: PresentationTableBlock | null)
   return useMemo(() => {
     void epoch;
     if (surface && table && !active) return tableOff("not a candidate");
-    return active && table ? layoutPresentationEngineTable(table) : { status: "off" as const };
+    return active && table ? cachedEngineTable(table) : { status: "off" as const };
   }, [surface, active, table, epoch]);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const engineTableCache = new WeakMap<object, Map<string, EngineTableAnswer>>();
+export function cachedEngineTable(table: PresentationTableBlock): EngineTableAnswer {
+  const started = typeof performance === "undefined" ? 0 : performance.now();
+  const { rows, source, ...facts } = table;
+  const key = `${textEngineEpoch()}\u0000${objectSerial(source)}\u0000${contentHash(JSON.stringify(facts))}`;
+  noteKeyTime(started);
+  let kept = engineTableCache.get(rows);
+  const hit = kept?.get(key);
+  if (hit) {
+    touchLayout(hit);
+    return hit;
+  }
+  const laidAt = typeof performance === "undefined" ? 0 : performance.now();
+  const answer = layoutPresentationEngineTable(table);
+  noteLayoutTime(laidAt);
+  if (answer.status !== "pending") {
+    if (!kept) engineTableCache.set(rows, (kept = new Map()));
+    if (kept.size >= 8) {
+      for (const old of kept.values()) forgetLayout(old);
+      kept.clear();
+    }
+    kept.set(key, answer);
+    const owner = kept;
+    keepLayout(answer, answerGlyphs(answer), () => owner.delete(key));
+  }
+  return answer;
+}
+
+/** A number of its own for each object (its identity in a key; the import's receipts are never edited in place). */
+const serials = new WeakMap<object, number>();
+let nextSerial = 1;
+function objectSerial(value: unknown): string {
+  if (!value || typeof value !== "object") return String(value);
+  let serial = serials.get(value);
+  if (serial === undefined) serials.set(value, (serial = nextSerial++));
+  return `#${serial}`;
+}
+
+/** The glyphs a layout holds (its size, roughly: a kept layout's cost). */
+function answerGlyphs(answer: EngineTableAnswer): number {
+  if (answer.status !== "ok") return 1;
+  let glyphs = 1;
+  for (const row of answer.cells) for (const cell of row) {
+    if (!cell) continue;
+    for (const paragraph of cell.layout.paragraphs) for (const line of paragraph.lines) for (const segment of line.segments) glyphs += segment.glyphs.length;
+  }
+  return glyphs;
+}
+
+/** A table laid out again (no kept layout for it): count, total and largest ms, with the key's (the probes' view). */
+function noteLayoutTime(started: number): void {
+  if (typeof window === "undefined" || typeof performance === "undefined") return;
+  const ms = performance.now() - started;
+  const seen = ((window as unknown as { __mraiSlidesEngineTableKey?: { count: number; totalMs: number; maxMs: number; layouts?: number; layoutMs?: number; layoutMaxMs?: number } }).__mraiSlidesEngineTableKey ??= { count: 0, totalMs: 0, maxMs: 0 });
+  seen.layouts = (seen.layouts ?? 0) + 1;
+  seen.layoutMs = (seen.layoutMs ?? 0) + ms;
+  seen.layoutMaxMs = Math.max(seen.layoutMaxMs ?? 0, ms);
+}
+
+/** What working out a table's key takes (`window.__mraiSlidesEngineTableKey`: count, total and largest ms; the probes' view). */
+function noteKeyTime(started: number): void {
+  if (typeof window === "undefined" || typeof performance === "undefined") return;
+  const ms = performance.now() - started;
+  const seen = ((window as unknown as { __mraiSlidesEngineTableKey?: { count: number; totalMs: number; maxMs: number } }).__mraiSlidesEngineTableKey ??= { count: 0, totalMs: 0, maxMs: 0 });
+  seen.count += 1;
+  seen.totalMs += ms;
+  seen.maxMs = Math.max(seen.maxMs, ms);
+}
+
+/** FNV-1a 32-bit over a string's UTF-16 units, with its length: a content key, not a secret. */
+function contentHash(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `${text.length.toString(36)}.${hash.toString(36)}`;
 }
 
 /** One cell's words, drawn where the engine laid them, filling the cell's text box. */
 export function PresentationEngineTableCellText({ cell }: { cell: EngineTableCell }): ReactElement {
+  const linkSurface = useContext(PresentationEngineLinkSurfaceContext);
+  const links = useContext(PresentationEngineLinksContext);
   if (cell.vertical) return <PresentationEngineVerticalCellText cell={cell} vertical={cell.vertical} />;
   const { layout } = cell;
   const nodes: ReactElement[] = [];
@@ -495,7 +768,7 @@ export function PresentationEngineTableCellText({ cell }: { cell: EngineTableCel
           fontStyle: font.italic ? "italic" : "normal",
           textDecorationLine: css.textDecorationLine,
           textDecorationStyle: css.textDecorationStyle,
-          ...(css.color !== undefined ? { fill: css.color as CSSProperties["fill"] } : {}),
+          ...cellRunSvgFill(css),
           ...(css.verticalAlign === "super" || css.verticalAlign === "sub" ? ({ baselineShift: css.verticalAlign } as CSSProperties) : {}),
         };
         const glyphs = segment.glyphs;
@@ -505,22 +778,47 @@ export function PresentationEngineTableCellText({ cell }: { cell: EngineTableCel
           );
         }
         const shown = (text: string) => (caps ? text.toUpperCase() : text);
+        const segmentSpans: ReactElement[] = [];
         if (glyphs.every((glyph) => shown(glyph.text).length === 1)) {
-          spans.push(
+          segmentSpans.push(
             <tspan key={segmentIndex} x={glyphs.map((glyph) => Math.round(glyph.x * PX_PER_PT * 1000) / 1000).join(" ")} y={segmentY} style={paint}>
               {glyphs.map((glyph) => shown(glyph.text)).join("")}
             </tspan>,
           );
         } else {
           glyphs.forEach((glyph, glyphIndex) => {
-            spans.push(
+            segmentSpans.push(
               <tspan key={`${segmentIndex}-${glyphIndex}`} x={Math.round(glyph.x * PX_PER_PT * 1000) / 1000} y={segmentY} style={paint}>
                 {shown(glyph.text)}
               </tspan>,
             );
           });
         }
+        // A word's hyperlink in a cell, as in a text box (TRIAGE 181: the show's links, the print's PDF links).
+        const link = run ? engineRunLink(run, links, linkSurface) : null;
+        if (link) spans.push(<EngineRunLinkAnchor key={`a${segmentIndex}`} link={link}>{segmentSpans}</EngineRunLinkAnchor>);
+        else spans.push(...segmentSpans);
       });
+      // The paragraph's bullet or number (readings row 1036) on its first
+      // line, on the line's baseline at the x the engine hung it.
+      const marker = lineIndex === 0 && paragraph.marker ? cell.markers?.[paragraphIndex] : undefined;
+      if (marker && paragraph.marker) {
+        spans.unshift(
+          <tspan
+            key="marker"
+            x={Math.round(paragraph.marker.x * PX_PER_PT * 1000) / 1000}
+            style={{
+              fontFamily: marker.font.stack,
+              fontSize: Math.round(marker.font.sizePt * PX_PER_PT * 1000) / 1000,
+              fontWeight: marker.font.weight,
+              fontStyle: marker.font.italic ? "italic" : "normal",
+              ...(marker.color !== undefined ? { fill: marker.color } : {}),
+            }}
+          >
+            {marker.text}
+          </tspan>,
+        );
+      }
       if (!spans.length) return;
       nodes.push(
         <g key={`${paragraphIndex}-${lineIndex}`}>
@@ -536,9 +834,8 @@ export function PresentationEngineTableCellText({ cell }: { cell: EngineTableCel
     <div
       data-testid="presentation-engine-table-cell"
       {...{ [PRESENTATION_TEXT_ENGINE_ATTRIBUTE]: "laid" }}
-      // As tall as its whole lines: PowerPoint centres a cell's words on them
-      // (P2-cell: Arial 10 pt in a 40 pt row 14 pt down, not 14.06 by its descent).
-      style={{ position: "relative", width: "100%", height: Math.round(cellLinesBottomPt(layout) * PX_PER_PT * 1000) / 1000 }}
+      // As tall as the block its row is sized by: PowerPoint centres or bottom-aligns a cell's words on it (TRIAGE 137e).
+      style={{ position: "relative", width: "100%", height: Math.round(engineTableCellBoxPt(layout) * PX_PER_PT * 1000) / 1000 }}
     >
       <EngineSvgRoot>{nodes}</EngineSvgRoot>
     </div>
@@ -554,8 +851,14 @@ function cellRunPaint(css: CSSProperties, font: OfficeTextFont): CSSProperties {
     fontStyle: font.italic ? "italic" : "normal",
     textDecorationLine: css.textDecorationLine,
     textDecorationStyle: css.textDecorationStyle,
-    ...(css.color !== undefined ? { fill: css.color as CSSProperties["fill"] } : {}),
+    ...cellRunSvgFill(css),
   };
+}
+
+/** A cell run's SVG fill: its colour, or its colour seen through at the exact opacity (readings row 1052). */
+function cellRunSvgFill(css: CSSProperties): CSSProperties {
+  const { fill, fillOpacity } = officeTextSvgFill(css);
+  return { ...(fill !== undefined ? { fill: fill as CSSProperties["fill"] } : {}), ...(fillOpacity !== undefined ? { fillOpacity } : {}) };
 }
 
 /**

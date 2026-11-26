@@ -3,6 +3,13 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import {
+  mapCellKeyThroughLineEdit,
+  mapLineThroughLineEdit,
+  sheetLineMoveChain,
+  type SheetLineEdit,
+} from "@mrnote/core/web/lib/spreadsheet/structural.ts";
+
 /** A stored value the editor could not read, set aside and saved back. */
 export interface SpreadsheetSetAsideValue {
   /** The sheet the value belongs to, or null for a workbook-level value. */
@@ -25,6 +32,90 @@ export interface SpreadsheetSetAsideValue {
 
 
   readonly cell?: { readonly value: unknown; readonly formula: unknown };
+  
+
+
+
+
+
+
+
+
+  readonly lineMovesAfter?: string;
+  
+
+
+
+
+
+
+
+  readonly shownAs?: unknown;
+}
+
+/** A sheet's line-keyed maps a set-aside value can move with, by axis. */
+const LINE_KEYED_MAPS: Readonly<Record<string, "row" | "col">> = {
+  rowHeights: "row",
+  rowStyles: "row",
+  columnWidths: "col",
+  columnStyles: "col",
+};
+
+/** The line edits of `sheet`'s chain after the entry `after` ("" before the
+ * first), or null when the chain cannot say (forked, unchained, or `after`
+ * no longer in it). */
+function lineEditsSince(sheet: Json, after: string): SheetLineEdit[] | null {
+  if (sheet.lineMovesUnchained) return null;
+  const chain = sheetLineMoveChain(sheet);
+  if (!chain) return null;
+  const start = after === "" ? 0 : chain.findIndex((entry) => entry.id === after) + 1;
+  if (start === 0 && after !== "") return null;
+  return chain.slice(start).map((entry): SheetLineEdit => ({
+    axis: entry.axis,
+    op: entry.delta > 0 ? "insert" : "delete",
+    at: entry.at,
+    count: Math.abs(entry.delta),
+  }));
+}
+
+/**
+ * Where a set-aside value of `sheet` goes after the line edits made since it
+ * was set aside: the path, with every line it names moved as the edits moved
+ * the page ({@link mapLineThroughLineEdit}); nothing for a value whose line
+ * or cell was deleted. A row's height or format on the line an insert copies
+ * from (Range.Insert's xlFormatFromLeftOrAbove, as `insertLine` gives the
+ * page's own) also goes onto the lines inserted after it. Null when the
+ * chain cannot say: the value goes back where it was, as before.
+ */
+function setAsidePathsAfterLineEdits(entry: SpreadsheetSetAsideValue, sheet: Json): string[][] | null {
+  if (entry.lineMovesAfter === undefined) return null;
+  const edits = lineEditsSince(sheet, entry.lineMovesAfter);
+  if (!edits) return null;
+  const [map, key, ...rest] = entry.path;
+  const axis = map && Object.hasOwn(LINE_KEYED_MAPS, map) ? LINE_KEYED_MAPS[map] : undefined;
+  if (map === "cells" && key) {
+    let cellKey: string | null = key;
+    for (const edit of edits) {
+      if (cellKey === null) break;
+      cellKey = mapCellKeyThroughLineEdit(cellKey, edit);
+    }
+    return cellKey === null ? [] : [[map, cellKey, ...rest]];
+  }
+  if (!map || !axis || !key || rest.length || !/^\d+$/.test(key)) return [entry.path as string[]];
+  let lines = [Number(key)];
+  for (const edit of edits) {
+    if (edit.axis !== axis) continue;
+    const next: number[] = [];
+    for (const line of lines) {
+      const moved = mapLineThroughLineEdit(line, edit);
+      if (moved !== null) next.push(moved);
+      if (edit.op === "insert" && line === edit.at - 1) {
+        for (let offset = 0; offset < edit.count; offset += 1) next.push(edit.at + offset);
+      }
+    }
+    lines = next;
+  }
+  return lines.map((line) => [map, String(line)]);
 }
 
 /** A value the schema refused, where it was in the content parsed. */
@@ -86,48 +177,74 @@ export function restoreSetAsideValues<T extends Record<string, unknown>>(
       sheets[index] = { ...sheet, [key]: next };
       continue;
     }
-    let root: Json | null = null;
-    let replace: ((next: Json) => void) | null = null;
-    if (entry.sheetId === null) {
-      root = result;
-      replace = (next) => {
-        result = next;
-      };
-    } else {
-      const list = (sheets ?? (Array.isArray(result.sheets) ? result.sheets : null)) as unknown[] | null;
-      const index = list?.findIndex(
+    const list = entry.sheetId === null
+      ? null
+      : (sheets ?? (Array.isArray(result.sheets) ? result.sheets : null)) as unknown[] | null;
+    const index = entry.sheetId === null
+      ? -1
+      : list?.findIndex(
         (sheet) => sheet && typeof sheet === "object" && (sheet as { id?: unknown }).id === entry.sheetId,
       ) ?? -1;
-      if (!list || index < 0) continue;
-      root = list[index] as Json;
-      replace = (next) => {
-        sheets = sheets ?? [...list];
-        sheets[index] = next;
-      };
-    }
-    if (!root || !entry.path.length) continue;
-    // Copy along the path, so the caller's objects are never written to.
-    const chain: Json[] = [root];
-    let missingParent = false;
-    for (const step of entry.path.slice(0, -1)) {
-      const next = chain[chain.length - 1][step];
-      if (!next || typeof next !== "object" || Array.isArray(next)) {
-        missingParent = true;
-        break;
+    if (entry.sheetId !== null && (!list || index < 0)) continue;
+    // A line's or a cell's value goes where the rows and columns inserted or
+    // deleted since moved it (none when its line went).
+    const paths = list && index >= 0
+      ? setAsidePathsAfterLineEdits(entry, list[index] as Json) ?? [entry.path]
+      : [entry.path];
+    for (const path of paths) {
+      let root: Json | null = null;
+      let replace: ((next: Json) => void) | null = null;
+      if (entry.sheetId === null) {
+        root = result;
+        replace = (next) => {
+          result = next;
+        };
+      } else if (list) {
+        // The sheet as restored so far: one value can go onto several lines.
+        root = (sheets ?? list)[index] as Json;
+        replace = (next) => {
+          sheets = sheets ?? [...list];
+          sheets[index] = next;
+        };
       }
-      chain.push(next as Json);
+      if (!root || !replace || !path.length) continue;
+      // Copy along the path, so the caller's objects are never written to.
+      const chain: Json[] = [root];
+      let missingParent = false;
+      for (const step of path.slice(0, -1)) {
+        const next = chain[chain.length - 1][step];
+        if (!next || typeof next !== "object" || Array.isArray(next)) {
+          missingParent = true;
+          break;
+        }
+        chain.push(next as Json);
+      }
+      const last = path[path.length - 1];
+      if (missingParent) continue;
+      const holder = chain[chain.length - 1];
+      if (entry.shownAs !== undefined) {
+        // Kept as stored: back only over the form the editor showed it in.
+        if (!(last in holder) || !sameJson(holder[last], entry.shownAs)) continue;
+      } else if (last in holder) continue;
+      if (entry.cell && (chain[2]?.value !== entry.cell.value || chain[2]?.formula !== entry.cell.formula)) continue;
+      let rebuilt: Json = { ...holder, [last]: entry.value };
+      for (let depth = chain.length - 2; depth >= 0; depth -= 1) {
+        rebuilt = { ...chain[depth], [path[depth]]: rebuilt };
+      }
+      replace(rebuilt);
     }
-    const last = entry.path[entry.path.length - 1];
-    if (missingParent || last in chain[chain.length - 1]) continue;
-    if (entry.cell && (chain[2]?.value !== entry.cell.value || chain[2]?.formula !== entry.cell.formula)) continue;
-    let rebuilt: Json = { ...chain[chain.length - 1], [last]: entry.value };
-    for (let depth = chain.length - 2; depth >= 0; depth -= 1) {
-      rebuilt = { ...chain[depth], [entry.path[depth]]: rebuilt };
-    }
-    replace(rebuilt);
   }
   if (sheets) result = { ...result, sheets };
   return result as T;
+}
+
+/** The id of the last entry of `sheet`'s line-edit chain ("" for none), or
+ * null when the chain cannot be followed (forked or unchained). */
+function lineMoveTip(sheet: Json): string | null {
+  if (sheet.lineMovesUnchained) return null;
+  const chain = sheetLineMoveChain(sheet);
+  if (!chain) return null;
+  return chain.length ? chain[chain.length - 1]!.id : "";
 }
 
 /**
@@ -162,6 +279,10 @@ export function anchorSetAsideValues(
     const heldBy = sheetId !== null && rest[0] === "cells" && rest.length >= 3
       ? ((sheets[path[1] as number] as Json).cells as Json | undefined)?.[rest[1] as string]
       : undefined;
+    const sheet = sheetId !== null ? (sheets[path[1] as number] as Json) : null;
+    const lineMovesAfter = sheet && (rest[0] === "cells" || Object.hasOwn(LINE_KEYED_MAPS, rest[0] as string))
+      ? lineMoveTip(sheet)
+      : null;
     anchored.push({
       sheetId,
       path: rest as string[],
@@ -169,6 +290,7 @@ export function anchorSetAsideValues(
       ...(heldBy && typeof heldBy === "object"
         ? { cell: { value: (heldBy as Json).value, formula: (heldBy as Json).formula } }
         : {}),
+      ...(lineMovesAfter !== null ? { lineMovesAfter } : {}),
     });
   }
   return anchored;

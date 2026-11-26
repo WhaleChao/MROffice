@@ -159,7 +159,7 @@ import {
   selectionEdgeTokens,
   visibleSelectionEdges,
 } from "../../../lib/spreadsheet/range-preview";
-import { createRangeFrame, createSelectionGlide } from "../../../lib/spreadsheet/selection-glide";
+import { createRangeFrame, createSelectionGlide, selectionStageIn } from "../../../lib/spreadsheet/selection-glide";
 import { useSpreadsheetRangePick } from "./spreadsheet/useSpreadsheetRangePick";
 import { formulaArityProblem, formulaCallsDataTable } from "@mrnote/core/web/lib/spreadsheet/formula-entry-arity.ts";
 import {
@@ -194,7 +194,7 @@ import { measureNativeLineAdvance, nativeAutoRowIsNumeric, nativeParagraphFontSt
 
 import { invertSheetOwnHistory, type SheetOwnHistoryState } from "../../../lib/spreadsheet/own-history";
 
-import { SpreadsheetCellCheckbox } from "./spreadsheet/SpreadsheetCellCheckbox";
+import { SpreadsheetCellCheckbox, SpreadsheetPlainCellCheckbox } from "./spreadsheet/SpreadsheetCellCheckbox";
 import { SpreadsheetCellListPopover } from "./spreadsheet/SpreadsheetCellListPopover";
 import { SpreadsheetPivotTimeline, type SpreadsheetPivotTimelineLabels } from "./spreadsheet/SpreadsheetPivotTimeline";
 import { applyPivotTimelineChange, DEFAULT_PIVOT_TIMELINE_HEIGHT, DEFAULT_PIVOT_TIMELINE_WIDTH, normalizePivotTimelines, pivotTimelineBlock, type PivotTimelineChange } from "../../../lib/spreadsheet/pivot-timeline";
@@ -221,7 +221,7 @@ import {
 import { cellShiftedSheet, columnWidthsSheet, defaultColumnWidthSheet, deletedLinesSheet, insertedLinesSheet, lineFormatProtected as lineFormatProtectedFor, manualHiddenSpanSheet, pivotSourcesFollowLines, resolveSpreadsheetNativeGrid, sizeMapsEqual } from "../../../lib/spreadsheet/row-column-buttons";
 import { chartRecordFramePrintedReachPx } from "../../../lib/spreadsheet/chart-print-input";
 import { anchorBoxTurned } from "@mrnote/core/web/lib/spreadsheet/drawing-rotation-box.ts";
-import { OFFICE_PRINT_IDENTITY, officeEastAsianFamily, officeDrawingWidensPrint, officeMarkedDrawingSize, officePrintAnchorKind, officePrintedDrawingFrame, officePrintedDrawingReach, officePrintedFontPx, officePrintedRowDots, officePrintedTextInsetDots, officePrintsInApplicationStandardFont, officeShapeOutlineReachPx } from "../../../lib/spreadsheet/office-print-metrics";
+import { OFFICE_PRINT_IDENTITY, officeEastAsianFamily, officeMarkedDrawingSize, officePrintAnchorKind, officePrintedDrawingFrame, officePrintedDrawingReach, officePrintedFontPx, officePrintedRowDots, officePrintedTextInsetDots, officePrintsInApplicationStandardFont, officeShapeOutlineReachPx, officeShrunkPrintedDots } from "../../../lib/spreadsheet/office-print-metrics";
 import { printedStripEdges } from "../../../lib/spreadsheet/printed-cell-borders";
 import { forecastOutputSheet, type ForecastOutputRequest } from "../../../lib/spreadsheet/forecast-sheet-output";
 import { activeSheetAfterDelete, copiedSheetWorkbook, deletedSheetWorkbook, MAX_SHEETS, movedSheetIndex, movedSheetWorkbook, newWorksheetFor, renamedSheetWorkbook, sheetHiddenWorkbook, sheetUnhideable, tabColoredWorkbook, unhiddenSheet, visibleSheetAfterHiding, workbookNameMirrorsForNewSheet } from "../../../lib/spreadsheet/sheet-buttons";
@@ -283,7 +283,7 @@ import { officePrimaryFontFamily } from "@mrnote/core/web/components/office-ribb
 import { measureAutoRowsNow, officeKnownStyleFace, officeScriptMarks, useSpreadsheetAutoRowHeights, type AutoRowMeasurement } from "./spreadsheet/useSpreadsheetAutoRowHeights";
 import {OfficeShapeStyleGallery} from "@mrnote/core/web/components/office-ribbon/OfficeShapeStyleGallery.tsx";
 import { OfficePictureStyleGraphic } from "@mrnote/core/web/components/office-ribbon/OfficePictureStyleGraphic.tsx";
-import { spreadsheetPictureEffectFromParameter, spreadsheetPictureEffectPatch } from "../../../lib/spreadsheet/picture-effects";
+import { spreadsheetPictureEffectFromParameter, spreadsheetPictureEffectPatch, spreadsheetPictureBorderOutline } from "../../../lib/spreadsheet/picture-effects";
 import { OfficePictureEffectsFrame } from "@mrnote/core/web/components/office-ribbon/OfficePictureEffectsFrame.tsx";
 import {
   type OfficePictureStyleId,
@@ -329,7 +329,7 @@ import { AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJusti
 import { useLocale, useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import { createPortal, flushSync } from "react-dom";
 import { hiddenRowSpansPastEnd, rowsShownPastEndOf, sheetCoveringRanges } from "../../../lib/spreadsheet/sheet-extent";
-import { asLoadedSpelling } from "../../../lib/spreadsheet/loaded-spelling";
+import { asLoadedSpelling } from "@mrnote/core/web/lib/spreadsheet/loaded-spelling.ts";
 import { nextPaintOrTimer, snapshotWhenWorkbookSettles } from "../../../lib/spreadsheet/export-settle";
 import { latestScrollFrame, createSpreadsheetGridWindowResolver, spreadsheetGridReachViewport, spreadsheetGridStageSize, spreadsheetGridWindowCovers, spreadsheetGridWindowWithMerges } from "../../../lib/spreadsheet/grid-scroll";
 import ConfirmDialog from "@mrnote/core/web/components/ui/ConfirmDialog.tsx";
@@ -338,6 +338,7 @@ import { EditorLoadingState } from "@mrnote/core/web/components/ui/editor-loadin
 import type { DocumentSurfaceReadiness } from "@mrnote/docs/web/components/console/editor/NoteEditor.tsx";
 import { useEqualSet } from "@mrnote/core/web/hooks/useEqualSet.ts";
 import { toast } from "@mrnote/core/web/hooks/use-toast.ts";
+import { ToastAction } from "@mrnote/core/web/components/ui/toast.tsx";
 import { LibreOfficeNeededText, libreOfficeToastAction } from "@mrnote/core/web/components/console/LibreOfficeEnableAction.tsx";
 import { canEnableLibreOfficeFor } from "@mrnote/core/web/lib/desktop-libreoffice.ts";
 import { pickOfficePictureFill, type OfficePictureFillSource } from "@mrnote/core/web/lib/office-picture-fill.ts";
@@ -366,6 +367,7 @@ import {
 } from "@mrnote/core/web/lib/spreadsheet/excel-1900-calendar.ts";
 import { notebookSDK, type PageItem } from "@mrnote/core/web/lib/notebook-sdk.ts";
 import { runCollaborationRequestWithTimeout } from "@mrnote/core/web/lib/collaboration-windows/request-timeout.ts";
+import { EXPORT_AUTHORITY_RERUNS, EXPORT_PREPARE_DEADLINE_MS, EXPORT_TRANSFER_DEADLINE_MS, ExportCancelledError, ExportDeadlineError, isExportCancelledError, isExportDeadlineError, withinExportDeadline } from "@mrnote/core/web/lib/export/export-deadline.ts";
 import {
   conditionalClearTouchesLockedCells,
   conditionalFormatPatchbackMutationIsLossless,
@@ -946,6 +948,17 @@ import {
 } from "./spreadsheet/SpreadsheetPageSetupDialog";
 import PivotFieldFilterMenu from "./spreadsheet/PivotFieldFilterMenu";
 import {
+  PIVOT_PRINT_BUTTON_BASELINE_PT,
+  PIVOT_PRINT_BUTTON_HEIGHT_PT,
+  PIVOT_PRINT_BUTTON_LINE_COLOR,
+  PIVOT_PRINT_BUTTON_LINE_PT,
+  pivotChartPrintButtons,
+  pivotChartPrintsLegend,
+  pivotChartRecordWithAutomaticTitle,
+  pivotPrintFieldNameAsWritten,
+  type PivotPrintButtonFields,
+} from "../../../lib/spreadsheet/pivot-chart-print-buttons";
+import {
   PIVOT_CHART_BUTTON_BAND_HEIGHT,
   pivotChartFieldButtonLayout,
   type PivotChartFieldButton,
@@ -961,6 +974,7 @@ import {
   isSpreadsheetPivotChartType,
   nextPivotTableName,
   normalizePivotChartOptions,
+  pivotChartShowsButtons,
   pivotChartReportToRows,
   pivotChartsRefreshedWithoutAnalysis,
   pivotTableName,
@@ -1413,6 +1427,7 @@ import { pivotLiveSourceReads, planWorkbookPivots, withPivotOverlay, type PivotL
 import {
   cellShiftOutcome,
   clearContentsOutcome,
+  activeCellAfterLineDelete,
   lineEditOutcome,
   sheetSortAuthorized,
   mergeSpansDiscardValues,
@@ -1791,7 +1806,7 @@ import {
   type NavDirection,
 } from "../../../lib/spreadsheet/grid-nav";
 import { copiedCellStyle, gridCellWithDefaultLook, xlsxDefaultLookEnabled, type DefaultLookSheet } from "@mrnote/core/web/lib/spreadsheet/default-look.ts";
-import { compactLineStyleCells, deferredLineStyleBudget, expandLineStyleRuns, lineBlankAt, lineStyleAt, newCellsTakeLineFormats, writeLineBlanksIn, materializeLineStyles, printedLineBlanksSheet, type LineStyleMap } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
+import { compactLineStyleCells, deferredLineStyleBudget, expandLineStyleRuns, isMaterializedLineStyleBlank, lineBlankAt, lineStyleAt, newCellsTakeLineFormats, writeLineBlanksIn, materializeLineStyles, printedLineBlanksSheet, type LineStyleMap } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
 import {
   entryWalkAnchor,
   nextCellInReorderedSelection,
@@ -1873,7 +1888,7 @@ import {
 } from "@mrnote/core/web/lib/spreadsheet/smart-art.ts";
 import { spreadsheetSmartArtMembersAsShapes } from "../../../lib/spreadsheet/smartart-convert";
 import { SparklineGlyph, sparklineLayerInset } from "./spreadsheet/SpreadsheetSparklineGlyph";
-import { CELL_BASE_PADDING_X_PX, tableCellPaintCss, cellDisplayTextCss, cellEditorStyle, cellEditorVerticalAlign, cellInlineFormulaEditorCss, cellInputExtraCss, cellStyleCss, cellTextLayerInsetY, cellVerticalAlignCss, conditionalIconBoxCss, effectiveVerticalAlign, EXCEL_CELL_TEXT_MARGINS_PX, fittedCellNumberText, fittedCellNumberWidthPx, shrinkToFitFontSizePx, spillTextWidthPx, excelAutoFitTextWidthPx, SPREADSHEET_DEFAULT_FONT_SIZE, SPREADSHEET_WRAP_LINE_HEIGHT, spreadsheetWrapMetrics, withoutBorderCss } from "./spreadsheet/spreadsheetCellCss";
+import { CELL_BASE_PADDING_X_PX, tableCellPaintCss, cellDisplayTextCss, cellEditorStyle, cellEditorVerticalAlign, cellInlineFormulaEditorCss, cellInputExtraCss, cellStyleCss, cellTextLayerInsetY, cellVerticalAlignCss, conditionalIconBoxCss, effectiveVerticalAlign, EXCEL_CELL_TEXT_MARGINS_PX, fittedCellNumberText, fittedCellNumberWidthPx, shrinkToFitFontSizePx, shrinkToFitRunsFit, spillTextWidthPx, excelAutoFitTextWidthPx, SPREADSHEET_DEFAULT_FONT_SIZE, SPREADSHEET_WRAP_LINE_HEIGHT, spreadsheetWrapMetrics, withoutBorderCss } from "./spreadsheet/spreadsheetCellCss";
 import { type SheetModel, type SpreadsheetObject } from "./spreadsheet/spreadsheetSheetModel";
 import { useSpreadsheetPictureObjects } from "./spreadsheet/useSpreadsheetPictureObjects";
 import { registerSpreadsheetGridEventScope, spreadsheetInertCellHandlers, selectSpreadsheetCellEntryText, spreadsheetGridAutoFilterHandlers, spreadsheetGridAuxHandlers, spreadsheetGridControlHandlers, spreadsheetGridDraftHandlers, spreadsheetGridFillHandlers, spreadsheetGridLinkHandlers, spreadsheetGridRowHandlers, spreadsheetGridTableHandlers, spreadsheetRowHeaderHandlers } from "./spreadsheet/spreadsheetGridEventHandlers";
@@ -1958,7 +1973,7 @@ import { spreadsheetTableReceiptWriters } from "./spreadsheet/spreadsheetTableRe
 import { useSpreadsheetPrimarySelections } from "./spreadsheet/useSpreadsheetPrimarySelections";
 import { useSpreadsheetFilterAnswerAndPopupPlacement } from "./spreadsheet/useSpreadsheetFilterAnswerAndPopupPlacement";
 import { useSpreadsheetGridViewportCapacity } from "./spreadsheet/useSpreadsheetGridViewportCapacity";
-import { useSpreadsheetCellDisplayValues } from "./spreadsheet/useSpreadsheetCellDisplayValues";
+import { sheetShowsConstantsRaw, useSpreadsheetCellDisplayValues } from "./spreadsheet/useSpreadsheetCellDisplayValues";
 import { useSpreadsheetCellRangeDrag } from "./spreadsheet/useSpreadsheetCellRangeDrag";
 import { spreadsheetDelimitedImportPreviewBuilder } from "./spreadsheet/spreadsheetDelimitedImportPreviewBuilder";
 import { spreadsheetDelimitedImportPreviewUpdaters } from "./spreadsheet/spreadsheetDelimitedImportPreviewUpdaters";
@@ -2083,7 +2098,7 @@ import { renderSpreadsheetFillAcrossSheetsDialog } from "./spreadsheet/renderSpr
 import { renderSpreadsheetZoomDialog } from "./spreadsheet/renderSpreadsheetZoomDialog";
 import { renderSpreadsheetIterationDialog, renderSpreadsheetPrecisionWarning, spreadsheetIterationDialogLimits, type SpreadsheetIterationDialogDraft } from "./spreadsheet/renderSpreadsheetIterationDialog";
 import { cellsAtKeysRoundedAsDisplayed, cellsRoundedAsDisplayed } from "@mrnote/core/web/lib/spreadsheet/display-precision.ts";
-import { cellsWithTableOwnEdges, sheetWithoutHeaderOwnBorder, tableOwnEdgeKeys, tablesWithOwnBorders } from "@mrnote/core/web/lib/spreadsheet/table-own-borders.ts";
+import { cellHasTableEdgeMarks, cellsWithTableOwnEdges, sheetWithoutHeaderOwnBorder, tableOwnEdgeKeys, tablesWithOwnBorders } from "@mrnote/core/web/lib/spreadsheet/table-own-borders.ts";
 import { renderSpreadsheetMergeStylesDialog } from "./spreadsheet/renderSpreadsheetMergeStylesDialog";
 import { SpreadsheetTouchSelectionLayer } from "./spreadsheet/SpreadsheetTouchSelectionLayer";
 import { syntheticHandleEvent, useSpreadsheetTouchGestures } from "./spreadsheet/useSpreadsheetTouchGestures";
@@ -2489,7 +2504,11 @@ const normalizedLoadsByPage = new Map<string, NormalizedLoad>();
 const NORMALIZED_LOADS_KEPT = 4;
 
 function keptOutcome(outcome: NormalizeSheetsOutcome): NormalizeSheetsOutcome {
-  return { ...outcome, ...(outcome.setAside ? { setAside: [...outcome.setAside] } : {}) };
+  return {
+    ...outcome,
+    ...(outcome.setAside ? { setAside: [...outcome.setAside] } : {}),
+    ...(outcome.keptAsStored ? { keptAsStored: [...outcome.keptAsStored] } : {}),
+  };
 }
 
 /** For a probe: `window.__sheetLoadProbe` (an object) counts loads normalized and reused. */
@@ -3746,6 +3765,9 @@ function SpreadsheetWindow({
     (zoomActiveSheet ? viewModeBySheet[zoomActiveSheet.id] : undefined) ??
     sheetViewModeOf(zoomActiveSheet);
   const pageBreakPreview = spreadsheetViewMode === "pageBreakPreview";
+  // For a delete's active cell (activeCellAfterLineDelete), read in callbacks.
+  const spreadsheetViewModeRef = useRef(spreadsheetViewMode);
+  spreadsheetViewModeRef.current = spreadsheetViewMode;
   // Switch the active sheet's view, or every grouped sheet's, as Excel does.
   const setSpreadsheetViewMode = useCallback(
     (next: SpreadsheetViewMode | ((current: SpreadsheetViewMode) => SpreadsheetViewMode)) => {
@@ -6113,7 +6135,7 @@ function SpreadsheetWindow({
   const selectionGlideEnabledRef = useRef(false);
   const selectionGlideScopeRef = useRef<string>("");
   const selectionGlide = useMemo(() => createSelectionGlide({
-    getStage: () => gridWrapRef.current?.querySelector<HTMLElement>(":scope > .spreadsheet-window__grid-stage") ?? null,
+    getStage: (range) => selectionStageIn(gridWrapRef.current, range),
     enabled: () => selectionGlideEnabledRef.current,
     scope: () => selectionGlideScopeRef.current,
   }), []);
@@ -6878,13 +6900,13 @@ function SpreadsheetWindow({
   // fill or land on wears one frame (Excel's grey outline) that glides from
   // cell to cell with the pointer instead of stepping.
   const fillFrame = useMemo(() => createRangeFrame({
-    getStage: () => gridWrapRef.current?.querySelector<HTMLElement>(":scope > .spreadsheet-window__grid-stage") ?? null,
+    getStage: (range) => selectionStageIn(gridWrapRef.current, range),
     className: "spreadsheet-window__drag-frame",
     testId: "spreadsheet-fill-frame",
     stageAttribute: "data-fill-frame",
   }), []);
   const moveFrame = useMemo(() => createRangeFrame({
-    getStage: () => gridWrapRef.current?.querySelector<HTMLElement>(":scope > .spreadsheet-window__grid-stage") ?? null,
+    getStage: (range) => selectionStageIn(gridWrapRef.current, range),
     className: "spreadsheet-window__drag-frame",
     testId: "spreadsheet-move-frame",
     stageAttribute: "data-move-frame",
@@ -7050,8 +7072,11 @@ function SpreadsheetWindow({
           // A tiled workbook's body without its tiles is never saved over.
           ("tiledWorkbook" in loadedContent && !tiledRef.current && !tiledElsewhere),
       );
-      setAsideValuesRef.current = loadOutcome.setAside ?? [];
-      setSetAsideValueCount(setAsideValuesRef.current.length);
+      
+      // those set aside, but are no value the workbook failed to show.
+      const loadSetAside = loadOutcome.setAside ?? [];
+      setAsideValuesRef.current = [...loadSetAside, ...(loadOutcome.keptAsStored ?? [])];
+      setSetAsideValueCount(loadSetAside.length);
       
       // a workbook opened with values set aside, or one that could not be
       // read at all, reaches the alert mail by these names.
@@ -7060,11 +7085,11 @@ function SpreadsheetWindow({
           { name: "SpreadsheetContentUnreadable", message: "schema_rejected" },
           { source: "window", windowType: "spreadsheet" },
         );
-      } else if (setAsideValuesRef.current.length > 0) {
+      } else if (loadSetAside.length > 0) {
         reportClientError(
           {
             name: "SpreadsheetContentReadDegraded",
-            message: [...new Set(setAsideValuesRef.current.map((entry) => entry.path[0] ?? "value"))].join(","),
+            message: [...new Set(loadSetAside.map((entry) => entry.path[0] ?? "value"))].join(","),
           },
           { source: "window", windowType: "spreadsheet" },
         );
@@ -7591,6 +7616,8 @@ function SpreadsheetWindow({
     error: Boolean(autosave.error), saveSlow: Boolean(autosave.saveSlow), dirty: Boolean(autosave.isDirty),
     catchingUp: Boolean(sourceAutosave.workbookCatchingUp), roomsAhead: sourceAutosave.workbookRoomsAheadOfSave === true,
     retrying: autosave.guaranteedRetrying ?? false,
+    preparing: savePreparationPending, validating: validatedDraftPending, retained: retainedValidatedDraftsRef.current.size,
+    tiles: tiledSavingRef.current, source: sourceAutosave.saveStatus, guest: guestMode,
   });
   useSaveSurfaceStallReport({
     pageId, pageType: "spreadsheet", enabled: !embeddedWorkbook && !autosave.readOnly && !autosave.loading,
@@ -7899,8 +7926,8 @@ function SpreadsheetWindow({
     const seedOutcome: NormalizeSheetsOutcome = { schemaRejected: false };
     const seedSheets = normalizeSheets(seedContent, seedOutcome);
     setContentSchemaRejected(seedOutcome.schemaRejected);
-    setAsideValuesRef.current = seedOutcome.setAside ?? [];
-    setSetAsideValueCount(setAsideValuesRef.current.length);
+    setAsideValuesRef.current = [...(seedOutcome.setAside ?? []), ...(seedOutcome.keptAsStored ?? [])];
+    setSetAsideValueCount(seedOutcome.setAside?.length ?? 0);
     const seedViewOptions = normalizeViewOptions(seedContent);
     const seedDataSourceInventory = normalizeDataSourceInventory(
       seedContent["dataSourceInventory"],
@@ -8986,7 +9013,7 @@ function SpreadsheetWindow({
   // holding a value or a format of their own (and merges), not the columns
   // or rows a whole-column / whole-row style reaches (RO046: B:IV styled,
   // 6 pages in Excel, 259 here before). Drawings extend it in the geometry.
-  const printedExtent = useMemo(() => {
+  const printedOwnExtent = useMemo(() => {
     if (embeddedWorkbook?.presentation !== "print" || String(sheet.printSettings?.printArea ?? "").trim()) return null;
     // The window writes row and column formats onto the blank cells they
     // reach (materializeLineStyles); those blanks are the line's format, not
@@ -9016,7 +9043,7 @@ function SpreadsheetWindow({
     // are filled white and whose K5 is a cell of its own, prints A:G and a
     // second page of the white H:K where one page printed here.
     const lineOnly: string[] = [];
-    for (const key of printedOccupiedLineBlanks(sheet.cells, own, (sheet as { occupiedExtent?: unknown }).occupiedExtent)) {
+    for (const key of printedOccupiedLineBlanks(sheet.cells, own, (sheet as { occupiedExtent?: unknown }).occupiedExtent, (sheet as { rowSpans?: unknown }).rowSpans)) {
       if (!visible[key]) lineOnly.push(key);
       visible[key] = { value: "x" };
     }
@@ -9141,9 +9168,11 @@ function SpreadsheetWindow({
       ),
     [sheet.advancedFilterState, sheet.columnCount, sheet.rowCount],
   );
+  
+  // ones is no stop for Tab or the arrows.
   const manualHiddenCols = useMemo(
-    () => normalizeManualHidden(sheet.manuallyHiddenCols, sheet.columnCount),
-    [sheet.manuallyHiddenCols, sheet.columnCount],
+    () => normalizeManualHidden(sheet.manuallyHiddenCols, MAX_SHEET_COLS),
+    [sheet.manuallyHiddenCols],
   );
   // The deepest outline level per axis; drives whether the gutter renders and
   // how many corner level buttons (1..maxLevel+1) appear. 0 = no groups.
@@ -11080,6 +11109,43 @@ function SpreadsheetWindow({
     }
     return union;
   }, [sheetPivotReports]);
+  // A PivotTable whose cache refreshes on open prints the refreshed report
+  // the grid shows (X-158), however far past the cells the file saved it
+  // reaches: r490's "en" workbooks save their Pivoted sheet empty (location
+  // A1, no rows cached), and Windows Excel, refreshing on open, prints
+  // A1:B1807 over 38 pages (lookwin lw110 ops probe) where this print stopped
+  // at the one saved cell and printed "Row Labels" alone.
+  const printedExtent = useMemo(() => {
+    if (!printedOwnExtent) return printedOwnExtent;
+    let rows = printedOwnExtent.rows;
+    let cols = printedOwnExtent.cols;
+    let keys = printedOwnExtent.keys;
+    for (const report of sheetPivotReports) {
+      if (report.pivot.native?.refreshOnLoad !== true) continue;
+      if (keys === printedOwnExtent.keys) keys = { ...keys };
+      for (const cell of report.plan.cells.values()) {
+        if (cell.row >= MAX_GRID_ROWS || cell.col >= MAX_GRID_COLUMNS) continue;
+        rows = Math.max(rows, cell.row + 1);
+        cols = Math.max(cols, cell.col + 1);
+        keys[`${cell.row}:${cell.col}`] = { value: "x" };
+      }
+    }
+    // A table prints to the last row and column of its range, values or
+    // not (lookwin abs2 T1/T2: A1:B200 and A5:B200 over values to row 5 or
+    // 10 print 4 pages, headers or none; R492-X10's profile table A5:G384
+    // over values to row 55 prints its blank rows, 6 pages).
+    for (const table of dataTables) {
+      // Its totals row is the row under its range (tableTotalsRowIndex).
+      const r2 = table.range.r2 + (table.totalsRow ? 1 : 0);
+      const { c2 } = table.range;
+      if (r2 < rows && c2 < cols) continue;
+      if (keys === printedOwnExtent.keys) keys = { ...keys };
+      rows = Math.max(rows, r2 + 1);
+      cols = Math.max(cols, c2 + 1);
+      keys[`${r2}:${c2}`] = { value: "x" };
+    }
+    return keys === printedOwnExtent.keys ? printedOwnExtent : { rows, cols, keys };
+  }, [printedOwnExtent, sheetPivotReports, dataTables]);
   const pivotReportAt = useCallback(
     (row: number, col: number) =>
       sheetPivotReports.find(
@@ -13993,6 +14059,10 @@ function SpreadsheetWindow({
               : {}),
             ...(copiedLink && !copiedLink.area && cell?.hyperlinkDisplay
               ? { hyperlinkDisplay: cell.hyperlinkDisplay }
+              : {}),
+            
+            ...(!copiedLink && !cell?.hyperlink && cell?.inertHyperlink
+              ? { inertHyperlink: cell.inertHyperlink }
               : {}),
             // The area the link is: a paste inside it takes what is beneath (XC-206 C 11).
             ...(() => {
@@ -17511,6 +17581,11 @@ function SpreadsheetWindow({
       : cellSortNumericValue(cell, row, col) !== null);
     // A number under a text-only format (`@`) reads as General but sits left,
     // as text does (MEASURED: Excel for Mac 16, 123.45 formatted `@`).
+    // Under Show Formulas every cell sits left, whatever its alignment
+    // (Windows Excel, lookwin lw109/sf: 175, 1234.5, TRUE, a centred 2 and
+    // right-aligned 3 and =A1*2 all print at their columns' left edges;
+    // R488-X78).
+    if (sheetShowsFormulas) return resolveSpreadsheetFontStyle({ ...style, textAlign: "left" });
     const numericRight = numeric && !(cell?.style?.numberFormat && isTextOnlyNumberFormat(cell.style.numberFormat));
     if (style.textAlign || numeric || showFormula || pivot || !cell?.value) {
       return resolveSpreadsheetFontStyle({ ...style, textAlign: style.textAlign ?? (numericRight ? "right" : "left") });
@@ -18376,6 +18451,12 @@ function SpreadsheetWindow({
   // (_native_print_sheet_scaled's _statedAutoRows). The value is each row's
   // single-line floor, px: the tallest of its cells' own lines.
   const printPresentation = embeddedWorkbook?.presentation === "print";
+  // Show Formulas prints every column twice its width, as Excel shows it
+  // (Microsoft KB Q72065; R488-X78: 8.83-character columns 100 pt apart).
+  const formulaViewPrint = printPresentation && sheetShowsFormulas;
+  const formulaViewColumnWidths = useMemo(() => (formulaViewPrint && columnWidths
+    ? Object.fromEntries(Object.entries(columnWidths).map(([column, width]) => [column, width * 2])) : columnWidths),
+  [formulaViewPrint, columnWidths]);
   const statedRefitRows = useMemo(() => {
     // Asked again when the hinted wrap's extra table lands (advancesOf below).
     void textEngineEpoch;
@@ -18408,13 +18489,17 @@ function SpreadsheetWindow({
       const rowKey = key.slice(0, separator);
       const cell = sheet.cells[key];
       if (customFit && !dropped.has(rowKey) && !floors.has(rowKey) && sheet.rowHeights?.[rowKey] === undefined
-        && metrics.rows[rowKey] === undefined && cell) {
+        && metrics.rows[rowKey] === undefined && cell && !isMaterializedLineStyleBlank(cell)) {
         // A row the file holds a cell of is fitted, to its text and to its
         // empty cells' faces as in any sheet, below the default too (lookwin
         // p210d-lw: under a 15, 12.75 or 20 pt custom default "x" in Arial 8
         // and an empty cell alike stand 17 px, the Arial 10 Normal font's
         // row, an empty Arial 20 cell 34); a row with no cell keeps the
-        // default (R261-X03's rows 1-9). Not a multi-row merge's.
+        // default (R261-X03's rows 1-9), its column formats' blanks
+        // (materializeLineStyles) are no cells of the file (R488-X49: row 3,
+        // no record under a 12.95 pt custom default, stands 17 px in Excel,
+        // not its ＭＳ Ｐゴシック column format's 16: 55 rows a page, not 56).
+        // Not a multi-row merge's.
         const span = spanAt(Number(rowKey), Number(key.slice(separator + 1)), mergeSpans);
         if (!span || span.rowSpan <= 1) floors.set(rowKey, 0);
       }
@@ -19781,10 +19866,12 @@ function SpreadsheetWindow({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the active cell is read when the heights change, not followed
   }, [rowHeight, sheet.id, freeze.freezeRows, splitActive, spreadsheetViewMode, gridRowCount, toContentPx, toScreenPx]);
   // Where the frame may glide: one scrolling grid, read left to right, on an
-  // editable surface in Normal view (a frozen cell is refused by the glide).
-  selectionGlideEnabledRef.current =
-    !previewSurface && !splitActive && !gridRtl && spreadsheetViewMode === "normal";
-  selectionGlideScopeRef.current = `${pageId}:${sheet.id}`;
+  // editable surface, in every view -- Normal, Page Break Preview (the same
+  // grid) and Page Layout (the page showing the selection) select alike. A
+  // frozen cell is refused by the glide.
+  selectionGlideEnabledRef.current = !previewSurface && !splitActive && !gridRtl &&
+    embeddedWorkbook?.presentation !== "print";
+  selectionGlideScopeRef.current = `${pageId}:${sheet.id}:${spreadsheetViewMode}`;
   const splitSelectionFitsPersistedGrid =
     activeCell.row >= 0 &&
     activeCell.col >= 0 &&
@@ -21678,6 +21765,14 @@ function SpreadsheetWindow({
   const [serverExporting, setServerExporting] = useState(false);
   // The format of the export running (its label), or null.
   const serverExportInFlightRef = useRef<string | null>(null);
+  // The running export's controller: its bounded waits abort with it.
+  const serverExportControllerRef = useRef<AbortController | null>(null);
+  useEffect(() => () => {
+    // A window closed mid-export: its waits are cancelled and the latch freed.
+    serverExportControllerRef.current?.abort(new ExportCancelledError());
+    serverExportControllerRef.current = null;
+    serverExportInFlightRef.current = null;
+  }, []);
   // The status bar's export chip (the Docs OfficeStatusProgress): preparing
   // while an export runs, then ready or failed for a moment. The toasts stay;
   // the chip is where the phase can still be read after they are gone.
@@ -21823,7 +21918,7 @@ function SpreadsheetWindow({
     if (running) toast({ title: t("spreadsheet.exportView.preparing", { format: running }) });
   }, [t]);
   const runServerExport = useCallback(
-    async (format: PageExportFormat, options: { lossyConsent?: true } = {}) => {
+    async (format: PageExportFormat, options: { lossyConsent?: true; authorityReruns?: number } = {}) => {
       if (guestNeedsAccount(onGuestExportRequestRef)) return;
       if (serverExportInFlightRef.current) {
         announceExportInFlight();
@@ -21831,6 +21926,15 @@ function SpreadsheetWindow({
       }
       const formatLabel = format.toUpperCase();
       serverExportInFlightRef.current = formatLabel;
+      // Every wait below is bounded under this attempt's controller
+      // (R490-X01: an export whose save never answered held the latch, the
+      // menu stayed disabled and nothing was said); the window closing
+      // cancels it.
+      const controller = new AbortController();
+      serverExportControllerRef.current = controller;
+      const stillSettling = t("spreadsheet.exportView.stillSettling");
+      const prepareWithin = <T,>(work: () => Promise<T>) =>
+        withinExportDeadline(controller, () => work(), stillSettling, EXPORT_PREPARE_DEADLINE_MS);
       setServerExporting(true);
       reportExportStatus("preparing", formatLabel);
       let savedContentVersion: number | null = null;
@@ -21840,16 +21944,20 @@ function SpreadsheetWindow({
         // arrives and write authority is known, and the export reads the
         // server's page: it waits for that, then runs again on the workbook
         // as it then stands (user audit: an export right after a reopen ended
-        // "无法导出 XLSX" before sending anything).
-        const authority = await autosave.waitUntilAuthoritative?.();
-        if (authority === "timeout") throw new Error(t("spreadsheet.exportView.stillSettling"));
+        // "无法导出 XLSX" before sending anything). A few times, not forever.
+        const authority = await prepareWithin(async () => (await autosave.waitUntilAuthoritative?.()) ?? "ready");
+        if (authority === "timeout") throw new Error(stillSettling);
         if (authority === "waited") {
+          if ((options.authorityReruns ?? 0) >= EXPORT_AUTHORITY_RERUNS) throw new ExportDeadlineError(stillSettling);
           runAgain = true;
           return;
         }
         if(embeddedWorkbookRef.current){
           if(format!=="xlsx" || !embeddedWorkbookRef.current.exportXlsx)throw new Error(t("spreadsheet.uiCopy.chartWorkbooksSupportXLSXCSVAndImageExport"));
-          await embeddedWorkbookRef.current.exportXlsx(await prepareCurrentContentWhenSettled());
+          const embedded = embeddedWorkbookRef.current;
+          const content = await prepareWithin(() => prepareCurrentContentWhenSettled());
+          await withinExportDeadline(controller, async () => embedded.exportXlsx?.(content),
+            t("toolbar.exportFailed", { format: formatLabel }), EXPORT_TRANSFER_DEADLINE_MS);
           reportExportStatus("ready", formatLabel);
           return;
         }
@@ -21862,19 +21970,20 @@ function SpreadsheetWindow({
           ...(activeSession.sortState ? { sortState: structuredClone(activeSession.sortState) } : {}),
           ...(sheetViewDisplayOrderRef.current ? { rowOrder: [...sheetViewDisplayOrderRef.current] } : {}),
         } : undefined;
-        const savedPage = await saveCurrentDraftForServerExport(format);
+        const savedPage = await prepareWithin(() => saveCurrentDraftForServerExport(format));
         savedContentVersion = savedPage.content_version;
         // Export as PDF is the printed workbook: the same view Print sends,
         // with the cells the grid paints beyond what it stores (conditional
         // formats, PivotTable and table styles, spills, slicers).
-        const exportAt = async (page: PageItem & { content_version: number }) => {
+        const exportAt = (page: PageItem & { content_version: number }) => withinExportDeadline(controller, async (signal) => {
           const spreadsheetView: SpreadsheetPdfExportView | undefined = format === "pdf"
             ? await pdfViewForSavedPageRef.current(page, capturedSession)
             : undefined;
           await downloadPageExport({ pageId, format, expectedContentVersion: page.content_version,
             ...(options.lossyConsent ? { lossyConsent: true } : {}),
-            ...(spreadsheetView ? { spreadsheetView } : {}), ...({}) });
-        };
+            ...(spreadsheetView ? { spreadsheetView } : {}), ...({}),
+            signal });
+        }, t("toolbar.exportFailed", { format: formatLabel }), EXPORT_TRANSFER_DEADLINE_MS);
         try {
           await exportAt(savedPage);
         } catch (error) {
@@ -21887,13 +21996,15 @@ function SpreadsheetWindow({
           const newer = options.lossyConsent ? null : pageExportNewerContentVersion(error);
           if (newer === null || newer <= savedPage.content_version || !exportSnapshotBoundary.active) throw error;
           savedContentVersion = newer;
-          await exportAt(format === "pdf" ? await serverPageAtVersion(newer) : { ...savedPage, content_version: newer });
+          await exportAt(format === "pdf" ? await prepareWithin(() => serverPageAtVersion(newer)) : { ...savedPage, content_version: newer });
         }
         toast({
           title: t("toolbar.exportReady", { format: formatLabel }),
         });
         reportExportStatus("ready", formatLabel);
       } catch (error) {
+        // The window went away while the export waited: nothing to say.
+        if (isExportCancelledError(error)) return;
         if (
           (format === "xlsx" || format === "ods" || format === "xls" || format === "xltx" || format === "fods" || format === "excelxml" || format === "slk" || format === "dif") &&
           savedContentVersion !== null &&
@@ -21924,6 +22035,16 @@ function SpreadsheetWindow({
         // MRNote Classic: an .ods needs LibreOffice, which the app can
         // fetch; the export runs again once it is enabled.
         const libreOffice = canEnableLibreOfficeFor(error);
+        // A wait that ran out is said, and offered again (a fresh attempt).
+        const retryLabel = t("spreadsheet.saveResilience.retry");
+        const retryAfterDeadline = isExportDeadlineError(error)
+          ? (
+              <ToastAction altText={retryLabel} data-testid="spreadsheet-export-retry"
+                onClick={() => void runServerExportRef.current(format, options.lossyConsent ? { lossyConsent: true } : {})}>
+                {retryLabel}
+              </ToastAction>
+            )
+          : undefined;
         toast({
           title: libreOffice ? t("toolbar.exportFailed") : failure,
           variant: "destructive",
@@ -21933,16 +22054,22 @@ function SpreadsheetWindow({
                 action: libreOfficeToastAction(error, () => void runServerExportRef.current(format, options)),
                 duration: Number.POSITIVE_INFINITY,
               }
-            : {}),
+            : retryAfterDeadline
+              ? { action: retryAfterDeadline }
+              : {}),
         });
         reportExportStatus("failed", formatLabel, failure);
       } finally {
+        // The latch is the attempt's: released on every way out of it.
         serverExportInFlightRef.current = null;
+        if (serverExportControllerRef.current === controller) serverExportControllerRef.current = null;
         setServerExporting(false);
         // Here, not after the block: the wait returns from inside `try`, so a
         // line after `finally` never ran and the export stopped at
-        // "preparing" with nothing sent.
-        if (runAgain) void runServerExportRef.current(format, options);
+        // "preparing" with nothing sent. Not once the window is gone.
+        if (runAgain && !controller.signal.aborted && exportSnapshotBoundary.active) {
+          void runServerExportRef.current(format, { ...options, authorityReruns: (options.authorityReruns ?? 0) + 1 });
+        }
       }
     },
     [
@@ -21990,8 +22117,8 @@ function SpreadsheetWindow({
     ? t("spreadsheet.uiCopy.exportPDFFromTheParentDocument")
     : undefined;
   // Page Setup's Print… runs the print of the render after its apply.
-  const printWorkbookRef = useRef<(scope?: SpreadsheetPrintScopeView) => Promise<void>>(async () => {});
-  const printWorkbook = async (scope?: SpreadsheetPrintScopeView) => {
+  const printWorkbookRef = useRef<(scope?: SpreadsheetPrintScopeView, authorityReruns?: number) => Promise<void>>(async () => {});
+  const printWorkbook = async (scope?: SpreadsheetPrintScopeView, authorityReruns = 0) => {
     if (guestNeedsAccount(onGuestExportRequestRef)) return;
     if (printUnavailableReason) {
       toast({ title: printUnavailableReason, variant: "destructive" });
@@ -22002,6 +22129,12 @@ function SpreadsheetWindow({
       return;
     }
     serverExportInFlightRef.current = "PDF";
+    // As the exports: every wait bounded under this print's controller.
+    const controller = new AbortController();
+    serverExportControllerRef.current = controller;
+    const stillSettling = t("spreadsheet.exportView.stillSettling");
+    const prepareWithin = <T,>(work: () => Promise<T>) =>
+      withinExportDeadline(controller, () => work(), stillSettling, EXPORT_PREPARE_DEADLINE_MS);
     setServerExporting(true);
     // "Preparing to print", not "Preparing to export PDF": the PDF is only
     
@@ -22010,15 +22143,16 @@ function SpreadsheetWindow({
     try {
       // As the exports do: a reopened workbook's print waits for the
       // server's page, then runs again on the workbook as it then stands.
-      const authority = await autosave.waitUntilAuthoritative?.();
-      if (authority === "timeout") throw new Error(t("spreadsheet.exportView.stillSettling"));
+      const authority = await prepareWithin(async () => (await autosave.waitUntilAuthoritative?.()) ?? "ready");
+      if (authority === "timeout") throw new Error(stillSettling);
       if (authority === "waited") {
+        if (authorityReruns >= EXPORT_AUTHORITY_RERUNS) throw new ExportDeadlineError(stillSettling);
         runAgain = true;
         return;
       }
       const capturedSession = captureExportSheetViewSession();
-      const savedPage = await saveCurrentDraftForServerExport("pdf");
-      const fetchAt = async (page: PageItem & { content_version: number }) => fetchPageExportBlob({
+      const savedPage = await prepareWithin(() => saveCurrentDraftForServerExport("pdf"));
+      const fetchAt = (page: PageItem & { content_version: number }) => withinExportDeadline(controller, async (signal) => fetchPageExportBlob({
         pageId,
         format: "pdf",
         expectedContentVersion: page.content_version,
@@ -22031,7 +22165,8 @@ function SpreadsheetWindow({
         // Printed as Excel's File > Print prints, not as its Save as PDF
         // (the spilled tails, CRITERIA XC-155).
         printRoute: true,
-      });
+        signal,
+      }), t("toolbar.exportFailed", { format: "PDF" }), EXPORT_TRANSFER_DEADLINE_MS);
       let pdf: Blob;
       try {
         pdf = await fetchAt(savedPage);
@@ -22039,20 +22174,38 @@ function SpreadsheetWindow({
         // A save that landed after the pinned version: printed at it, once.
         const newer = pageExportNewerContentVersion(error);
         if (newer === null || newer <= savedPage.content_version || !exportSnapshotBoundary.active) throw error;
-        pdf = await fetchAt(await serverPageAtVersion(newer));
+        pdf = await fetchAt(await prepareWithin(() => serverPageAtVersion(newer)));
       }
       reportExportStatus(null);
       if ((await printPdfBlob(pdf)) === "blocked") {
         toast({ title: t("spreadsheet.printBlocked"), variant: "destructive" });
       }
     } catch (error) {
+      if (isExportCancelledError(error)) return;
       const failure = serverExportFailureTitle(error);
-      toast({ title: failure, variant: "destructive" });
+      const retryLabel = t("spreadsheet.saveResilience.retry");
+      toast({
+        title: failure,
+        variant: "destructive",
+        ...(isExportDeadlineError(error)
+          ? {
+              action: (
+                <ToastAction altText={retryLabel} data-testid="spreadsheet-print-retry"
+                  onClick={() => void printWorkbookRef.current(scope)}>
+                  {retryLabel}
+                </ToastAction>
+              ),
+            }
+          : {}),
+      });
       reportExportStatus("failed", "PDF", failure);
     } finally {
       serverExportInFlightRef.current = null;
+      if (serverExportControllerRef.current === controller) serverExportControllerRef.current = null;
       setServerExporting(false);
-      if (runAgain) void printWorkbookRef.current(scope);
+      if (runAgain && !controller.signal.aborted && exportSnapshotBoundary.active) {
+        void printWorkbookRef.current(scope, authorityReruns + 1);
+      }
     }
   };
   useInsertionEffect(() => {
@@ -22537,7 +22690,15 @@ function SpreadsheetWindow({
           ? tableOwnEdgeKeys([...earlierTables, ...ownTables])
           : null;
         const relayKeys = structural ? [...new Set([...knownChange.keys, ...structural])] : knownChange.keys;
-        const laid = anyOwn ? cellsWithTableOwnEdges(nextSheet.cells, relayKeys, ownTables) : nextSheet.cells;
+        // No table on this sheet: cells pasted from one take off the sides it
+        // laid on them and get their own edges back (xlsx-rounds R488-X26).
+        const laid = anyOwn
+          ? cellsWithTableOwnEdges(nextSheet.cells, relayKeys, ownTables)
+          : cellsWithTableOwnEdges(
+            nextSheet.cells,
+            relayKeys.filter((key) => cellHasTableEdgeMarks((nextSheet.cells as Record<string, unknown>)[key])),
+            [],
+          );
         if (laid !== nextSheet.cells) {
           nextSheet = { ...nextSheet, cells: laid as typeof nextSheet.cells };
           knownChange = { before: sheet.cells, after: nextSheet.cells, keys: knownChange.keys };
@@ -25599,11 +25760,8 @@ function SpreadsheetWindow({
     tiledLineEditHeldCellsRef.current = new Map();
     applyTiledModelRef.current(() => workbookAfterActiveSheetEdit(live, index, current, outcome.sheet, outcome.followOthers).sheets);
     if (op === "delete") {
-      setActiveCell((prev) =>
-        axis === "row"
-          ? { ...prev, row: Math.min(prev.row, outcome.sheet.rowCount - 1) }
-          : { ...prev, col: Math.min(prev.col, outcome.sheet.columnCount - 1) },
-      );
+      const normalView = spreadsheetViewModeRef.current === "normal";
+      setActiveCell((prev) => activeCellAfterLineDelete(prev, outcome.sheet, axis, normalView));
     }
     // The ribbon or the menu pressed gave the edit; the next word goes to the cell:
     // now, for a key already on its way, and again once the menu has closed.
@@ -25933,11 +26091,8 @@ function SpreadsheetWindow({
       changeLogStructuralRef.current = { sheetId: structuralSheet.id, axis, op, at, count };
       replaceActiveSheet(next, undefined, "coordinate", undefined, outcome.followOthers);
       if (op === "delete") {
-        setActiveCell((prev) =>
-          axis === "row"
-            ? { ...prev, row: Math.min(prev.row, next.rowCount - 1) }
-            : { ...prev, col: Math.min(prev.col, next.columnCount - 1) },
-        );
+        const normalView = spreadsheetViewModeRef.current === "normal";
+        setActiveCell((prev) => activeCellAfterLineDelete(prev, next, axis, normalView));
       }
       return "done";
     },
@@ -34261,6 +34416,58 @@ function SpreadsheetWindow({
     },
     [pivotChartBoundFor],
   );
+  // The names a PivotChart's printed field buttons carry (Page Layout and
+  // print draw them as Windows Excel prints them): the report's, or -- a
+  // PivotTable kept as the file wrote it (preserve-only), which has none --
+  // the recipe's own captions and the cache's field names.
+  const pivotChartPrintFieldsFor = useCallback(
+    (chart: { pivotSource?: unknown; pivotOptions?: unknown }): PivotPrintButtonFields | null => {
+      const bound = pivotChartBoundFor(normalizeSpreadsheetPivotChartSource(chart.pivotSource));
+      if (!bound) return null;
+      const options = normalizePivotChartOptions(chart.pivotOptions);
+      if (options?.visible === false) return null;
+      if (bound.report) {
+        const layout = pivotChartFieldButtonLayout(bound.report, bound.pivot, options);
+        return {
+          filters: layout.top.filter((entry) => entry.kind === "filter").map((entry) => entry.field.caption),
+          values: layout.top.filter((entry) => entry.kind === "values").map((entry) => entry.field.caption),
+          legend: layout.legend.map((entry) => entry.field.caption),
+          axis: layout.axis.map((entry) => entry.field.caption),
+          expandCollapse: layout.expandCollapse,
+          filtered: [...layout.top, ...layout.legend, ...layout.axis]
+            .filter((entry) => entry.filtered)
+            .map((entry) => entry.field.caption),
+        };
+      }
+      const pivot = bound.pivot as Partial<PivotConfig>;
+      const sourceSheet = pivot.native ? sheets.find((candidate) => candidate.name === pivot.native?.sourceSheetName) : undefined;
+      const sourceRange = sourceSheet ? normalizePivotRange(pivot.native?.sourceRef) : null;
+      const nativeName = (colIndex: number) => {
+        const own = pivot.native?.fields.find((field) => field.sourceIndex === colIndex)?.name;
+        if (own === undefined) return undefined;
+        const header = sourceRange ? sourceSheet?.cells[`${sourceRange.r1}:${sourceRange.c1 + colIndex}`]?.value : undefined;
+        return pivotPrintFieldNameAsWritten(own, header);
+      };
+      const name = (colIndex: number) =>
+        pivot.fieldCaptions?.find((entry) => entry.colIndex === colIndex)?.caption ??
+        nativeName(colIndex) ??
+        `Field${colIndex + 1}`;
+      const rows = pivot.rows ?? [];
+      // A field that hides some of its items prints its wider filter mark.
+      const filtered = [...(pivot.filters ?? []), ...(pivot.itemFilters ?? [])]
+        .filter((entry) => entry.selected.length > 0)
+        .map((entry) => name(entry.colIndex));
+      return {
+        filters: pivotChartShowsButtons(options, "filter") ? (pivot.filters ?? []).map((entry) => name(entry.colIndex)) : [],
+        values: pivotChartShowsButtons(options, "values") ? (pivot.values ?? []).map((field) => valueFieldLabel(field, name(field.colIndex))) : [],
+        legend: pivotChartShowsButtons(options, "legend") ? (pivot.columns ?? []).map(name) : [],
+        axis: pivotChartShowsButtons(options, "axis") ? rows.map(name) : [],
+        expandCollapse: pivotChartShowsButtons(options, "expandCollapse") && rows.length > 1,
+        filtered,
+      };
+    },
+    [pivotChartBoundFor, sheets],
+  );
   // Why one PivotTable (by sheet and slot) cannot take an edit from a chart
   // or a report button now; null when it can. The same bounds every
   // PivotTable writer keeps: a writable page and route, an unprotected sheet,
@@ -34744,6 +34951,79 @@ function SpreadsheetWindow({
     } };
   };
   const pageLayoutDrawings = useMemo(() => {
+    // A PivotChart's field buttons as Windows Excel prints them: boxes at
+    // the chart area's top and bottom (and over its legend), the picture
+    // laid out in what they leave (lib/spreadsheet/pivot-chart-print-buttons).
+    const withPivotPrintButtons = (
+      object: { pivotSource?: unknown; pivotOptions?: unknown },
+      chartData: { rows?: readonly (readonly unknown[])[]; headerRow?: boolean } | null,
+      width: number,
+      height: number,
+      canvas: (
+        pictureRoom: { top: number; bottom: number; legend?: { leftPx: number; middlePx: number }; legendRoomOnly?: boolean } | undefined,
+      ) => ReactElement,
+    ): ReactElement => {
+      const fields = object.pivotSource ? pivotChartPrintFieldsFor(object) : null;
+      // Printed without its legend button, a PivotChart prints no legend but
+      // keeps its room (pivotChartPrintsLegend); one whose PivotTable is not
+      // found prints it.
+      const legendHidden = Boolean(object.pivotSource) &&
+        Boolean(pivotChartBoundFor(normalizeSpreadsheetPivotChartSource(object.pivotSource))) &&
+        !pivotChartPrintsLegend(fields);
+      const header = chartData?.headerRow !== false ? chartData?.rows?.[0] : undefined;
+      const printed = fields
+        ? pivotChartPrintButtons(
+            fields,
+            width * 0.75,
+            height * 0.75,
+            Math.max(1, (header?.length ?? 2) - 1),
+            (header ?? []).slice(1).map((cell) => (cell === null || cell === undefined ? "" : String(cell))),
+          )
+        : null;
+      if (!printed) return canvas(legendHidden ? { top: 0, bottom: 0, legendRoomOnly: true } : undefined);
+      const px = 4 / 3;
+      return (
+        <div style={{ position: "relative", width, height }} data-pivot-chart-print-buttons="">
+          {canvas({
+            top: printed.roomTopPt * px,
+            bottom: printed.roomBottomPt * px,
+            ...(printed.legend
+              ? { legend: { leftPx: printed.legend.leftPt * px, middlePx: printed.legend.entriesMiddlePt * px } }
+              : {}),
+            ...(legendHidden ? { legendRoomOnly: true } : {}),
+          })}
+          {printed.buttons.map((entry, index) => (
+            <span
+              key={index}
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                left: entry.leftPt * px,
+                top: entry.topPt * px,
+                width: entry.widthPt * px,
+                height: PIVOT_PRINT_BUTTON_HEIGHT_PT * px,
+                boxSizing: "border-box",
+                background: "#ffffff",
+                outline: `${PIVOT_PRINT_BUTTON_LINE_PT * px}px solid ${PIVOT_PRINT_BUTTON_LINE_COLOR}`,
+                outlineOffset: -(PIVOT_PRINT_BUTTON_LINE_PT * px) / 2,
+                overflow: "hidden",
+                whiteSpace: "pre",
+                color: "#000000",
+                fontFamily: spreadsheetFontStack("Calibri"),
+                fontSize: entry.fontPt * px,
+                // The name's baseline 2.67 pt over the box's bottom: a line
+                // box the button's height stands Calibri's (0.75 / 0.25 em)
+                // baseline a quarter em under its middle.
+                lineHeight: `${PIVOT_PRINT_BUTTON_HEIGHT_PT * px}px`,
+                paddingTop: (PIVOT_PRINT_BUTTON_HEIGHT_PT / 2 - PIVOT_PRINT_BUTTON_BASELINE_PT - 0.25 * entry.fontPt) * px,
+              }}
+            >
+              {entry.text}
+            </span>
+          ))}
+        </div>
+      );
+    };
     // The sheet's own grid, as the workbook states it (the API's
     // drawing_rotation_box._axes): the widths and heights a drawing's
     // markers were measured on, before Windows Excel's own fit.
@@ -34816,7 +35096,10 @@ function SpreadsheetWindow({
             />
           </div>
         ) : object.type === "image" && object.src ? (
-          <div style={{ position: "relative", width, height, overflow: "hidden", clipPath: object.pictureGeometry ? officePictureGeometryClipPath(object.pictureGeometry.preset, object.pictureGeometry.adjustments, width, height) || undefined : undefined, transform: `scale(${object.anchor?.flipH ? -1 : 1}, ${object.anchor?.flipV ? -1 : 1})` }}>
+          <div style={{ position: "relative", width, height, overflow: "hidden", clipPath: object.pictureGeometry ? officePictureGeometryClipPath(object.pictureGeometry.preset, object.pictureGeometry.adjustments, width, height) || undefined : undefined, transform: `scale(${object.anchor?.flipH ? -1 : 1}, ${object.anchor?.flipV ? -1 : 1})`,
+            // Picture Border as the file states it (readings row 1030),
+            // outside the picture and at the print's scale.
+            ...(object.pictureGeometry ? {} : spreadsheetPictureBorderOutline(object, width / sheetWidth)) }}>
           <img
             src={sheetPictureDisplaySrc(object)}
             alt={object.alt || object.caption || ""}
@@ -34910,7 +35193,8 @@ function SpreadsheetWindow({
             ) : null;
           })()
         ) : object.type === "chart" ? (
-          <SpreadsheetChartCanvas date1904={workbookDate1904}
+          withPivotPrintButtons(object as { pivotSource?: unknown; pivotOptions?: unknown }, chartData, width, height, (pictureRoom) => <SpreadsheetChartCanvas date1904={workbookDate1904}
+            pictureRoom={pictureRoom}
             // Printed, every chart draws: a page past the print window's
             // view (the third page across) never asked for its picture and
             // the sheet printed the old way (A_charts_pies, still drawing).
@@ -34920,7 +35204,11 @@ function SpreadsheetWindow({
             selected={selectedObjectId === object.id}
             selectionKey={selectedObjectId === object.id ? sheetChartSelectionKey : null}
             key={object.id}
-            record={object as unknown as SpreadsheetChartLike}
+            // A PivotChart's automatic title in its words and Excel's look
+            // (pivotChartRecordWithAutomaticTitle).
+            record={((object as { pivotSource?: unknown }).pivotSource
+              ? pivotChartRecordWithAutomaticTitle(object, t("presentation.ui.chart.defaultChartTitle"))
+              : object) as unknown as SpreadsheetChartLike}
             type={chartData!.chartType}
             rows={chartData!.rows}
             headerRow={chartData!.headerRow}
@@ -34941,7 +35229,7 @@ function SpreadsheetWindow({
             fontFamily={shapeLabelFontFamily}
             extendedTypes
             ariaLabel={label}
-          />
+          />)
         ) : null;
       if (!content) return [];
       const rotation = spreadsheetObjectRotation(object.anchor);
@@ -34957,9 +35245,6 @@ function SpreadsheetWindow({
           label,
           <div key={object.id} data-page-layout-object-paint={object.id} style={{ position: "absolute", left: (rotatedWidth - width) / 2, top: (rotatedHeight - height) / 2, width, height, transform: rotation ? `rotate(${rotation}deg)` : undefined, ...(object.type === "shape" ? (object.shapeEffects ? {} : officeShapeEffectStyle(object.effect, shadowFilterCss(object.shadow))) : { filter: shadowFilterCss(object.shadow) }) }}>{content}</div>,
           { frame: { left, top, width: sheetWidth, height: sheetHeight }, rotation, selectionType: object.type === "chart" || object.type === "shape" ? object.type : undefined, groupId: object.groupId, disabledReason: pageLayoutDrawingDisabledReason(object), aspectLocked: objectAspectLocked(object), printAnchor,
-            // An absolute anchor on a worksheet prints where it stands but does
-            // not widen what prints (officeDrawingWidensPrint).
-            ...(officeDrawingWidensPrint(printAnchor, Boolean(sheet.chartSheet)) ? {} : { printExtends: false as const }),
             ...(embeddedWorkbook?.presentation === "print" && object.type === "chart" ? { printLineReach: chartRecordFramePrintedReachPx(object) } : {}),
             ...(embeddedWorkbook?.presentation === "print" && object.type === "shape" ? { printLineReach: officeShapeOutlineReachPx(object.shape as { stroke?: unknown; strokeWidth?: unknown } | undefined) } : {}) },
         ] as const,
@@ -35011,10 +35296,10 @@ function SpreadsheetWindow({
     const levels = drawingStackLevels(sheetDrawingStack(sheetObjects, chartViews.map(({ chart }) => chart)));
     const level = (id: string) => levels.get(id.startsWith("chart:") ? id : `object:${id}`) ?? 0;
     return [...imported, ...floating].sort((a, b) => level(a[0]) - level(b[0]));
-  }, [chartViews, colWidth, rowHeight, sheet, sheetObjects, importedChartRenderData, t, hiddenRows, groupHiddenRows, groupHiddenCols, manualHiddenRows, manualHiddenCols, pageLayoutDrawingDisabledReason, pageLayoutRowMap,workbookThemeAccentColors,previewChart,selectedObjectId,selectedNativeChart?.id,webImageRevision,embeddedWorkbook?.presentation,nativeGrid?.printScale,printPresentation]);
+  }, [chartViews, colWidth, rowHeight, sheet, sheetObjects, importedChartRenderData, t, hiddenRows, groupHiddenRows, groupHiddenCols, manualHiddenRows, manualHiddenCols, pageLayoutDrawingDisabledReason, pageLayoutRowMap,workbookThemeAccentColors,previewChart,selectedObjectId,selectedNativeChart?.id,webImageRevision,embeddedWorkbook?.presentation,nativeGrid?.printScale,printPresentation,pivotChartPrintFieldsFor,pivotChartBoundFor]);
   // On the unscaled grid, as the page view counts them (officePrintedDrawingReach).
   const pageLayoutDrawingBounds = useMemo(() => [
-    ...pageLayoutDrawings.filter((drawing) => (drawing[4] as { printExtends?: false } | undefined)?.printExtends !== false).map((drawing) => officePrintedDrawingReach(drawing[1], drawing[4]?.printAnchor, nativeGrid?.printScale, drawing[4]?.printLineReach)),
+    ...pageLayoutDrawings.map((drawing) => officePrintedDrawingReach(drawing[1], drawing[4]?.printAnchor, nativeGrid?.printScale, drawing[4]?.printLineReach)),
     ...slicers.map((slicer, index) => [slicer.x ?? 12 + index * 184, slicer.y ?? 12,
       slicer.width ?? DEFAULT_SLICER_WIDTH, slicer.height ?? DEFAULT_SLICER_HEIGHT] as const),
   ], [nativeGrid?.printScale, pageLayoutDrawings, slicers]);
@@ -58609,12 +58894,21 @@ function SpreadsheetWindow({
       ? printing && columnScale !== undefined && columnScale > 0 ? drawn + PRINTED_RUN_REACH_ROOM_PX / columnScale
         : printing ? drawn + PRINTED_RUN_REACH_ROOM_PX : drawn + 2 * displayCellPadding
       : spillTextWidthPx(text, cell.style, workbookFontAssets.aliases, effective) + breaksPx + 2 * CELL_BASE_PADDING_X_PX;
-    const centred = spill.startCol < col && spill.endCol > col;
+    // Centred by its alignment, not by where its run starts: a centred text
+    // in A (or against a taken left neighbour) still reaches half its
+    // overflow right of its cell, its left half cut (R484-X07's centred A62
+    // note on Table S2 printed a band of its own past the page, Windows
+    // Excel and the API's writer print none: sheet_extent's half width).
+    const centred = ("centred" in spill && spill.centred === true) || (spill.startCol < col && spill.endCol > col);
     let need = centred ? (width - printedColumnWidthPx(col)) / 2 : width - printedColumnWidthPx(col);
     let reach = col;
     while (need > 0 && reach < spill.endCol) {
       reach += 1;
-      need -= intrinsicColWidth(reach);
+      // A column wider than the page the run crosses is laid out at the
+      // page's width, and the run goes on out of its cut onto the next band
+      // (Windows Excel, R491-X14's Notes: A3's note over a 150-character B
+      // prints its last words on a third page; the API's clamp_col_point).
+      need -= printedColumnWidthPx(reach);
     }
     return reach;
   };
@@ -58642,6 +58936,7 @@ function SpreadsheetWindow({
     }
     return cols;
   };
+  const printedSpillColumns = printedExtent ? printedColumnsWithSpill(printedExtent) : null;
   // Whether a page of the print holds anything, by worksheet rows and
   // columns (pageLayoutPrintedPageCount: the trailing pages that hold nothing
   // do not print, as Excel's and the API's print). Anything: a value, an own
@@ -58773,7 +59068,7 @@ function SpreadsheetWindow({
       if (showFormula || pivot || formatted === "" || cell?.style?.shrinkToFit || printedErrorText(row, col) !== null) return null;
       const value = cellSortNumericValue(cell, row, col);
       if (value === null) return null;
-      const numFmt = typeof cond.style.numberFormat === "string" && cond.style.numberFormat.trim()
+      const numFmt = sheetShowsConstantsRaw(sheet, cell) ? "" : typeof cond.style.numberFormat === "string" && cond.style.numberFormat.trim()
         ? cond.style.numberFormat.trim() : typeof cell?.style?.numberFormat === "string" ? cell.style.numberFormat.trim() : "";
       // Printed, a number fits on paper, as Excel and the API's writer fit
       // it: drawn at the printer's advances in the column as wide as it
@@ -58830,7 +59125,7 @@ function SpreadsheetWindow({
       ? cellTextOnOneLine(cellDrawnNumberText(fittedNumber ?? formatted, formatted, cell, row, col, cond.style.numberFormat), cellWrapTextSetting(cell))
       : fittedNumber ?? formatted;
     // A refitted number (1.23E+11, ####) is drawn as plain text.
-    const numberLayout = !showFormula && (fittedNumber === null || fittedNumber === formatted) ? cellNumberFormatLayout(row, col) : undefined;
+    const numberLayout = !showFormula && !sheetShowsConstantsRaw(sheet, cell) && (fittedNumber === null || fittedNumber === formatted) ? cellNumberFormatLayout(row, col) : undefined;
     // Vertical Justify and Distributed wrap the text and spread its lines over
     // the cell, as Excel prints them (lookwin probe p22).
     const pageSpread = showFormula ? null : cellVerticalSpreadJustifyContent(cell?.style);
@@ -58838,7 +59133,13 @@ function SpreadsheetWindow({
     // and the API's print lay them out; Distributed spreads each line across
     // the cell, its indent at both sides (distributedLineUnits).
     const pageDistributed = !showFormula && !pivot && cell?.style?.horizontalJustify === "distributed";
-    const wrap = !showFormula && (cell?.style?.wrapText || Boolean(pageSpread) || cellTextWraps(cell?.style) || (cellWrapTextSetting(cell) !== false && display.includes("\n")));
+    // A number never wraps, Wrap Text or not: it fits its column or shows #
+    // (fittedNumber), and stands on the line an unwrapped number does, as
+    // Excel prints it (R491-X36's wrapped dates and #### on its number
+    // baseline; ours had them 0.2 pt below and 0.6 pt above it, centred as
+    // wrapped lines). A format's own line break still breaks it.
+    const numberOnOneLine = fittedNumber !== null && !display.includes("\n");
+    const wrap = !showFormula && !numberOnOneLine && (cell?.style?.wrapText || Boolean(pageSpread) || cellTextWraps(cell?.style) || (cellWrapTextSetting(cell) !== false && display.includes("\n")));
     const align = effectiveVerticalAlign(cell?.style);
     const alignmentBox = nativeGrid && nativeTextWidth !== undefined
       ? { width: nativeTextWidth + 5 * 96 / nativeGrid.dpi, textLeft: 3 * 96 / nativeGrid.dpi, textRight: 2 * 96 / nativeGrid.dpi, wrapText: Boolean(cell?.style?.wrapText) }
@@ -58858,12 +59159,35 @@ function SpreadsheetWindow({
     // Distributed lays its lines out between the indents on both sides.
     const pageLineWidth = pageDistributed && nativeTextWidth !== undefined
       ? Math.max(1, nativeTextWidth - 2 * indentPaddingPx(cell?.style?.indent, indentStepPx)) : nativeTextWidth;
-    const shrunkPx = !showFormula && !wrap && !runs?.length
+    // Printed on an imported Windows grid, Shrink to Fit fits the text in
+    // the cell less the printer's re-wrap margin and two dots (round(digit /
+    // 2) + 9, officePrintedTextInsetDots' margin + 2) as Excel's zoom does:
+    // a whole percent, a whole number of twips, then of dots
+    // (officeShrunkPrintedDots; lookwin p118-lw shr2/shr3: 86 % of 5,873
+    // cells exact where whole dots under + 7 were 75 %; the API's
+    // draw_cell_text_upright alike). With the grid's two pixels a side,
+    // R491-X36 at 13 % left an address Excel prints at 8 dots unshrunk and
+    // the next over its border.
+    const printedShrink = (() => {
+      if (showFormula || wrap || !cell?.style?.shrinkToFit || nativeGrid?.dpi !== 96 || frame?.dotPx === undefined || !(fontScale > 0)) return undefined;
+      const base = pageLayoutCellStyle(row, col);
+      const family = typeof base?.fontFamily === "string" ? stackPrimaryFamily(base.fontFamily) : "";
+      const sizePx = typeof base?.fontSize === "number" ? base.fontSize : Number.NaN;
+      const scale = (fontScale * 96 / 600) / frame.dotPx;
+      const dots = family && sizePx > 0 ? officePrintedTextInsetDots(family, sizePx * 0.75, scale) : undefined;
+      return dots ? { sidePx: ((dots.margin + 2) * frame.dotPx) / fontScale / 2, dotPx: frame.dotPx, sizePx, scale } : undefined;
+    })();
+    const shrunkPx = (() => {
+      if (showFormula || wrap || runs?.length) return undefined;
       // Fitted to the whole merge (R112-X03: a merged label shrank to its
       // first column's width), at the width the page prints it: the text
       // keeps its point size while the printer widens the columns.
-      ? shrinkToFitFontSizePx(cell?.style, display, spanned * (nativeGrid?.printScale?.x ?? 1), workbookFontAssets.aliases, pageLayoutCellStyle(row, col), nativeGrid ? displayCellPadding : 4)
-      : undefined;
+      const fitted = shrinkToFitFontSizePx(cell?.style, display, spanned * (nativeGrid?.printScale?.x ?? 1), workbookFontAssets.aliases,
+        pageLayoutCellStyle(row, col), printedShrink?.sidePx ?? (nativeGrid ? displayCellPadding : 4), printedShrink !== undefined);
+      if (fitted === undefined || !printedShrink) return fitted;
+      const printedDots = officeShrunkPrintedDots(printedShrink.sizePx * 0.75, printedShrink.scale, fitted / printedShrink.sizePx);
+      return (printedDots * printedShrink.dotPx) / fontScale;
+    })();
     const pageCellFontFamily = pageLayoutCellStyle(row, col)?.fontFamily;
     const phoneticGuide = cellPhoneticGuideLayout(cell, typeof pageCellFontFamily === "string" ? pageCellFontFamily : undefined);
     // The cell's own text effects, drawn as the grid draws them (live audit
@@ -58908,6 +59232,21 @@ function SpreadsheetWindow({
     const scriptedStyle = script ? { ...pageStyle, fontSize: scriptBaselineCss(script, pageStyle.fontSize).fontSize } : pageStyle;
     const raised = (node: ReactNode) => script ? <span style={{ verticalAlign: scriptBaselineCss(script, pageStyle.fontSize).verticalAlign }}>{node}</span> : node;
     const textParts = (parts: Array<{ text: string; style?: CSSProperties }>) => partsWithCellScript(parts, script);
+    // A printed rich text shrinks too, every run at Excel's one zoom
+    // (shrinkToFitRunsFit, officeShrunkPrintedDots; the API's shrink_fit):
+    // lookwin p117-lw shr r19's two-run No cell at 13 % printed as its plain
+    // neighbours, the page's unshrunk over its border.
+    const runParts = () => {
+      const parts = textParts(runs?.length ? runs.map(run=>({text:run.text,style:fontRunStyle(run.style)})) : []);
+      const shrink = printedShrink;
+      if (!shrink || !runs?.length || showFormula || wrap) return parts;
+      const fit = shrinkToFitRunsFit(parts, spanned * (nativeGrid?.printScale?.x ?? 1), workbookFontAssets.aliases, pageLayoutCellStyle(row, col), shrink.sidePx);
+      if (fit === undefined) return parts;
+      return parts.map((part) => {
+        const sizePx = typeof part.style?.fontSize === "number" && part.style.fontSize > 0 ? part.style.fontSize : shrink.sizePx;
+        return { ...part, style: { ...(part.style ?? {}), fontSize: (officeShrunkPrintedDots(sizePx * 0.75, shrink.scale, fit) * shrink.dotPx) / fontScale } };
+      });
+    };
     // A wrapped line's underline stops at its last character, as the grid's
     // (and Excel's) does: the space a line breaks at is not drawn.
     const pageUnhungSpaces = Boolean(wrap) && !nativeGrid && !runs?.length && !pivot && !numberLayout &&
@@ -58952,7 +59291,7 @@ function SpreadsheetWindow({
     // cells are empty, and each one's empty text layer was two more nodes.
     if (display === "" && !numberLayout && !runs?.length && !cond.dataBar && !cond.icon && !sparkline && !picture &&
       !pageBand && !phoneticGuide && !accounting) return null;
-    const pageParagraphParts = () => textParts(runs?.length?runs.map(run=>({text:run.text,style:fontRunStyle(run.style)})):[{text:shownText}]);
+    const pageParagraphParts = () => runs?.length ? runParts() : textParts([{text:shownText}]);
     // A native paragraph is a block of its own: the text box around it (full
     // width, its line height) holds nothing else and draws nothing, so the
     // paragraph stands in its place, one element less for each cell, unless
@@ -59078,8 +59417,14 @@ function SpreadsheetWindow({
       ? { ...pageStyle, [NATIVE_PRINTED_ROOM_MARK]: "1", ...(cellWrapsSpaced(row, col) ? { [NATIVE_KEEP_SPACE_MARK]: "1" } : {}) } as CSSProperties
       : pageStyle;
     const pageMergedAnchor = mergeSpans.some((merge) => merge.row === row && merge.col === col && (merge.rowSpan > 1 || merge.colSpan > 1));
+    // A printed Shrink to Fit line, which is no native paragraph
+    // (hasNativeTextLayout), stands on Excel's baseline as a formatted
+    // number does: centred by the browser's line box, it rounded its
+    // baseline to the page's whole pixel, 0.1-0.9 pt off a row by row on
+    // R491-X36's 13 % page.
+    const shrinkLine = printedShrink !== undefined && !pageParagraphAlone && !numberLayout;
     const officeBaseline = (() => {
-      if (!(pageParagraphAlone || (numberLayout && !textDir && !accounting && !pageQuarterTurn && !pageAngledCss)) || !nativeGrid || nativeGrid.dpi !== 96 || wrap || !frame || !(frame.height > 0) || pageSpread || script || phoneticGuide) return undefined;
+      if (!(pageParagraphAlone || ((numberLayout || shrinkLine) && !textDir && !accounting && !pageQuarterTurn && !pageAngledCss)) || !nativeGrid || nativeGrid.dpi !== 96 || wrap || !frame || !(frame.height > 0) || pageSpread || script || phoneticGuide) return undefined;
       const family = typeof pageStyle.fontFamily === "string" ? stackPrimaryFamily(pageStyle.fontFamily) : "";
       const sizePx = typeof pageStyle.fontSize === "number" ? pageStyle.fontSize : Number.NaN;
       if (!family || !(sizePx > 0)) return undefined;
@@ -59231,7 +59576,7 @@ function SpreadsheetWindow({
           ...(pageDistributed && !(nativeGrid && hasNativeTextLayout(row,col,display)) ? cellHorizontalSpreadCss(cell?.style, display) ?? {} : {}),
           // A formatted number stood at Excel's baseline (officeBaseline):
           // the browser's own for its font at its normal line height.
-          ...(numberLayout && officeBaseline !== undefined ? (() => {
+          ...((numberLayout || shrinkLine) && officeBaseline !== undefined ? (() => {
             const font = nativeParagraphFontStyle(scriptedStyle, fontScale, display, nativeGrid?.dpi);
             const size = typeof font.fontSize === "number" ? font.fontSize : Number.NaN;
             const strut = nativeStrutBaselinePx(font, "normal", nativeTypographyGeneration()) ?? (size > 0 ? 0.915 * size : undefined);
@@ -59273,7 +59618,7 @@ function SpreadsheetWindow({
             })() : {})} : {}),
           ...(pageAngledCss?.text ?? {})}}>{pageTurnedWrap ? pageLinked(pagePlainText) : numberLayout ? raised(<SpreadsheetFormattedText parts={numberLayout} style={scriptedStyle} dpi={nativeGrid?.dpi} scale={fontScale} wrap={Boolean(wrap)} layoutWidth={nativeTextWidth} alignmentBox={alignmentBox}/>) : nativeGrid&&hasNativeTextLayout(row,col,display)?<SpreadsheetNativeParagraph
           parts={pageParagraphParts()}
-          style={pageParagraphStyle} dpi={nativeGrid.dpi} scale={fontScale} wrap={Boolean(wrap)} layoutWidth={printedLineWidth} alignmentBox={alignmentBox} distributed={pageDistributed} linkHref={pageLinkHref}/>:pageLinked(runs?.length ? nativeGrid ? <SpreadsheetNativeTextParts parts={textParts(runs.map(run=>({text:run.text,style:fontRunStyle(run.style)})))} style={pageStyle} dpi={nativeGrid.dpi} scale={fontScale}/> : textParts(runs.map(run=>({text:run.text,style:fontRunStyle(run.style)}))).map((part,index)=>{
+          style={pageParagraphStyle} dpi={nativeGrid.dpi} scale={fontScale} wrap={Boolean(wrap)} layoutWidth={printedLineWidth} alignmentBox={alignmentBox} distributed={pageDistributed} linkHref={pageLinkHref}/>:pageLinked(runs?.length ? nativeGrid ? <SpreadsheetNativeTextParts parts={runParts()} style={pageStyle} dpi={nativeGrid.dpi} scale={fontScale}/> : textParts(runs.map(run=>({text:run.text,style:fontRunStyle(run.style)}))).map((part,index)=>{
           const style=part.style ?? {};
           return <span key={index} style={{...style,...(typeof style.fontSize==="number"?{fontSize:style.fontSize*fontScale}:{})}}>{part.text}</span>;
         }) : nativeGrid && !cell?.style?.verticalText ? raised(<SpreadsheetNativeText text={shownText} style={scriptedStyle} dpi={nativeGrid.dpi} scale={fontScale}/>) : script ? <span style={scriptBaselineCss(script)}>{pagePlainText}</span> : pagePlainText)}</span>}
@@ -70480,6 +70825,8 @@ function SpreadsheetWindow({
             printMode={embeddedWorkbook?.presentation === "print"}
             thickBottomRows={printThickBottomRows}
             printPageStart={embeddedWorkbook?.printPageStart}
+            printJobPageNumbers={embeddedWorkbook?.printJobPageNumbers === true}
+            printBatchText={embeddedWorkbook?.printBatchText}
             printRoute={embeddedWorkbook?.printRoute}
             unclippedTexts={pageLayoutUnclippedTexts()}
             backgroundPicture={sheetBackgroundPicture?.src}
@@ -70498,17 +70845,23 @@ function SpreadsheetWindow({
             sheetId={sheet.id}
             sheetName={sheet.name}
             rowCount={printedExtent?.rows ?? sheet.rowCount}
-            columnCount={printedExtent ? printedColumnsWithSpill(printedExtent) : sheet.columnCount}
+            columnCount={printedSpillColumns ?? sheet.columnCount}
+            // Hidden columns past a wide one print a blank band only when a
+            // spill or a drawing runs on into them, not for blanks the range
+            // holds there (R488-X42; the API's hidden_tail_cols).
+            hiddenTailReached={printedExtent === null || printedSpillColumns === null || printedSpillColumns > printedExtent.cols
+              || pageLayoutDrawings.length > 0}
             sourceRowAt={pageLayoutRowMap.sourceRow}
             rowOrder={pageLayoutRowMap.order}
             hiddenRows={pageLayoutHiddenRows}
             hiddenCols={new Set([...groupHiddenCols, ...manualHiddenCols])}
+            tableBoxes={dataTables.map((table) => table.range)}
             printSettings={sheet.printSettings}
             rowHeights={pageLayoutRowHeights}
-            columnWidths={columnWidths}
+            columnWidths={formulaViewPrint ? formulaViewColumnWidths : columnWidths}
             defaultRowHeight={displayDefaultRowHeight}
             nativeRowHeights={Boolean(nativeRows)}
-            defaultColumnWidth={displayDefaultColumnWidth}
+            defaultColumnWidth={formulaViewPrint ? displayDefaultColumnWidth * 2 : displayDefaultColumnWidth}
             merges={mergeSpans}
             drawings={[
               ...pageLayoutDrawings,
@@ -70545,6 +70898,8 @@ function SpreadsheetWindow({
             activeCell={activeCell}
             editingCell={editingCell?.sheetId === sheet.id ? editingCell : null}
             selection={selRect}
+            multiSelection={hasMultiSelection}
+            selectionEdges={selectionEdgeRect}
             viewportRef={gridWrapRef}
             fileName={
               title ||
@@ -70605,7 +70960,7 @@ function SpreadsheetWindow({
                     data-testid="spreadsheet-fill-handle" onPointerDown={beginFillDrag} onDoubleClick={autoFillDownFromHandle}
                     style={{ right: 0, bottom: 0 }} /> : null}
                 {fillDrag && row >= Math.min(fillDrag.src.r1, fillDrag.target.row) && row <= Math.max(fillDrag.src.r2, fillDrag.target.row) && col >= Math.min(fillDrag.src.c1, fillDrag.target.col) && col <= Math.max(fillDrag.src.c2, fillDrag.target.col) ?
-                  <span aria-hidden data-testid="spreadsheet-page-fill-preview" style={{ position: "absolute", inset: 0, pointerEvents: "none", border: "1px dashed #107c41", background: "rgb(16 124 65 / 8%)" }} /> : null}
+                  <span aria-hidden className="spreadsheet-window__page-fill-preview" data-testid="spreadsheet-page-fill-preview" /> : null}
                 {!printing && table?.role === "header" ? <>
                   {renderTableFilterTrigger(table.table, col, filterAnchor)}
                   {tableFilterMenu?.anchorId === filterAnchor ? renderTableFilterMenu(filterAnchor) : null}
@@ -70614,10 +70969,12 @@ function SpreadsheetWindow({
                   <SpreadsheetCellCheckbox frame={frame} cellStyle={pageLayoutCellStyle(row, col)} dpi={nativeGrid.dpi}
                     horizontalAlign={cell?.style?.textAlign} verticalAlign={effectiveVerticalAlign(cell?.style)}
                     aria-label={`${columnLabel(col)}${row + 1}`} checked={checkboxCheckedAt(cell, row, col)} disabled={!isEditableCell(row, col)}
-                    onPointerDown={event => event.stopPropagation()}
-                    onChange={() => { if (!isEditableCell(row, col)) return; setActiveCell({ row, col }); setSelectionAnchor({ row, col }); toggleCheckboxAt(row, col); }} />
-                  : <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><input type="checkbox" aria-label={`${columnLabel(col)}${row + 1}`} checked={checkboxCheckedAt(cell, row, col)} disabled={!isEditableCell(row, col)}
-                  onPointerDown={(event) => event.stopPropagation()} onChange={() => { if (!isEditableCell(row, col)) return; setActiveCell({ row, col }); setSelectionAnchor({ row, col }); toggleCheckboxAt(row, col); }} /></span> : null}
+                    onPointerDown={spreadsheetGridControlHandlers.nativeCheckboxPointerDown(gridEventBridge)}
+                    onChange={spreadsheetGridControlHandlers.nativeCheckboxChange(gridEventBridge, !isEditableCell(row, col), row, col)} />
+                  : <SpreadsheetPlainCellCheckbox horizontalAlign={cell?.style?.textAlign}
+                    aria-label={`${columnLabel(col)}${row + 1}`} checked={checkboxCheckedAt(cell, row, col)} disabled={!isEditableCell(row, col)}
+                    onPointerDown={spreadsheetGridControlHandlers.checkboxPointerDown(gridEventBridge)}
+                    onChange={spreadsheetGridControlHandlers.checkboxChange(gridEventBridge, !isEditableCell(row, col), row, col)} /> : null}
                 {!printing && hasComment(cell?.comment) ? <button type="button" className={reviewCommentStyles.cellIndicator}
                   data-kind={cell?.comment?.kind} data-resolved={isThreadComment(cell?.comment) && cell.comment.done ? "true" : undefined}
                   data-testid="spreadsheet-page-layout-comment" title={commentSummary(cell?.comment)} aria-label={`${t("spreadsheet.comment")}: ${commentSummary(cell?.comment)}`}
@@ -72296,7 +72653,9 @@ function SpreadsheetWindow({
                         // format's, else the cell's own. Its colour section
                         // paints the text too, as its digits already follow it
                         // (real Excel shows a rule's [Red]0.00 in red; B361).
-                        const numFmt =
+                        // Show Formulas draws a constant under no format
+                        // (sheetShowsConstantsRaw), its colour section too.
+                        const numFmt = sheetShowsConstantsRaw(sheet, cell) ? "" :
                           typeof _condNumberFormat === "string" && _condNumberFormat.trim() !== ""
                             ? _condNumberFormat.trim()
                             : typeof cell?.style?.numberFormat === "string"
@@ -74956,42 +75315,17 @@ function SpreadsheetWindow({
                               onPointerDown={spreadsheetGridControlHandlers.nativeCheckboxPointerDown(gridEventBridge)}
                               onChange={spreadsheetGridControlHandlers.nativeCheckboxChange(gridEventBridge, cellLocked, row, col)}
                             /> : showCheckbox ? (
-                              <span
-                                className="spreadsheet-window__checkbox-layer"
-                                data-testid={`spreadsheet-checkbox-${row}-${col}`}
-                                style={{
-                                  position: "absolute",
-                                  inset: 0,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent:
-                                    cell?.style?.textAlign === "left"
-                                      ? "flex-start"
-                                      : cell?.style?.textAlign === "right"
-                                        ? "flex-end"
-                                        : "center",
-                                  padding: "0 6px",
-                                }}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={checkboxCheckedAt(cell, row, col)}
-                                  // A1-style name so the box has an accessible label.
-                                  aria-label={`${columnLabel(col)}${visualRow + 1}`}
-                                  disabled={cellLocked}
-                                  onPointerDown={spreadsheetGridControlHandlers.checkboxPointerDown(gridEventBridge)}
-                                  onChange={spreadsheetGridControlHandlers.checkboxChange(gridEventBridge, cellLocked, row, col)}
-                                  style={{
-                                    width: 15,
-                                    height: 15,
-                                    margin: 0,
-                                    cursor: cellLocked ? "default" : "pointer",
-                                    accentColor:
-                                      "var(--console-accent, #0D9488)",
-                                  }}
-                                  data-testid={`spreadsheet-checkbox-input-${row}-${col}`}
-                                />
-                              </span>
+                              <SpreadsheetPlainCellCheckbox
+                                containerTestId={`spreadsheet-checkbox-${row}-${col}`}
+                                horizontalAlign={cell?.style?.textAlign}
+                                checked={checkboxCheckedAt(cell, row, col)}
+                                // A1-style name so the box has an accessible label.
+                                aria-label={`${columnLabel(col)}${visualRow + 1}`}
+                                disabled={cellLocked}
+                                onPointerDown={spreadsheetGridControlHandlers.checkboxPointerDown(gridEventBridge)}
+                                onChange={spreadsheetGridControlHandlers.checkboxChange(gridEventBridge, cellLocked, row, col)}
+                                data-testid={`spreadsheet-checkbox-input-${row}-${col}`}
+                              />
                             ) : null}
                             {/* In-cell RADIO (Excel / WPS form control): a radio over
                             the cell whose checked state is the cell's lenient
@@ -77091,6 +77425,9 @@ function SpreadsheetWindow({
                         data-crop-active={pictureCropActive ? "true" : "false"}
                         data-testid={`spreadsheet-picture-crop-viewport-${object.id}`}
                         style={{
+                          // Picture Border as the file states it (readings
+                          // row 1030), outside the picture (the grid zooms it).
+                          ...(object.pictureGeometry || pictureCropActive ? {} : spreadsheetPictureBorderOutline(object)),
                           // Crop to Shape: the picture cut to its preset (X-118).
                           clipPath: object.pictureGeometry
                             ? officePictureGeometryClipPath(object.pictureGeometry.preset, object.pictureGeometry.adjustments, memberBox.width, memberBox.height) || undefined

@@ -52,6 +52,7 @@ import {
 } from "../../../../lib/pdf/annotation-list";
 
 import { PDF_TASK_PANE_BODY_CLASS, pdfTaskPaneClassName } from "./pdfTaskPaneDock";
+import { usePdfReviewStateLabel } from "./pdfReviewStateLabel";
 
 const ANNOTATION_TARGET_CLASS =
   "min-h-11 min-w-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1";
@@ -198,6 +199,7 @@ export default function PdfAnnotationsPanel({
   onClose,
 }: PdfAnnotationsPanelProps) {
   const t = useTranslations("console-notebooks");
+  const reviewStateLabel = usePdfReviewStateLabel(t);
   const [activePanel, setActivePanel] = useState<"comments" | "attachments">(
     "comments",
   );
@@ -956,7 +958,11 @@ export default function PdfAnnotationsPanel({
                                 </div>
                                 {/* Previewed plain text — never HTML. */}
                                 <p className={commentCardStyles.messageText}>
-                                  <MentionText text={reply.text} mentions={mentions} />
+                                  {reply.reviewState ? (
+                                    reviewStateLabel(reply.reviewState)
+                                  ) : (
+                                    <MentionText text={reply.text} mentions={mentions} />
+                                  )}
                                 </p>
                               </div>
                             </li>

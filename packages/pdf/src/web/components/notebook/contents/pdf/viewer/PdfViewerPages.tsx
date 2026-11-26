@@ -503,6 +503,7 @@ import {
   SNAPSHOT_ROUNDED_RADIUS_CSS,
   type SnapshotShape,
 } from "../../../../../lib/pdf/snapshot-region";
+import type { PdfInsertedReaderPages } from "@mrnote/core/web/lib/pdf/inserted-page-identity.ts";
 
 export interface PdfViewerPagesModel {
   /** The page room another member's object gestures arrive on, and this
@@ -777,6 +778,9 @@ export interface PdfViewerPagesModel {
   prewarmPlacedObjectLayers: (pageNumber: number, key: string, rect: PercentBox) => void;
   visiblePages: PageRecord[];
   visiblePageItems: ({ kind: "original"; page: PageRecord; } | { kind: "inserted"; page: { id: string; afterPage: number; width: number; height: number; copyOfPage?: number | undefined; image?: string; }; })[];
+  /** Each inserted page's reader number (lib/pdf/inserted-page-identity):
+   * its layers are keyed by it. */
+  insertedReaderPages: PdfInsertedReaderPages;
   visiblePageCount: number;
   visibleOrdinalForOriginal: (pageNumber: number) => number;
   previousVisibleOrdinal: number | null;
@@ -1742,6 +1746,7 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
     prewarmPlacedObjectLayers,
     visiblePages,
     visiblePageItems,
+    insertedReaderPages,
     visiblePageCount,
     visibleOrdinalForOriginal,
     previousVisibleOrdinal,
@@ -2266,6 +2271,24 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
               viewMode === "single" &&
               visibleOrdinal !== currentVisibleOrdinal;
             const copyOf = item.page.copyOfPage;
+            // The page's reader number: its layers are keyed by it as a file
+            // page's are by its number (lib/pdf/inserted-page-identity). A page
+            // held for Save has none until Save gives it a place in the file.
+            const readerPage = insertedReaderPages.readerPageOf.get(item.page.id) ?? null;
+            const readerRecord: PageRecord | null = readerPage === null ? null : {
+              pageNumber: readerPage,
+              width: item.page.width,
+              height: item.page.height,
+              nativeRotation: 0,
+            };
+            const insertedInks = readerPage === null ? EMPTY_INKS : (inksByPage.get(readerPage) ?? EMPTY_INKS);
+            // The PDF's copy of a stroke drawn there (the host's), drawn as on
+            // a file page: what a reader row does not hold is still shown.
+            const insertedNativeInks = readerPage === null
+              ? EMPTY_NATIVE_INK_STROKES
+              : (nativeInkStrokesByPage.get(readerPage) ?? EMPTY_NATIVE_INK_STROKES);
+            const insertedDrawingStroke =
+              readerPage !== null && drawingStroke && drawingStroke.page === readerPage ? drawingStroke : null;
             return [
               rowBreak,
               <div
@@ -2275,12 +2298,14 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
                   else visibleItemRefs.current.delete(visibleOrdinal);
                 }}
                 data-inserted-page-id={item.page.id}
+                data-reader-page-number={readerPage ?? undefined}
                 data-visible-page-ordinal={visibleOrdinal}
                 data-copy-of-page={copyOf ?? undefined}
                 className={`pdf-viewer__page pdf-viewer__page--inserted${
                   copyOf ? " pdf-viewer__page--duplicate" : ""
                 }`}
                 style={{
+                  position: "relative",
                   width: item.page.width * scale,
                   height: item.page.height * scale,
                   background: "#fff",
@@ -2289,6 +2314,12 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
                   alignItems: "center",
                   justifyContent: "center",
                 }}
+                // The pen, the highlighter, the eraser and the lasso work on
+                // it as on any page (each handler gates on its own mode).
+                onPointerDown={readerPage === null ? undefined : (e) => handleInkPointerDown(readerPage, e)}
+                onPointerMove={readerPage === null ? undefined : (e) => handleInkPointerMove(readerPage, e)}
+                onPointerUp={readerPage === null ? undefined : (e) => finishStroke(readerPage, e)}
+                onPointerCancel={readerPage === null ? undefined : (e) => finishStroke(readerPage, e)}
               >
                 {item.page.image ? (
                   // eslint-disable-next-line @next/next/no-img-element -- a page drawn in this tab
@@ -2313,6 +2344,94 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
                   >
                     {t("pdfViewer.duplicatePageLabel", { page: copyOf })}
                   </span>
+                ) : null}
+                {readerRecord ? (
+                  <svg
+                    data-pdf-ink-layer
+                    className="pdf-viewer__ink-layer"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
+                    aria-hidden={insertedInks.length === 0 && insertedNativeInks.length === 0}
+                  >
+                    {insertedNativeInks.map((stroke, index) => {
+                      const d = nativeInkPathD(stroke.points);
+                      if (!d) return null;
+                      return (
+                        <path
+                          key={`native-${stroke.id ?? index}`}
+                          d={d}
+                          fill="none"
+                          stroke={isInkColor(stroke.color) ? stroke.color : DEFAULT_INK_COLOR}
+                          strokeWidth={nativeInkWidthToPercent(stroke.width, readerRecord)}
+                          strokeOpacity={nativeInkStrokeOpacity(stroke)}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          data-testid="pdf-native-ink-stroke"
+                          style={{ pointerEvents: "none" }}
+                        />
+                      );
+                    })}
+                    {insertedInks.map((stroke) => {
+                      const selected = selectedPlaced?.kind === "ink" && selectedPlaced.id === stroke.id;
+                      const paint = readerInkPaint(stroke.points, stroke.width, stroke.color, readerRecord);
+                      return (
+                        <path
+                          key={stroke.id}
+                          d={paint.d}
+                          fill={paint.fill}
+                          stroke={paint.stroke}
+                          strokeWidth={paint.strokeWidth}
+                          data-ink-pressure={paint.pressure ? "true" : undefined}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          data-testid="pdf-ink-stroke-paint"
+                          aria-hidden
+                          style={{
+                            pointerEvents: "none",
+                            filter: selected ? "drop-shadow(0 0 1.5px rgba(37, 99, 235, 0.95))" : undefined,
+                          }}
+                        />
+                      );
+                    })}
+                    {wetInkHost ? <g ref={wetInkHost(readerRecord.pageNumber)} data-pdf-wet-ink-layer="" /> : null}
+                    {(inkWet ?? []).map((stroke) => {
+                      if (stroke.page !== readerRecord.pageNumber) return null;
+                      const paint = readerInkPaint(stroke.points, stroke.width, stroke.color, readerRecord);
+                      return (
+                        <path
+                          key={`wet-${stroke.key}`}
+                          d={paint.d}
+                          fill={paint.fill}
+                          stroke={paint.stroke}
+                          strokeWidth={paint.strokeWidth}
+                          data-ink-pressure={paint.pressure ? "true" : undefined}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          data-testid="pdf-ink-stroke-wet"
+                          aria-hidden
+                        />
+                      );
+                    })}
+                    {insertedDrawingStroke
+                      ? (() => {
+                          const paint = readerInkPaint(insertedDrawingStroke.points, inkWidth, inkColor, readerRecord);
+                          return (
+                            <path
+                              d={paint.d}
+                              fill={paint.fill}
+                              stroke={paint.stroke}
+                              strokeWidth={paint.strokeWidth}
+                              data-ink-pressure={paint.pressure ? "true" : undefined}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              data-testid="pdf-ink-stroke-pending"
+                              aria-hidden
+                            />
+                          );
+                        })()
+                      : null}
+                  </svg>
                 ) : null}
               </div>,
             ];

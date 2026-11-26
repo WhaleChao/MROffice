@@ -548,6 +548,13 @@ export type SlideTransitionShapeOption =
 export const SLIDE_TRANSITION_ZOOM_OPTIONS = ["in", "out"] as const;
 export type SlideTransitionZoomOption =
   (typeof SLIDE_TRANSITION_ZOOM_OPTIONS)[number];
+/**
+ * Zoom's Effect Options in the gallery: In, Out, and Zoom and Rotate -- the
+ * 2006 `p:newsflash` (PpEntryEffect ppEffectNewsflash), which has no option of
+ * its own and is never spelled `p14:warp` (GAP 23).
+ */
+export const SLIDE_TRANSITION_ZOOM_EFFECT_OPTIONS = [...SLIDE_TRANSITION_ZOOM_OPTIONS, "zoom-rotate"] as const;
+export type SlideTransitionZoomEffectOption = (typeof SLIDE_TRANSITION_ZOOM_EFFECT_OPTIONS)[number];
 /** The side a Zoom with no `dir` at all plays. */
 export const SLIDE_TRANSITION_ZOOM_DEFAULT_OPTION: SlideTransitionZoomOption =
   "out";
@@ -647,9 +654,65 @@ export const SLIDE_TRANSITION_FLY_THROUGH_OPTIONS = [
 ] as const;
 export type SlideTransitionFlyThroughOption =
   (typeof SLIDE_TRANSITION_FLY_THROUGH_OPTIONS)[number];
+/**
+ * Fade's Effect Options: Smoothly (`p:fade`) and Through Black (`p:fade
+ * thruBlk="1"`), PpEntryEffect ppEffectFadeSmoothly / ppEffectFade (GAP 23).
+ */
+export const SLIDE_TRANSITION_FADE_OPTIONS = ["smoothly", "through-black"] as const;
+export type SlideTransitionFadeOption = (typeof SLIDE_TRANSITION_FADE_OPTIONS)[number];
+/**
+ * Cut's Effect Options: the plain cut (`p:cut`) and Through Black (`p:cut
+ * thruBlk="1"`), PpEntryEffect ppEffectCut / ppEffectCutThroughBlack (GAP 23).
+ */
+export const SLIDE_TRANSITION_CUT_OPTIONS = ["plain", "through-black"] as const;
+export type SlideTransitionCutOption = (typeof SLIDE_TRANSITION_CUT_OPTIONS)[number];
+/**
+ * Wipe's Effect Options: the four sides (`p:wipe/@dir`) and the four corners,
+ * which PowerPoint writes as the 2006 `p:strips` (CT_CornerDirectionTransition,
+ * PpEntryEffect ppEffectStrips*) (GAP 23).
+ */
+export const SLIDE_TRANSITION_WIPE_OPTIONS = [
+  // PowerPoint's order and names (truth transition-option-names-v2): From
+  // Right, From Top, From Left, From Bottom, From Top-Right, From Bottom-Right,
+  // From Top-Left, From Bottom-Left. Each option names the way the edge
+  // moves, so "left" comes in from the right (PpEntryEffect ppEffectWipeRight
+  // selects From Left).
+  "left",
+  "down",
+  "right",
+  "up",
+  "left-down",
+  "left-up",
+  "right-down",
+  "right-up",
+] as const;
+/** The side or corner each Wipe option comes in from, as PowerPoint names it. */
+export const SLIDE_TRANSITION_WIPE_OPTION_FROM = {
+  left: "right",
+  down: "top",
+  right: "left",
+  up: "bottom",
+  "left-down": "top-right",
+  "left-up": "bottom-right",
+  "right-down": "top-left",
+  "right-up": "bottom-left",
+} as const satisfies Record<(typeof SLIDE_TRANSITION_WIPE_OPTIONS)[number], string>;
+/**
+ * Page Curl's Effect Options: Double Left / Double Right (`p15:prstTrans
+ * prst="pageCurlDouble"`) and Single Left / Single Right (pageCurlSingle), in
+ * PowerPoint's order (GAP 23; before, a double curl read as a single one).
+ */
+export const SLIDE_TRANSITION_PAGE_CURL_OPTIONS = ["double-left", "double-right", "left", "right"] as const;
+export type SlideTransitionPageCurlDoubleOption = "double-left" | "double-right";
 /** Native `p:wheel/@spokes` identities exposed by PowerPoint Effect Options. */
 export const SLIDE_TRANSITION_CLOCK_OPTIONS = [
   "one-spoke",
+  // Clockwise's two siblings in PowerPoint's Effect Options (PpEntryEffect
+  // ppEffectWheelReverse1Spoke / ppEffectWedge): the Office 2010
+  // `p14:wheelReverse` ([MS-PPTX] 2.3.1.32, CT_WheelTransition) and the 2006
+  // `p:wedge` (GAP 23).
+  "counterclockwise",
+  "wedge",
   "two-spokes",
   "three-spokes",
   "four-spokes",
@@ -677,6 +740,11 @@ export const SLIDE_TRANSITION_MORPH_OPTIONS = ["objects", "words", "characters"]
 export type SlideTransitionMorphOption = (typeof SLIDE_TRANSITION_MORPH_OPTIONS)[number];
 export const SLIDE_TRANSITION_EFFECT_OPTIONS = [
   ...SLIDE_TRANSITION_MORPH_OPTIONS,
+  ...SLIDE_TRANSITION_FADE_OPTIONS,
+  "plain",
+  "zoom-rotate",
+  "double-left",
+  "double-right",
   ...SLIDE_TRANSITION_DIRECTIONS,
   ...SLIDE_TRANSITION_CORNER_OPTIONS,
   ...SLIDE_TRANSITION_SHAPE_OPTIONS,
@@ -695,7 +763,11 @@ export type SlideTransitionDirection =
   | SlideTransitionOrientationOption
   | SlideTransitionClockOption
   | SlideTransitionP14TypedOption
-  | SlideTransitionMorphOption;
+  | SlideTransitionMorphOption
+  | SlideTransitionFadeOption
+  | SlideTransitionCutOption
+  | SlideTransitionZoomEffectOption
+  | SlideTransitionPageCurlDoubleOption;
 const SLIDE_TRANSITION_EFFECT_OPTION_SET: ReadonlySet<string> = new Set(
   SLIDE_TRANSITION_EFFECT_OPTIONS,
 );
@@ -756,6 +828,8 @@ const DIRECTIONAL_SLIDE_TRANSITION_DEFAULTS = {
   origami: "right",
   push: "up",
   wipe: "right",
+  fade: "smoothly",
+  cut: "plain",
   shape: "circle",
   zoom: "in",
   split: "horizontal-out",
@@ -784,6 +858,8 @@ const DIRECTIONAL_SLIDE_TRANSITION_DEFAULTS = {
   Record<
     | "push"
     | "wipe"
+    | "fade"
+    | "cut"
     | "shape"
     | "zoom"
     | "split"
@@ -1121,6 +1197,8 @@ export function isDirectionalSlideTransition(
 ): value is
   | "push"
   | "wipe"
+  | "fade"
+  | "cut"
   | "shape"
   | "zoom"
   | "split"
@@ -1139,6 +1217,8 @@ export function isDirectionalSlideTransition(
   return (
     value === "push" ||
     value === "wipe" ||
+    value === "fade" ||
+    value === "cut" ||
     value === "shape" ||
     value === "zoom" ||
     value === "split" ||
@@ -1162,9 +1242,12 @@ export function slideTransitionEffectOptions(
   kind: unknown,
 ): readonly SlideTransitionDirection[] {
   if (kind === "push") return SLIDE_TRANSITION_PUSH_OPTIONS;
-  if (kind === "wipe") return SLIDE_TRANSITION_DIRECTIONS;
+  if (kind === "wipe") return SLIDE_TRANSITION_WIPE_OPTIONS;
+  if (kind === "fade") return SLIDE_TRANSITION_FADE_OPTIONS;
+  if (kind === "cut") return SLIDE_TRANSITION_CUT_OPTIONS;
+  if (kind === "page-curl") return SLIDE_TRANSITION_PAGE_CURL_OPTIONS;
   if (kind === "shape") return SLIDE_TRANSITION_SHAPE_OPTIONS;
-  if (kind === "zoom") return SLIDE_TRANSITION_ZOOM_OPTIONS;
+  if (kind === "zoom") return SLIDE_TRANSITION_ZOOM_EFFECT_OPTIONS;
   if (kind === "split") return SLIDE_TRANSITION_SPLIT_OPTIONS;
   if (kind === "clock") return SLIDE_TRANSITION_CLOCK_OPTIONS;
   if (kind === "morph") return SLIDE_TRANSITION_MORPH_OPTIONS;
@@ -1194,6 +1277,31 @@ export function slideTransitionEffectOptions(
     kind === "comb"
     ? SLIDE_TRANSITION_ORIENTATION_OPTIONS
     : [];
+}
+
+/**
+ * The Effect Options menu PowerPoint shows for ``kind`` (truth
+ * transition-option-names-v2): every option this editor can write, except
+ * Clock's wheels of 2 to 8 spokes, which PowerPoint keeps from older files
+ * but no longer offers (its Clock menu is Clockwise, Counterclockwise, Wedge).
+ */
+export function slideTransitionEffectMenuOptions(
+  kind: unknown,
+): readonly SlideTransitionDirection[] {
+  if (kind === "clock") return ["one-spoke", "counterclockwise", "wedge"];
+  return slideTransitionEffectOptions(kind);
+}
+
+/**
+ * The option a transition takes when it is picked in the gallery: PowerPoint's
+ * own (Page Curl starts Double Left). A slide that names no option keeps
+ * {@link defaultSlideTransitionDirection}, what it has always meant.
+ */
+export function gallerySlideTransitionDirection(
+  kind: unknown,
+): SlideTransitionDirection | null {
+  if (kind === "page-curl") return "double-left";
+  return defaultSlideTransitionDirection(kind);
 }
 
 /** Prevent an option from one native effect being written onto another. */
@@ -1320,6 +1428,10 @@ export function hasEditableSlideTransitionSource(source: unknown): boolean {
     kind !== "wipe" &&
     // A Morph receipt from before its Effect Options names none: by object.
     kind !== "morph" &&
+    // Fade and Cut had no Effect Options before GAP 23: their receipts name
+    // none (Smoothly / the plain cut, the only ones read then).
+    kind !== "fade" &&
+    kind !== "cut" &&
     !hasDirection
   ) {
     return false;
@@ -1331,7 +1443,8 @@ export function hasEditableSlideTransitionSource(source: unknown): boolean {
     // always the right-hand one, so the receipt still says which slide it
     // came from; keeping it editable is what stops a re-export mirroring it.
     const legacyDirectionlessPreset =
-      direction === null && (isSlideTransitionP15LeftRightKind(kind) || kind === "morph");
+      direction === null &&
+      (isSlideTransitionP15LeftRightKind(kind) || kind === "morph" || kind === "fade" || kind === "cut");
     if (
       (isDirectionalSlideTransition(kind) &&
         !legacyDirectionlessPreset &&
@@ -1517,11 +1630,19 @@ export function slideTransitionClassName(
   randomSource: () => number = Math.random,
 ): string | null {
   const transition = normalizeSlideTransition(value);
-  if (
-    transition === "none" ||
-    transition === "morph" ||
-    transition === "cut"
-  ) {
+  if (transition === "cut") {
+    // Cut through black: a beat of black, then the slide (GAP 23); the plain
+    // cut has no animation at all.
+    return normalizeSlideTransitionDirection(transition, direction) === "through-black"
+      ? "presentation-present__slide--enter-cut-through-black"
+      : null;
+  }
+  if (transition === "fade") {
+    return normalizeSlideTransitionDirection(transition, direction) === "through-black"
+      ? "presentation-present__slide--enter-fade-through-black"
+      : "presentation-present__slide--enter-fade";
+  }
+  if (transition === "none" || transition === "morph") {
     return null;
   }
   // The basic-gallery identities reuse the already-shipped visual keyframes;
@@ -1536,7 +1657,9 @@ export function slideTransitionClassName(
     return `presentation-present__slide--enter-shape-${normalizeSlideTransitionDirection(transition, direction)}`;
   }
   if (transition === "zoom") {
-    return normalizeSlideTransitionDirection(transition, direction) === "out"
+    const option = normalizeSlideTransitionDirection(transition, direction);
+    if (option === "zoom-rotate") return "presentation-present__slide--enter-zoom-rotate";
+    return option === "out"
       ? "presentation-present__slide--enter-zoom-out"
       : "presentation-present__slide--enter-zoom";
   }

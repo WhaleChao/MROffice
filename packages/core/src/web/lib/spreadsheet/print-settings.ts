@@ -1434,8 +1434,16 @@ export function normalizeHeaderFooter(
 export interface HeaderFooterContext {
   /** 1-based current page number. */
   pageNumber: number;
+  /** How a page number field prints: a whole-workbook print numbers its
+   * pages through the job ({@link markJobPageNumber}), the window's
+   * numbers being the sheet's own. Plain digits when absent. */
+  pageNumberText?: (pageNumber: number) => string;
   /** Total page count. */
   totalPages: number;
+  /** How the page count field prints: a whole-workbook print counts the
+   * job's pages ({@link markJobPageCount}), the window's count being the
+   * sheet's own. Plain digits when absent. */
+  pagesText?: (totalPages: number) => string;
   /** Pre-formatted print date string (caller's locale). */
   date: string;
   /** Pre-formatted print time string. */
@@ -1477,8 +1485,8 @@ export function substituteHeaderFooterTokens(
 ): string {
   if (typeof text !== "string" || text === "") return "";
   const map: Record<HeaderFooterFieldName, string> = {
-    page: String(ctx.pageNumber),
-    pages: String(ctx.totalPages),
+    page: ctx.pageNumberText ? ctx.pageNumberText(ctx.pageNumber) : String(ctx.pageNumber),
+    pages: ctx.pagesText ? ctx.pagesText(ctx.totalPages) : String(ctx.totalPages),
     date: ctx.date,
     time: ctx.time,
     tab: ctx.sheetName,
@@ -1492,11 +1500,63 @@ export function substituteHeaderFooterTokens(
     .map((piece) => {
       if (piece.kind === "text") return piece.text;
       if (piece.field === "page" && piece.offset) {
-        return String(ctx.pageNumber + Number(piece.offset));
+        const number = ctx.pageNumber + Number(piece.offset);
+        return ctx.pageNumberText ? ctx.pageNumberText(number) : String(number);
       }
       return map[piece.field];
     })
     .join("");
+}
+
+/**
+ * A page number of a sheet printed in a whole-workbook job, as the sheet's
+ * own window numbers it: marked so the job renumbers it once the pages of
+ * the sheets before it are known ({@link numberJobPages}). Windows Excel
+ * numbers a job's pages straight through: a sheet whose First page number
+ * is Auto goes on from the sheet before (R492-X10's second sheet prints
+ * "Seite 11" after ten pages), one that states a number starts there; the
+ * server's writer does the same.
+ */
+export function markJobPageNumber(pageNumber: number): string {
+  return `\uE000${pageNumber}\uE001`;
+}
+
+/** Rewrites the marked page numbers ({@link markJobPageNumber}) under
+ * `root` to their place in the job: the sheet's own number plus `before`
+ * (the number its first page follows). */
+export function numberJobPages(root: Node, before: number): void {
+  const doc = root.ownerDocument ?? (root as Document);
+  const walker = doc.createTreeWalker(root, 4 /* NodeFilter.SHOW_TEXT */);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node.nodeValue ?? "";
+    if (!text.includes("\uE000")) continue;
+    node.nodeValue = text.replace(/\uE000(-?\d+)\uE001/g, (_match, number: string) => String(Number(number) + before));
+  }
+}
+
+/**
+ * The page count of a sheet printed in a whole-workbook job, as the sheet's
+ * own window counts it: marked so the job prints its own count once every
+ * sheet is stacked ({@link countJobPages}). Windows Excel's &N counts the
+ * job's pages, a sheet that states its first page number too (lookwin
+ * probe pn: four sheets of 2 + 3 + 1 + 2 pages, the third from page 7,
+ * print "N8" on every page); the server's writer does the same.
+ */
+export function markJobPageCount(totalPages: number): string {
+  return `\uE002${totalPages}\uE003`;
+}
+
+/** Rewrites the marked page counts ({@link markJobPageCount}) under `root`
+ * to the job's page count, or, `null`, to the sheet's own count (a streamed
+ * print hands its pages on before the job's count is known). */
+export function countJobPages(root: Node, total: number | null): void {
+  const doc = root.ownerDocument ?? (root as Document);
+  const walker = doc.createTreeWalker(root, 4 /* NodeFilter.SHOW_TEXT */);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node.nodeValue ?? "";
+    if (!text.includes("\uE002")) continue;
+    node.nodeValue = text.replace(/\uE002(\d+)\uE003/g, (_match, own: string) => String(total ?? Number(own)));
+  }
 }
 
 // ── Range parsing helpers ─────────────────────────────────────────────────────

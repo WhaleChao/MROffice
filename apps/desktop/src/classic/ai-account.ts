@@ -9,6 +9,7 @@ import path from "node:path";
 import { app, safeStorage } from "electron";
 
 import { PRODUCT } from "./product";
+import { isLocale, localizedRoute } from "./locale";
 
 
 
@@ -35,8 +36,10 @@ export function newVerifier(): string {
   return base64url(randomBytes(48));
 }
 
-export function connectUrl(cloud: string, challenge: string): string {
-  const url = new URL("/app/desktop-connect", cloud);
+/** ``locale``: the app's language (../app-locale.ts), the page's prefix -- the
+ * site shows an unprefixed page in its default, Chinese, to everyone. */
+export function connectUrl(cloud: string, challenge: string, locale?: string): string {
+  const url = new URL(isLocale(locale) ? localizedRoute("/app/desktop-connect", locale) : "/app/desktop-connect", cloud);
   url.searchParams.set("challenge", challenge);
   // The page names the app asking, and the code comes back on its scheme
   // (apps/api/app/routers/desktop_cloud.py approve_connect). Classic's link

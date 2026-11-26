@@ -75,6 +75,9 @@ export interface AnnotationListItem {
   /** For a text markup row, the markup it is. */
   markup?: AnnotationListMarkup;
   page: number;
+  /** On a page inserted in MR Office (`page` is then the page before it):
+   * lib/pdf/inserted-page-identity. */
+  insertedPageId?: string;
   preview: string;
   
 
@@ -117,6 +120,10 @@ export interface AnnotationListReply {
    
   fullText: string;
   authorName?: string;
+  /** Present when the reply is its author's review state record: the row
+   * shows the state, and `text` keeps the producer's own wording (empty, or
+   * Acrobat's "<State> set by <author>"). */
+  reviewState?: { model: "Review" | "Marked"; state: string };
 }
 
 /** Source-PDF rows sort after the reader's own on a page, in source order. */
@@ -166,6 +173,7 @@ interface ReplyLike {
   id?: string;
   text?: string;
   author?: AuthorLike;
+  reviewState?: { model: "Review" | "Marked"; state: string };
 }
 interface HighlightLike {
   id: string;
@@ -191,6 +199,7 @@ interface InkLike {
   id: string;
   page: number;
   color?: string;
+  insertedPageId?: string;
 }
 interface ShapeLike {
   id: string;
@@ -328,7 +337,15 @@ function projectReplies(
   replies.forEach((reply, index) => {
     if (!reply || typeof reply !== "object") return;
     const text = annotationPreview(reply.text);
-    if (!text) return;
+    // A review state record is listed as that state, with or without words.
+    const reviewState =
+      reply.reviewState &&
+      (reply.reviewState.model === "Review" || reply.reviewState.model === "Marked") &&
+      typeof reply.reviewState.state === "string" &&
+      reply.reviewState.state
+        ? { model: reply.reviewState.model, state: reply.reviewState.state }
+        : undefined;
+    if (!text && !reviewState) return;
     const name = authorName(reply.author);
     out.push({
       id:
@@ -336,8 +353,9 @@ function projectReplies(
           ? reply.id
           : `${parentId}:reply:${index}`,
       text,
-      fullText: annotationFullText(reply.text),
+      fullText: annotationFullText(reply.text) || (reviewState ? reviewState.state : ""),
       ...(name ? { authorName: name } : {}),
+      ...(reviewState ? { reviewState } : {}),
     });
   });
   return out;
@@ -430,6 +448,7 @@ export function buildAnnotationList(
   push("ink", sources.inks, (k: InkLike, order) => ({
     id: k.id,
     page: k.page,
+    ...(typeof k.insertedPageId === "string" ? { insertedPageId: k.insertedPageId } : {}),
     preview: "",
     color: typeof k.color === "string" ? k.color : undefined,
     order,

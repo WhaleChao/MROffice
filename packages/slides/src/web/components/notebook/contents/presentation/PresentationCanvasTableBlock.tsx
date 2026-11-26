@@ -227,6 +227,13 @@ function sameCellProps(a: PresentationCanvasTableCellProps, b: PresentationCanva
 
 
 
+/**
+ * The field each table cell last detached (by `blockId:row:col`): its ref
+ * attaches again around the same field on a mere redraw, which is not the
+ * cell drawn again whole (`EditingHostHandover`).
+ */
+const detachedTableCellFields = new Map<string, PresentationCellTextElement>();
+
 const PresentationCanvasTableCell = memo(function PresentationCanvasTableCell({
   live,
   blockId,
@@ -506,8 +513,16 @@ const PresentationCanvasTableCell = memo(function PresentationCanvasTableCell({
             key,
             element,
           );
+          // This ref is a new function on every render, so React detaches
+          // and attaches it again around the SAME field each time the cell
+          // draws: only a new field (the cell mounted again) takes the caret
+          // back. Given back to the field it never left, it pulled the focus
+          // into the cell after a row / column selection moved it away (a
+          // whole-row Shift+click, a copied column: their scope gone).
+          const kept = detachedTableCellFields.get(key) === element;
+          detachedTableCellFields.delete(key);
           const back = L().editingHostHandover.take(handoverKey);
-          if (back) {
+          if (back && !kept) {
             // Once the field says what it holds (its handle is set after
             // this ref runs).
             queueMicrotask(() => {
@@ -524,10 +539,14 @@ const PresentationCanvasTableCell = memo(function PresentationCanvasTableCell({
           }
         } else {
           const previous = L().tableCellInputRefs.current.get(key);
+          if (previous) detachedTableCellFields.set(key, previous);
           if (
             previous?.isConnected &&
             previous.contains(previous.ownerDocument.activeElement) &&
-            typeof previous.value === "string"
+            typeof previous.value === "string" &&
+            // Only a cell being typed in: a row, column or table selection
+            // keeps its own focus.
+            L().tableSelectionScope === "cells"
           ) {
             L().editingHostHandover.lost(handoverKey, {
               text: previous.value, start: previous.selectionStart, end: previous.selectionEnd,

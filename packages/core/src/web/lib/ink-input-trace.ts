@@ -32,6 +32,25 @@ const DEAF_NEAR_PX = 160;
 /** Work of the page's own logged in the trail when it took at least this long. */
 const MARK_MIN_MS = 24;
 const TRAIL_DEFAULT = 48;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const HEARTBEAT_MS = 250;
+const HELD_MIN_MS = 400;
+const SPLIT_MIN_MS = 100;
+const SPLIT_EVENTS = new Set(["pointerdown", "pointerup", "click", "gesturestart", "gestureend"]);
 const MAX_REPORTS_DEFAULT = 4;
 
 /**
@@ -120,6 +139,7 @@ const EVENT_CODES: Record<string, string> = {
   touchcancel: "tc",
   click: "ck",
   gesturestart: "gs",
+  gestureend: "ge",
 };
 
 function eventCode(event: Event): string {
@@ -177,6 +197,41 @@ export class InkInputTrace {
     private readonly describePoint: (x: number, y: number) => string = () => "",
   ) {
     if (fieldSwitches.diag) this.watchFrames();
+    this.beat();
+  }
+
+  private heartbeat: ReturnType<typeof setTimeout> | null = null;
+  private disposed = false;
+
+  /** The heartbeat (see {@link HEARTBEAT_MS}); a hidden page's timers are throttled, so it says nothing then. */
+  private beat(): void {
+    if (this.disposed || typeof setTimeout !== "function") return;
+    const due = this.now() + HEARTBEAT_MS;
+    this.heartbeat = setTimeout(() => {
+      this.heartbeat = null;
+      const late = this.now() - due;
+      const hidden = typeof document !== "undefined" && document.visibilityState === "hidden";
+      if (late >= HELD_MIN_MS && !hidden) this.push(due, `held${Math.round(late)}`);
+      this.beat();
+    }, HEARTBEAT_MS);
+  }
+
+  private splitPending = false;
+
+  /** After a discrete input: script until the next frame, and that frame's cost (see {@link SPLIT_MIN_MS}). */
+  private splitAfter(handedAt: number): void {
+    if (this.splitPending || this.disposed || typeof requestAnimationFrame !== "function") return;
+    this.splitPending = true;
+    requestAnimationFrame(() => {
+      const frame = this.now();
+      setTimeout(() => {
+        this.splitPending = false;
+        if (this.disposed) return;
+        const script = frame - handedAt;
+        const render = this.now() - frame;
+        if (script + render >= SPLIT_MIN_MS) this.push(handedAt, `js${Math.round(script)}rf${Math.round(render)}`);
+      }, 0);
+    });
   }
 
   private frameHandle = 0;
@@ -249,6 +304,7 @@ export class InkInputTrace {
       }
     }
     if (pen || code.includes("s")) this.scheduleDump();
+    if (SPLIT_EVENTS.has(event.type)) this.splitAfter(now);
     if (event.type === "pointerdown" && pen) {
       this.penDown = true;
       this.arm();
@@ -307,6 +363,9 @@ export class InkInputTrace {
   }
 
   dispose(): void {
+    this.disposed = true;
+    if (this.heartbeat !== null) clearTimeout(this.heartbeat);
+    this.heartbeat = null;
     this.disarm();
     if (this.frameHandle && typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.frameHandle);
     this.frameHandle = 0;

@@ -110,7 +110,7 @@ export interface CodePageBufferAuthority {
   known: boolean;
   /** Page tier + notebook role + checkout verdict. */
   writable: boolean;
-  reason: "read_only_tier" | "role" | "locked" | null;
+  reason: "read_only_tier" | "role" | "locked" | "missing" | null;
   /** Stable, last-verified editor binding; freshness must not change it. */
   binding?: CodePageBufferBinding;
   /** Current fail-closed write gate. False pauses writes in the same binding. */

@@ -18,7 +18,7 @@ import {
 } from "@mrnote/core/web/components/office-ribbon/OfficeRibbonQuickStrip.tsx";
 import { computeRibbonOverflow } from "@mrnote/core/web/components/console/editor/ribbonOverflow.ts";
 
-import { PdfRibbonFitContext, usePdfRibbonFit } from "./pdfRibbonFit";
+import { PdfRibbonCompactContext, PdfRibbonFitContext, usePdfRibbonFit } from "./pdfRibbonFit";
 
 export type PdfRibbonSaveStatus = "saved" | "saving" | "unsaved" | "conflict";
 export type PdfOfficeActionRail = Omit<
@@ -279,6 +279,7 @@ export function PdfOfficeRibbon<TabId extends string>({
         />
         <PdfRibbonActiveTabContext.Provider value={activeTab}>
           <PdfRibbonFitContext.Provider value={fit.collapsed}>
+          <PdfRibbonCompactContext.Provider value={fit.compacted}>
             {/* One strip for both anatomies (OfficeRibbonSurfaceStrip): a
                 contextual tab no longer unmounts and re-inserts the ribbon.
                 Every tab's groups are children here, gated by data-ribbon. */}
@@ -287,9 +288,10 @@ export function PdfOfficeRibbon<TabId extends string>({
               density="office"
               {...stripProps}
             >
-              <span ref={fit.markerRef} hidden aria-hidden="true" data-pdf-ribbon-fit-marker="" />
+              <span ref={fit.attachMarker} hidden aria-hidden="true" data-pdf-ribbon-fit-marker="" />
               {children}
             </OfficeRibbonSurfaceStrip>
+          </PdfRibbonCompactContext.Provider>
           </PdfRibbonFitContext.Provider>
         </PdfRibbonActiveTabContext.Provider>
       </section>

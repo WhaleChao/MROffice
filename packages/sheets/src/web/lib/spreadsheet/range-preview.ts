@@ -6,6 +6,7 @@
 import { PAGE_LOCATE_FLASH_MS, PAGE_LOCATED_ATTRIBUTE } from "@mrnote/core/web/lib/page-locate.ts";
 
 import type { CellRange as RangeRect } from "./block-clear";
+import { RANGE_CELL_SELECTOR } from "./selection-glide";
 
 /** The lines that carry the selection's border. Excel draws ONE border around
  * a selected range; when the range starts or ends on a hidden row or column
@@ -154,7 +155,7 @@ export function createRangePreview(getRoot: () => HTMLElement | null, resolveEdg
     const root = getRoot();
     const edges = resolveEdges(range);
     let corner: HTMLElement | null = null;
-    for (const cell of root?.querySelectorAll<HTMLElement>("td[data-range-cell]") ?? []) {
+    for (const cell of root?.querySelectorAll<HTMLElement>(RANGE_CELL_SELECTOR) ?? []) {
       const [row, col] = cell.dataset.rangeCell!.split(":").map(Number);
       const selected = row >= range.r1 && row <= range.r2 && col >= range.c1 && col <= range.c2;
       if (!originals.has(cell)) originals.set(cell, MARK_ATTRIBUTES.map((attr) => cell.getAttribute(attr)));
@@ -210,7 +211,7 @@ export function createRangePreview(getRoot: () => HTMLElement | null, resolveEdg
 export function createSelectionPaint(getRoot: () => HTMLElement | null, onPainted: (edges: RangeRect | null) => void = () => {}) {
   return {
     paint(range: RangeRect | null, edges: RangeRect | null = range) {
-      for (const cell of getRoot()?.querySelectorAll<HTMLElement>("td[data-range-cell]") ?? []) {
+      for (const cell of getRoot()?.querySelectorAll<HTMLElement>(RANGE_CELL_SELECTOR) ?? []) {
         const [row, col] = cell.dataset.rangeCell!.split(":").map(Number);
         const selected = range !== null && row >= range.r1 && row <= range.r2 && col >= range.c1 && col <= range.c2;
         if (selected) {
@@ -229,6 +230,11 @@ export function createSelectionPaint(getRoot: () => HTMLElement | null, onPainte
     /** A press made this the selection while its paint waits for the drag to
      * end (or not to start): the frame may go there already. */
     pressed(edges: RangeRect) {
+      onPainted(edges);
+    },
+    /** The cells were laid out again where the selection stays (a Page
+     * Layout page re-planned, zoomed or resized): its frame follows them. */
+    relaid(edges: RangeRect | null) {
       onPainted(edges);
     },
     /** The headings of the selection's rows and columns, a single active cell
@@ -278,7 +284,7 @@ export function flashLocatedRange(
     const root = getRoot();
     const cells =
       root && (options.ready?.() ?? true)
-        ? Array.from(root.querySelectorAll<HTMLElement>("td[data-range-cell]")).filter(
+        ? Array.from(root.querySelectorAll<HTMLElement>(RANGE_CELL_SELECTOR)).filter(
             (cell) => {
               const [row, col] = cell.dataset.rangeCell!.split(":").map(Number);
               return row >= r1 && row <= r2 && col >= c1 && col <= c2;

@@ -349,6 +349,8 @@ export function PresentationTextVisualContents({
     flatRunLineBoxStyle,
     suppressFirstSpaceBefore,
   } = layout;
+  // A word's link where the engine draws the body (the show, the print).
+  const engineLinks = useMemo(() => ({ slideIds, onNavigateToSlide }), [slideIds, onNavigateToSlide]);
   const family = layout.nativeBaseline?.fontFamily;
   const size = layout.nativeBaseline?.fontSizePx;
   const leading = layout.nativeBaseline?.lineHeight;
@@ -556,6 +558,8 @@ export function PresentationTextVisualContents({
     lineBox: asRecord(block.source)?.nativeLineBox,
     // Row 1013: the empty lines a body ends on, in their mark's (or break's) size and face.
     markLines: asRecord(block.source)?.nativeMarkLines,
+    // Row 1042: a line that ends at a line break, laid with the break's face.
+    breakLines: asRecord(block.source)?.nativeBreakLineFaces,
     ...(buildParagraphs ? {} : { flatText: block.text, flatRuns: block.runs }),
     widthPx: engineWidthEmu === null ? null : engineWidthEmu / AUTOFIT_EMU_PER_PX,
     wrap: textBlockWraps(block),
@@ -598,6 +602,7 @@ export function PresentationTextVisualContents({
             fontAliases={fontAliases}
             autofitScale={layout.autofitScale}
             colorOverride={colorOverride}
+            links={engineLinks}
           />
         </PresentationAnchorCenterBounds>
       </PresentationAutofitScaleContext.Provider>

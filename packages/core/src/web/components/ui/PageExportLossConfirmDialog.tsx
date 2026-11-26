@@ -30,6 +30,8 @@ const PAGE_EXPORT_LOSS_MESSAGE_KEYS: Readonly<Record<string, string>> =
   Object.freeze({
     document_activex_preserve_only_not_exported:
       "toolbar.exportLossCode.document_activex_preserve_only_not_exported",
+    presentation_kept_object_not_written:
+      "toolbar.exportLossCode.presentation_kept_object_not_written",
     document_embedded_object_preserve_only_not_exported:
       "toolbar.exportLossCode.document_embedded_object_preserve_only_not_exported",
     document_external_linked_image_not_exported:
@@ -87,6 +89,8 @@ const PAGE_EXPORT_LOSS_MESSAGE_KEYS: Readonly<Record<string, string>> =
     // records, named for the reader after a download it did not ask about.
     pptx_slides_written_from_page:
       "toolbar.exportLossCode.pptx_slides_written_from_page",
+    pptx_graft_layout_brought_in:
+      "toolbar.exportLossCode.pptx_graft_layout_brought_in",
     // A slide whose contents the import could not read went out as the
     // imported file has it, without boxes added there that no save has
     // written yet (readings row 820).

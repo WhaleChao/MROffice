@@ -536,24 +536,48 @@ export function partitionManagedNativeNotes<T extends NativePdfPageAnnotation>(
             ...(markupColorMatch
               ? { color: `#${match[4].toUpperCase()}` }
               : {}),
-            nativeSource: {
+            nativeSource: sameSourceKept(annotation.nativeSource, {
               kind: "pdf_text_markup_annotation",
               objectRef: match[2],
               subtype: match[3] as
                 "Highlight" | "Underline" | "StrikeOut" | "Squiggly",
-            },
+            }),
           }
         : importedMatch
           ? {
-              nativeSource: {
+              nativeSource: sameSourceKept(annotation.nativeSource, {
                 kind: "pdf_text_annotation",
                 objectRef: match[2],
-              },
+              }),
             }
           : {}),
     });
   }
   return { notes, tombstones };
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+function sameSourceKept<S extends NativePdfAnnotationSource>(
+  stored: NativePdfAnnotationSource | undefined,
+  named: S,
+): S {
+  if (!stored || stored.kind !== named.kind || stored.objectRef !== named.objectRef) {
+    return named;
+  }
+  const { textTruncated: _truncated, ...kept } = stored;
+  void _truncated;
+  return { ...kept, ...named } as S;
 }
 
 export function serializeManagedNativeNotes<T extends NativePdfPageAnnotation>(

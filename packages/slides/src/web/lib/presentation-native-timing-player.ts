@@ -29,6 +29,9 @@
 
 import { patternRevealKeyframes } from "./presentation-anim-pattern-reveal";
 import { effectRevealClip } from "@mrnote/core/web/lib/presentation-effect-recipes.ts";
+import { nativeMotionPathEnds, nativeMotionPathPoints, pointsEvenlyAlong } from "@mrnote/core/web/lib/presentation-motion-path-native.ts";
+import { isSmooth, smoothEasingCss, smoothFrameTimes } from "@mrnote/core/web/lib/presentation-smooth-timing.ts";
+import { polylinePointsAlongSmoothly } from "@mrnote/core/web/lib/presentation-motion-path.ts";
 
 export type NativeTimingBehaviour = {
   kind: "set" | "anim" | "animEffect" | "animMotion" | "animScale" | "animRot" | "animClr" | "cmd" | "sound";
@@ -67,6 +70,13 @@ export type NativeTimingBehaviour = {
    * container repeats, reverses, eases, runs at another speed, removes what
    * it did at its end (Rewind when done playing) or ends at the next click. */
   wrap?: NativeTimingWrap;
+  /**
+   * An `animMotion`'s: where the object stands when it begins, in shares of
+   * the slide from its place -- the end an earlier path on it holds, which
+   * the player has already moved it by (`readNativeTimingTree` works it
+   * out; absent, its place).
+   */
+  motionFrom?: [number, number];
 };
 
 export type NativeTimingWrap = {
@@ -99,8 +109,10 @@ export function readNativeTimingTree(value: unknown): NativeTimingTree | null {
   if (tree.schema !== "pptx-timing-tree-v1" || !Array.isArray(tree.clicks)) return null;
   return {
     schema: tree.schema,
-    clicks: tree.clicks.filter(
-      (click) => typeof click === "object" && click !== null && Array.isArray((click as { behaviours?: unknown }).behaviours),
+    clicks: withMotionStarts(
+      tree.clicks.filter(
+        (click) => typeof click === "object" && click !== null && Array.isArray((click as { behaviours?: unknown }).behaviours),
+      ),
     ),
     hiddenUntil: typeof tree.hiddenUntil === "object" && tree.hiddenUntil !== null ? tree.hiddenUntil : {},
     ...(Array.isArray(tree.triggers)
@@ -116,6 +128,38 @@ export function readNativeTimingTree(value: unknown): NativeTimingTree | null {
         }
       : {}),
   };
+}
+
+/**
+ * The clicks with each path told where its object stands when it begins:
+ * PowerPoint measures every path from the object's place on the slide, so a
+ * path after another on the same object takes it from where the last one
+ * left it to its own start (the player adds paths up; it moves the object
+ * by the difference). In the order the show plays them: click by click, in
+ * each by start time.
+ */
+function withMotionStarts<T extends NativeTimingRun>(clicks: T[]): T[] {
+  const held = new Map<string, [number, number]>();
+  return clicks.map((click) => {
+    const order = click.behaviours
+      .map((behaviour, index) => ({ behaviour, index }))
+      .filter(({ behaviour }) => behaviour?.kind === "animMotion" && typeof behaviour.path === "string")
+      .sort((a, b) => (a.behaviour.start ?? 0) - (b.behaviour.start ?? 0) || a.index - b.index);
+    if (order.length === 0) return click;
+    const behaviours = [...click.behaviours];
+    for (const { behaviour, index } of order) {
+      const ends = nativeMotionPathEnds(behaviour.path!);
+      if (!ends) continue;
+      const from = held.get(behaviour.target);
+      if (from) behaviours[index] = { ...behaviour, motionFrom: from };
+      // What the path leaves the object at: its end, its start when it runs
+      // back (auto-reverse, a reversed run), its place again when removed.
+      const back = Boolean(behaviour.autoRev || behaviour.wrap?.autoRev) !== Boolean(behaviour.reverse || behaviour.wrap?.reverse);
+      if (behaviour.fill === "remove" || behaviour.wrap?.remove) held.delete(behaviour.target);
+      else held.set(behaviour.target, back ? ends.start : ends.end);
+    }
+    return { ...click, behaviours };
+  });
 }
 
 /** The objects whose click plays one of the tree's interactive sequences. */
@@ -263,8 +307,13 @@ function targetsOf(root: ParentNode, behaviour: NativeTimingBehaviour): HTMLElem
   return picked.length > 0 ? picked : [element];
 }
 
+/**
+ * Smooth start / end over a whole run (SMIL accelerate / decelerate, the
+ * deck's one mapping in lib/presentation-smooth-timing): a Web Animation's
+ * own easing applies to its progress as a whole, whatever keyframes it has.
+ */
 function easingOf(accel: number, decel: number): string {
-  return accel > 0 || decel > 0 ? `cubic-bezier(${Math.min(1, accel)}, 0, ${Math.max(0, 1 - decel)}, 1)` : "linear";
+  return smoothEasingCss(accel, decel) ?? "linear";
 }
 
 function timingOf(behaviour: NativeTimingBehaviour): KeyframeAnimationOptions {
@@ -282,7 +331,10 @@ function timingOf(behaviour: NativeTimingBehaviour): KeyframeAnimationOptions {
       duration: Math.max(1, wrap.span),
       iterations: wrap.autoRev ? passes * 2 : passes,
       direction: wrap.autoRev ? (wrap.reverse ? "alternate-reverse" : "alternate") : wrap.reverse ? "reverse" : "normal",
-      fill: removes ? (behaviour.kind === "set" ? "none" : "backwards") : behaviour.kind === "set" ? "forwards" : "both",
+      // Before its container begins, neither a `set` nor a path holds (see below).
+      fill: removes
+        ? behaviour.kind === "set" || behaviour.kind === "animMotion" ? "none" : "backwards"
+        : behaviour.kind === "set" || behaviour.kind === "animMotion" ? "forwards" : "both",
       easing: easingOf(wrap.accel ?? 0, wrap.decel ?? 0),
     };
   }
@@ -295,9 +347,16 @@ function timingOf(behaviour: NativeTimingBehaviour): KeyframeAnimationOptions {
       : behaviour.reverse ? "reverse" : "normal",
     // A run is held where it ends unless it says to remove itself. A `set`
     // takes effect at its own time only: held before it, an entrance's
-    // visibility would show the object while its delay runs.
-    fill: behaviour.fill === "remove" ? (behaviour.kind === "set" ? "none" : "backwards") : behaviour.kind === "set" ? "forwards" : "both",
-    easing: easingOf(accel, decel),
+    // visibility would show the object while its delay runs. So does a
+    // path: until it begins the object stands where it is, not at the
+    // path's start.
+    fill:
+      behaviour.fill === "remove"
+        ? behaviour.kind === "set" || behaviour.kind === "animMotion" ? "none" : "backwards"
+        : behaviour.kind === "set" || behaviour.kind === "animMotion" ? "forwards" : "both",
+    // A path's frames carry its Smooth start / end (`keyframesOf`): it runs
+    // linearly, in every browser.
+    easing: behaviour.kind === "animMotion" ? "linear" : easingOf(accel, decel),
   };
 }
 
@@ -323,7 +382,13 @@ export function wrapKeyframes(behaviour: NativeTimingBehaviour, frames: Keyframe
     ...frame,
     offset: typeof frame.offset === "number" ? frame.offset : frames.length === 1 ? 0 : index / (frames.length - 1),
   }));
-  const ease = easingOf(behaviour.accel ?? 0, behaviour.decel ?? 0);
+  // The behaviour's own Smooth start / end within each of its passes: its
+  // frames moved to the times the eased progress reaches them, each eased
+  // up to the next (a keyframe easing applies between two frames only, so
+  // the same easing on every frame of a path would restart at each).
+  const accel = behaviour.accel ?? 0;
+  const decel = behaviour.decel ?? 0;
+  const smooth = isSmooth(accel, decel);
   const leg = (backwards: boolean): Keyframe[] => {
     const ordered = backwards ? [...plain].reverse().map((frame) => ({ ...frame, offset: 1 - (frame.offset as number) })) : plain;
     return ordered;
@@ -340,14 +405,17 @@ export function wrapKeyframes(behaviour: NativeTimingBehaviour, frames: Keyframe
   for (let index = 0; index < legs; index += 1) {
     const backwards = (behaviour.reverse === true) !== (behaviour.autoRev === true && index % 2 === 1);
     const legStart = local + index * own;
-    for (const frame of leg(backwards)) {
+    const frames = leg(backwards);
+    const timed = smooth ? smoothFrameTimes(frames.map((frame) => frame.offset as number), accel, decel) : null;
+    frames.forEach((frame, position) => {
       const { easing: frameEasing, ...rest } = frame;
+      const eased = timed?.[position];
       out.push({
         ...rest,
-        offset: at(legStart + (frame.offset as number) * own),
-        easing: ease !== "linear" ? ease : frameEasing ?? "linear",
+        offset: at(legStart + (eased ? eased.time : (frame.offset as number)) * own),
+        easing: eased ? eased.easing : frameEasing ?? "linear",
       });
-    }
+    });
   }
   const last = out[out.length - 1]!;
   if ((last.offset as number) < 1) out.push({ ...last, offset: 1, easing: "linear" });
@@ -497,64 +565,6 @@ export function nativeTimingFilterKeyframes(filter: string, entering: boolean): 
   return entering ? [hidden, shown] : [shown, hidden];
 }
 
-/** Points along a motion path (`M x y L x y C ... E`, shares of the slide). */
-function motionPoints(path: string, stage: NativeTimingStage): Array<[number, number]> {
-  const tokens = path.match(/[MLCZEmlcze]|-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) ?? [];
-  const points: Array<[number, number]> = [];
-  let at = 0;
-  let command = "M";
-  let current: [number, number] = [0, 0];
-  const number = () => Number(tokens[at++] ?? 0);
-  const point = (): [number, number] => [number() * stage.width, number() * stage.height];
-  while (at < tokens.length) {
-    if (/[A-Za-z]/.test(tokens[at]!)) command = tokens[at++]!.toUpperCase();
-    if (command === "M" || command === "L") {
-      current = point();
-      points.push(current);
-    } else if (command === "C") {
-      const c1 = point();
-      const c2 = point();
-      const end = point();
-      for (let step = 1; step <= 12; step += 1) {
-        const t = step / 12;
-        const u = 1 - t;
-        points.push([
-          u * u * u * current[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * end[0],
-          u * u * u * current[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * end[1],
-        ]);
-      }
-      current = end;
-    } else {
-      // Z / E: close or end.
-      at += 1;
-    }
-  }
-  return points.length > 0 ? points : [[0, 0]];
-}
-
-function evenlyAlong(points: Array<[number, number]>, count: number): Array<[number, number]> {
-  const lengths = [0];
-  for (let index = 1; index < points.length; index += 1) {
-    const [ax, ay] = points[index - 1]!;
-    const [bx, by] = points[index]!;
-    lengths.push(lengths[index - 1]! + Math.hypot(bx - ax, by - ay));
-  }
-  const total = lengths[lengths.length - 1]!;
-  if (total === 0) return [points[0]!];
-  const out: Array<[number, number]> = [];
-  let segment = 1;
-  for (let step = 0; step <= count; step += 1) {
-    const goal = (step / count) * total;
-    while (segment < lengths.length - 1 && lengths[segment]! < goal) segment += 1;
-    const span = lengths[segment]! - lengths[segment - 1]!;
-    const t = span > 0 ? (goal - lengths[segment - 1]!) / span : 0;
-    const [ax, ay] = points[segment - 1]!;
-    const [bx, by] = points[segment]!;
-    out.push([ax + (bx - ax) * t, ay + (by - ay) * t]);
-  }
-  return out;
-}
-
 function keyframesOf(behaviour: NativeTimingBehaviour, stage: NativeTimingStage): { frames: Keyframe[]; composite?: CompositeOperation } | null {
   const frame = stage.frames.get(behaviour.target);
   const variables: Variables = frame
@@ -598,10 +608,24 @@ function keyframesOf(behaviour: NativeTimingBehaviour, stage: NativeTimingStage)
     }
     case "animMotion": {
       if (!behaviour.path) return null;
-      const points = evenlyAlong(motionPoints(behaviour.path, stage), 40);
-      const [ox, oy] = points[0]!;
+      // From the path's own coordinates, as PowerPoint plays it: a path that
+      // does not start at the object's place takes the object to its start
+      // (motion-path-roundtrip). Paths add up, so one after another moves
+      // the object by the difference from where the last left it.
+      const path = nativeMotionPathPoints(behaviour.path);
+      if (!path || path.length === 0) return null;
+      // Its own Smooth start / end baked in at even times, as the slide view
+      // plays a path (in a container, `wrapKeyframes` lays them over its pass).
+      const points =
+        !behaviour.wrap && isSmooth(behaviour.accel ?? 0, behaviour.decel ?? 0)
+          ? polylinePointsAlongSmoothly(path, 40, behaviour.accel ?? 0, behaviour.decel ?? 0)
+          : pointsEvenlyAlong(path, 40);
+      const [fx, fy] = behaviour.motionFrom ?? [0, 0];
       return {
-        frames: points.map(([x, y], index) => ({ offset: index / (points.length - 1 || 1), translate: `${x - ox}px ${y - oy}px` })),
+        frames: points.map(([x, y], index) => ({
+          offset: index / (points.length - 1 || 1),
+          translate: `${(x - fx) * stage.width}px ${(y - fy) * stage.height}px`,
+        })),
         composite: "add",
       };
     }

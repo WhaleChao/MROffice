@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { canvasGestureActive } from "@mrnote/core/web/lib/canvas-gesture.ts";
 /**
  * The pace of the page ledger's background: pages near the reader are laid
  * out at once, pages far from them only while the app is idle.
@@ -177,6 +178,12 @@ export function createIdleStepper(
   /** How long before a step may run: 0, it may now. */
   const waitMs = (): number => {
     if (shared.settling) return FAR_STEP_POLL_MS;
+    // Not while a canvas window or the desk moves, however long the step has
+    // waited (a long drag outlasted FAR_STEP_MAX_WAIT_MS and the far pages
+    // laid out under it: in WebKit each step a redraw of the document's
+    // pages, the frames around it 0.3-1 s). lib/canvas-gesture; a gesture
+    // never holds longer than MAX_GESTURE_MS. `window.__canvasGestureHoldOff`.
+    if (canvasGestureActive()) return FAR_STEP_POLL_MS;
     const t = now();
     // While no input comes the gap is shorter; input brings the longer one
     // back at once.

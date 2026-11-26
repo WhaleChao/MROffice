@@ -23,17 +23,14 @@
  * was loaded with.
  */
 
+import { LOCALE_PREFIX, LOCALES, NOT_A_PAGE } from "./locale";
+
 /** apps/web/proxy.ts OFFICE_LANDING_PATHS. */
 const OFFICE_LANDING_PATHS = new Set(["/", "/app", "/workspace", "/app/notebooks", "/workspace/notebooks"]);
 /** Where those lead (the office host's signed-in landing). */
 const OFFICE_HOME = "/app/recent";
-/** The web app's locales (apps/web/i18n/locale-list.json; the test holds them together). */
-export const WEB_LOCALES: readonly string[] = [
-  "en", "id", "da", "de", "en-GB", "es", "es-419", "fr", "it", "nl",
-  "no", "pl", "pt-BR", "fi", "sv", "vi", "he", "th", "ko", "ja", "zh", "zh-TW", "ar", "ru", "tr", "uk", "cs", "pt-PT", "ro", "sr-Cyrl", "sr-Latn", "el", "hu", "bg", "hr", "lv", "sk", "ca", "ms", "sl", "sq", "az", "gl", "hy", "ur", "be", "eu", "si", "lo",
-];
-const LOCALE_PREFIX = new RegExp(`^/(?:${WEB_LOCALES.join("|")})(?=/|$)`);
-const LEFT_ALONE = /^\/(?:_next|api|render|pyodide|fonts|proofing|marketing)(?:\/|$)|\.[A-Za-z0-9]{1,8}$/;
+/** The web app's locales (apps/web/i18n/locale-list.json, through ./web-locales.ts). */
+export const WEB_LOCALES: readonly string[] = LOCALES;
 
 /** The route with `surface=office` in its query (a route, not a URL: "/app/recent?x=1#y"). */
 export function withOfficeSurface(route: string): string {
@@ -57,7 +54,7 @@ export function officeSurfaceRedirect(raw: string, webOrigin: string, method = "
   if (url.origin !== webOrigin) return null;
   const locale = LOCALE_PREFIX.exec(url.pathname)?.[0] ?? "";
   const stripped = (url.pathname.slice(locale.length) || "/").replace(/(.)\/+$/, "$1");
-  if (LEFT_ALONE.test(stripped)) return null;
+  if (NOT_A_PAGE.test(stripped)) return null;
   if (OFFICE_LANDING_PATHS.has(stripped)) {
     const home = new URL(`${locale}${OFFICE_HOME}`, webOrigin);
     home.searchParams.set("surface", "office");

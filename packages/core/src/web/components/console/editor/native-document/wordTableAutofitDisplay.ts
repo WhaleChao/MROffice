@@ -45,6 +45,7 @@ import {
   wordTableContentFit,
   wordTableTextOutdentPx,
 } from "./wordTableLayout";
+import { tabMeasureMutation } from "./paged/tabMeasureMark";
 
 /**
  * Word's AutoFit to contents, as a view projection.
@@ -1421,6 +1422,7 @@ const OBSERVED_TABLE_CHANGES: MutationObserverInit = {
 
 function markDirty(dirty: Set<Element>, records: readonly MutationRecord[]): void {
   for (const record of records) {
+    if (tabMeasureMutation(record)) continue;
     const target = record.target;
     const element = target instanceof Element ? target : target.parentElement;
     // A nested table's content is its outer tables' content too.

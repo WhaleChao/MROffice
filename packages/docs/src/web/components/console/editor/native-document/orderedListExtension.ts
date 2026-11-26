@@ -191,6 +191,28 @@ export const DocumentOrderedList = OrderedList.extend({
             : {};
         },
       },
+      
+
+
+
+
+
+
+
+      listRestart: {
+        default: null,
+        parseHTML: (element) => {
+          const raw = element.getAttribute("data-list-restart");
+          const value = raw === null ? Number.NaN : Number(raw);
+          return Number.isInteger(value) && value >= 0 && value <= MAX_LIST_START ? value : null;
+        },
+        renderHTML: (attributes) => {
+          const value = attributes.listRestart;
+          return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= MAX_LIST_START
+            ? { "data-list-restart": String(value) }
+            : {};
+        },
+      },
       /** Word numbering instance shared with numbered headings (numId). */
       listChain: {
         default: null,
@@ -288,6 +310,8 @@ export const DocumentOrderedList = OrderedList.extend({
             // (TipTap's OrderedList `start` default), which renders no `start`
             // attribute (byte-stable). A value ≥ 2 is stored verbatim.
             start: normalizeListStart(start) ?? DEFAULT_LIST_START,
+            // A start set here is the list's own number, not a restart.
+            listRestart: null,
           }),
       setOrderedListDefinition:
         (definition: ListDefinition | null, options?: { styleId?: string | null }) =>
@@ -573,6 +597,7 @@ function applyListNumberingValue(
         ...at.list.attrs,
         listContinue: true,
         start: DEFAULT_LIST_START,
+        listRestart: null,
       });
     return true;
   }
@@ -610,6 +635,7 @@ function applyListNumberingValue(
     ...list.attrs,
     listContinue: false,
     start: start === null ? DEFAULT_LIST_START : start,
+    listRestart: start === null ? null : start,
     ...(startsNewList
       ? { [SPLIT_CONTINUATION_ATTR]: false, [SPLIT_CONTINUES_ATTR]: continuesOn }
       : {}),

@@ -41,6 +41,7 @@ import { BandLineLayout } from "./bandLineLayout";
 import type { BandTokenContext } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
 import { BandTabLayout } from "./bandTabLayout";
 import { BandStoryPictures } from "./bandStoryPictures";
+import { ReadBackLossGuard } from "../readBackLossGuard";
 
 /** Transactions that only refresh the document-attr mirror carry this meta. */
 export const BAND_STORY_MIRROR_META = "bandStoryMirror";
@@ -207,6 +208,9 @@ export default function BandStoryEditor({
       // with its own extension set still gets it here.
       ...(extensions.some((extension) => extension.name === BandTabLayout.name) ? [] : [BandTabLayout]),
       BandLineLayout,
+      // One typed character never deletes the header's paragraph either
+      
+      ...(extensions.some((extension) => extension.name === ReadBackLossGuard.name) ? [] : [ReadBackLossGuard]),
     ];
   }
   const ruleExtensions = useRef<string[] | null>(null);

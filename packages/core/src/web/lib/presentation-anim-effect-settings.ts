@@ -3,6 +3,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { smoothEasingCss } from "./presentation-smooth-timing";
+
 /**
  * Effect Options of one animation step (PowerPoint's Effect Options dialog:
  * the Effect and Timing tabs beyond the effect, its direction and its
@@ -31,6 +33,19 @@
  *    effect on the object as a whole, as without one, so the show ignores it;
  *    it is kept so the effect is written back as it was. Never beside
  *    `textUnit` (choosing By word / By letter replaces it).
+ *  - `flyStart`: "offSlide" -- a Fly In from the bottom, left or right
+ *    written on one track from a whole slide away (PowerPoint for Mac's
+ *    spelling, row 1096); absent, PowerPoint's own from just past the edge.
+ *    It only keeps a file's spelling: the editor offers no such choice, and
+ *    a new direction or effect drops it.
+ *  - `growSize` (+ `growDirection`): Grow/Shrink's Size and Direction
+ *    (`p:animScale/p:by`, row 1094), the size in thousandths of a percent --
+ *    Tiny 25000, Smaller 50000, Larger 150000 (the default, never stated),
+ *    Huge 400000 or a custom amount -- and the direction "horizontal" (x the
+ *    size, y 100 %) or "vertical"; absent, both axes. A file's amount is
+ *    kept as it is (0, negative, past 10000 % included: PowerPoint's object
+ *    model keeps them, truth anim-grow-size); what a user types is limited
+ *    to whole percents 1..9999 ({@link GROW_SIZE_TYPED_MIN_PCT}).
  *
  * Absent keys are the effect's own defaults; a step without the object is
  * byte-for-byte what it was before. This module has no dependencies, so the
@@ -90,6 +105,26 @@ export const PRESENTATION_EFFECTS_WITHOUT_REWIND: ReadonlySet<string> = new Set(
   "vertical-highlight",
 ]);
 
+/** Grow/Shrink as the gallery adds it: Larger (150 %), both axes. */
+export const DEFAULT_GROW_SIZE = 150_000;
+/** The axis a one-way Grow/Shrink leaves alone stays at 100 %. */
+export const GROW_UNCHANGED_AXIS = 100_000;
+export const EFFECT_GROW_DIRECTIONS = ["horizontal", "vertical"] as const;
+export type EffectGrowDirection = (typeof EFFECT_GROW_DIRECTIONS)[number];
+/** PowerPoint's Size presets (Effect Options), in thousandths of a percent. */
+export const GROW_SIZE_PRESETS = [
+  { id: "tiny", size: 25_000 },
+  { id: "smaller", size: 50_000 },
+  { id: "larger", size: 150_000 },
+  { id: "huge", size: 400_000 },
+] as const;
+export type GrowSizePreset = (typeof GROW_SIZE_PRESETS)[number]["id"];
+/** What the Custom box takes when typed: whole percents. */
+export const GROW_SIZE_TYPED_MIN_PCT = 1;
+export const GROW_SIZE_TYPED_MAX_PCT = 9_999;
+/** The widest amount p:by holds (a 32-bit whole number). */
+const GROW_SIZE_LIMIT = 2_147_483_647;
+
 export interface PresentationAnimationEffectSettings {
   accel?: number;
   decel?: number;
@@ -104,6 +139,22 @@ export interface PresentationAnimationEffectSettings {
   wholeIterate?: EffectWholeIterate;
   wholeIterateDelayPct?: number;
   wholeIterateDelayMs?: number;
+  growSize?: number;
+  growDirection?: EffectGrowDirection;
+  flyStart?: "offSlide";
+  /**
+   * A templated effect's text colour track as the file states its two
+   * colours (Color Typewriter, row 1308), each in its own form: an sRGB
+   * value, or a theme / preset colour with its modifiers.
+   */
+  typewriterTextColors?: [EffectTrackColor, EffectTrackColor];
+}
+
+/** One colour of an effect's colour track, in the file's form (row 1308). */
+export interface EffectTrackColor {
+  kind: "srgbClr" | "schemeClr" | "prstClr";
+  val: string;
+  mods?: [string, string][];
 }
 
 /** An iteration over the whole object: no type stated, or "el" (row 1089). */
@@ -191,6 +242,20 @@ export function normalizeEffectSettings(
       out.wholeIterateDelayMs = record.wholeIterateDelayMs;
     }
   }
+  if (
+    wholeIn(record.growSize, -GROW_SIZE_LIMIT - 1, GROW_SIZE_LIMIT) &&
+    record.growSize !== DEFAULT_GROW_SIZE &&
+    !Object.is(record.growSize, -0)
+  ) {
+    out.growSize = record.growSize;
+  }
+  if (
+    typeof record.growDirection === "string" &&
+    (EFFECT_GROW_DIRECTIONS as readonly string[]).includes(record.growDirection)
+  ) {
+    out.growDirection = record.growDirection as EffectGrowDirection;
+  }
+  if (record.flyStart === "offSlide") out.flyStart = "offSlide";
   // A key this release does not know is dropped with the rest of the
   // malformed values; the server refuses to write it either way.
   return Object.keys(out).length > 0 ? out : undefined;
@@ -223,6 +288,11 @@ export interface EffectSettingsDefaults {
   iterates: boolean;
   /** Rewind when done playing applies (the effect's node ends held). */
   rewindable: boolean;
+  /** The effect takes a Size and Direction (Grow/Shrink). */
+  sizable?: boolean;
+  /** The effect may fly from a whole slide away (Fly In from the bottom,
+   * left or right, row 1096). */
+  fliesFromOffSlide?: boolean;
 }
 
 /**
@@ -243,6 +313,11 @@ export function canonicalEffectSettings(
   if (out.accel === defaults.accel) delete out.accel;
   if (out.decel === defaults.decel) delete out.decel;
   if (!defaults.rewindable) delete out.rewind;
+  if (!defaults.sizable) {
+    delete out.growSize;
+    delete out.growDirection;
+  }
+  if (!defaults.fliesFromOffSlide) delete out.flyStart;
   if (defaults.iterates || out.textUnit !== undefined) {
     // An effect that iterates itself takes no iteration of the file's; By
     // word / By letter replaces a whole-object one.
@@ -255,6 +330,40 @@ export function canonicalEffectSettings(
     delete out.textUnitDelayPct;
     delete out.textUnitDelayMs;
   }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * The scale a Grow/Shrink ends at under its Size and Direction, per axis
+ * (1.5 = 150 %): the `p:by` the API writes, divided by 100000.
+ */
+export function effectGrowScale(
+  settings: PresentationAnimationEffectSettings | undefined,
+): { x: number; y: number } {
+  const size = (settings?.growSize ?? DEFAULT_GROW_SIZE) / 100_000;
+  if (settings?.growDirection === "horizontal") return { x: size, y: 1 };
+  if (settings?.growDirection === "vertical") return { x: 1, y: size };
+  return { x: size, y: size };
+}
+
+/** The Size preset a size is, or null for a custom amount. */
+export function growSizePreset(size: number): GrowSizePreset | null {
+  return GROW_SIZE_PRESETS.find((preset) => preset.size === size)?.id ?? null;
+}
+
+/**
+ * `settings` with Grow/Shrink's Size and Direction replaced (the default
+ * left unstated), or `undefined` when nothing is left.
+ */
+export function withGrowSettings(
+  settings: PresentationAnimationEffectSettings | undefined,
+  size: number,
+  direction: EffectGrowDirection | "both",
+): PresentationAnimationEffectSettings | undefined {
+  const { growSize: _size, growDirection: _direction, ...rest } = settings ?? {};
+  const out: PresentationAnimationEffectSettings = { ...rest };
+  if (size !== DEFAULT_GROW_SIZE) out.growSize = size;
+  if (direction !== "both") out.growDirection = direction;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -277,8 +386,14 @@ export function effectSettingsPlayFactor(
  * 16.0.20527: "Hello, world! 123" is five words, "我们今天讨论动画" one).
  */
 export function effectTextWordPieces(text: string): { text: string; word: boolean }[] {
+  // PowerPoint's words (row 1310, the API's `effect_text_words`): an emoji with
+  // its skin tone, variation selector and ZWJ-joined emoji is one word; a run
+  // of letters and digits breaks where Latin meets Han, kana or Hangul; every
+  // other character that is not white space is a word of its own.
   const pieces: { text: string; word: boolean }[] = [];
-  for (const match of text.matchAll(/[\p{L}\p{M}\p{N}]+|\s+|[^\p{L}\p{M}\p{N}\s]/gu)) {
+  const pattern =
+    /(?:\p{Extended_Pictographic}(?:\p{Emoji_Modifier}|\uFE0F|\u200D\p{Extended_Pictographic})*)|[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}][\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}\p{M}]*|(?:(?![\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}\p{Extended_Pictographic}])[\p{L}\p{M}\p{N}])+|\s+|[^\p{L}\p{M}\p{N}\s]/gu;
+  for (const match of text.matchAll(pattern)) {
     pieces.push({ text: match[0], word: !/^\s/u.test(match[0]) });
   }
   return pieces;
@@ -334,27 +449,10 @@ export function effectSettingsPlayDurationMs(
 
 /**
  * The CSS easing of PowerPoint's Smooth start / Smooth end (ECMA-376 /
- * SMIL accelerate-decelerate): the speed ramps up linearly over the `accel`
- * share, holds, and ramps down over the `decel` share; progress is the
- * integral, sampled into a `linear()` easing. `null` for no easing.
+ * SMIL accelerate-decelerate, `lib/presentation-smooth-timing`) for an effect
+ * drawn by two keyframes, from its `accel` / `decel` (100000 = all of it).
+ * `null` for no easing.
  */
 export function effectSmoothEasing(accel: number, decel: number): string | null {
-  const a = Math.max(0, Math.min(1, accel / MAX_EFFECT_SHARE));
-  const d = Math.max(0, Math.min(1 - a, decel / MAX_EFFECT_SHARE));
-  if (a === 0 && d === 0) return null;
-  const peak = 1 / (1 - a / 2 - d / 2);
-  const progress = (t: number): number => {
-    if (t < a) return (peak * t * t) / (2 * a);
-    if (t <= 1 - d) return peak * (t - a / 2);
-    const tail = t - (1 - d);
-    return peak * (t - a / 2 - (tail * tail) / (2 * d));
-  };
-  const samples: string[] = [];
-  const steps = 20;
-  for (let index = 0; index <= steps; index += 1) {
-    const t = index / steps;
-    const value = Math.round(Math.min(1, Math.max(0, progress(t))) * 10_000) / 10_000;
-    samples.push(`${value} ${Math.round(t * 1000) / 10}%`);
-  }
-  return `linear(${samples.join(", ")})`;
+  return smoothEasingCss(accel / MAX_EFFECT_SHARE, decel / MAX_EFFECT_SHARE);
 }

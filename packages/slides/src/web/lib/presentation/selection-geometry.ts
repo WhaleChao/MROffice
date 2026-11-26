@@ -983,6 +983,9 @@ export function clampNumber(value: number, minimum: number, maximum: number): nu
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+/** How far from the slide's corner, in its own sizes, a stroke is still placed by a translate (see below). */
+export const INK_PLACEMENT_MAX_OWN_SIZES = 32;
+
 
 
 
@@ -1004,6 +1007,16 @@ export function presentationInkBlockPlacement(style: CSSProperties | undefined):
   const width = share(style.width);
   const height = share(style.height);
   if (![left, top, width, height].every(Number.isFinite) || width < 1e-6 || height < 1e-6) return style;
+  // A translate in shares of the box's own size is taken against the size
+  // layout gave the box, snapped to Chromium's 1/64 px layout unit: the error
+  // is that snap times the share. A stroke many times narrower than its
+  
+  // C=O bond (0.7 px wide, 860 of its widths from the corner) -- moved by up to
+  // 13 px (TRIAGE 149). Past 32 of its own sizes (half a pixel at most) the
+  // stroke keeps its left/top, a whole-pixel snap at worst.
+  if (Math.abs(left / width) > INK_PLACEMENT_MAX_OWN_SIZES || Math.abs(top / height) > INK_PLACEMENT_MAX_OWN_SIZES) {
+    return style;
+  }
   const own = typeof style.transform === "string" && style.transform !== "none" ? ` ${style.transform}` : "";
   return {
     ...style,

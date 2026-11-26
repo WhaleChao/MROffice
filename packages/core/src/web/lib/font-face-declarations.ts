@@ -13,6 +13,7 @@
  * face from a URL notes the URL here, keyed by the face itself.
  */
 
+import { afterCanvasGesture } from "./canvas-gesture";
 // One registry per page, shared by every bundle that reads it: a probe
 // injected into the page (the text engine's audits) sees the faces the app
 // noted, not an empty copy of its own.
@@ -130,7 +131,7 @@ let facesNoticeQueued = false;
 function queueFacesNotice(): void {
   if (facesNoticeQueued || facesListeners.size === 0) return;
   facesNoticeQueued = true;
-  setTimeout(() => {
+  setTimeout(() => afterCanvasGesture(() => {
     facesNoticeQueued = false;
     for (const listener of [...facesListeners]) {
       try {
@@ -139,7 +140,7 @@ function queueFacesNotice(): void {
         /* one listener's failure leaves the others told */
       }
     }
-  }, 0);
+  }), 0);
 }
 
 /** Hear when faces are declared or a family's registration settles. */

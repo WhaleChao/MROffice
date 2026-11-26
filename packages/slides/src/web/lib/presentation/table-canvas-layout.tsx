@@ -32,6 +32,7 @@ import {
   TABLE_FRAME_EMU_PER_CSS_PX,
   axisSizeAt,
   materializedAxisSizeAt,
+  layoutUnitAxisSizes,
   normalizeAxisSizes,
   resizeTableFrame,
 } from "@mrnote/core/web/lib/presentation-table-size.ts";
@@ -291,6 +292,12 @@ export function tableCellVisualTextStyle(
   cell?: PresentationTableCell,
   /** The height its row(s) state, in px (`tableCellStatedHeightPx`). */
   statedHeightPx?: number,
+  
+
+
+
+
+  engineWords = false,
 ): CSSProperties {
   const strut = tableCellStrut(cell);
   const strutFontSizePt = cellStyle.fontSize === null ? (strut?.sizePt ?? null) : null;
@@ -326,7 +333,7 @@ export function tableCellVisualTextStyle(
   // by what the anchor shared of it.
   const exactSpacing = importedPresentationTable(block) ? tableCellExactLineSpacingPt(cell) : undefined;
   const percentLeading =
-    importedPresentationTable(block) && exactSpacing === undefined && tableCellLineSpacing(cell) !== 1
+    !engineWords && importedPresentationTable(block) && exactSpacing === undefined && tableCellLineSpacing(cell) !== 1
       ? officePercentLeadingEm(
           Math.round(IMPORTED_TABLE_CELL_LINE_HEIGHT * tableCellLineSpacing(cell) * 10_000) / 10_000,
           cellStyle.fontFamily ?? strutFontFamily ?? tableInheritedFace(block) ?? undefined,
@@ -875,6 +882,38 @@ function tableTdEntry(block: PresentationTableBlock): TableTdEntry {
   return entry;
 }
 
+/**
+ * Readings row 1045: the colour a table cell's own body states for its words
+ * -- its first worded paragraph's `a:pPr/a:defRPr` fill, else its list
+ * style's at that level, where no run states one -- as the import resolved it
+ * (`source.nativeCellTextColors[row][cell]`), or null. Display only: the
+ * browser's cell, the text engine and the Font Color button show it over the
+ * table style's colour, as PowerPoint draws it; the package keeps the stated
+ * colour, and a colour the user picks is the cell's own and wins.
+ */
+export function tableCellStatedTextColor(block: PresentationTableBlock, rowIndex: number, colIndex: number): string | null {
+  const receipt = (block.source as { nativeCellTextColors?: unknown } | undefined)?.nativeCellTextColors;
+  const row = Array.isArray(receipt) ? receipt[rowIndex] : undefined;
+  const value = Array.isArray(row) ? row[colIndex] : undefined;
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : null;
+}
+
+/**
+ * A cell as Home reads its words' format: with the colour its own body states
+ * (`tableCellStatedTextColor`, readings row 1045) where the cell states none of
+ * its own, so the Font Color state shows what is drawn. Never written back.
+ */
+export function presentationTableCellWithStatedTextColor<C extends PresentationTableCell>(
+  block: PresentationTableBlock,
+  cell: C,
+  rowIndex: number,
+  colIndex: number,
+): C {
+  if (normalizeCellStyle(cell).color !== null) return cell;
+  const stated = tableCellStatedTextColor(block, rowIndex, colIndex);
+  return stated ? { ...cell, color: stated } : cell;
+}
+
 export function tableCellTdStyle(
   block: PresentationTableBlock,
   cell: PresentationTableCell,
@@ -1000,8 +1039,13 @@ function tableCellTdStyleOf(
     ...(rowIndex > 0 ? { borderTop: null } : {}),
     ...(logicalColIndex > 0 ? { borderLeft: null } : {}),
   };
+  // Readings row 1045: the colour the cell's own body states for its words
+  // (its list style's or paragraph's run defaults, `source.nativeCellTextColors`)
+  // is over the table style's, under the cell's own colour (`cellStyleCss`).
+  const statedTextColor = tableCellStatedTextColor(block, rowIndex, colIndex);
   const css: CSSProperties = {
     ...(nativeStyleCss ?? {}),
+    ...(statedTextColor ? { color: statedTextColor } : {}),
     ...tableBorderCss(block.borders === true),
     ...cellStyleCss(ownDrawn, {
       headerEmphasis:
@@ -1559,9 +1603,16 @@ export function TableColgroup({
   block: PresentationTableBlock;
 }): ReactElement | null {
   const columnCount = tableLogicalWidth(block.rows);
-  const widths = block.rows.some(row => row.some(cell => cell.drawCellId))
-    ? drawTableGrid(block).colWidths
+  const stated = block.rows.some(row => row.some(cell => cell.drawCellId))
+    ? undefined
     : normalizeAxisSizes(block.colWidths, columnCount);
+  // Whole LayoutUnits by their running total (`layoutUnitAxisSizes`): the
+  // columns of a wide grid stand where the stated widths put them.
+  const widths = stated
+    ? layoutUnitAxisSizes(Array.from({ length: columnCount }, (_unused, col) => stated[col] ?? null))
+    : block.rows.some(row => row.some(cell => cell.drawCellId))
+      ? drawTableGrid(block).colWidths
+      : undefined;
   if (!widths) return null;
   return (
     <colgroup>
@@ -1695,10 +1746,9 @@ export function tableRowHeightStyles(
     // The rows as stored (`normalizeAxisSizes`): the 16 px sizing minimum
     // (`axisSizeAt`) is for what a person sets, and an imported row PowerPoint
     
-    return Array.from({ length: count }, (_, rowIndex) => {
-      const height = rowHeights[rowIndex] ?? null;
-      return height !== null ? { height } : undefined;
-    });
+    // Whole LayoutUnits by their running total (`layoutUnitAxisSizes`).
+    const laid = layoutUnitAxisSizes(Array.from({ length: count }, (_, rowIndex) => rowHeights[rowIndex] ?? null));
+    return laid.map((height) => (typeof height === "number" ? { height } : undefined));
   }
   if (!hasLayoutGeometry(block) || count === 0) return Array.from({ length: count }, () => undefined);
   // A geometry table must occupy its authored frame without letting textarea

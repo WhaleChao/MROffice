@@ -282,6 +282,57 @@ export function sourceParagraphPieceGroups(doc: ProseMirrorNode): Map<string, Pi
   return groups;
 }
 
+/** Harness switch (`globalThis.__docsSourceBreakTailItemNumberOff = true`):
+ * the later pieces of a numbered paragraph a page break splits draw and
+ * count a number of their own, as before (A/B). */
+export function sourceBreakTailItemNumberOff(): boolean {
+  return (globalThis as { __docsSourceBreakTailItemNumberOff?: boolean }).__docsSourceBreakTailItemNumberOff === true;
+}
+
+const continuationItemsByDoc = new WeakMap<ProseMirrorNode, ReadonlyMap<number, number>>();
+
+/**
+ * The list items that are a later piece of a numbered (or bulleted) Word
+ * paragraph a page or column break splits: item position -> position of the
+ * outermost list holding the paragraph's first piece. The page draws each
+ * piece after a break as a list of its own (the break is a block between
+ * them), but Word numbers a paragraph once, on its first line: the piece
+ * after the break is the same item, with no number or bullet of its own and
+ * no count (corpus R506-D27: a restarted list's last item split by a page
+ * break drew its stale "11." on the next page where Word draws none;
+ * R488-D74 E13 likewise after an indent changed the count). Only a piece
+ * that is its list item's first paragraph, after a first piece that is its
+ * own item's first paragraph, all pieces standing in order with their breaks.
+ */
+export function sourceContinuationListItems(doc: ProseMirrorNode): ReadonlyMap<number, number> {
+  if (sourceBreakTailItemNumberOff()) return new Map();
+  const cached = continuationItemsByDoc.get(doc);
+  if (cached) return cached;
+  const found = new Map<number, number>();
+  if (HOLDS_ANY_SOURCE_SEGMENT.inDoc(doc)) {
+    const itemOf = (pos: number): { item: number; outer: number } | null => {
+      const $pos = doc.resolve(pos);
+      if ($pos.depth < 2 || $pos.parent.type.name !== "listItem" || $pos.index() !== 0) return null;
+      let outer = -1;
+      for (let depth = $pos.depth - 1; depth >= 1; depth--) {
+        if (LIST_NODES.has($pos.node(depth).type.name)) outer = $pos.before(depth);
+      }
+      return outer < 0 ? null : { item: $pos.before(), outer };
+    };
+    for (const pieces of sourceParagraphPieceGroups(doc).values()) {
+      const head = itemOf(pieces[0].pos);
+      if (!head) continue;
+      for (const piece of pieces.slice(1)) {
+        const tail = itemOf(piece.pos);
+        if (!tail || doc.resolve(tail.item).index() !== 0) continue;
+        found.set(tail.item, head.outer);
+      }
+    }
+  }
+  continuationItemsByDoc.set(doc, found);
+  return found;
+}
+
 function sameValue(a: unknown, b: unknown): boolean {
   return a === b || JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 }
@@ -359,6 +410,82 @@ export function sourceParagraphPieceFormatSync(
   return tr.docChanged ? tr : null;
 }
 
+/** Harness switch (`globalThis.__docsSourceBreakPieceListSyncOff = true`):
+ * Bullets or Numbering on one piece of a paragraph a break splits lists that
+ * piece alone, as before (A/B). */
+function pieceListSyncOff(): boolean {
+  return (globalThis as { __docsSourceBreakPieceListSyncOff?: boolean }).__docsSourceBreakPieceListSyncOff === true;
+}
+
+/** The list a piece stands in as its item's first paragraph. */
+function pieceList(doc: ProseMirrorNode, pos: number): { list: ProseMirrorNode; listPos: number; item: ProseMirrorNode } | null {
+  const $pos = doc.resolve(pos);
+  if ($pos.depth < 2 || $pos.parent.type.name !== "listItem" || $pos.index() !== 0) return null;
+  const list = $pos.node($pos.depth - 1);
+  return LIST_NODES.has(list.type.name) ? { list, listPos: $pos.before($pos.depth - 1), item: $pos.parent } : null;
+}
+
+/**
+ * Bullets and Numbering are the whole `w:p`'s, as its other paragraph
+ * properties are: given to (or taken from) one piece of a paragraph a page or
+ * column break splits, they are given to (taken from) every piece, as Word
+ * lists the whole paragraph wherever the caret is in it and draws its number
+ * or bullet once, on its first line (the later pieces are its continuation:
+ * sourceContinuationListItems). Corpus R485-D95 E16: Bullets on the text
+ * after a page break listed that piece alone, the file listed the paragraph
+ * and read back with its first piece bulleted; R498-D04 / R499-D09 E16 the
+ * other way round. Only a change that leaves the pieces listed unlike each
+ * other, where they were alike, is handed on; a piece in a list of more than
+ * itself is not taken out of it.
+ */
+export function sourceParagraphPieceListSync(
+  transactions: readonly Transaction[], oldState: EditorState, newState: EditorState,
+): Transaction | null {
+  if (pieceListSyncOff()) return null;
+  if (!transactions.some((tr) => tr.docChanged && tr.getMeta("addToHistory") !== false && tr.getMeta("y-sync$") === undefined)) return null;
+  if (editsStayInsideTextblocks(transactions) || !HOLDS_ANY_SOURCE_SEGMENT.inDoc(newState.doc)) return null;
+  const before = sourceParagraphPieceGroups(oldState.doc);
+  if (!before.size) return null;
+  const tr = newState.tr;
+  for (const [base, pieces] of sourceParagraphPieceGroups(newState.doc)) {
+    const earlier = before.get(base);
+    if (!earlier || earlier.length !== pieces.length) continue;
+    const was = earlier.map((piece) => pieceList(oldState.doc, piece.pos)?.list.type.name ?? null);
+    const now = pieces.map((piece) => pieceList(newState.doc, piece.pos)?.list.type.name ?? null);
+    if (new Set(was).size !== 1 || new Set(now).size === 1) continue;
+    const changed = now.findIndex((kind, index) => kind !== was[index]);
+    if (changed < 0) continue;
+    const model = pieceList(newState.doc, pieces[changed].pos);
+    for (let index = 0; index < pieces.length; index++) {
+      if (now[index] === now[changed]) continue;
+      const pos = tr.mapping.map(pieces[index].pos);
+      const node = tr.doc.nodeAt(pos);
+      if (!node) continue;
+      if (model) {
+        // Listed like the piece the command listed: the same kind of list,
+        // its definition and level; the list's own identity is its own.
+        const itemType = model.item.type;
+        const attrs: Record<string, unknown> = { ...model.list.attrs };
+        for (const key of ["block_id", "source", "anchor_id"]) if (key in attrs) attrs[key] = null;
+        const listed = pieceList(tr.doc, pos);
+        const range = listed ? null : tr.doc.resolve(pos).blockRange(tr.doc.resolve(pos + node.nodeSize));
+        if (!range) continue;
+        try {
+          tr.wrap(range, [{ type: model.list.type, attrs }, { type: itemType }]);
+        } catch {
+          continue;
+        }
+      } else {
+        // Taken out of the list the piece stands in alone.
+        const listed = pieceList(tr.doc, pos);
+        if (!listed || listed.list.childCount !== 1 || listed.item.childCount !== 1) continue;
+        tr.replaceWith(listed.listPos, listed.listPos + listed.list.nodeSize, node);
+      }
+    }
+  }
+  return tr.docChanged ? tr : null;
+}
+
 type TailState = { positions: number[]; decorations: DecorationSet };
 export const sourceHardBreakTailKey = new PluginKey<TailState>("sourceHardBreakTail");
 
@@ -381,6 +508,12 @@ function decorations(doc: ProseMirrorNode, positions: number[], caret: number | 
     })),
     ...pieces.continuations.map((pos) => Decoration.node(pos, pos + doc.nodeAt(pos)!.nodeSize, {
       class: styles.breakContinuation,
+    })),
+    // A later piece of a numbered paragraph standing as a list item: the
+    // item's marker is not drawn (the page-split continuation's rules).
+    ...[...sourceContinuationListItems(doc).keys()].map((pos) => Decoration.node(pos, pos + doc.nodeAt(pos)!.nodeSize, {
+      "data-page-split-item-continuation": "true",
+      "data-mrnote-source-break-item": "true",
     })),
   ]);
 }
@@ -411,6 +544,8 @@ export const SourceHardBreakTail = Extension.create({
       props: { decorations: (state) => sourceHardBreakTailKey.getState(state)?.decorations ?? DecorationSet.empty },
     }), new Plugin({
       appendTransaction: imeReplayingAppendTransaction(sourceParagraphPieceFormatSync),
+    }), new Plugin({
+      appendTransaction: imeReplayingAppendTransaction(sourceParagraphPieceListSync),
     })];
   },
 });

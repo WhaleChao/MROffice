@@ -34,6 +34,8 @@ import { editorFontFamilies, facesUsedBy, loadedFaceRanges, textDrawsCodePointIn
 import { afterFontsReady, newFontFacesOf } from "@mrnote/core/web/lib/font-face-news.ts";
 import { clearLayoutPending, markLayoutPending, registerLayoutSettler } from "@mrnote/core/web/components/console/editor/native-document/paged/layoutPending.ts";
 import { REBALANCE_META as PAGINATION_MOVE_META } from "@mrnote/core/web/components/console/editor/native-document/paged/pageRebalanceExtension.ts";
+import { TAB_MEASURE_UNJUSTIFIED_ATTR, tabsUnjustifySheet } from "@mrnote/core/web/components/console/editor/native-document/paged/tabMeasureMark.ts";
+import { measureOutsideEditorObservation } from "@mrnote/core/web/components/console/editor/native-document/documentLayoutStatus.ts";
 
 /** The tabs' decorations, and how many edits from outside the document has had
  * (the pagination's own moves not counted). */
@@ -613,10 +615,11 @@ function tabsUnjustifiedOff(): boolean {
  * breaks the line before it justifies it, so the breaks are the ones these
  * widths give.
  */
-function unjustifyTabbedBlocks(view: EditorView, lines: readonly TabbedLine[]): HTMLStyleElement | null {
+function unjustifyTabbedBlocks(view: EditorView, lines: readonly TabbedLine[]): { remove(): void } | null {
   const doc = view.dom.ownerDocument;
   const win = doc.defaultView;
   if (!win || tabsUnjustifiedOff()) return null;
+  const blocks: HTMLElement[] = [];
   const selectors = new Set<string>();
   for (const line of lines) {
     const block = view.nodeDOM(line.blockPos);
@@ -625,15 +628,32 @@ function unjustifyTabbedBlocks(view: EditorView, lines: readonly TabbedLine[]): 
     if (!id) continue;
     const align = win.getComputedStyle(block).textAlign;
     if (align !== "justify") continue;
+    blocks.push(block);
     const escaped = typeof win.CSS?.escape === "function" ? win.CSS.escape(id) : id.replace(/["\\]/g, "\\$&");
     selectors.add(`[data-block-id="${escaped}"]`);
   }
-  if (!selectors.size) return null;
-  const style = doc.createElement("style");
-  style.setAttribute("data-band-tabs-unjustified", "");
-  style.textContent = `${[...selectors].join(",")} { text-align: start !important; text-align-last: start !important; }`;
-  (doc.head ?? doc.documentElement).appendChild(style);
-  return style;
+  if (!blocks.length) return null;
+  if (tabsUnjustifySheet(win)) {
+    const style = doc.createElement("style");
+    style.setAttribute("data-band-tabs-unjustified", "");
+    style.textContent = `${[...selectors].join(",")} { text-align: start !important; text-align-last: start !important; }`;
+    (doc.head ?? doc.documentElement).appendChild(style);
+    return style;
+  }
+  // The paragraphs themselves, not a style sheet (paged/tabMeasureMark):
+  // every element the sheet's selectors named (a block's copies too, a
+  // footnote's in the notes area, as the rule reached them).
+  const marked = Array.from(doc.querySelectorAll<HTMLElement>([...selectors].join(",")));
+  measureOutsideEditorObservation(view, () => {
+    for (const element of marked) element.setAttribute(TAB_MEASURE_UNJUSTIFIED_ATTR, "");
+  });
+  return {
+    remove() {
+      measureOutsideEditorObservation(view, () => {
+        for (const element of marked) element.removeAttribute(TAB_MEASURE_UNJUSTIFIED_ATTR);
+      });
+    },
+  };
 }
 
 function measure(view: EditorView, rounds: TabRounds | null = null): { set: DecorationSet; key: string; wrapped: boolean; deferred: boolean; firstRead: boolean } | null {
@@ -1084,7 +1104,7 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
   const restore = !tabRestoreOff();
   const lines = tabbedLines(view.state.doc);
   // Taken off before anything paints (the rule is removed below, in this task).
-  let unjustified: HTMLStyleElement | null | undefined;
+  let unjustified: { remove(): void } | null | undefined;
   try {
     for (const [lineIndex, line] of lines.entries()) {
       const place = memo ? tabLinePlace(view, root, line) : null;

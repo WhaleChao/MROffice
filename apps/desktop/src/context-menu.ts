@@ -9,10 +9,12 @@
  * draw their own menus and so never reach this.
  */
 
-import { app, clipboard, Menu, shell, type ContextMenuParams, type MenuItemConstructorOptions, type WebContents } from "electron";
+import { clipboard, Menu, shell, type ContextMenuParams, type MenuItemConstructorOptions, type WebContents } from "electron";
+
+import { appSpeaksChinese } from "./app-locale";
 
 export function showContextMenu(contents: WebContents, params: ContextMenuParams): void {
-  const zh = app.getLocale().toLowerCase().startsWith("zh");
+  const zh = appSpeaksChinese();
   const label = (zhText: string, enText: string) => (zh ? zhText : enText);
   const items: MenuItemConstructorOptions[] = [];
 

@@ -129,12 +129,15 @@ export function derivedPdfCellsForSheet(
   // A PivotTable report: its cells are a read model, never stored.
   sheetPivots(candidate).forEach((config, slot) => {
     // A PivotTable the file holds no report for (never laid out: no row or
-    // column items cached, its location's first data row 0) prints nothing,
-    // as Windows Excel prints it -- not the report the source would give
-    // (R455-X80: a generated workbook's refreshOnLoad report over a table,
-    // 9 pages in Excel, 12 with the planned report).
+    // column items cached, its location's first data row 0) prints nothing
+    // until it is refreshed. One whose cache refreshes on open prints its
+    // refreshed report, as the grid shows it (X-158): Windows Excel refreshes
+    // R455-X80's and r490's "en" reports on open (lookwin lw110 ops probe:
+    // X75 A1:B1807, 38 pages more); the round's plain export is made before
+    // that refresh lands and printed them blank.
     const layout = config.native?.savedLayout;
-    if (layout && !layout.rowItems.length && !layout.colItems.length && layout.firstDataRow === 0) return;
+    if (layout && !layout.rowItems.length && !layout.colItems.length && layout.firstDataRow === 0 &&
+      config.native?.refreshOnLoad !== true) return;
     const plan = sources.formulaWorkbook.pivotPlans.get(pivotPlanKey(candidate.id, slot));
     if (!plan || plan.status !== "ready") {
       // A report the grid does not draw prints the cells the file cached,

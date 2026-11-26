@@ -30,6 +30,7 @@ import type {
 } from "../components/console/editor/native-document/documentCommands";
 import {
   normalizeOfficeTextPaint,
+  officeTextPaintFlatFill,
   officeTextPaintWithFontColor,
   type OfficeTextPaint,
 } from "./office-text-paint";
@@ -169,7 +170,13 @@ export function presentationBlockWithCanonicalTextPaint<T extends PresentationBl
   const paints = frameRunPaints(block);
   if (paints.length === 0 || !paints.some(Boolean)) return block;
   const first = paints[0];
-  const uniform = first !== null && paints.every((paint) => paint !== null && sameRunTextPaint(paint, first));
+  // A colour seen through (`officeTextPaintFlatFill`, readings row 1052) is
+  // each run's own colour, never the block's WordArt: it stays on the runs,
+  // where its writer changes only the colour's alpha.
+  const uniform =
+    first !== null &&
+    officeTextPaintFlatFill(first) === null &&
+    paints.every((paint) => paint !== null && sameRunTextPaint(paint, first));
   if (!uniform) {
     const next = { ...block } as TextFrame & { textPaint?: unknown };
     delete next.textPaint;
@@ -247,12 +254,16 @@ export function presentationBlockWithTextPaintIn(
     range,
     (style) => {
       const paint = transform(style?.textPaint ?? null, style);
+      const flat = paint ? officeTextPaintFlatFill(paint) : null;
       return {
         ...runPatch,
         textPaint: paint ?? undefined,
+        // A colour seen through is the run's colour at an opacity: `color`
+        // is the same rgb beside it (both copies move together).
+        ...(flat ? { color: flat.fill } : {}),
         // The paint owns the glyphs' fill and outline now (`a:rPr`'s fill
         // group and `a:ln` are the paint's), as the import reads them.
-        ...(paint
+        ...(paint && !flat
           ? {
             color: undefined, textOutline: undefined, textOutlineWidthPt: undefined, textOutlineJoin: undefined,
             textOutlineMiterLimit: undefined, textOutlineCap: undefined, textOutlineDash: undefined,
@@ -275,7 +286,8 @@ export function presentationFontColorOnPaint(
   color: string | undefined,
   automaticFill?: string,
 ): OfficeTextPaint | null {
-  return officeTextPaintWithFontColor(paint, color, { automaticFill });
+  // PowerPoint's Font Color keeps the colour's Transparency (tp-alpharecolor).
+  return officeTextPaintWithFontColor(paint, color, { automaticFill, keepFillOpacity: true });
 }
 
 /** Whether a run patch (or what a patch function made of a run) states a font colour. */
@@ -377,6 +389,22 @@ export function presentationBlockWithFontColor<T extends PresentationBlock>(
       : run,
   );
   return presentationBlockWithCanonicalTextPaint(recolored as PresentationBlock) as T;
+}
+
+/**
+ * The block with every run's colour seen through made opaque again (its flat
+ * paint taken off, its `color` kept): Format Painter from a source whose
+ * colour is opaque (readings row 1052). WordArt is not touched.
+ */
+export function presentationBlockWithoutFlatTextFills<T extends PresentationBlock>(block: T): T {
+  if (!isTextFrame(block) || !presentationBlockHasRunTextPaint(block)) return block;
+  let changed = false;
+  const next = withEveryRun(block, (run) => {
+    if (!officeTextPaintFlatFill(run.style?.textPaint)) return run;
+    changed = true;
+    return runWithPaint(run, null);
+  });
+  return changed ? (next as unknown as T) : block;
 }
 
 /**

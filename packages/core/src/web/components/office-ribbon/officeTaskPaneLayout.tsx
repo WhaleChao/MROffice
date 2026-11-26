@@ -431,6 +431,15 @@ export const OfficeTaskPaneResizeHandle = forwardRef<
         const startY = event.clientY;
         const startWidth = width;
         let latest = startWidth;
+        // The pane's px are the window's: on a zoomed canvas (a scale on the
+        // plane) or under a CSS zoom a screen px is not one of them, and the
+        // border fell behind or ran ahead of the pointer. Measured once, on
+        // the surface the border lies in.
+        const surface = target.parentElement;
+        const drawn = surface?.getBoundingClientRect();
+        const laid = edge === "top" ? surface?.offsetHeight : surface?.offsetWidth;
+        const drawnSize = edge === "top" ? drawn?.height : drawn?.width;
+        const scale = laid && drawnSize && laid > 0 && drawnSize > 0 ? drawnSize / laid : 1;
         target.setPointerCapture(event.pointerId);
         const move = (moveEvent: PointerEvent) => {
           // A left edge widens the pane dragged left; a right edge dragged
@@ -441,7 +450,7 @@ export const OfficeTaskPaneResizeHandle = forwardRef<
               : edge === "right"
                 ? moveEvent.clientX - startX
                 : startX - moveEvent.clientX;
-          latest = clamp(startWidth + grow);
+          latest = clamp(startWidth + grow / scale);
           onWidth(latest, false);
         };
         const end = () => {

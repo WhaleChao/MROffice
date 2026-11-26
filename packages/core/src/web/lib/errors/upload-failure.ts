@@ -242,6 +242,11 @@ export function uploadFailureReason(error: unknown, file: UploadFailureFile): st
   if (status === 429 || code === "rate_limited") {
     return catalogText("upload.reason.tooFast");
   }
+  if (code === "source_reading_interrupted") {
+    // The server ran out of room or time reading the file (503, retryable;
+    // the import already tried again once): never that the file is broken.
+    return catalogText("code.source_reading_interrupted") ?? catalogText("upload.reason.serverBusy");
+  }
   if (
     status >= 500 ||
     code === "storage_error" ||

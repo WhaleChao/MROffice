@@ -46,8 +46,9 @@
   <button id="cancel"></button>
 </div>
 <script>
-  // lang=<locale>, and the buttons' words when the app gives them (the
-  // update's twenty languages: src/update-text.ts); else Chinese or English.
+  // lang=<locale>, and the buttons' words when the app gives them (every
+  // language of the site: src/update-text.ts); else Chinese or English.
+  // Arabic, Hebrew and Urdu read right to left.
   const params = new URLSearchParams(location.hash.slice(1) || location.search);
   const lang = params.get("lang") || "en";
   const zh = lang === "zh";
@@ -55,6 +56,7 @@
   $("hide").textContent = params.get("hide") || (zh ? "后台下载" : "Hide");
   $("cancel").textContent = params.get("cancel") || (zh ? "取消" : "Cancel");
   document.documentElement.lang = lang;
+  document.documentElement.dir = /^(?:ar|he|ur)(?:-|$)/.test(lang) ? "rtl" : "ltr";
   let asked = 0;
   const answer = (what) => { document.title = `${what}:${++asked}`; };
   $("hide").onclick = () => answer("hide");

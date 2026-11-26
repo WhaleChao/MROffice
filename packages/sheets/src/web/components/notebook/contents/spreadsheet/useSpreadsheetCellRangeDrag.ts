@@ -54,7 +54,7 @@ export interface SpreadsheetCellRangeDragInputs {
   selectionEdgeRect: CellRange;
   selectionExtendingRef: RefObject<boolean>;
   selectionMoveDragRef: RefObject<{ src: { r1: number; r2: number; c1: number; c2: number; }; grab: { row: number; col: number; }; pointerId: number; sourceSheet: SheetModel; sourceWorkbook: SheetModel[]; target: { row: number; col: number; }; copy: boolean; clientX: number; clientY: number; } | null>;
-  selectionPaint: { paint(range: CellRange | null, edges?: CellRange | null): void; pressed(edges: CellRange): void; paintHeaders(range: CellRange | null, extent: SheetExtent | null): void; };
+  selectionPaint: { paint(range: CellRange | null, edges?: CellRange | null): void; pressed(edges: CellRange): void; relaid(edges: CellRange | null): void; paintHeaders(range: CellRange | null, extent: SheetExtent | null): void; };
   selRect: GridRect;
   setActiveCell: Dispatch<SetStateAction<{ row: number; col: number; }>>;
   setGridScroll: Dispatch<SetStateAction<{ left: number; top: number; }>>;
@@ -552,6 +552,12 @@ export function useSpreadsheetCellRangeDrag({
     // A press: the cells' paint waits for the pointer, the frame need not.
     else selectionPaint.pressed(selectionEdgeRect);
   }, [selectionPaint, selRect, selectionEdgeRect, hasMultiSelection]);
+  // A Page Layout page lays its cells out again on renders that leave the
+  // selection where it is (a zoom, the pages planned anew, a row its text
+  // grew): the frame, which a page keeps as its landed box, follows them.
+  useLayoutEffect(() => {
+    if (spreadsheetViewMode === "pageLayout" && !cellRangeDragRef.current) selectionPaint.relaid(selectionEdgeRect);
+  });
   // Row headings sit in the same memoized rows, so their selection mark is
   // painted the same way; the column headings render it themselves.
   useLayoutEffect(() => {

@@ -84,6 +84,17 @@ export interface ChartRenderRequest {
 
   dataTableLayout?: "plot";
   /**
+   * A worksheet PivotChart printed with its legend field button
+   * (`pivot-chart-print-buttons`): the side legend's entries start at the
+   * button's left `leftPx` (the legend widened leftward, the plot giving up
+   * the width gained) and their keys' middle stands at `middlePx` of the picture,
+   * under the button.
+   */
+  legendUnderButton?: { leftPx: number; middlePx: number };
+  /** A PivotChart printed without its legend button: the chart laid out with
+   * its legend's room, the legend not drawn (pivotChartPrintsLegend). */
+  legendRoomOnly?: boolean;
+  /**
    * The editors draw the chart's texts themselves (the title and the axis
    * titles): the picture keeps their place and box but not their words, and
    * the answer says where and how each is drawn (`ChartRenderPicture.texts`).

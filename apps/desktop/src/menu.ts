@@ -24,11 +24,15 @@
 import { app, BrowserWindow, Menu, shell, type KeyboardEvent, type MenuItemConstructorOptions } from "electron";
 
 import { APP_DISPLAY_NAME } from "./brand";
+import { appSpeaksChinese } from "./app-locale";
 import { ut } from "./update-text";
 import { isAppUrl } from "./navigation";
 
 export interface MenuActions {
   readonly origin: string;
+  /** The URL a route of the app is loaded at (the classic app's: in the
+   * pages' language and surface); absent: the origin and the route. */
+  pageUrl?(route: string): string;
   newWindow(route: string): void;
   checkForUpdates(): void;
   /** The name in the app menu (MR Note Classic names itself). */
@@ -71,7 +75,7 @@ function historyItem(
 }
 
 export function buildMenu(actions: MenuActions): Menu {
-  const zh = app.getLocale().toLowerCase().startsWith("zh");
+  const zh = appSpeaksChinese();
   const label = (zhText: string, enText: string) => (zh ? zhText : enText);
   const mac = process.platform === "darwin";
   const mod: Modifier = mac ? "meta" : "control";
@@ -86,7 +90,7 @@ export function buildMenu(actions: MenuActions): Menu {
     accelerator: "CmdOrCtrl+,",
     click: (_item, base) => {
       const window = base instanceof BrowserWindow ? base : null;
-      if (window) void window.loadURL(`${actions.origin}/app/settings`);
+      if (window) void window.loadURL(actions.pageUrl ? actions.pageUrl("/app/settings") : `${actions.origin}/app/settings`);
       else actions.newWindow("/app/settings");
     },
   };

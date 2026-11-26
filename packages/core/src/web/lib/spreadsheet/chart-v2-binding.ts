@@ -1028,6 +1028,7 @@ export function spreadsheetChartModelOverData(attrs: ChartBlockAttrsV2, data: Ch
   within("seriesStyles", "seriesIndex", series);
   within("sliceStyles", "pointIndex", categories);
   within("seriesTrendlines", "seriesIndex", series);
+  within("seriesErrorBars", "seriesIndex", series);
   for (const [key, bound] of [["hiddenSeries", series], ["hiddenCategories", categories]] as const) {
     if (!Array.isArray(format[key])) continue;
     const kept = (format[key] as number[]).filter((index) => index < bound);

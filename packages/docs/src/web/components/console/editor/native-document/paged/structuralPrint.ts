@@ -31,6 +31,7 @@ import {
   documentPrintSourceReadiness,
   waitForDocumentPrintSource,
   renderPrintReadinessFailure,
+  type PrintFailureMessages,
   type PrintWindowResult,
   PRINT_ASSET_TIMEOUT_MS,
   PRINT_READY_ATTRIBUTE,
@@ -383,6 +384,12 @@ export interface StructuralPrintOptions {
   } | null;
   /** Localized failure copied into the popup when an asset cannot be printed. */
   readinessErrorMessage?: string;
+  /** Each failure reason's own message (printFailureMessages). */
+  readinessErrorMessages?: PrintFailureMessages;
+  /** Said on screen in the copy window (never printed) when the source is
+   * copied as it stands at the wait's deadline (printUnsettled); given, the
+   * copy window's print takes the pages as they stand rather than failing. */
+  printUnsettledNotice?: string;
   preparingMessage?: string;
   onReadinessError?: (error: PrintReadinessError) => void;
   /** The browser refused the print window; the host tells the user, since
@@ -878,7 +885,7 @@ export function printStructuralSheets(
     );
   };
   const preparing = doc.createElement("div");
-  const prepare = (refresh = false) => {
+  const prepare = (refresh = false, unsettled = false) => {
     if (printWindow.closed) return Promise.resolve<PrintWindowResult>({status: "closed"});
     // What a face arriving lays out again (the tab stops) is laid out now,
     // from scratch, with the faces that are in: the copy is not taken
@@ -897,6 +904,7 @@ export function printStructuralSheets(
       { ...current, revisionMarkup: options.revisionMarkup ?? null },
       printWindow,
     );
+    if (unsettled && options.printUnsettledNotice) showUnsettledNotice(doc, options.printUnsettledNotice);
     // The sheets are copied by now (the copy waits only for its assets).
     putViewBack();
     return made;
@@ -906,13 +914,30 @@ export function printStructuralSheets(
   preparing.textContent = options.preparingMessage ?? "Preparing document…";
   preparing.style.cssText = "font:14px/1.6 system-ui;padding:40px;text-align:center";
   doc.body.appendChild(preparing);
-  return delivered(viewPutBack(waitForDocumentPrintSource(options.root, {cancelled: () => printWindow.closed, timeoutMs: options.sourceTimeoutMs}).then(() => prepare(true)).catch((raw: unknown): PrintWindowResult => {
+  const printUnsettled = Boolean(options.printUnsettledNotice) && options.deliver !== "ready";
+  return delivered(viewPutBack(waitForDocumentPrintSource(options.root, {cancelled: () => printWindow.closed, timeoutMs: options.sourceTimeoutMs, printUnsettled}).then((state) => prepare(true, state === "unsettled")).catch((raw: unknown): PrintWindowResult => {
     if (printWindow.closed) return {status:"closed"};
     const error = raw instanceof PrintReadinessError ? raw : new PrintReadinessError("print-failed", "The source document could not be prepared.", raw);
-    renderPrintReadinessFailure(doc, options.readinessErrorMessage, error);
+    renderPrintReadinessFailure(doc, options.readinessErrorMessage, error, options.readinessErrorMessages);
     options.onReadinessError?.(error);
     return {status:"failed", error};
   })));
+}
+
+/** The copy window's word that its pages were taken as they stood (the layout
+ * had not settled by the deadline): on screen only, never on the paper. */
+export const PRINT_UNSETTLED_NOTICE_ATTR = "data-print-unsettled-notice";
+function showUnsettledNotice(doc: Document, message: string): void {
+  if (doc.querySelector(`[${PRINT_UNSETTLED_NOTICE_ATTR}]`)) return;
+  const style = doc.createElement("style");
+  style.textContent = `@media print { [${PRINT_UNSETTLED_NOTICE_ATTR}] { display: none !important; } }`;
+  const notice = doc.createElement("div");
+  notice.setAttribute(PRINT_UNSETTLED_NOTICE_ATTR, "true");
+  notice.setAttribute("role", "status");
+  notice.textContent = message;
+  notice.style.cssText = "position:sticky;top:0;z-index:10;margin:0 0 8px;padding:8px 12px;font:13px/1.5 system-ui,sans-serif;background:#fff8e1;color:#5d4200;border-bottom:1px solid #e0c060";
+  doc.head.appendChild(style);
+  doc.body.insertBefore(notice, doc.body.firstChild);
 }
 
 function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: Window): Promise<PrintWindowResult> {
@@ -944,7 +969,7 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
       rawError instanceof PrintReadinessError
         ? rawError
         : measuredLineNumberError(rawError);
-    renderPrintReadinessFailure(doc, options.readinessErrorMessage, error);
+    renderPrintReadinessFailure(doc, options.readinessErrorMessage, error, options.readinessErrorMessages);
     options.onReadinessError?.(error);
     printWindow.focus();
     return Promise.resolve({ status: "failed", error });
@@ -1226,7 +1251,7 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
               "Preparing a chart for printing failed.",
               rawError,
             );
-      renderPrintReadinessFailure(doc, options.readinessErrorMessage, error);
+      renderPrintReadinessFailure(doc, options.readinessErrorMessage, error, options.readinessErrorMessages);
       options.onReadinessError?.(error);
       printWindow.focus();
       return Promise.resolve({ status: "failed", error });
@@ -1428,6 +1453,7 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
       return printWindowWhenReady(printWindow, surfaceClone, {
         skipDialog: options.deliver === "ready",
         errorMessage: options.readinessErrorMessage,
+        errorMessages: options.readinessErrorMessages,
         onError: options.onReadinessError,
         timeoutMs: Math.max(
           1,
@@ -1445,7 +1471,7 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
               "Document fonts are unavailable for printing.",
               rawError,
             );
-      renderPrintReadinessFailure(doc, options.readinessErrorMessage, error);
+      renderPrintReadinessFailure(doc, options.readinessErrorMessage, error, options.readinessErrorMessages);
       options.onReadinessError?.(error);
       return { status: "failed", error };
     },

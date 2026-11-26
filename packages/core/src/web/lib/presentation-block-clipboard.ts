@@ -10,6 +10,7 @@ import { presentationBlockSchema } from "./native-page-schemas";
 import { isPictureObjectUrl } from "./page-picture-objects";
 import { readPresentationNativeThemePaint } from "./presentation-native-theme-paint";
 import { isValidInlineImageSource } from "./inline-image-source";
+import { isObjectPlaceholder } from "./presentation-object-degraded";
 import { readNativeListIndents } from "./native-drawing-geometry";
 import { cssFontFamilyList } from "./css-font-family";
 
@@ -501,6 +502,9 @@ export function canPreparePresentationPaste(
   const ids = new Set<string>();
   for (const block of source) {
     if (!isSupportedClipboardBlock(block) || ids.has(block.id)) return false;
+    // The frame of an object the page could not display (TRIAGE 152) is no
+    // object: copied, it would become a dashed box of the user's own.
+    if (isObjectPlaceholder(block as { source?: unknown })) return false;
     if (
       mode === "text-only" &&
       presentationClipboardBlockPlainText(block) === null

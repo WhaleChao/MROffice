@@ -22,6 +22,7 @@ import { usePresentationChartPicture } from "./PresentationChartCanvas";
 import { PresentationFontAliasesContext } from "./usePresentationFontFaces";
 import { presentationFontFamilyWithAssets } from "@mrnote/core/web/lib/presentation-font-face-reads.ts";
 import { OfficeChartDataTableGrid } from "@mrnote/core/web/components/office-charts/OfficeChartDataTableGrid.tsx";
+import { POWERPOINT_SHADOW_BLUR_DEVIATION } from "@mrnote/core/web/lib/office-shadow-effects.ts";
 
 
 export type PresentationChartDataTableView = Readonly<{
@@ -54,7 +55,7 @@ export function presentationChartDataTableView(
   return {
     table: basis.table,
     block,
-    style: { ...inherited, ...presentationChartAreaStyleCss(basis.style), ...fitted },
+    style: { ...inherited, ...presentationChartAreaStyleCss(basis.style, { shadowBlurDeviation: POWERPOINT_SHADOW_BLUR_DEVIATION }), ...fitted },
     heightPx,
     rowPx,
   };

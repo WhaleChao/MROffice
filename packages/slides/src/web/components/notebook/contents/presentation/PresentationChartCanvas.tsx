@@ -39,6 +39,7 @@ import {
   OfficeChartPicture,
   type OfficeChartPictureFinish,
 } from "@mrnote/core/web/components/office-charts/OfficeChartPicture.tsx";
+import { POWERPOINT_SHADOW_BLUR_DEVIATION } from "@mrnote/core/web/lib/office-shadow-effects.ts";
 
 /**
  * A browser keeps only a handful of live WebGL contexts — Chrome drops the
@@ -404,7 +405,7 @@ export function PresentationChartCanvas({
     const areaStyle = styleFrame?.outline
       ? { ...(stated ?? {}), outline: styleFrame.outline, shapePaint: { outlineWidthPt: styleFrame.outlineWidthPt ?? 0.75 } }
       : renderAttrs?.format?.chartAreaStyle;
-    const css = presentationChartAreaStyleCssWithoutLine(areaStyle) as Record<string, unknown>;
+    const css = presentationChartAreaStyleCssWithoutLine(areaStyle, { shadowBlurDeviation: POWERPOINT_SHADOW_BLUR_DEVIATION }) as Record<string, unknown>;
     return {
       // The frame's line is drawn as Office draws it, centred on the edge at
       // its exact width (`OfficeChartAreaOutline`), not as a CSS border.

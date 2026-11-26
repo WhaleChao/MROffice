@@ -49,10 +49,18 @@ function snapshotFile(): string {
   return path.join(app.getPath("userData"), "instant", "home.html");
 }
 
-/** A home snapshot this build can draw (read once; the cover then serves it). */
-export function hasHomeSnapshot(webDir: string): boolean {
+/** A home snapshot this build can draw, in ``locale`` (read once; the cover then serves it). */
+export function hasHomeSnapshot(webDir: string, locale?: string): boolean {
   homePage = homeSnapshot(webDir);
+  // Drawn in another language than the pages now load in (the person
+  // switched since): the splash, not a home in the old language.
+  if (homePage && locale && snapshotLocale(homePage) !== null && snapshotLocale(homePage) !== locale) homePage = null;
   return homePage !== null;
+}
+
+/** The language a snapshot's page was shown in (its <html lang>), or null. */
+export function snapshotLocale(html: string): string | null {
+  return /^<!doctype html><html\b[^>]*?\slang="([^"]+)"/i.exec(html)?.[1] ?? null;
 }
 
 /**

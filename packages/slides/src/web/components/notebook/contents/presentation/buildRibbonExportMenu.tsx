@@ -335,8 +335,8 @@ export function buildRibbonExportMenu(ctl: BuildRibbonExportMenuCtl) {
           <DropdownMenuItem
             className="docs-cupertino-menu__rich-item"
             disabled={slides.length === 0}
-            title={t("presentation.exportImageLabel")}
-            aria-label={t("presentation.exportImageLabel")}
+            title={t("presentation.exportPictures.menuLabel", { format: "PNG" })}
+            aria-label={t("presentation.exportPictures.menuLabel", { format: "PNG" })}
             onSelect={() => void exportSlideAsImage()}
             data-testid="presentation-export-image"
           >
@@ -347,14 +347,15 @@ export function buildRibbonExportMenu(ctl: BuildRibbonExportMenuCtl) {
               detail={
                 slides.length === 0
                   ? t("presentation.exportMenu.noSlides")
-                  : t("presentation.exportMenu.imageDetail")
+                  : t("presentation.exportPictures.menuDetail", { format: "PNG" })
               }
               blocked={slides.length === 0}
               badge="PNG"
             />
           </DropdownMenuItem>
-          {/* PowerPoint's Export > Change File Type: the slide as a JPEG, a
-              TIFF or a Device Independent Bitmap, from the same picture. */}
+          {/* PowerPoint's Export > Change File Type: the slides as JPEG, TIFF
+              or Device Independent Bitmap pictures, from the same picture; each
+              asks All Slides or Just This One (GAP #3). */}
           <DropdownMenuItem
             className="docs-cupertino-menu__rich-item"
             disabled={slides.length === 0}
@@ -369,7 +370,7 @@ export function buildRibbonExportMenu(ctl: BuildRibbonExportMenuCtl) {
               detail={
                 slides.length === 0
                   ? t("presentation.exportMenu.noSlides")
-                  : t("presentation.exportMenu.imageJpegDetail")
+                  : t("presentation.exportPictures.menuDetail", { format: "JPEG" })
               }
               blocked={slides.length === 0}
               badge="JPEG"
@@ -389,7 +390,7 @@ export function buildRibbonExportMenu(ctl: BuildRibbonExportMenuCtl) {
               detail={
                 slides.length === 0
                   ? t("presentation.exportMenu.noSlides")
-                  : t("presentation.exportMenu.imageTiffDetail")
+                  : t("presentation.exportPictures.menuDetail", { format: "TIFF" })
               }
               blocked={slides.length === 0}
               badge="TIFF"
@@ -409,7 +410,7 @@ export function buildRibbonExportMenu(ctl: BuildRibbonExportMenuCtl) {
               detail={
                 slides.length === 0
                   ? t("presentation.exportMenu.noSlides")
-                  : t("presentation.exportMenu.imageBmpDetail")
+                  : t("presentation.exportPictures.menuDetail", { format: "BMP" })
               }
               blocked={slides.length === 0}
               badge="BMP"

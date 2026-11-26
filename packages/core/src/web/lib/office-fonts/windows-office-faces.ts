@@ -125,6 +125,20 @@ export function windowsOfficeFace(family: string | null | undefined, adapter: Wi
   return undefined;
 }
 
+
+
+
+
+
+
+
+
+export function powerPointWindowsLineEndFace(family: string): string {
+  const name = family.trim().replace(/^["']|["']$/g, "").trim();
+  if (!name || windowsOfficeHas(name)) return name;
+  return windowsOfficeFace(name, POWERPOINT_WINDOWS_FACES)?.face ?? "Calibri";
+}
+
 /** Office's own pick for `family`, the same in every app (Helvetica Neue -> Arial), leaving any app fallback out. */
 export function windowsOfficePick(family: string | null | undefined): string | undefined {
   return windowsOfficeFace(family, NO_FALLBACK)?.face;

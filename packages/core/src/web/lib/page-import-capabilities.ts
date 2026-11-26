@@ -348,6 +348,41 @@ export function pageImportMediaType(type: string | undefined): string {
   return (type || "").split(";", 1)[0].trim().toLowerCase();
 }
 
+/** The extension the server reads each Office or PDF media type by. */
+const SOURCE_EXTENSION_BY_MEDIA_TYPE: Readonly<Record<string, string>> = {
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+  "application/vnd.ms-word.document.macroenabled.12": ".docm",
+  "application/msword": ".doc",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+  "application/vnd.ms-excel.sheet.macroenabled.12": ".xlsm",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.template": ".xltx",
+  "application/vnd.ms-excel.template.macroenabled.12": ".xltm",
+  "application/vnd.ms-excel": ".xls",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+  "application/vnd.ms-powerpoint.presentation.macroenabled.12": ".pptm",
+  "application/vnd.openxmlformats-officedocument.presentationml.template": ".potx",
+  "application/vnd.openxmlformats-officedocument.presentationml.slideshow": ".ppsx",
+  "application/vnd.ms-powerpoint": ".ppt",
+  "application/pdf": ".pdf",
+};
+
+
+
+
+
+
+
+
+
+
+
+export function importFileNameForItsType(name: string, type: string | undefined): string {
+  const extension = pageImportExtension(name);
+  if (extension && PAGE_IMPORT_CAPABILITIES.some((row) => row.extensions.includes(extension))) return name;
+  const byType = SOURCE_EXTENSION_BY_MEDIA_TYPE[pageImportMediaType(type)];
+  return byType ? `${name}${byType}` : name;
+}
+
 const SPREADSHEETML_2003_NAMESPACE = "urn:schemas-microsoft-com:office:spreadsheet";
 const SPREADSHEETML_2003_ROOT = /<(?:[A-Za-z_][\w.-]*:)?Workbook[\s>/]/;
 

@@ -170,6 +170,8 @@ export function holdScribbleOff(roots: readonly Element[], options: HoldScribble
       const target = record.target;
       if (!(target instanceof Element)) continue;
       if (!scribbleWritableElement(target)) {
+        // Disabled (or enabled while still held): nothing of ours was written over.
+        if (record.attributeName === "disabled") continue;
         // The app itself made a held element non-editable (a text box
         // left editing while the pen was picked): it wrote over our
         // value, so the old value was ours. Release leaves it so.
@@ -196,7 +198,13 @@ export function holdScribbleOff(roots: readonly Element[], options: HoldScribble
       childList: true,
       attributes: true,
       attributeOldValue: true,
-      attributeFilter: ["contenteditable", "readonly"],
+      // `disabled`: a field disabled when the hold began was not taken (it
+      // could not be written into then) and is writable once enabled -- the
+      // page title's field is disabled until the page's write permission has
+      // loaded, and stayed open to Scribble under the Draw tab after
+      
+      // pen of a deaf page).
+      attributeFilter: ["contenteditable", "readonly", "disabled"],
     });
   }
   // Typing: the held field a finger, the mouse or the keyboard takes is

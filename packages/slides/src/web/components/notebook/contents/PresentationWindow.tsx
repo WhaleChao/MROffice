@@ -100,7 +100,7 @@ import {
   officeLineWeightPxAsPointText,
   officeLineWeightSteppedPx,
 } from "@mrnote/core/web/lib/office-line-weight.ts";
-import { nativeSmartArtConversionAtDrawnBoxes, nativeSmartArtConversionLikeness, nativeSmartArtConversionLooksLikeDrawing, nativeSmartArtConvertedShapeAt, nativeSmartArtConvertedShapeOf, nativeSmartArtConvertsFromOwnDefinition, nativeSmartArtConversionIdPrefix, nativeSmartArtDrawingAbsent, nativeSmartArtOutlineWithWrittenWords, nativeSmartArtWordsOntoConversion, smartArtAnswerWithWords, isNativeSmartArtMember, readNativeSmartArtGroup, readNativeSmartArtView, updateNativeSmartArtText, type NativeSmartArtView } from "@mrnote/core/web/lib/presentation-native-smartart.ts";
+import { nativeSmartArtConversionAtDrawnBoxes, nativeSmartArtConversionLikeness, nativeSmartArtConversionLooksLikeDrawing, nativeSmartArtConvertedShapeAt, nativeSmartArtConvertedShapeOf, nativeSmartArtConvertsFromOwnDefinition, nativeSmartArtConversionIdPrefix, nativeSmartArtDrawingAbsent, nativeSmartArtOutlineWithWrittenWords, nativeSmartArtWordsOntoConversion, smartArtAnswerWithWords, readNativeSmartArtGroup, readNativeSmartArtView, updateNativeSmartArtText, type NativeSmartArtView } from "@mrnote/core/web/lib/presentation-native-smartart.ts";
 import { registerSmartArtDefinitionPage } from "@mrnote/core/web/lib/office-smartart/layout-definition-client.ts";
 import { reportOfficeExperience } from "@mrnote/core/web/lib/office-experience-report.ts";
 import { SMARTART_OWN_DEFINITION_LIKENESS_LIMIT } from "@mrnote/core/web/lib/office-smartart/drawing-likeness.ts";
@@ -156,8 +156,6 @@ import {
 import {
   OfficeDrawingAdjustHandles,
   OfficeDrawingEditPoints,
-  officeDrawingSelectionStyles,
-  officeDrawingVisibleResizeHandles,
   OfficeShapeDrawLayer,
 } from "@mrnote/core/web/components/office-ribbon/OfficeDrawingSelection.tsx";
 import { officeEditPointsLabels } from "@mrnote/core/web/lib/office-drawing-overlays.ts";
@@ -195,6 +193,7 @@ import {
   withPresentationGridDefaults,
   type PresentationViewSettings,
 } from "@mrnote/core/web/lib/presentation-grid.ts";
+import { PresentationMarqueeBox, type PresentationMarqueeRect } from "./presentation/PresentationMarqueeBox";
 import {
   presentationDesktopShortcutFor,
   presentationDesktopShortcutLabel,
@@ -254,10 +253,11 @@ import {
   nextRibbonScrollLeft,
   type RibbonOverflowState,
 } from "@mrnote/core/web/components/console/editor/ribbonOverflow.ts";
-import { AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd, AlignHorizontalJustifyStart, AlignJustify, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart, ChevronDown, ChevronUp, Circle, Columns3, Download, FlipHorizontal, FlipVertical, Group, MessageSquare, Maximize2, MoreHorizontal, Pause, Pipette, Play, Type, RotateCcw, RotateCw, Rows3, Search, Settings, SlidersHorizontal, Spline, Square, Trash2, Omega, Sparkles, Ungroup, Wand2, Printer } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
+import { AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd, AlignHorizontalJustifyStart, AlignJustify, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart, Circle, Columns3, Download, FlipHorizontal, FlipVertical, Group, MessageSquare, Maximize2, MoreHorizontal, Pause, Pipette, Play, Type, RotateCcw, RotateCw, Rows3, Search, Settings, SlidersHorizontal, Spline, Square, Trash2, Omega, Sparkles, Ungroup, Wand2, Printer } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import { houseIconStandaloneSvg } from "@mrnote/core/web/components/office-ribbon/icons/houseIconStandaloneSvg.ts";
 import { IconAlignObjects, IconBringForward, IconBringToFront, IconMediaCaptions, IconObjectFormatPane, IconObjectHeight, IconObjectWidth, IconResetPicture, IconLockAspect, IconShapeEffects, IconTableAutoFit, IconTableBorders, IconTableDelete, IconTableDistributeColumns, IconTableDistributeRows, IconTableInsertAbove, IconTableInsertBelow, IconTableInsertLeft, IconTableInsertRight, IconTableMergeCells, IconTableSplitCells, IconGroupObjects, IconAnimationMotionPath, IconReviewComment, IconRotateObjects, IconSendBackward, IconSendToBack, IconSlideShowFromCurrent, IconSelectionPane, IconSelectObjects, IconUngroupObjects } from "./PresentationRibbonIcons";
 import { useLocale, useTranslations } from "@mrnote/core/host/next-intl.tsx";
+import { SurfaceWords } from "@mrnote/core/web/components/brand/SurfaceWords.tsx";
 import { useMemoizedTranslator } from "@mrnote/core/web/lib/i18n/memoizedTranslator.ts";
 import { layoutCardsOf, requestLayoutCards, withLayoutCards } from "../../../lib/presentation-layout-cards";
 import { useDeskWindowUnloadable } from "@mrnote/core/web/lib/desk-window-unload.ts";
@@ -273,6 +273,7 @@ import { readPresentationSettledSave } from "../../../lib/presentation-settled-s
 import { PresentationFontAliasesContext, usePresentationFontFaces } from "./presentation/usePresentationFontFaces";
 import { announceFirstSlidePainted } from "@mrnote/core/web/lib/presentation/first-slide-painted.ts";
 import { PresentationAutofitMeasurer } from "./presentation/PresentationAutofitMeasurer";
+import { noteEngineSvgRootsRescaled } from "@mrnote/core/web/lib/text-engine/svg-root-snap.ts";
 const PresentationVideoExportDialog = lazyNamed(() => import("./presentation/PresentationVideoExportDialog"), "PresentationVideoExportDialog");
 import {
   nativeTimingClickCount,
@@ -287,6 +288,18 @@ import { useWindowManagerActionsOptional } from "@mrnote/core/web/components/not
 import presentationChrome from "@mrnote/core/web/lib/presentation/presentation-window-shell.module.css";
 import "../../../lib/presentation/presentation-context-menu.module.css";
 import { PresentationSlideSorter } from "./presentation/PresentationSlideSorter";
+import { PresentationShowAllSlides } from "./presentation/PresentationShowAllSlides";
+import { showSlidePickerKey } from "../../../lib/presentation-show-keys";
+import { PresentationShowGoToDialog } from "./presentation/PresentationShowGoToDialog";
+import {
+  clampShowMagnify,
+  magnifyAt,
+  panShowMagnify,
+  panShowMagnifyByArrow,
+  showMagnifyStyle,
+  stepShowMagnify,
+  type ShowMagnify,
+} from "../../../lib/presentation-show-magnify";
 import {
   PresentationLiveRegion,
   type PresentationLiveRegionHandle,
@@ -376,7 +389,6 @@ import {
   presentationElbowConnectorEnabled,
   presentationHistoryCoalesceEnabled,
   presentationMultiTransformEnabled,
-  presentationPressDragEnabled,
 } from "../../../lib/presentation-flags";
 import {
   applyMultiMove,
@@ -406,6 +418,7 @@ import type { DocumentChartAreaStyleKey } from "@mrnote/core/web/components/cons
 import { OfficePictureEffectsMenu } from "@mrnote/core/web/components/office-ribbon/OfficePictureEffectsMenu.tsx";
 import { OFFICE_GLOW_ACCENTS, OFFICE_GLOW_SIZES_PT, officeGlowVariation } from "@mrnote/core/web/lib/office-picture-effects.ts";
 import { effectPlayDurationMs } from "@mrnote/core/web/lib/presentation-effect-recipes.ts";
+import { DEFAULT_GROW_SIZE, type EffectGrowDirection } from "@mrnote/core/web/lib/presentation-anim-effect-settings.ts";
 import { type PresentationAnimationEffectOptionsResult } from "@/components/notebook/contents/presentation/PresentationAnimationEffectOptionsDialog";
 import { readPresentationEmbeddedFontsAnswer } from "../../../lib/presentation-embedded-fonts";
 import type {
@@ -445,6 +458,7 @@ import {
   useOfficeShapeContextMenuLabels,
 } from "@mrnote/core/web/components/office-ribbon/OfficeShapeContextMenu.tsx";
 import {
+  officeTextPaintFlatFill,
   officeTextPaintWithFontColor,
   type OfficeTextPaint,
 } from "@mrnote/core/web/lib/office-text-paint.ts";
@@ -527,6 +541,7 @@ import { pictureObjectTokenSha, pictureObjectUrlSha, expandPictureObjectRecords,
 import { printDeckInBrowser } from "../../../lib/presentation-client-print";
 import {
   presentationHomeObjectRunMarks,
+  presentationFirstSelectedChartId,
   presentationHomeObjectTargets,
   presentationHomeObjectTextState,
   presentationHomeObjectWordsSlice,
@@ -591,14 +606,8 @@ import { smartArtTextFitScale } from "@mrnote/core/web/lib/office-smartart/text-
 import { PresentationValueCombobox } from "@mrnote/core/web/components/notebook/contents/ribbon/PresentationValueCombobox.tsx";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "@mrnote/core/web/components/notebook/contents/ribbon/PresentationAnimationGallery.tsx";
-import {
-  applyPresentationTableStyleSelection,
-  type PresentationTableStyleSelection,
-} from "@mrnote/core/web/components/notebook/contents/ribbon/PresentationTableStyleGallery.tsx";
-import {
-  applyPresentationPictureFrameStyle,
-  type PresentationPictureFrameStyle,
-} from "@mrnote/core/web/components/notebook/contents/ribbon/PresentationPictureStyleGallery.tsx";
+import { type PresentationTableStyleSelection } from "@mrnote/core/web/components/notebook/contents/ribbon/PresentationTableStyleGallery.tsx";
+import { type PresentationPictureFrameStyle } from "@mrnote/core/web/components/notebook/contents/ribbon/PresentationPictureStyleGallery.tsx";
 import { OfficeHomeNumberField } from "@mrnote/core/web/components/office-ribbon/OfficeHomeRibbon.tsx";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "@mrnote/core/web/components/office-ribbon/OfficeShapeCatalogPanel.tsx";
@@ -885,6 +894,17 @@ import {
   paintPresentationBlockFormat,
 } from "../../../lib/presentation-format-painter-apply";
 import { toPngFilename } from "@mrnote/core/web/lib/export/svg-to-png.ts";
+import { pictureWithDpi } from "@mrnote/core/web/lib/export/picture-dpi.ts";
+import {
+  SLIDE_PICTURE_DEFAULT_DPI,
+  SLIDE_PICTURES_INCLUDE_HIDDEN,
+  SlidePicturesCancelled,
+  safePictureName,
+  slidePicturePixels,
+  zipSlidePictures,
+  type SlidePictureResolution,
+} from "../../../lib/presentation-picture-export";
+import { PresentationExportPicturesDialog } from "./presentation/PresentationExportPicturesDialog";
 import { ElementPictureError, rasterElementPicture, type ElementPicture } from "@mrnote/core/web/lib/export/element-picture.ts";
 import { usePresentationSlidePictures } from "./presentation/usePresentationSlidePictures";
 import { presentationSlideDisplayTitle } from "../../../lib/presentation-outline-view";
@@ -948,6 +968,7 @@ import {
   type PresenterCommand,
   type PresenterDocStrings,
 } from "../../../lib/presentation-presenter-view";
+import { newRandomEffectSeed } from "../../../lib/presentation/random-effects";
 import {
   STROKE_STYLES,
   DEFAULT_SHAPE_FILL,
@@ -969,7 +990,6 @@ import {
   type ShapeKind,
   type StrokeStyle,
   presentationConnectorFieldsForKind,
-  presentationShapeBlendCss,
 } from "@mrnote/core/web/lib/presentation-shapes.ts";
 import {
   PRESENTATION_CUSTOM_GEOMETRY_TOOLS,
@@ -1164,11 +1184,7 @@ import {
   type SmartArtScene3d,
   type SmartArtStyleId,
 } from "@mrnote/core/web/lib/office-smartart/styles-model.ts";
-import {
-  smartArtCameraCss,
-  smartArtCameraWithOwnTransform,
-} from "@mrnote/core/web/lib/office-smartart/canvas-3d.ts";
-import { smartArtEditIn2dKey, smartArtEditingIn2d, smartArtMemberHasScene, useSmartArtEditIn2dVersion } from "@mrnote/core/web/lib/office-smartart/edit-in-2d.ts";
+import { useSmartArtEditIn2dVersion } from "@mrnote/core/web/lib/office-smartart/edit-in-2d.ts";
 import { fetchPictureLayerOriginal, pictureEffectCanReturnToOriginal, withPictureOriginal } from "../../../lib/presentation-picture-original";
 import { withVideoPoster } from "../../../lib/presentation-video-format";
 import type { OfficeVideoStyleId } from "@mrnote/core/web/lib/office-video-styles/catalog.ts";
@@ -1251,6 +1267,8 @@ import { pageDocumentJsonEquals } from "@mrnote/core/web/lib/page-save-acknowled
 import { presentationNativeSavedContentMatches } from "@mrnote/core/web/lib/presentation-native-save.ts";
 import { presentationGestureSurvivesRemote } from "../../../lib/presentation-gesture-authority";
 import DocumentIssueNotice, { type DocumentIssue } from "@mrnote/core/web/components/notebook/DocumentIssueNotice.tsx";
+import { deckDegradedObjects, degradedObjectReportLine } from "@mrnote/core/web/lib/presentation-object-degraded.ts";
+import { openReportProblemDraft } from "@mrnote/core/web/lib/report-problem-draft.ts";
 import WindowNotice from "@mrnote/core/web/components/notebook/WindowNotice.tsx";
 import RecoveredCopiesNotice from "@mrnote/core/web/components/notebook/RecoveredCopiesNotice.tsx";
 import windowNoticeStyles from "@mrnote/core/web/components/notebook/DocumentIssueNotice.module.css";
@@ -1266,7 +1284,6 @@ import {
 import {
   connectorGeometry,
   isAnchoredConnector,
-  legacyLineSlopeFlipsHorizontally,
   recomputeConnectors,
   type Rect as ConnectorRect,
   nearestAnchorPair,
@@ -1529,12 +1546,19 @@ import {
   reconcileDeletedSlideRunLinks,
   reconcileSlideCommentAuthority,
 } from "@mrnote/core/web/lib/presentation-deck-commit.ts";
-import { copyTimelineStep, timelineTextSequenceOf, type TimelineTextSequence, partitionTimelineSteps, presentationAnimationEffect, presentationMediaCallCommand, resolvePresentationAnimationEffectColor, pruneSequence, computeStepStartOffsets, timelineClickCount, type PresentationAnimationEffectId, type PresentationAnimationEffectOption, type AnimationSequenceEditOperation, type AnimationTimingValue, type TimelineAnimation, type TimelinePreviewFrame, type TimelineStep } from "@mrnote/core/web/lib/presentation-anim-timeline.ts";
+import { copyTimelineStep, timelineTextSequenceOf, type TimelineTextSequence, partitionTimelineSteps, presentationAnimationEffect, presentationMediaCallCommand, resolvePresentationAnimationEffectColor, resolveTimelinePreviewFramesFrom, pruneSequence, computeStepStartOffsets, timelineClickCount, type PresentationAnimationEffectId, type PresentationAnimationEffectOption, type AnimationSequenceEditOperation, type AnimationTimingValue, type TimelineAnimation, type TimelinePreviewFrame, type TimelineStep } from "@mrnote/core/web/lib/presentation-anim-timeline.ts";
 import {
   applyAnimationSteps,
   copyAnimationSteps,
 } from "../../../lib/presentation-anim-painter";
 import { type MotionPathPreset } from "@mrnote/core/web/lib/presentation-motion-path.ts";
+import {
+  lockedMotionPathStep,
+  motionPathNativeOfStep,
+  motionPathStepLocked,
+  reversedMotionPathStep,
+  slidesWithLockedMotionPathsHeld,
+} from "@mrnote/core/web/lib/presentation-motion-path-step.ts";
 import {
   DEFAULT_MIN_BLOCK_SIZE,
   angleFromPointer,
@@ -1615,7 +1639,7 @@ import {
   PresentationReuseSlidesPane,
   REUSE_SLIDES_TEXT_BUTTON_STYLE,
 } from "./presentation/PresentationReuseSlidesPane";
-import { withPresentationBlackWhiteStyle, type PresentationBlackWhiteMode } from "@mrnote/core/web/lib/presentation/presentation-black-white-mode.ts";
+import { type PresentationBlackWhiteMode } from "@mrnote/core/web/lib/presentation/presentation-black-white-mode.ts";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "./presentation/PresentationOfficeMasterTextStyleBar";
 const PresentationMasterRenameDialog = lazyNamed(() => import("./presentation/PresentationMasterRenameDialog"), "PresentationMasterRenameDialog");
@@ -1636,8 +1660,6 @@ import {
 import {
   presentationFirstStatedPlace,
   presentationInPaintOrder,
-  presentationBlockOverFooterFieldsZIndex,
-  withFooterFieldStacking,
   presentationListIndexForPlace,
   presentationSlideReordersNativeObjects,
 } from "@mrnote/core/web/lib/presentation-paint-order.ts";
@@ -1719,10 +1741,9 @@ import { yieldTouchHold } from "@mrnote/core/web/lib/touch-hold.ts";
 import { startInkHoldToErase, usePenFirstDraw } from "@mrnote/core/web/lib/pen-first-draw.ts";
 import { OfficePenPalette } from "@mrnote/core/web/components/office-ribbon/OfficePenPalette.tsx";
 import { isCompatMouseFromTouch, isTouchLikePointer } from "@mrnote/core/web/lib/pointer-capability.ts";
-import { officePressIntoTextHost } from "@mrnote/core/web/lib/office-off-line-text-press.ts";
 import { OfficeTouchCommandBar } from "@mrnote/core/web/components/office-ribbon/OfficeTouchCommandBar.tsx";
 import { OfficeInkLassoSelection } from "@mrnote/core/web/components/office-ribbon/OfficeInkLassoSelection.tsx";
-import { INK_LASSO_MEMBER_ATTRIBUTE, inkLassoUnionBox, isInkLassoOverlayTarget, placeInkLassoLoop, sameInkLassoIds, type InkLassoAnchoredLoop } from "@mrnote/core/web/lib/office-ink-lasso-selection.ts";
+import { inkLassoUnionBox, isInkLassoOverlayTarget, placeInkLassoLoop, sameInkLassoIds, type InkLassoAnchoredLoop } from "@mrnote/core/web/lib/office-ink-lasso-selection.ts";
 import { OfficeSoftKeyboardLayer } from "@mrnote/core/web/components/office-ribbon/OfficeSoftKeyboardLayer.tsx";
 import { type OfficeInkCircleOffer } from "@mrnote/core/web/components/office-ribbon/OfficeInkCircleSelect.tsx";
 import { DEFAULT_SNAP_THRESHOLD, alignBlocks, alignBlocksToBounds, computeSnapGuides, snapMovingSelection, snapResizePointer, type AlignEdge, type SpacingGuide, type DistributeAxis, type SnapGuide } from "@mrnote/core/web/lib/presentation-align.ts";
@@ -1845,7 +1866,6 @@ import {
   type PresentationGeometryFieldSpec,
   type PresentationPositionOrigin,
 } from "./presentation/PresentationGeometryFields";
-import { presentationBlockFrameOverflow } from "../../../lib/presentation/block-frame-overflow";
 import {
   PRESENTATION_PLACEHOLDER_INK_VAR,
   presentationSlideInk,
@@ -2033,14 +2053,10 @@ export {
   buildPresentationCopilotStructure,
 } from "@mrnote/core/web/__cut__/md572371e21.ts";
 import {
-  textBlockDrawsInsets,
-  textBlockInsetsCss,
-  importedPptxTextHasPreview,
   textBlockStyleCss,
   AUTOFIT_EMU_PER_PX,
   autofitSmartTagVisibleForBlock,
   CSS_PX_PER_POINT,
-  type PresentationFontSizeUnit,
 } from "../../../lib/presentation/text-layout-css";
 import { presentationSmartArtMembersAsShapes } from "../../../lib/presentation-smartart-shapes";
 import { outlineWithStoredRunColours } from "@mrnote/core/web/lib/office-smartart/stored-run-colours.ts";
@@ -2117,6 +2133,7 @@ import {
   type RecordStudioInkGesture,
 } from "../../../lib/presentation/ink-annotation";
 import { type InkDeleteScope } from "@/lib/presentation/ink-delete";
+import { showHasKeepableInk, slidesWithKeptShowInk } from "../../../lib/presentation/keep-show-ink";
 import {
   ONLINE_PICTURE_FETCH_TIMEOUT_MS,
   parseOnlinePictureUrl,
@@ -2127,7 +2144,6 @@ import {
   selectionPaneIdsIdentifyOneLiveObject,
   presentationSmartArtGroup,
   presentationSmartArtBounds,
-  presentationSmartArtGroupBox,
   blockNativeSmartArtTextAuthority,
   blockClaimsImportedGroup,
   nativeGroupMoveMembers,
@@ -2142,8 +2158,6 @@ import {
   translatedMemberGeoms,
   hasGeometry,
   canvasFallbackGeometry,
-  blockGeometryStyle,
-  presentationInkBlockPlacement,
   geometryInputValue,
   clampNumber,
   presentationSmartArtCameraStyle,
@@ -2189,7 +2203,7 @@ import {
   tableCellAddressAt,
   drawTableGrid,
   tableWithScaledGestureGeometry,
-  tableWithFrameAlignedGrid,
+  presentationTableCellWithStatedTextColor,
 } from "../../../lib/presentation/table-canvas-layout";
 import {
   PresentationPageIdContext,
@@ -2263,11 +2277,16 @@ import {
   usePresentationNormalViewPanes,
   writePresentationCommentsPaneOpen,
 } from "./presentation/PresentationNormalViewPanes";
-import { PresentationCanvasTextBlock, type EditingHostHandover } from "./presentation/PresentationCanvasTextBlock";
-import { PresentationCanvasEmbedBlock } from "./presentation/PresentationCanvasEmbedBlock";
-import { PresentationCanvasShapeBlock } from "./presentation/PresentationCanvasShapeBlock";
-import { PresentationCanvasTableBlock } from "./presentation/PresentationCanvasTableBlock";
-import { PresentationCanvasChartBlock } from "./presentation/PresentationCanvasChartBlock";
+import {
+  DeckCopyQueue,
+  isPendingCopy,
+  pendingCopyKept,
+  pendingCopyRefusal,
+  withPendingCopy,
+  withoutPendingCopies,
+  withoutPendingCopy,
+} from "@mrnote/core/web/lib/deck-pending-copies.ts";
+import type { EditingHostHandover } from "./presentation/PresentationCanvasTextBlock";
 import { usePicturesNotDrawn } from "../../../lib/presentation/usePicturesNotDrawn";
 import {
   deckFieldsToRestore,
@@ -2279,9 +2298,6 @@ import {
 } from "./presentation/useDeckSaveResilience";
 import { registerUnsavedWorkFlush } from "@mrnote/core/web/lib/unsaved-work-hold.ts";
 import { useDeckRoomsUnsaved } from "../../../lib/presentation/useDeckRoomsUnsaved";
-import { PresentationCanvasImageBlock } from "./presentation/PresentationCanvasImageBlock";
-import { PresentationBlockHandles } from "./presentation/PresentationBlockHandles";
-import { PresentationBlockAutofitSmartTag } from "./presentation/PresentationBlockAutofitSmartTag";
 import { PresentationSmartArtMemberRotateGrip } from "./presentation/PresentationSmartArtMemberRotateGrip";
 import {
   smartArtCommandItemId,
@@ -2300,16 +2316,30 @@ import { smartArtMemberDeletedItemId } from "@mrnote/core/web/lib/office-smartar
 import { presentationSmartArtBackgroundsAfterReset, presentationSmartArtBackgroundsCarried } from "../../../lib/presentation/smartart-background";
 import { isSmartArtGraphicPlate, withNativeSmartArtGraphicPlates } from "../../../lib/presentation/smartart-graphic-plate";
 import { readSmartArtGraphicFormat, sheetSmartArtBackgroundStyle, type SmartArtGraphicFormatChange } from "@mrnote/core/web/lib/spreadsheet/smartart-background.ts";
-import { PresentationSmartArtGraphicHitLayer, presentationShapeGeometryHitClassName, presentationShapeIsNativeTextBox } from "./presentation/PresentationSmartArtGraphicHitArea";
+import { presentationSmartArtGraphicHitAreas } from "./presentation/PresentationSmartArtGraphicHitArea";
+import {
+  PresentationCanvasBlockSlot,
+  presentationCanvasBlockTakesChrome,
+  presentationCanvasBlockView,
+  type PresentationCanvasBlockChrome,
+  type PresentationCanvasBlockHandlers,
+  type PresentationCanvasBlockKindCtl,
+  type PresentationCanvasBlockShared,
+  type PresentationCanvasSelectionState,
+} from "./presentation/PresentationCanvasBlockSlot";
+import { useStableHandlers } from "@mrnote/core/web/hooks/useStableHandlers.ts";
 import {
   PresentationLiveBlockFrame,
-  presentationLiveFrameOf,
   presentationLiveTransformObjects,
   presentationLiveTransformSurface,
   presentationSettledTransformObjects,
 } from "./presentation/PresentationLiveBlockFrame";
 import { PresentationGuidesOverlay } from "./presentation/PresentationGuidesOverlay";
 import { PresentationFreeformDrawLayer } from "./presentation/PresentationFreeformDrawLayer";
+import {
+  PresentationMotionPathDrawLayer,
+  PresentationMotionPathLayer,
+} from "./presentation/PresentationMotionPathLayer";
 import { paintPresentationWetStroke, type PresentationWetStroke } from "./presentation/PresentationDrawToolSurface";
 const PresentationReadingViewLayer = lazyNamed(() => import("./presentation/PresentationReadingViewLayer"), "PresentationReadingViewLayer");
 /** The split-out parts, in the order they are loaded while idle: what a
@@ -2818,7 +2848,8 @@ function nativeSmartArtWithWords(
  * saved as the file holds it (lib/presentation-smartart-prepared).
  */
 function buildContent(...[slides, ...rest]: Parameters<typeof buildDeckContent>): ReturnType<typeof buildDeckContent> {
-  return buildDeckContent(slidesToPersist(slides as SlideModel[]) as typeof slides, ...rest);
+  // A copy still being made by the server is the window's stand-in, never saved (lib/deck-pending-copies).
+  return buildDeckContent(slidesToPersist(withoutPendingCopies(slides as SlideModel[])) as typeof slides, ...rest);
 }
 
 
@@ -2857,6 +2888,11 @@ function useDerivedOnChange(deps: readonly unknown[], apply: () => void): void {
 }
 
 /** Slide numbers as a member reads them: "5–12, 14". */
+/** At most this many objects kept read-only are named one by one. */
+const DEGRADED_OBJECT_ISSUES_SHOWN = 8;
+/** A deck's later parts still reading past this are said to be. */
+const DECK_READING_SLOW_MS = 15_000;
+
 function slideNumberRuns(numbers: readonly number[]): string {
   const runs: string[] = [];
   for (let at = 0; at < numbers.length; at += 1) {
@@ -2888,6 +2924,61 @@ function isDeckLossGatedExportFormat(format: PageExportFormat): format is DeckLo
 
 /** A notes draft left in its box this long is written onto its slide. */
 const NOTES_DRAFT_SETTLE_MS = 800;
+
+/**
+ * Puts the slide show's host over everything: full screen when asked for and
+ * given (the person's click that started the show is the activation it
+ * needs), otherwise the page's top layer through a manual popover, which
+ * escapes the slide window's transform, containment and stacking as full
+ * screen does, so the notebook's sidebar (and its hover-open strip), guided
+ * tour and cookie notice stay under the show, unanswered, and come back as
+ * they were when the host unmounts. A browser without the Popover API keeps
+ * the show where it was. An element open as a popover cannot go full screen,
+ * so full screen is asked first and the popover only when it is refused.
+ */
+function coverPresentHost(host: HTMLElement, wantFullscreen: boolean): void {
+  if (typeof document === "undefined") return;
+  if (document.fullscreenElement === host) return;
+  const inTopLayer = () => {
+    try {
+      return host.matches(":popover-open");
+    } catch {
+      return false;
+    }
+  };
+  const coverPage = () => {
+    if (!host.isConnected || document.fullscreenElement === host) return;
+    if (typeof host.showPopover !== "function" || inTopLayer()) return;
+    host.setAttribute("popover", "manual");
+    try {
+      host.showPopover();
+    } catch {
+      host.removeAttribute("popover");
+    }
+  };
+  if (inTopLayer()) return;
+  if (
+    wantFullscreen &&
+    document.fullscreenEnabled !== false &&
+    typeof host.requestFullscreen === "function"
+  ) {
+    let request: Promise<void> | undefined;
+    try {
+      request = host.requestFullscreen();
+    } catch {
+      coverPage();
+      return;
+    }
+    void Promise.resolve(request).catch(coverPage);
+    return;
+  }
+  coverPage();
+}
+
+/** No prepared SmartArt conversion shown: the same empty list on every render. */
+const NO_PREPARED_ORIGINALS: readonly PresentationBlock[] = [];
+/** No SmartArt hit area (a preview slide, or a drawing tool on the slide). */
+const NO_SMARTART_HIT_AREAS: ReadonlyMap<string, unknown> = new Map();
 
 export default function PresentationWindow({
   pageId,
@@ -3013,6 +3104,7 @@ export default function PresentationWindow({
   // kept for the selection); each is formatted once per translator, not at
   
   const t = useMemoizedTranslator(useTranslations("console-notebooks"));
+  const commonT = useTranslations("common");
   const smartArtPlaceholders = useOfficeSmartArtPlaceholders();
   const smartArtDesignLabels = useOfficeSmartArtDesignLabels();
   const smartArtContextMenuLabels = useOfficeSmartArtContextMenuLabels();
@@ -3283,6 +3375,7 @@ export default function PresentationWindow({
   const transitionSoundPreviewRef = useRef<HTMLAudioElement | null>(null);
   const [transitionPreview, setTransitionPreview] =
     useState<EditorTransitionPreviewPlayback | null>(null);
+  const animationPreviewTokenRef = useRef(0);
   const animationPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -4069,6 +4162,12 @@ export default function PresentationWindow({
     adjustments: Record<string, number>;
   } | null>(null);
   const [editPointsBlockId, setEditPointsBlockId] = useState<string | null>(null);
+  // Edit Points on the selected effect's motion path (GAP #10): the step's
+  // slide and place in its sequence while editing.
+  const [motionPathEditing, setMotionPathEditing] = useState<{ slideId: string; index: number } | null>(null);
+  // Path Animation > Custom Path (GAP #10): the object a drawing on the slide
+  // becomes a motion path of, while it is drawn.
+  const [motionPathDrawing, setMotionPathDrawing] = useState<{ slideId: string; blockId: string } | null>(null);
   useEffect(() => {
     if (editPointsBlockId && selectedBlockId !== editPointsBlockId) setEditPointsBlockId(null);
   }, [editPointsBlockId, selectedBlockId]);
@@ -4582,7 +4681,22 @@ export default function PresentationWindow({
   const presenterWindowRef = useRef<Window | null>(null);
   const presenterChannelRef = useRef<PresenterChannel | null>(null);
   const presenterEpochRef = useRef(0);
+  // The show's Random Effects seed (row 1041): set once when a show starts,
+  // used by the show and sent to every window of it with the sync snapshot.
+  const randomEffectSeedRef = useRef(newRandomEffectSeed());
   const presentOverlayRef = useRef<HTMLDivElement>(null);
+  // The show's host: one element for the whole show, around the audience
+  // and the in-window presenter layouts (each its own overlay element), so
+  // switching between them keeps the show in full screen. It is what goes
+  // full screen, or, when full screen is not asked for (Set Up Show >
+  // Browsed by an individual) or not given, the top layer of the page: the
+  // show sits inside the slide window, whose transform and containment held
+  // its position: fixed to the window's box, under the notebook's sidebar,
+  // its guided tour and its cookie notice.
+  const presentHostRef = useRef<HTMLDivElement>(null);
+  // Set by a show's start, read once its host is mounted (the start's own
+  // click is still the user activation full screen needs).
+  const presentFullscreenWantedRef = useRef<boolean | null>(null);
   // ── PRESENT-MODE ANNOTATION (laser pointer + pen / highlighter ink) ────────
   // The active draw tool (`null` = off, normal click-to-advance). Selecting a
   // tool mounts a transparent SVG draw layer over the audience slide.
@@ -4599,13 +4713,30 @@ export default function PresentationWindow({
   // discard-on-exit default. A map (not an array) so a slide reorder / delete
   // doesn't shift another slide's ink.
   const [inkBySlide, setInkBySlide] = useState<Record<string, InkStroke[]>>({});
+  const inkBySlideRef = useRef(inkBySlide);
+  inkBySlideRef.current = inkBySlide;
+  // The show's ink, offered to be kept as it ends (GAP 14, lib/presentation/keep-show-ink): the
+  // strokes by slide id, until Keep or Discard.
+  const [keepShowInkOffer, setKeepShowInkOffer] = useState<Record<string, InkStroke[]> | null>(null);
   // The stroke currently being drawn (its points accumulate on pointer-move);
   // committed into `inkBySlide` on pointer-up. Held separately so an in-progress
   // stroke can render live without churning the saved map on every point.
-  const [draftStroke, setDraftStroke] = useState<{
+  // The stroke's id is given as it starts and travels with it, so committing it is
+  // the same write however often React runs an update: the strokes are added by id,
+  
+  // Mode one stroke was committed twice, and Keep wrote two ink objects for it).
+  const [draftStroke, setDraftStrokeState] = useState<{
+    id: string;
     slideId: string;
     points: AnnotationPoint[];
   } | null>(null);
+  // The draft as the pointer handlers last wrote it (pointer-up reads it without
+  // waiting for a render of the last moves).
+  const draftStrokeRef = useRef<typeof draftStroke>(null);
+  const setDraftStroke = useCallback((next: typeof draftStroke) => {
+    draftStrokeRef.current = next;
+    setDraftStrokeState(next);
+  }, []);
   // Monotonic counter for stable, unique stroke ids (React keys + erase target).
   const inkStrokeSeqRef = useRef(0);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -4673,6 +4804,8 @@ export default function PresentationWindow({
     blockId: string;
     start: number;
     end: number;
+    shown?: string;
+    shownRange?: { start: number; end: number };
   } | null>(null);
   // Set true by a SHIFT mouse-down on a table cell so the focus handler that
   // immediately follows does NOT clear the just-set selection anchor (the
@@ -4924,14 +5057,17 @@ export default function PresentationWindow({
   // while the user drags on the empty slide canvas. `null` when no marquee drag
   // is in flight. On pointer-up the equivalent EMU rect is hit-tested against the
   // slide blocks (intersection) to populate `selectedBlockIds`. Editor-only,
-  // never persisted. Held in state so the box re-renders each move; the gesture
-  // math lives in `marqueeGestureRef` so the window listeners stay closure-free.
-  const [marqueePreview, setMarqueePreview] = useState<{
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  } | null>(null);
+  // never persisted. The box holds its own state (`PresentationMarqueeBox`), set
+  // through this ref, so a move repaints the box and not the slide (TRIAGE 151);
+  // the gesture math lives in `marqueeGestureRef` so the window listeners stay
+  // closure-free.
+  const marqueeBoxSetterRef = useRef<((rect: PresentationMarqueeRect | null) => void) | null>(null);
+  const setMarqueePreview = useCallback((rect: PresentationMarqueeRect | null) => {
+    marqueeBoxSetterRef.current?.(rect);
+  }, []);
+  const registerMarqueeBox = useCallback((setter: ((rect: PresentationMarqueeRect | null) => void) | null) => {
+    marqueeBoxSetterRef.current = setter;
+  }, []);
   // Mutable context for the in-flight marquee drag. Like the geometry gesture, it
   // is held in a ref so the move/up window listeners read the latest start point
   // + px→EMU scale without re-binding. `slideId` records which slide the drag
@@ -7340,6 +7476,14 @@ export default function PresentationWindow({
   useEffect(() => {
     if (!hasPersistedReviewInk) setReviewInkHidden(false);
   }, [hasPersistedReviewInk]);
+  // The show's ink kept (GAP 14): every slide's strokes as its ink objects, in one change (one Undo).
+  const keepShowInk = () => {
+    const offer = keepShowInkOffer;
+    setKeepShowInkOffer(null);
+    if (!offer || autosave.readOnly) return;
+    const next = slidesWithKeptShowInk(slidesRef.current, offer, (slide) => slideBounds(slide), () => crypto.randomUUID());
+    if (next) commitSlides(next);
+  };
   const activeSlideVisibleBlocks = useMemo(
     () => {
       const shownBlocks = activeSlide.hideBackgroundGraphics
@@ -8179,7 +8323,7 @@ export default function PresentationWindow({
   }, []);
   const preparedSmartArtShown =
     preparedSmartArt && !preparedSmartArt.revealed && preparedSmartArt.prepared === activeSlide ? preparedSmartArt : null;
-  const preparedSmartArtDrawnOriginals: readonly PresentationBlock[] = preparedSmartArtShown?.originals ?? [];
+  const preparedSmartArtDrawnOriginals: readonly PresentationBlock[] = preparedSmartArtShown?.originals ?? NO_PREPARED_ORIGINALS;
   const preparedSmartArtHidden = useMemo(
     () => (preparedSmartArtShown ? new Set(preparedSmartArtShown.converted.map((block) => block.id)) : null),
     [preparedSmartArtShown],
@@ -8719,8 +8863,12 @@ export default function PresentationWindow({
           row2: selection.row2,
           rowSpan: cell.rowspan,
           colSpan: cell.colspan,
-          style: normalizeCellStyle(cell),
-          characterStyles: cellCharacterRuns(cell.text, cell.runs).map(run => normalizeCellStyle({ ...cell, ...run.style, ...(typeof run.style?.fontSize === "number" ? { fontSize: pxToPtRounded(run.style.fontSize) } : {}) })),
+          // The colour the cell's own body states for its words (readings row 1045)
+          // is the cell's colour on Home, as it is drawn, until one of its own is picked.
+          ...((stated) => ({
+            style: normalizeCellStyle(stated),
+            characterStyles: cellCharacterRuns(cell.text, cell.runs).map(run => normalizeCellStyle({ ...stated, ...run.style, ...(typeof run.style?.fontSize === "number" ? { fontSize: pxToPtRounded(run.style.fontSize) } : {}) })),
+          }))(presentationTableCellWithStatedTextColor(contextualTableBlock, cell, rowIndex, cellIndex)),
         });
       }
     }
@@ -9906,7 +10054,10 @@ export default function PresentationWindow({
   // browser-only and fails soft (returns false) — we surface a notice then.
   // PowerPoint's Export > Change File Type writes a slide as PNG, JPEG, TIFF
   // or a Device Independent Bitmap (.bmp) too: each from the same picture.
-  const exportSlideAsImage = useCallback(async (format: SlideImageExportFormat = "png") => {
+  const exportSlideAsImage = useCallback(async (
+    format: SlideImageExportFormat = "png",
+    dpi: SlidePictureResolution = SLIDE_PICTURE_DEFAULT_DPI,
+  ) => {
     if (guestNeedsAccount(onGuestExportRequestRef)) return;
     const index = activeIndexRef.current;
     const slide = slidesRef.current[index];
@@ -9932,14 +10083,20 @@ export default function PresentationWindow({
     try {
       slidePictureMissingScenesRef.current = 0;
       const picture = await captureSlidePicture(slide, index);
-      // Twice the slide's design size, for a crisp picture.
-      const png = await rasterElementPicture(picture, {
-        scale: 2,
-        background: "#ffffff",
+      // PowerPoint's size for the slide at `dpi` (96 by default: 1280 x 720
+      // for 16:9), the same as every slide's in Save As > All Slides.
+      const pixels = slidePicturePixels(dpi, slideDimension(slide, "widthEmu"), slideDimension(slide, "heightEmu"));
+      // The resolution stated in the file as PowerPoint states it (pHYs, JFIF).
+      const png = await pictureWithDpi(
+        await rasterElementPicture(picture, {
+          scale: pixels.width / Math.max(1, picture.width),
+          background: "#ffffff",
+          format,
+          dpi,
+        }),
         format,
-        // Twice the slide's 96-dpi design size: the slide's own size in print.
-        dpi: 192,
-      });
+        dpi,
+      );
       progress.dismiss();
       // A diagram that could not be drawn is said, not left out silently (TRIAGE S15).
       if (slidePictureMissingScenesRef.current) toast({ title: t("presentation.exportSmartArtNotDrawn") });
@@ -9961,6 +10118,112 @@ export default function PresentationWindow({
       slideImageExportInFlightRef.current = false;
     }
   }, [captureSlidePicture, t, title]);
+
+  // Save As > pictures > All Slides (GAP #3): every slide a picture, in one
+  // .zip made as the slides are drawn (`zipSlidePictures`), with progress, a
+  // Cancel, and every slide that could not be drawn named. Same size as one
+  // slide's picture (`exportSlideAsImage`).
+  const slidePicturesAbortRef = useRef<AbortController | null>(null);
+  const exportAllSlidesAsImages = useCallback(async (
+    format: SlideImageExportFormat,
+    dpi: SlidePictureResolution = SLIDE_PICTURE_DEFAULT_DPI,
+  ) => {
+    if (guestNeedsAccount(onGuestExportRequestRef)) return;
+    const all = slidesRef.current;
+    const chosen = all
+      .map((slide, index) => ({ slide, index }))
+      .filter(({ slide }) => SLIDE_PICTURES_INCLUDE_HIDDEN || !isSlideHidden(slide));
+    if (!chosen.length) return;
+    if (slideImageExportInFlightRef.current) {
+      toast({ title: t("toolbar.exportPreparing", { format: format.toUpperCase() }) });
+      return;
+    }
+    slideImageExportInFlightRef.current = true;
+    const controller = new AbortController();
+    slidePicturesAbortRef.current = controller;
+    const working = (current: number) =>
+      t("presentation.exportPictures.working", { current, total: chosen.length });
+    const cancel = (
+      <ToastAction
+        altText={t("toolbar.cancel")}
+        data-testid="presentation-export-pictures-cancel"
+        onClick={() => controller.abort()}
+      >
+        {t("toolbar.cancel")}
+      </ToastAction>
+    );
+    const progress = toast({ title: working(0), duration: Number.POSITIVE_INFINITY, action: cancel });
+    const name = safePictureName(title || t("pages.defaultPresentationTitle"), "Presentation");
+    // PowerPoint's own spelling: Slide1.PNG, Slide1.JPG (truth export-all-pictures).
+    const extension = SLIDE_IMAGE_EXTENSION[format].toUpperCase();
+    try {
+      slidePictureMissingScenesRef.current = 0;
+      const archive = await zipSlidePictures({
+        count: chosen.length,
+        folder: name,
+        fileName: (position) => {
+          // "Slide1", in the interface's language; a name without the slide's
+          // number (a translation that lost it) would make every file one.
+          const number = chosen[position]!.index + 1;
+          const named = safePictureName(t("presentation.exportPictures.slideFileName", { number }), "");
+          return `${named.includes(String(number)) ? named : `Slide${number}`}.${extension}`;
+        },
+        draw: async (position) => {
+          const { slide, index } = chosen[position]!;
+          const picture = await captureSlidePicture(slide, index);
+          const pixels = slidePicturePixels(dpi, slideDimension(slide, "widthEmu"), slideDimension(slide, "heightEmu"));
+          return pictureWithDpi(
+            await rasterElementPicture(picture, {
+              scale: pixels.width / Math.max(1, picture.width),
+              background: "#ffffff",
+              format,
+              dpi,
+              signal: controller.signal,
+            }),
+            format,
+            dpi,
+          );
+        },
+        onProgress: (done) => progress.update({ id: progress.id, title: working(done), action: cancel }),
+        signal: controller.signal,
+      });
+      progress.dismiss();
+      if (slidePictureMissingScenesRef.current) toast({ title: t("presentation.exportSmartArtNotDrawn") });
+      if (archive.failed.length) {
+        // Never a slide silently missing from the folder.
+        toast({
+          title: t("presentation.exportPictures.someFailed", {
+            slides: archive.failed.map((position) => chosen[position]!.index + 1).join(", "),
+          }),
+          variant: "destructive",
+        });
+      }
+      if (!archive.written) throw new Error("no_pictures");
+      const file = new Blob([...archive.parts], { type: "application/zip" });
+      const filename = `${name}.zip`;
+      if (!startDownloadWhenAllowed(filename, () => downloadBlobFile(filename, file))) {
+        throw new Error("download_unavailable");
+      }
+    } catch (error) {
+      progress.dismiss();
+      if (error instanceof SlidePicturesCancelled) {
+        toast({ title: t("presentation.exportPictures.cancelled") });
+      } else {
+        toast({ title: t("presentation.exportImageFailed"), variant: "destructive" });
+      }
+    } finally {
+      if (slidePicturesAbortRef.current === controller) slidePicturesAbortRef.current = null;
+      slideImageExportInFlightRef.current = false;
+    }
+  }, [captureSlidePicture, t, title]);
+  // The menu's picture commands ask PowerPoint's question first: All Slides
+  // or Just This One (PresentationExportPicturesDialog).
+  const [pictureExportFormat, setPictureExportFormat] = useState<SlideImageExportFormat | null>(null);
+  const openPictureExport = useCallback(async (format: SlideImageExportFormat = "png") => {
+    if (guestNeedsAccount(onGuestExportRequestRef)) return;
+    setPictureExportFormat(format);
+  }, []);
+  useEffect(() => () => slidePicturesAbortRef.current?.abort(), []);
 
   // Export ▸ Web page: the deck as a standalone show that plays in any
   // browser, each slide as the show draws it, notes kept for the presenter
@@ -10286,6 +10549,9 @@ export default function PresentationWindow({
   // a part not loaded yet, a part left with no slide): refused before it
   // lands, and the member told why -- once per reason while they retry.
   const deckPartsRefusalToldRef = useRef<{ key: string; at: number } | null>(null);
+  // The window's own settling of its pending copies (kept as ordinary slides
+  // when the server could not make them): past the stand-ins' guard.
+  const pendingCopyReleaseRef = useRef(false);
   const announceDeckPartsRefusal = useCallback((refusal: DeckCommitRefusal) => {
     const ordinal = "slideId" in refusal
       ? slidesRef.current.findIndex((slide) => slide.id === refusal.slideId) + 1
@@ -10314,6 +10580,15 @@ export default function PresentationWindow({
     ) => {
       // A preview is read: no command that reached this far changes its deck.
       if (previewMode) return;
+      // A copy the server is still making stands as it is until it lands: no
+      // edit, move, delete or copy of the stand-in (it would be lost then).
+      if (!pendingCopyReleaseRef.current) {
+        const pendingRefusal = pendingCopyRefusal(slidesRef.current, nextSlides);
+        if (pendingRefusal) {
+          announceDeckPartsRefusal({ reason: "loading", slideId: pendingRefusal.slideId });
+          return;
+        }
+      }
       // The first words typed into an imported slide's empty-slide stub state
       // the frame it is drawn at, in this same step (one Undo takes both).
       nextSlides = slidesWithFramedStubWords(
@@ -10329,6 +10604,11 @@ export default function PresentationWindow({
         nextSlides,
         slidesRef.current,
         nextTheme !== undefined && nextTheme !== null && deckThemeFontsDiffer(themeRef.current, nextTheme),
+      );
+      // A motion path locked to the slide (Effect Options > Path: Locked)
+      // stays where it is when its object moves, in the same step.
+      nextSlides = slidesWithLockedMotionPathsHeld(nextSlides, slidesRef.current, (slide) =>
+        slideBounds(slide as unknown as Record<string, unknown>),
       );
       if (
         typingLetterRef.current &&
@@ -11832,6 +12112,14 @@ export default function PresentationWindow({
   // stayed tall and Redo was over.
   const tableFitFromHistoryRef = useRef(false);
   const undo = useCallback(() => {
+    // A copy the server is still making: the history waits for it (taken
+    // back or brought again over its stand-in, it stood at another place
+    // when it landed, or came back after it had gone).
+    const pendingCopy = slidesRef.current.find(isPendingCopy);
+    if (pendingCopy) {
+      announceDeckPartsRefusal({ reason: "loading", slideId: pendingCopy.id });
+      return;
+    }
     caretToHistoryEditRef.current(slidesRef.current);
     // A pen stroke still wet on the Draw surface (it lands when the hand
     // pauses, lib/office-wet-ink) is the last thing done: it lands first, so
@@ -11947,6 +12235,14 @@ export default function PresentationWindow({
   latestUndoRef.current = undo;
 
   const redo = useCallback(() => {
+    // A copy the server is still making: the history waits for it (taken
+    // back or brought again over its stand-in, it stood at another place
+    // when it landed, or came back after it had gone).
+    const pendingCopy = slidesRef.current.find(isPendingCopy);
+    if (pendingCopy) {
+      announceDeckPartsRefusal({ reason: "loading", slideId: pendingCopy.id });
+      return;
+    }
     caretToHistoryEditRef.current(slidesRef.current);
     // A wet stroke is a newer step than anything Redo could bring back.
     inkWetRef.current?.flush();
@@ -12138,6 +12434,8 @@ export default function PresentationWindow({
     
     // the slide, and Reading View's player, which stays under the show.
     pausePresentationMediaIn(rootRef.current ?? slideCanvasRef.current);
+    // A new show picks its Random Effects anew (row 1041).
+    randomEffectSeedRef.current = newRandomEffectSeed();
     presentIndexRef.current = startIndex;
     lastViewedPresentIndexRef.current = null;
     setPresentIndex(startIndex);
@@ -12175,19 +12473,52 @@ export default function PresentationWindow({
     setInkBySlide({});
     slideEntryRef.current = null;
     setPresentMode(true);
-    // Best-effort native fullscreen; the fixed overlay is the CSS fallback when
-    // the Fullscreen API is unavailable or rejected (e.g. not user-gestured).
-      const node = presentOverlayRef.current;
-      if (
-        configuredSlideShowType !== "window" &&
-        node &&
-        typeof node.requestFullscreen === "function"
-      ) {
-        void node.requestFullscreen().catch(() => {});
-      }
+    // Full screen unless the show is browsed in a window. The host is not
+    // mounted yet on a show's start: its layout effect asks; a show started
+    // again from inside a show asks here.
+    const wantFullscreen = configuredSlideShowType !== "window";
+    const host = presentHostRef.current;
+    if (host) coverPresentHost(host, wantFullscreen);
+    else presentFullscreenWantedRef.current = wantFullscreen;
     },
-    [configuredSlideShowType, setPresentMode, presentSlides, showSlideShowAnimations],
+    [configuredSlideShowType, setPresentMode, presentSlides, showSlideShowAnimations, setDraftStroke],
   );
+
+  // A show's host is mounted: cover the page with it, as its start asked.
+  // When the show ends (its Esc, its End, or the browser leaving full screen),
+  // the keyboard comes back to the slide, as PowerPoint's does: the show held
+  // the focus and took it along when it unmounted, so Page Down and the
+  // arrows went to the page's body, nowhere near the deck.
+  const presentShownRef = useRef(false);
+  useLayoutEffect(() => {
+    if (!presentMode) {
+      presentFullscreenWantedRef.current = null;
+      if (!presentShownRef.current) return;
+      presentShownRef.current = false;
+      // Also from the control that started the show (Slide Show > From
+      // Beginning kept it); never from a field the person is typing in.
+      const active = document.activeElement;
+      const lost =
+        active === null ||
+        active === document.body ||
+        !active.isConnected;
+      const fromDeckControl =
+        active instanceof HTMLElement &&
+        rootRef.current?.contains(active) === true &&
+        !active.isContentEditable &&
+        !active.matches("input, textarea, select");
+      if (lost || fromDeckControl) {
+        slideCanvasRef.current?.focus({ preventScroll: true });
+      }
+      return;
+    }
+    presentShownRef.current = true;
+    const wanted = presentFullscreenWantedRef.current;
+    const host = presentHostRef.current;
+    if (wanted === null || !host) return;
+    presentFullscreenWantedRef.current = null;
+    coverPresentHost(host, wanted);
+  }, [presentMode, presentSlides.length]);
 
   const enterPresentModeFromLiveSlide = useCallback(
     (fromBeginning: boolean) => {
@@ -12238,8 +12569,14 @@ export default function PresentationWindow({
     rehearsingRef.current = false;
     setRehearsing(false);
     setAutoPlaying(false);
-    // Discard all ephemeral ink + reset the draw tool on exit (ink is never
-    // persisted onto the deck → present mode is byte-for-byte unchanged after).
+    // Ink drawn in the show: PowerPoint asks, as the show ends, whether to keep it
+    // (GAP 14). The show's own ink layer is emptied either way; Keep writes the
+    // strokes onto their slides as ink objects, one change. A show with no pen
+    // or highlighter ink ends as it did (a deck that cannot be edited is not
+    // asked: the dialog stays shut for it, `keepShowInkOffer` below).
+    if (showHasKeepableInk(inkBySlideRef.current)) {
+      setKeepShowInkOffer(inkBySlideRef.current);
+    }
     setAnnotationTool(null);
     setDraftStroke(null);
     setInkBySlide({});
@@ -12262,7 +12599,7 @@ export default function PresentationWindow({
           fullscreenExitRequestedRef.current = false;
         });
     }
-  }, [setPresentMode]);
+  }, [setPresentMode, setDraftStroke]);
 
   useEffect(() => {
     if (
@@ -12642,7 +12979,7 @@ export default function PresentationWindow({
   const selectAnnotationTool = useCallback((tool: AnnotationTool | null) => {
     setAnnotationTool(tool);
     setDraftStroke(null);
-  }, []);
+  }, [setDraftStroke]);
 
   const selectAnnotationColor = useCallback((color: string) => {
     setAnnotationColor(color);
@@ -12652,45 +12989,43 @@ export default function PresentationWindow({
   const startAnnotationStroke = useCallback(
     (point: AnnotationPoint) => {
       if (!presentSlideId) return;
-      setDraftStroke({ slideId: presentSlideId, points: [point] });
+      inkStrokeSeqRef.current += 1;
+      setDraftStroke({ id: `ink-${inkStrokeSeqRef.current}`, slideId: presentSlideId, points: [point] });
     },
-    [presentSlideId],
+    [presentSlideId, setDraftStroke],
   );
 
   // Extend the in-progress stroke (jitter-filtered + clamped by the helper).
   const appendAnnotationStroke = useCallback((point: AnnotationPoint) => {
-    setDraftStroke((draft) => {
-      if (!draft) return draft;
-      const points = appendStrokePoint(draft.points, point.x, point.y);
-      if (points === draft.points) return draft; // sub-threshold move → no churn
-      return { ...draft, points };
-    });
-  }, []);
+    const draft = draftStrokeRef.current;
+    if (!draft) return;
+    const points = appendStrokePoint(draft.points, point.x, point.y);
+    if (points === draft.points) return; // sub-threshold move → no churn
+    setDraftStroke({ ...draft, points });
+  }, [setDraftStroke]);
 
   // Commit the in-progress stroke into the per-slide ink map (simplified +
   // width-clamped by the helper). A zero-point draft commits nothing.
   const finishAnnotationStroke = useCallback(() => {
-    setDraftStroke((draft) => {
-      if (!draft) return null;
-      const tool: AnnotationTool = annotationTool ?? "pen";
-      if (tool !== "pen" && tool !== "highlighter") return null;
-      inkStrokeSeqRef.current += 1;
-      const stroke = finalizeStroke(
-        `ink-${inkStrokeSeqRef.current}`,
-        tool,
-        annotationColor,
-        defaultWidthForTool(tool),
-        draft.points,
-      );
-      if (stroke) {
-        setInkBySlide((prev) => {
-          const existing = prev[draft.slideId] ?? [];
-          return { ...prev, [draft.slideId]: [...existing, stroke] };
-        });
-      }
-      return null;
+    const draft = draftStrokeRef.current;
+    setDraftStroke(null);
+    if (!draft) return;
+    const tool: AnnotationTool = annotationTool ?? "pen";
+    if (tool !== "pen" && tool !== "highlighter") return;
+    const stroke = finalizeStroke(
+      draft.id,
+      tool,
+      annotationColor,
+      defaultWidthForTool(tool),
+      draft.points,
+    );
+    if (!stroke) return;
+    setInkBySlide((prev) => {
+      const existing = prev[draft.slideId] ?? [];
+      if (existing.some((kept) => kept.id === stroke.id)) return prev;
+      return { ...prev, [draft.slideId]: [...existing, stroke] };
     });
-  }, [annotationTool, annotationColor]);
+  }, [annotationTool, annotationColor, setDraftStroke]);
 
   // Erase any stroke on the current slide the eraser pass touches.
   const eraseAnnotation = useCallback(
@@ -12719,7 +13054,7 @@ export default function PresentationWindow({
       delete next[presentSlideId];
       return next;
     });
-  }, [presentSlideId]);
+  }, [presentSlideId, setDraftStroke]);
 
   // The current slide's strokes PLUS the live (uncommitted) draft rendered as a
   // provisional stroke so the line appears as the presenter draws it. Stable
@@ -12982,6 +13317,196 @@ export default function PresentationWindow({
     }
   }, [exitPresentMode, rehearsing]);
 
+  // ── SEE ALL SLIDES (GAP #6) ──────────────────────────────────────────────
+  // The show's grid of every slide (G, Ctrl+S, the right-click menu, the
+  // presenter's control), PresentationShowAllSlides. A kiosk show, which
+  // takes no navigation, has none.
+  // The magnifying glass (GAP 7, lib/presentation-show-magnify): armed (the next click on the
+  // slide magnifies there) and the magnification. Ref copies for the show's key handler.
+  const [showMagnify, setShowMagnify] = useState<ShowMagnify | null>(null);
+  const [showMagnifyArmed, setShowMagnifyArmed] = useState(false);
+  const showMagnifyRef = useRef<ShowMagnify | null>(null);
+  showMagnifyRef.current = showMagnify;
+  const showMagnifyArmedRef = useRef(false);
+  showMagnifyArmedRef.current = showMagnifyArmed;
+  const endShowMagnify = useCallback(() => {
+    setShowMagnify(null);
+    setShowMagnifyArmed(false);
+  }, []);
+  const toggleShowMagnify = useCallback(() => {
+    if (showMagnifyRef.current || showMagnifyArmedRef.current) endShowMagnify();
+    else setShowMagnifyArmed(true);
+  }, [endShowMagnify]);
+  const magnifyShowAt = useCallback((fx: number, fy: number) => {
+    setShowMagnifyArmed(false);
+    setShowMagnify(magnifyAt(fx, fy));
+  }, []);
+  const panShowMagnifyBy = useCallback((dx: number, dy: number, width: number, height: number) => {
+    setShowMagnify((state) => (state ? panShowMagnify(state, dx, dy, width, height) : state));
+  }, []);
+  // Two fingers spread on the slide: the magnification from where it stood at the gesture's start
+  // (the whole slide: about the fingers' midpoint), times the spread, 200-400 % (or the whole slide
+  // again when pinched back under 100 %).
+  const pinchBaseRef = useRef<ShowMagnify | null>(null);
+  const pinchShowMagnify = useCallback((phase: "start" | "change" | "end", scale: number, fx: number, fy: number) => {
+    if (phase === "start") {
+      pinchBaseRef.current = showMagnifyRef.current ?? { scale: 1, cx: fx, cy: fy };
+      setShowMagnifyArmed(false);
+      return;
+    }
+    if (phase === "end") {
+      pinchBaseRef.current = null;
+      return;
+    }
+    const base = pinchBaseRef.current;
+    if (!base) return;
+    const next = base.scale * scale;
+    setShowMagnify(next <= 1 ? null : clampShowMagnify({ scale: next, cx: base.cx, cy: base.cy }));
+  }, []);
+  // A pen, highlighter, eraser or laser chosen: the whole slide again (show-magnify v3, G: Ctrl+P on a
+  // magnified slide left it whole and drew there).
+  useEffect(() => {
+    if (annotationTool !== null) endShowMagnify();
+  }, [annotationTool, endShowMagnify]);
+  // Out of the show, or onto another slide: the whole slide again. (Whether PowerPoint keeps the
+  // magnification on the next slide waits for office-truth/probes/show-magnify.)
+  useEffect(() => {
+    endShowMagnify();
+  }, [presentMode, presentIndex, endShowMagnify]);
+  const [showAllSlidesOpen, setShowAllSlidesOpen] = useState(false);
+  const showAllSlidesOpenRef = useRef(false);
+  showAllSlidesOpenRef.current = showAllSlidesOpen;
+  const [showMenuAt, setShowMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const showMenuOpenRef = useRef(false);
+  showMenuOpenRef.current = showMenuAt !== null;
+  const showAllSlidesAvailable = configuredSlideShowType !== "kiosk" || rehearsing;
+  useEffect(() => {
+    if (presentMode) return;
+    setShowAllSlidesOpen(false);
+    setShowGoToOpen(false);
+    setShowMenuAt(null);
+  }, [presentMode]);
+  // Ctrl+S: the All Slides dialog box (PresentationShowGoToDialog).
+  const [showGoToOpen, setShowGoToOpen] = useState(false);
+  const showGoToOpenRef = useRef(false);
+  showGoToOpenRef.current = showGoToOpen;
+  // The show holds while the grid or the All Slides dialog is up: PowerPoint
+  // pauses it (truth show-see-all and show-see-all-v2: View.State 2,
+  // ppSlideShowPaused, the position and the click unchanged; State 1 again,
+  // the show's window in front, once the dialog closes). Its timings, its
+  // clock, the slide's running animations and its media stop where they
+  // stand and go on from there (the hold effect below).
+  const showHeld = presentMode && (showAllSlidesOpen || showGoToOpen);
+  const openShowAllSlides = useCallback(() => {
+    // The grid opened from a magnified slide leaves it whole (show-magnify v3, F).
+    endShowMagnify();
+    setShowMenuAt(null);
+    setShowGoToOpen(false);
+    setShowAllSlidesOpen(true);
+  }, [endShowMagnify]);
+  const openShowGoTo = useCallback(() => {
+    setShowMenuAt(null);
+    setShowAllSlidesOpen(false);
+    setShowGoToOpen(true);
+  }, []);
+  // The step each slide was shown to in this show: going back to one from
+  // the grid or the dialog shows it as it was left, its played steps kept,
+  // not from the start (truth show-see-all, steps 7-9: back on slide 3,
+  // click 1 as before).
+  const playedStepsRef = useRef(new Map<number, number>());
+  useEffect(() => {
+    if (!presentMode) {
+      playedStepsRef.current.clear();
+      return;
+    }
+    const map = playedStepsRef.current;
+    map.set(presentIndex, Math.max(map.get(presentIndex) ?? 0, presentStep));
+  }, [presentMode, presentIndex, presentStep]);
+  const pickShowAllSlide = useCallback(
+    (index: number) => {
+      setShowAllSlidesOpen(false);
+      setShowGoToOpen(false);
+      const played = playedStepsRef.current.get(index);
+      if (played !== undefined && index !== presentIndexRef.current) {
+        // As it was left: its steps shown, nothing played again.
+        movePresentTo(index, played, true);
+      } else {
+        // A hidden slide picked is shown, as a link naming it is.
+        jumpPresent(index, true);
+      }
+      requestAnimationFrame(() => presentOverlayRef.current?.focus({ preventScroll: true }));
+    },
+    [jumpPresent, movePresentTo],
+  );
+  const showAllSlidesGroups = useMemo(
+    () => groupSlidesBySection(presentSlides, sections),
+    [presentSlides, sections],
+  );
+  // Drawn where the show is (the overlay's `showLayer`), after the labels
+  // and thumbnails it uses are made.
+  const renderShowLayer = () =>
+    presentMode && showAllSlidesAvailable ? (
+      <>
+        {showAllSlidesOpen ? (
+          <PresentationShowAllSlides
+            slides={presentSlides}
+            groups={showAllSlidesGroups}
+            currentIndex={presentIndex}
+            theme={theme}
+            masters={masters}
+            randomEffectSeed={randomEffectSeedRef.current}
+            isHidden={isSlideHidden}
+            labels={{ ...sorterLabels, region: t("presentation.slideshow.seeAllSlides") }}
+            chrome={{
+              sections: t("presentation.slideshow.seeAll.sections"),
+              back: t("presentation.slideshow.seeAll.back"),
+              toggleSections: t("presentation.slideshow.seeAll.toggleSections"),
+              zoomOut: t("presentation.slideshow.seeAll.zoomOut"),
+              zoomIn: t("presentation.slideshow.seeAll.zoomIn"),
+            }}
+            onBack={() => {
+              setShowAllSlidesOpen(false);
+              presentOverlayRef.current?.focus({ preventScroll: true });
+            }}
+            onPick={pickShowAllSlide}
+          />
+        ) : null}
+        {showGoToOpen ? (
+          <PresentationShowGoToDialog
+            slides={presentSlides}
+            currentIndex={presentIndex}
+            lastViewedIndex={lastViewedPresentIndexRef.current}
+            isHidden={isSlideHidden}
+            container={presentHostRef.current}
+            returnFocusTarget={() => presentOverlayRef.current}
+            onGoTo={pickShowAllSlide}
+            onCancel={() => {
+              setShowGoToOpen(false);
+              presentOverlayRef.current?.focus({ preventScroll: true });
+            }}
+          />
+        ) : null}
+        {showMenuAt ? (
+          <PointerContextMenu
+            x={showMenuAt.x}
+            y={showMenuAt.y}
+            label={t("presentation.slideshow.showMenu")}
+            testId="presentation-show-menu"
+            container={presentHostRef.current}
+            onClose={() => setShowMenuAt(null)}
+            entries={[
+              { id: "next", label: t("presentation.presenterNextControl"), onSelect: () => advancePresent("control"), testId: "presentation-show-menu-next" },
+              { id: "previous", label: t("presentation.presenterPrev"), onSelect: retreatPresent, testId: "presentation-show-menu-previous" },
+              { id: "separator-go", separator: true },
+              { id: "see-all", label: t("presentation.slideshow.seeAllSlides"), onSelect: openShowAllSlides, testId: "presentation-show-menu-see-all" },
+              { id: "separator-end", separator: true },
+              { id: "end", label: t("presentation.exitPresent"), onSelect: requestExitPresentMode, testId: "presentation-show-menu-end" },
+            ]}
+          />
+        ) : null}
+      </>
+    ) : null;
+
   // ── AUTO-ADVANCE / KIOSK LOOP ─────────────────────────────────────────────
   // Toggle the self-running show. Starting it disarms rehearsing (recording and
   // auto-playback are mutually exclusive) and re-arms the clean audience layout
@@ -13007,8 +13532,15 @@ export default function PresentationWindow({
   // effect re-runs on each `presentIndex` change (the advance updates it), which
   // re-arms the next hop — a self-perpetuating timer. Any flip of presentMode /
   // autoPlaying tears the pending timer down via cleanup.
+  // When the loop armed its wait on the slide it is on: a hold (`showHeld`)
+  // moves it on by the time held, so the wait goes on from where it stood.
+  const autoAdvanceArmedRef = useRef<{ index: number; at: number } | null>(null);
   useEffect(() => {
-    if (!presentMode || !autoPlaying) return;
+    if (!presentMode || !autoPlaying) {
+      autoAdvanceArmedRef.current = null;
+      return;
+    }
+    if (showHeld) return;
     const plan = nextAutoAdvance(
       presentIndex,
       slideTimings,
@@ -13016,15 +13548,23 @@ export default function PresentationWindow({
       DEFAULT_DWELL_MS,
     );
     if (!plan) return;
+    const now = performance.now();
+    let armed = autoAdvanceArmedRef.current;
+    if (!armed || armed.index !== presentIndex) {
+      armed = { index: presentIndex, at: now };
+      autoAdvanceArmedRef.current = armed;
+    }
     const id = window.setTimeout(() => {
+      autoAdvanceArmedRef.current = null;
       advanceToNextVisibleSlide();
-    }, plan.delayMs);
+    }, Math.max(0, plan.delayMs - (now - armed.at)));
     autoAdvanceTimerRef.current = id;
     return () => {
       window.clearTimeout(id);
       autoAdvanceTimerRef.current = null;
     };
   }, [
+    showHeld,
     presentMode,
     autoPlaying,
     presentIndex,
@@ -13054,6 +13594,62 @@ export default function PresentationWindow({
         }
       : null;
   }, [presentIndex, presentMode, presentStep]);
+  // The hold (`showHeld`). Its start stops the clock (as the presenter's
+  // pause does: `toggleTimer`), the rehearsal's slide clock, the animations
+  // running on the show's slide and the clips playing on it; its end starts
+  // them again and moves the times the timings count from (the slide's
+  // entrance, its last build, the loop's wait) on by the time held, so the
+  // timing effects, run again as the hold ends (layout effects run before
+  // them), wait only what was left.
+  useLayoutEffect(() => {
+    if (!showHeld) return;
+    const heldAt = performance.now();
+    // The show's slide (and the presenter view's current slide): not the
+    // grid or the dialog over it, whose own opening animations run on.
+    const stages = Array.from(
+      (presentOverlayRef.current ?? presentHostRef.current)?.querySelectorAll<HTMLElement>(
+        '[data-testid="presentation-present-stage"], [data-testid="presentation-presenter-current"]',
+      ) ?? [],
+    );
+    const animations = stages
+      .flatMap((stage) => stage.getAnimations?.({ subtree: true }) ?? [])
+      .filter((animation) => animation.playState === "running");
+    for (const animation of animations) animation.pause();
+    const media = stages
+      .flatMap((stage) => Array.from(stage.querySelectorAll<HTMLMediaElement>("video, audio")))
+      .filter((clip) => !clip.paused);
+    for (const clip of media) clip.pause?.();
+    const clockRan = timerStartedAtRef.current !== null;
+    if (clockRan) {
+      timerAccumulatedRef.current = computeElapsed();
+      timerStartedAtRef.current = null;
+    }
+    const rehearsalClockRan = rehearsalPauseStartRef.current === null;
+    if (rehearsalClockRan) rehearsalPauseStartRef.current = Date.now();
+    return () => {
+      const heldMs = Math.max(0, performance.now() - heldAt);
+      const entered = presentEnteredRef.current;
+      if (entered) presentEnteredRef.current = { ...entered, at: entered.at + heldMs };
+      const stepAt = presentStepAtRef.current;
+      if (stepAt) presentStepAtRef.current = { ...stepAt, at: stepAt.at + heldMs };
+      const armed = autoAdvanceArmedRef.current;
+      if (armed) autoAdvanceArmedRef.current = { ...armed, at: armed.at + heldMs };
+      if (clockRan) timerStartedAtRef.current = Date.now();
+      if (rehearsalClockRan && rehearsalPauseStartRef.current !== null) {
+        rehearsalPausedMsRef.current += Math.max(0, Date.now() - rehearsalPauseStartRef.current);
+        rehearsalPauseStartRef.current = null;
+      }
+      // Only what is still on the show (it may have ended while held).
+      const live = presentOverlayRef.current ?? presentHostRef.current;
+      for (const animation of animations) {
+        const target = (animation.effect as KeyframeEffect | null)?.target;
+        if (animation.playState === "paused" && live && target instanceof Element && live.contains(target)) animation.play();
+      }
+      for (const clip of media) {
+        if (clip.paused && live?.contains(clip)) void clip.play?.()?.catch?.(() => {});
+      }
+    };
+  }, [showHeld, computeElapsed]);
   // Under Use Timings a slide whose clicks were rehearsed (its tag TIMING,
   // `rehearsedClickTimingsMs`, timing every click it has) plays them then, as
   // PowerPoint's show and video do (`timedClickPlan`; a self-running show no
@@ -13086,7 +13682,7 @@ export default function PresentationWindow({
     [groupCountAt, initialPresentStepAt, presentSlides, showSlideShowAnimations],
   );
   useEffect(() => {
-    if (!presentMode || autoPlaying || rehearsing || !useRecordedSlideTimings || presentEnded) return;
+    if (!presentMode || showHeld || autoPlaying || rehearsing || !useRecordedSlideTimings || presentEnded) return;
     const timed = timedClickPlanAt(presentIndex);
     if (!timed) return;
     const click = presentStep - timed.first + 1;
@@ -13122,6 +13718,7 @@ export default function PresentationWindow({
     presentStep,
     previousConfiguredShowIndex,
     rehearsing,
+    showHeld,
     timedClickPlanAt,
     useRecordedSlideTimings,
   ]);
@@ -13136,6 +13733,7 @@ export default function PresentationWindow({
   useEffect(() => {
     if (
       !presentMode ||
+      showHeld ||
       autoPlaying ||
       rehearsing ||
       !useRecordedSlideTimings
@@ -13195,12 +13793,28 @@ export default function PresentationWindow({
       stepAt && stepAt.timed && stepAt.index === presentIndex && stepAt.step === presentStep
         ? timedClickPlanAt(presentIndex)
         : null;
+    // Counted from that click, or from the end of the transition, less what
+    // has gone by since (the effect runs again as a hold ends: `showHeld`).
+    const now = performance.now();
+    const sinceClickMs =
+      finalGroupStartsOnClick && stepAt && stepAt.index === presentIndex && stepAt.step === presentStep
+        ? Math.max(0, now - stepAt.at)
+        : 0;
+    const sinceTransitionEndMs =
+      !finalGroupStartsOnClick && entered && entered.index === presentIndex
+        ? Math.max(
+            0,
+            now -
+              (entered.at +
+                slideEntranceTransitionMs(slide, previousConfiguredShowIndex(presentIndex) !== -1)),
+          )
+        : 0;
     let remainingMs = timedPlan && stepAt
-      ? Math.max(0, timedPlan.plan.afterLastMs - (performance.now() - stepAt.at))
+      ? Math.max(0, timedPlan.plan.afterLastMs - (now - stepAt.at))
       : transitionLeftMs +
         (finalGroupStartsOnClick
-          ? finalGroupDurationMs + slide.transitionAdvanceAfterMs
-          : Math.max(finalGroupDurationMs, slide.transitionAdvanceAfterMs));
+          ? Math.max(0, finalGroupDurationMs + slide.transitionAdvanceAfterMs - sinceClickMs)
+          : Math.max(0, Math.max(finalGroupDurationMs, slide.transitionAdvanceAfterMs) - sinceTransitionEndMs));
     let timerId: number | null = null;
     let cancelled = false;
     const schedule = () => {
@@ -13231,6 +13845,7 @@ export default function PresentationWindow({
     presentStep,
     rehearsing,
     presentSlides,
+    showHeld,
     showSlideShowAnimations,
     timedClickPlanAt,
     useRecordedSlideTimings,
@@ -13268,6 +13883,7 @@ export default function PresentationWindow({
         t("presentation.elapsedLabel", { elapsed }),
       counterLabel: (current: number, total: number) =>
         t("presentation.slideCounterLabel", { current, total }),
+      magnify: t("presentation.slideshow.magnify"),
     }),
     [t],
   );
@@ -13282,6 +13898,7 @@ export default function PresentationWindow({
         running: timerRunning,
       },
       presenterEpochRef.current,
+      randomEffectSeedRef.current,
     );
     const resolvedNextIndex = nextConfiguredShowIndex(presentIndex);
     const physicalNextSlot = presentIndex + 1;
@@ -13437,7 +14054,11 @@ export default function PresentationWindow({
     for (const picture of Array.from(body.querySelectorAll("img[data-ps-picture]"))) {
       shown.set(picture.getAttribute("data-ps-picture") ?? "", picture);
     }
-    body.innerHTML = renderPresenterConsoleHtml(vm, presenterDocStrings, pictures);
+    const magnified = showMagnifyRef.current;
+    body.innerHTML = renderPresenterConsoleHtml(vm, presenterDocStrings, pictures, {
+      armed: showMagnifyArmedRef.current,
+      on: magnified !== null,
+    });
     body.setAttribute(
       "data-picture-state",
       `current:${presenterPictureState(presentSlides[vm.currentIndex])} next:${presenterPictureState(nextSlide)}`,
@@ -13445,6 +14066,37 @@ export default function PresentationWindow({
     for (const picture of Array.from(body.querySelectorAll("img[data-ps-picture]"))) {
       const kept = shown.get(picture.getAttribute("data-ps-picture") ?? "");
       if (kept) picture.replaceWith(kept);
+    }
+    // The magnifying glass (GAP 7) on the console's current slide, as on the audience's: armed, a
+    // click there magnifies the show at that slide point; magnified, the console's picture is
+    // drawn magnified the same way and a drag on it pans the show.
+    const currentPicture = body.querySelector<HTMLImageElement>('[data-testid="ps-current"] img[data-ps-picture]');
+    if (currentPicture) {
+      const style = showMagnifyStyle(magnified);
+      currentPicture.style.translate = style?.translate ?? "";
+      currentPicture.style.scale = style?.scale ?? "";
+      let drag: { id: number; x: number; y: number } | null = null;
+      currentPicture.onpointerdown = (event) => {
+        if (!showMagnifyRef.current) return;
+        drag = { id: event.pointerId, x: event.clientX, y: event.clientY };
+        currentPicture.setPointerCapture?.(event.pointerId);
+      };
+      currentPicture.onpointermove = (event) => {
+        if (!drag || drag.id !== event.pointerId) return;
+        const rect = currentPicture.getBoundingClientRect();
+        panShowMagnifyBy(event.clientX - drag.x, event.clientY - drag.y, rect.width, rect.height);
+        drag = { ...drag, x: event.clientX, y: event.clientY };
+      };
+      currentPicture.onpointerup = () => {
+        drag = null;
+      };
+      currentPicture.onclick = (event) => {
+        if (!showMagnifyArmedRef.current) return;
+        const rect = currentPicture.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          magnifyShowAt((event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height);
+        }
+      };
     }
     doc.title = presenterDocStrings.title;
     // Wire the popup's controls to the SAME local navigation/timer handlers the
@@ -13467,12 +14119,18 @@ export default function PresentationWindow({
             case "resetTimer":
               resetTimer();
               break;
+            case "toggleMagnify":
+              toggleShowMagnify();
+              break;
             default:
               break;
           }
         };
       });
   }, [
+    magnifyShowAt,
+    panShowMagnifyBy,
+    toggleShowMagnify,
     buildRangeAwarePresenterSnapshot,
     presenterDocStrings,
     presenterPictureUrl,
@@ -13486,6 +14144,10 @@ export default function PresentationWindow({
   useEffect(() => {
     paintPresenterWindowRef.current = paintPresenterWindow;
   }, [paintPresenterWindow]);
+  // The console follows the glass as the audience's slide does (GAP 7).
+  useEffect(() => {
+    if (presenterWindowOpen) paintPresenterWindowRef.current();
+  }, [presenterWindowOpen, showMagnify, showMagnifyArmed]);
 
   // Apply a command the popup sent back over the channel (its prev/next/timer
   // buttons also post commands, so a presenter route on a separate origin would
@@ -13523,11 +14185,21 @@ export default function PresentationWindow({
         case "resetTimer":
           resetTimer();
           break;
+        case "toggleMagnify":
+          toggleShowMagnify();
+          break;
+        case "magnifyAt":
+          if (Number.isFinite(command.fx) && Number.isFinite(command.fy)) {
+            magnifyShowAt(command.fx as number, command.fy as number);
+          }
+          break;
         default:
           break;
       }
     },
     [
+      magnifyShowAt,
+      toggleShowMagnify,
       advancePresent,
       configuredSlideShowType,
       configuredPresentableIndices,
@@ -13710,6 +14382,51 @@ export default function PresentationWindow({
   useEffect(() => {
     if (!presentMode) return;
     const handleKeyDown = (event: KeyboardEvent) => {
+      // An Esc a dialog over the show took for itself (the All Slides
+      // dialog's Cancel: Radix dismisses its layer and prevents the key's
+      // default) leaves the show on. The dialog closes on the key's way down
+      // and the browser runs React between the two listeners, so the dialog
+      // is already gone from the refs below: on the same Esc the show ended.
+      if (event.key === "Escape" && event.defaultPrevented) return;
+      // The magnifying glass (GAP 7), as office-truth/probes/show-magnify measured PowerPoint (lib/
+      // presentation-show-magnify): + magnifies about the slide's centre with no glass, a rung of
+      // 2^(1/3) a press; - steps back one, the whole slide below the first, and on the whole slide
+      // opens See All Slides; Esc ends the magnification (or the armed glass), not the show; while
+      // magnified the arrows pan the view a tenth of itself and neither build nor turn the slide
+      // (Space still plays the next build, the slide staying magnified).
+      if ((showMagnifyRef.current || showMagnifyArmedRef.current) && event.key === "Escape") {
+        event.preventDefault();
+        endShowMagnify();
+        return;
+      }
+      {
+        const overSlide =
+          blankScreen === null && !showMenuOpenRef.current && !showGoToOpenRef.current && !showAllSlidesOpenRef.current;
+        const plain = !event.ctrlKey && !event.metaKey && !event.altKey;
+        const step = event.key === "+" || event.key === "=" ? 1 : event.key === "-" || event.key === "_" ? -1 : 0;
+        if (step !== 0 && overSlide && plain) {
+          const magnified = showMagnifyRef.current;
+          if (step > 0 || magnified) {
+            event.preventDefault();
+            setShowMagnifyArmed(false);
+            setShowMagnify(stepShowMagnify(magnified, step));
+            return;
+          }
+          if (showAllSlidesAvailable) {
+            event.preventDefault();
+            openShowAllSlides();
+            return;
+          }
+        }
+        const magnified = showMagnifyRef.current;
+        const arrow =
+          event.key === "ArrowRight" ? [1, 0] : event.key === "ArrowLeft" ? [-1, 0] : event.key === "ArrowDown" ? [0, 1] : event.key === "ArrowUp" ? [0, -1] : null;
+        if (magnified && arrow && overSlide && plain) {
+          event.preventDefault();
+          setShowMagnify(panShowMagnifyByArrow(magnified, arrow[0]!, arrow[1]!));
+          return;
+        }
+      }
       // While the screen is blacked / whited out, ANY key returns to the slide
       // (PowerPoint "press a key to resume"). The blank-toggle keys (B/. , W/,)
       // still route to their toggle below so re-pressing the SAME key un-blanks
@@ -13724,6 +14441,37 @@ export default function PresentationWindow({
       ) {
         event.preventDefault();
         setBlankScreen(null);
+        return;
+      }
+      // See All Slides (GAP #6): G opens the grid; Ctrl+S the All Slides
+      // dialog box -- the editor's Save outside the show
+      // (`showSlidePickerKey`). The show menu and the dialog answer their own
+      // keys; the open grid its arrows, Home / End and Enter, Esc leaving it
+      // on the slide the show was on.
+      if (showMenuOpenRef.current || showGoToOpenRef.current) return;
+      const pickerKey = showAllSlidesAvailable ? showSlidePickerKey(event) : null;
+      const seeAllKey = pickerKey === "grid";
+      if (pickerKey === "dialog") {
+        event.preventDefault();
+        // Not also the editor's Save (heard on the window).
+        event.stopPropagation();
+        openShowGoTo();
+        return;
+      }
+      if (showAllSlidesOpenRef.current) {
+        if (event.key === "Escape" || seeAllKey) {
+          event.preventDefault();
+          // Ctrl+S here is not the editor's Save (heard on the window).
+          event.stopPropagation();
+          setShowAllSlidesOpen(false);
+          presentOverlayRef.current?.focus({ preventScroll: true });
+        }
+        return;
+      }
+      if (seeAllKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        openShowAllSlides();
         return;
       }
       // A focused control keeps its own keys: Space / Enter press the
@@ -13987,6 +14735,10 @@ export default function PresentationWindow({
     blankScreen,
     configuredSlideShowType,
     rehearsing,
+    showAllSlidesAvailable,
+    openShowAllSlides,
+    openShowGoTo,
+    endShowMagnify,
   ]);
 
   // Clear the black / white screen whenever present mode ends or the projected
@@ -19375,49 +20127,97 @@ export default function PresentationWindow({
   deckStructureSettledRef.current = deckPartsView.whenStructureSettled;
   const duplicateDeckSlides = deckPartsView.duplicateSlides;
   deckPartsSmartArtStructureRef.current = deckPartsView.smartArtStructure;
-  const deckDuplicateBusyRef = useRef(false);
+  const deckCopyQueueRef = useRef(new DeckCopyQueue());
   /** The first copy a server Duplicate made: current once it arrives. */
   const deckCopyToSelectRef = useRef<string | null>(null);
   deckPartsDuplicateRef.current = (ids) => {
-    if (autosave.readOnly || deckDuplicateBusyRef.current || ids.length === 0) return false;
+    if (autosave.readOnly || ids.length === 0) return false;
     const unread = deckParts.unreadSlides();
     if (unread > 0) {
       announceDeckPartsRefusal({ reason: "structure-pending", count: unread });
       return false;
     }
-    deckDuplicateBusyRef.current = true;
-    void (async () => {
+    // A copy still being made is not copied again (the server does not hold it yet).
+    const pendingSource = ids.find((id) => isPendingCopy(slidesRef.current.find((slide) => slide.id === id)));
+    if (pendingSource) {
+      announceDeckPartsRefusal({ reason: "loading", slideId: pendingSource });
+      return false;
+    }
+    // Shown at once: a stand-in for each copy, where the server will put it,
+    // saving until it answers (lib/deck-pending-copies).
+    flushTypingRef.current(true);
+    let shown = slidesRef.current;
+    const pendingIds: string[] = [];
+    for (const id of ids) {
+      const made = withPendingCopy(shown, id, (list, index) => {
+        const authored = { ...list[index] } as SlideModel & { source?: unknown };
+        delete authored.source;
+        const working = list.map((slide, at) => (at === index ? (authored as SlideModel) : slide));
+        return duplicatePresentationSlideAt(working, index, () => crypto.randomUUID())?.clone ?? null;
+      });
+      if (!made) continue;
+      shown = made.slides;
+      pendingIds.push(made.pendingId);
+    }
+    if (pendingIds.length > 0) {
+      deckContentGenerationRef.current += 1;
+      slidesRef.current = shown;
+      setSlides(shown);
+      const at = shown.findIndex((slide) => slide.id === pendingIds[0]);
+      activeIndexRef.current = at;
+      setActiveIndex(at);
+    }
+    // One copy after another, each answered before the next is asked.
+    void deckCopyQueueRef.current.run(async () => {
+      let landed = false;
       try {
         // The deck's own edits first: the server copies what it holds.
         await autosave.saveNow();
         const result = await duplicateDeckSlides(ids);
         if (result.ok) {
+          landed = true;
           deckCopyToSelectRef.current = result.insertedSlideIds[0] ?? null;
           if (result.rebuiltFromPage) toast({ title: t("presentation.slideCopyRebuilt") });
           return;
         }
-        if (result.code === "native_copy_not_supported") {
-          toast({ title: t("presentation.slideCopyUnavailable"), variant: "destructive" });
-        } else if (result.code === "deck_parts_pending") {
-          const pending = Number(result.details?.pendingSlides);
-          toast({ title: t("presentation.deckParts.structurePending", { count: Number.isFinite(pending) ? pending : 0 }) });
-        } else if (result.code === "unsaved") {
-          toast({ title: t("presentation.deckParts.duplicateUnsaved") });
-        } else if (result.code === "page_locked") {
-          // Waited five minutes for another member's checkout: said, the deck unchanged.
-          toast({ title: t("presentation.deckParts.duplicateLocked"), variant: "destructive" });
-        } else if (result.code === "room_busy") {
-          // Someone kept typing in a slide it copies through the wait.
-          toast({ title: t("presentation.deckParts.duplicateRoomBusy") });
-        } else {
-          toast({ title: t("presentation.deckParts.structureRefused"), description: result.message || undefined });
+        if (pendingIds.length === 0) {
+          if (result.code === "native_copy_not_supported") {
+            toast({ title: t("presentation.slideCopyUnavailable"), variant: "destructive" });
+          } else if (result.code === "deck_parts_pending") {
+            const pending = Number(result.details?.pendingSlides);
+            toast({ title: t("presentation.deckParts.structurePending", { count: Number.isFinite(pending) ? pending : 0 }) });
+          } else if (result.code === "unsaved") {
+            toast({ title: t("presentation.deckParts.duplicateUnsaved") });
+          } else if (result.code === "page_locked") {
+            // Waited five minutes for another member's checkout: said, the deck unchanged.
+            toast({ title: t("presentation.deckParts.duplicateLocked"), variant: "destructive" });
+          } else if (result.code === "room_busy") {
+            // Someone kept typing in a slide it copies through the wait.
+            toast({ title: t("presentation.deckParts.duplicateRoomBusy") });
+          } else {
+            toast({ title: t("presentation.deckParts.structureRefused"), description: result.message || undefined });
+          }
         }
       } catch {
-        toast({ title: t("presentation.deckParts.duplicateUnsaved") });
+        if (pendingIds.length === 0) toast({ title: t("presentation.deckParts.duplicateUnsaved") });
       } finally {
-        deckDuplicateBusyRef.current = false;
+        if (landed) {
+          // The server's copies stand in their place.
+          installDeckSlides((list) => pendingIds.reduce((acc, id) => withoutPendingCopy(acc, id), list));
+        } else if (pendingIds.length > 0) {
+          // Not made by the server: each kept as an ordinary slide the deck's
+          // save writes from the page, and said -- never gone.
+          const kept = pendingIds.reduce((acc, id) => pendingCopyKept(acc, id), slidesRef.current);
+          pendingCopyReleaseRef.current = true;
+          try {
+            commitSlides(kept);
+          } finally {
+            pendingCopyReleaseRef.current = false;
+          }
+          toast({ title: t("presentation.slideCopyRebuilt") });
+        }
       }
-    })();
+    });
     return true;
   };
   useEffect(() => {
@@ -19568,6 +20368,82 @@ export default function PresentationWindow({
     }
     return issues;
   }, [autosave.readOnly, deckPartSlideRange, deckParts, deckPartsSnapshot, deckRoomsUnsaved, guestMode, retryDeckPart, slides, t]);
+  // Objects the page validator refused, kept read-only where they stand
+  // (TRIAGE 152, `source.objectDegraded`): each named by slide, object and
+  // reason. A refusal recurs on every read of the file, so the member can
+  // report it (the Report a problem panel, drafted; they send it).
+  const degradedObjects = useMemo(() => deckDegradedObjects(slides), [slides]);
+  const reportDegradedObjects = useCallback(() => {
+    const lines = degradedObjects.slice(0, 40).map(degradedObjectReportLine);
+    const text = [
+      t("presentation.objectDegraded.reportIntro"),
+      ...lines,
+      ...(degradedObjects.length > lines.length ? [`+${degradedObjects.length - lines.length}`] : []),
+    ].join("\n");
+    if (openReportProblemDraft(text)) return;
+    void navigator.clipboard?.writeText(text).then(
+      () => toast({ title: t("presentation.objectDegraded.reportCopied") }),
+      () => undefined,
+    );
+  }, [degradedObjects, t]);
+  const degradedObjectIssues = useMemo((): DocumentIssue[] => {
+    const shown = degradedObjects.slice(0, DEGRADED_OBJECT_ISSUES_SHOWN);
+    const issues: DocumentIssue[] = shown.map((object, index) => ({
+      key: `object-degraded-${object.slideId}-${object.blockId}-${index}`,
+      testId: "presentation-object-degraded-issue",
+      label: t(
+        object.stage === "placeholder"
+          ? "presentation.objectDegraded.issuePlaceholder"
+          : "presentation.objectDegraded.issueReadOnly",
+        { slide: object.slideNumber, name: object.name ?? t("presentation.objectDegraded.unnamed") },
+      ),
+      description: t("presentation.objectDegraded.reason", {
+        path: object.path || "-",
+        reason: object.reason || "-",
+      }),
+      action: index === 0
+        ? { label: t("presentation.objectDegraded.report"), onClick: reportDegradedObjects }
+        : undefined,
+    }));
+    if (degradedObjects.length > shown.length) {
+      issues.push({
+        key: "object-degraded-more",
+        label: t("presentation.objectDegraded.more", { count: degradedObjects.length - shown.length }),
+      });
+    }
+    return issues;
+  }, [degradedObjects, reportDegradedObjects, t]);
+  // Slides of a deck read in parts still on their way after 15 s: said, with
+  // their numbers, so a slow import is not read as a missing one.
+  const deckReadingSlides = useMemo(() => {
+    if (guestMode || !deckPartsSnapshot.active) return "";
+    const numbers: number[] = [];
+    slides.forEach((slide, at) => {
+      if (slide.importPending && deckStubStateOf(slide) !== "failed") numbers.push(at + 1);
+    });
+    return slideNumberRuns(numbers);
+  }, [deckPartsSnapshot.active, deckStubStateOf, guestMode, slides]);
+  const [deckReadingSlow, setDeckReadingSlow] = useState(false);
+  const deckStillReading = deckReadingSlides !== "";
+  useEffect(() => {
+    if (!deckStillReading) {
+      setDeckReadingSlow(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setDeckReadingSlow(true), DECK_READING_SLOW_MS);
+    return () => window.clearTimeout(timer);
+  }, [deckStillReading]);
+  const deckIssues = useMemo((): DocumentIssue[] => [
+    ...deckPartIssues,
+    ...(deckReadingSlow && deckReadingSlides
+      ? [{
+          key: "deck-parts-reading",
+          testId: "presentation-deck-parts-reading",
+          label: t("presentation.deckParts.stillReading", { range: deckReadingSlides }),
+        }]
+      : []),
+    ...degradedObjectIssues,
+  ], [deckPartIssues, deckReadingSlides, deckReadingSlow, degradedObjectIssues, t]);
   // A save's answer (and any page read) says which order the server holds:
   // a later part's save waits until its slides are the ones that order names.
   const deckPartsSavedBody = autosave.page?.id === pageId ? autosave.page.content_json : undefined;
@@ -22436,8 +23312,10 @@ export default function PresentationWindow({
   );
 
   const captureTextEditSelection = useCallback(
-    (blockId: string, start: number, end: number) => {
-      pendingTextEditSelectionRef.current = { blockId, start, end };
+    (blockId: string, start: number, end: number, shown?: string, shownRange?: { start: number; end: number }) => {
+      pendingTextEditSelectionRef.current = {
+        blockId, start, end, ...(shown !== undefined ? { shown } : {}), ...(shownRange ? { shownRange } : {}),
+      };
     },
     [],
   );
@@ -22447,7 +23325,11 @@ export default function PresentationWindow({
       const pending = pendingTextEditSelectionRef.current;
       pendingTextEditSelectionRef.current = null;
       return pending?.blockId === blockId
-        ? { start: pending.start, end: pending.end }
+        ? {
+          start: pending.start, end: pending.end,
+          ...(pending.shown !== undefined ? { shown: pending.shown } : {}),
+          ...(pending.shownRange ? { shownRange: pending.shownRange } : {}),
+        }
         : undefined;
     },
     [],
@@ -22514,7 +23396,8 @@ export default function PresentationWindow({
           changes: unrenderedTextChangesRef.current, slideId: activeSlide.id, blockId,
           rendered: presentationEditableText(target as PresentationTextBlock),
           live: presentationEditableText(liveTarget as PresentationTextBlock),
-          typed: text, selection: editSelection, caretAfter,
+          typed: text, selection: editSelection, caretAfter, shown: editSelection?.shown,
+          shownRange: editSelection?.shownRange,
         });
         keystrokeRead = keystroke.read;
         if (keystroke.read === "exact") carriedSplice = keystroke.splice;
@@ -23472,7 +24355,7 @@ export default function PresentationWindow({
       primary && readSmartArtBlockMarker(primary) && !smartArtGraphicOnlyRef.current ? primary : null;
     // A chart title in edit takes Home's Font group for itself (Office
     // formats the element selected); the chart area otherwise.
-    const selectedChartId = ids.find((id) => liveSlide.blocks.find((block) => block.id === id)?.type === "chart");
+    const selectedChartId = presentationFirstSelectedChartId(liveSlide.blocks, ids);
     const titleElement = officeChartTitleEditElement(rootRef.current);
     const targets = presentationHomeObjectTargets(liveSlide.blocks, ids, {
       item,
@@ -34949,6 +35832,7 @@ export default function PresentationWindow({
             changes: unrenderedTextChangesRef.current, slideId: activeSlide.id, blockId,
             rendered: before, live: (liveTarget as { text: string }).text,
             typed: raw, selection: edit?.selection, caretAfter,
+            shown: edit?.selection?.shown, shownRange: edit?.selection?.shownRange,
           });
           keystrokeRead = keystroke.read;
           noteTextEditOutcome(`shape-read-${keystroke.read}`);
@@ -39632,11 +40516,118 @@ export default function PresentationWindow({
   useEffect(() => {
     if (!animationEffectOptionsDialogAvailable) setAnimationEffectOptionsDialogOpen(false);
   }, [animationEffectOptionsDialogAvailable]);
+  // Grow/Shrink's Size and Direction (Effect Options, row 1094).
+  const selectedAnimationGrow =
+    animationEffectOptionsDialogAvailable &&
+    selectedAnimationTimingStep?.animation === "grow-shrink"
+      ? {
+          size: selectedAnimationTimingStep.effectSettings?.growSize ?? DEFAULT_GROW_SIZE,
+          direction: selectedAnimationTimingStep.effectSettings?.growDirection ?? ("both" as const),
+        }
+      : null;
+  // A path's Effect Options (Path: Unlocked / Locked, Reverse Path
+  // Direction; GAP #10), offered for a step that travels a path.
+  const selectedAnimationMotionPath = (() => {
+    if (
+      selectedAnimationIndex === null ||
+      selectedAnimationTimingStep === null ||
+      motionPathNativeOfStep(selectedAnimationTimingStep) === null
+    ) {
+      return null;
+    }
+    const { width, height } = slideBounds(activeSlide as unknown as Record<string, unknown>);
+    const locked = motionPathStepLocked(selectedAnimationTimingStep);
+    const payload = {
+      slideModelId: activeSlide.id,
+      index: selectedAnimationIndex,
+      expectedStep: copyTimelineStep(selectedAnimationTimingStep),
+      slideWidthEmu: width,
+      slideHeightEmu: height,
+    };
+    const reversible =
+      reversedMotionPathStep(selectedAnimationTimingStep, width, height) !== null &&
+      animationEffectCommand.canExecute({ ...payload, operation: "reverse-motion-path" });
+    const lockable =
+      lockedMotionPathStep(selectedAnimationTimingStep, !locked, width, height) !== null &&
+      animationEffectCommand.canExecute({ ...payload, operation: "set-motion-path-lock", locked: !locked });
+    return reversible || lockable ? { locked, reversible, lockable, editable: reversible } : null;
+  })();
+  // Path Animation > Custom Path being drawn: the shared Freeform overlay over
+  // the slide; the drawing becomes the object's new path effect, selected.
+  const renderMotionPathDrawLayer = (): ReactNode => {
+    {
+      return null;
+    }
+    const block = activeSlide.blocks.find((candidate) => candidate.id === null.blockId);
+    const left = block ? geometryNumber(block, "left") : null;
+    const top = block ? geometryNumber(block, "top") : null;
+    if (!block || left === null || top === null) return null;
+    const { width, height } = slideBounds(activeSlide as unknown as Record<string, unknown>);
+    return (
+      <PresentationMotionPathDrawLayer
+        slideWidthEmu={width}
+        slideHeightEmu={height}
+        centreXEmu={left + (geometryNumber(block, "width") ?? 0) / 2}
+        centreYEmu={top + (geometryNumber(block, "height") ?? 0) / 2}
+        onComplete={(drawn) => {
+          setMotionPathDrawing(null);
+          const liveSlide = slidesRef.current[activeIndexRef.current];
+          if (!liveSlide || liveSlide.id !== null.slideId) return;
+          const before = liveSlide.animationSequence?.length ?? 0;
+          const applied = animationEffectCommand.execute({
+            operation: "append-drawn-motion-path",
+            slideModelId: liveSlide.id,
+            blockModelId: null.blockId,
+            drawn,
+            slideWidthEmu: width,
+            slideHeightEmu: height,
+          });
+          if (!applied) return;
+          // The new effect is the selected one, as PowerPoint selects it.
+          selectedAnimationSlideIdRef.current = liveSlide.id;
+          selectedAnimationIndexRef.current = before;
+          setSelectedAnimationIndex(before);
+        }}
+        onCancel={() => setMotionPathDrawing(null)}
+      />
+    );
+  };
+  // The selected effect's path drawn on the slide while the Animations tab is
+  // up, as PowerPoint shows it; Edit Points on it (GAP #10).
+  // (A function: it reads the path commands declared further down.)
+  const renderSelectedAnimationMotionPathLayer = (): ReactNode => {
+    return null;
+    const native = motionPathNativeOfStep(selectedAnimationTimingStep);
+    const block = activeSlide.blocks.find((candidate) => candidate.id === selectedAnimationTimingStep.blockId);
+    const left = block ? geometryNumber(block, "left") : null;
+    const top = block ? geometryNumber(block, "top") : null;
+    if (!native || !block || left === null || top === null) return null;
+    const { width, height } = slideBounds(activeSlide as unknown as Record<string, unknown>);
+    const editing =
+      false;
+    return (
+      <PresentationMotionPathLayer
+        slideWidthEmu={width}
+        slideHeightEmu={height}
+        centreXEmu={left + (geometryNumber(block, "width") ?? 0) / 2}
+        centreYEmu={top + (geometryNumber(block, "height") ?? 0) / 2}
+        path={native.path}
+        ptsTypes={native.ptsTypes}
+        reversed={native.reversed === true}
+        editing={editing}
+        labels={officeEditPointsLabels(t)}
+        onCommit={commitAnimationMotionPathEdit}
+        onExit={() => setMotionPathEditing(null)}
+      />
+    );
+  };
+  const animationGrowEditable = selectedAnimationGrow !== null;
+  const animationMotionPathEditable = selectedAnimationMotionPath !== null;
   useEffect(() => {
-    if (!animationEffectOptionsEditable) {
+    if (!animationEffectOptionsEditable && !animationGrowEditable && !animationMotionPathEditable) {
       setAnimationEffectOptionsMenuOpen(false);
     }
-  }, [animationEffectOptionsEditable]);
+  }, [animationEffectOptionsEditable, animationGrowEditable, animationMotionPathEditable]);
   useEffect(() => {
     selectedAnimationIndexRef.current = null;
     selectedAnimationSlideIdRef.current = null;
@@ -40658,6 +41649,8 @@ export default function PresentationWindow({
                   officeTextPaintWithFontColor(
                     style.textPaint,
                     typeof patch.color === "string" && patch.color ? patch.color : undefined,
+                    // PowerPoint's Font Color keeps a Transparency (tp-alpharecolor).
+                    { keepFillOpacity: true },
                   ) ?? undefined,
               }
             : patch,
@@ -43875,6 +44868,13 @@ export default function PresentationWindow({
   // slide's grid from its top-left corner, as PowerPoint's window draws them
   // (lib/office-pattern-anchor).
   useOfficePatternAnchor(slideCanvasRef, `${slideScreenScale}:${activeIndex}`);
+  // The slide drawn at a new scale (its fit to a window that settled its size,
+  // the view zoom): the text engine's words are laid out again at it, or
+  // Chromium keeps their glyphs and boxes at the scale they were first laid
+  // out at (lib/text-engine/svg-root-snap, TRIAGE 128).
+  useLayoutEffect(() => {
+    noteEngineSvgRootsRescaled();
+  }, [slideScreenScale]);
   // The box the canvas lays out for the slide: the slide's size on screen.
   // (A slide reviewed in place keeps its host's box: no box of its own.)
   const slideZoomBoxStyle = useMemo<CSSProperties>(
@@ -44748,6 +45748,99 @@ export default function PresentationWindow({
     },
     [clearAnimationPreviewTimer],
   );
+  const previewAnimationSequenceFrom = useCallback((startIndex: number) => {
+    const liveSlides = slidesRef.current;
+    const liveIndex = Math.min(activeIndexRef.current, liveSlides.length - 1);
+    const liveSlide = liveSlides[liveIndex];
+    if (!liveSlide) return;
+    const frames = resolveTimelinePreviewFramesFrom(
+      liveSlide.animationSequence ?? [],
+      startIndex,
+    );
+    if (frames.length === 0) return;
+
+    clearAnimationPreviewTimer();
+    const firstFrame = {
+      slideModelId: liveSlide.id,
+      token: animationPreviewTokenRef.current + 1,
+      frames,
+      frameIndex: 0,
+    };
+    animationPreviewTokenRef.current = firstFrame.token;
+    animationPreviewRef.current = firstFrame;
+    setAnimationPreview(firstFrame);
+
+    const reducedMotion =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    function scheduleFrame(): void {
+      const current = animationPreviewRef.current;
+      if (!current || current.token !== firstFrame.token) return;
+      const frame = current.frames[current.frameIndex];
+      animationPreviewTimerRef.current = setTimeout(
+        advanceFrame,
+        reducedMotion ? 0 : frame.durationMs + 80,
+      );
+    }
+    function advanceFrame(): void {
+      const current = animationPreviewRef.current;
+      if (!current || current.token !== firstFrame.token) return;
+      if (current.frameIndex >= current.frames.length - 1) {
+        finishAnimationPreview(current.token);
+        return;
+      }
+      const nextFrame = {
+        ...current,
+        frameIndex: current.frameIndex + 1,
+      };
+      animationPreviewRef.current = nextFrame;
+      setAnimationPreview(nextFrame);
+      scheduleFrame();
+    }
+    scheduleFrame();
+  }, [clearAnimationPreviewTimer, finishAnimationPreview]);
+  const previewAnimations = useCallback(
+    () => previewAnimationSequenceFrom(0),
+    [previewAnimationSequenceFrom],
+  );
+  // Effect Options > Reverse Path Direction / Path: Locked or Unlocked.
+  const editAnimationMotionPath = useCallback(
+    (
+      operation: "reverse-motion-path" | "set-motion-path-lock" | "edit-motion-path",
+      locked?: boolean,
+      edited?: { path: string; ptsTypes: string },
+    ) => {
+      const liveSlide = slidesRef.current[activeIndexRef.current];
+      const index = selectedAnimationIndexRef.current;
+      const expectedStep =
+        liveSlide && index !== null ? liveSlide.animationSequence?.[index] : undefined;
+      if (
+        !liveSlide ||
+        index === null ||
+        !expectedStep ||
+        selectedAnimationSlideIdRef.current !== liveSlide.id
+      ) {
+        return;
+      }
+      const { width, height } = slideBounds(liveSlide as unknown as Record<string, unknown>);
+      const applied = animationEffectCommand.execute({
+        operation,
+        slideModelId: liveSlide.id,
+        index,
+        expectedStep: copyTimelineStep(expectedStep),
+        ...(operation === "set-motion-path-lock" ? { locked } : {}),
+        ...(operation === "edit-motion-path" ? { edited } : {}),
+        slideWidthEmu: width,
+        slideHeightEmu: height,
+      });
+      if (applied && operation === "reverse-motion-path") queueMicrotask(previewAnimations);
+    },
+    [animationEffectCommand, previewAnimations],
+  );
+  const commitAnimationMotionPathEdit = useCallback(
+    (edited: { path: string; ptsTypes: string }) => editAnimationMotionPath("edit-motion-path", undefined, edited),
+    [editAnimationMotionPath],
+  );
   useEffect(() => {
     const current = animationPreviewRef.current;
     if (current && current.slideModelId !== activeSlide.id) {
@@ -44755,16 +45848,16 @@ export default function PresentationWindow({
     }
   }, [activeSlide.id, finishAnimationPreview]);
   useEffect(() => {
-    return;
+    if (!animationPreview) return;
     const cancelOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
-      finishAnimationPreview(null.token);
+      finishAnimationPreview(animationPreview.token);
     };
     window.addEventListener("keydown", cancelOnEscape, true);
     return () => window.removeEventListener("keydown", cancelOnEscape, true);
-  }, [null, finishAnimationPreview]);
+  }, [animationPreview, finishAnimationPreview]);
   useEffect(
     () => () => {
       clearAnimationPreviewTimer();
@@ -45448,7 +46541,7 @@ export default function PresentationWindow({
     if (ribbonTableHomeWritable || selectedBlockIds.size === 0) return null;
     const ids = [...selectedBlockIds];
     if (ribbonTextBlock && ids.length === 1 && !readSmartArtBlockMarker(ribbonTextBlock)) return null;
-    const selectedChartId = ids.find((id) => activeSlide.blocks.find((block) => block.id === id)?.type === "chart");
+    const selectedChartId = presentationFirstSelectedChartId(activeSlide.blocks, ids);
     // One SmartArt shape selected (not the graphic) shows that shape's words,
     // the same scope the command takes (`resolveLiveHomeObjectTargets`).
     const primary = selectedBlockId ? activeSlide.blocks.find((block) => block.id === selectedBlockId) : undefined;
@@ -47290,6 +48383,205 @@ export default function PresentationWindow({
     presentationLoadIdentity,
   ]);
 
+  // The editing canvas's blocks (TRIAGE 155): each is drawn by its own
+  // memoized slot (PresentationCanvasBlockSlot), which takes the block, what
+  // the selection makes of it (`presentationCanvasBlockView`), one shared
+  // object of the window's values no selection changes, and the selection
+  // itself only for the block wearing its frame. A change of selection
+  // draws the blocks it touches, not the whole slide (2,351 objects of
+  
+  const paintedCanvasBlocks = useMemo(
+    () =>
+      presentationInPaintOrder(
+        // A file's SmartArt drawn from its cached drawing wears its
+        // graphic's own fill, line and effect across its frame
+        // (`smartart-graphic-plate`): drawn, never taken.
+        withNativeSmartArtGraphicPlates([
+          ...(activeSlideUsesCanvas
+            ? withAbsentSmartArtScenes(activeSlideVisibleBlocks).map((block, index) =>
+                hasLayoutGeometry(block)
+                  ? block
+                  : ({
+                      ...block,
+                      // An imported slide's empty-slide stub stands where its
+                      // first words will be written (lib/presentation/empty-slide-stub).
+                      ...(isFramelessImportedText(activeSlide, block)
+                        ? emptySlideStubFrame(activeSlide, activeSlideBounds, masters)
+                        : canvasFallbackGeometry(
+                            block,
+                            index,
+                            activeSlideBounds,
+                          )),
+                    } as PresentationBlock),
+              )
+            : activeSlide.blocks),
+          // Until a prepared diagram is touched, the file's own drawing
+          // stays what is seen; the conversion lies over it, unseen,
+          // taking the presses.
+          ...preparedSmartArtDrawnOriginals,
+        ]),
+        { reordered: presentationSlideReordersNativeObjects(activeSlide) },
+      ),
+    [
+      activeSlide,
+      activeSlideBounds,
+      activeSlideUsesCanvas,
+      activeSlideVisibleBlocks,
+      masters,
+      preparedSmartArtDrawnOriginals,
+      withAbsentSmartArtScenes,
+    ],
+  );
+  // Called by the blocks from their events (and from ref callbacks that only
+  // read refs), never while they draw: each is the latest render's.
+  const canvasBlockHandlers = useStableHandlers<PresentationCanvasBlockHandlers>({
+    adjustParagraphCaretLevel,
+    applyAnimationToBlock,
+    applyTextBlockRunToggle,
+    beginBlockGesture,
+    beginCropGesture,
+    beginReplaceImage,
+    beginRotateGesture,
+    captureImportedRichTextSelection,
+    captureTextEditSelection,
+    clearLiveRibbonList,
+    clearTextSelectionAuthority,
+    commitImportedPreviewText,
+    commitShapeRichText,
+    consumeTextEditSelection,
+    copyFromImportedPreview,
+    copyShapeText,
+    deleteBlock,
+    editSmartArtShapeText,
+    fillContentPlaceholder,
+    followImportedRichTextSelection,
+    handleBlockKeyDown,
+    handleFindRevealedKey,
+    handleShapeTextChange,
+    handleTextBlockBodyChange,
+    keepTextSelectionSnapshot,
+    moveBlock,
+    noteBlockTouchPress,
+    nudgeCropHandle,
+    openBlockContextMenu,
+    paintBlockFormat,
+    pasteIntoImportedPreview,
+    pasteShapeTextRuns,
+    placeShapeTextCaret,
+    recordShapeTextRange,
+    recordShapeTextSelection,
+    redo,
+    replaceBlock,
+    replaceImportedPreviewSelection,
+    restoreImportedPreviewSelectionAfterCommit,
+    selectBlockFromClick,
+    setAutofitSmartMenuBlockId,
+    setBlockContextMenu,
+    setEditingShapeTextId,
+    setGroupMemberFocusId,
+    setSelectedBlockId,
+    setSelectedBlockIds,
+    setShapeTextBlankDraft,
+    setSmartArtGraphicOnly,
+    setTextBlockAutofit,
+    takeShapeRichSelection,
+    toggleShapeWordsRunStyle: (key) => {
+      toggleLiveRibbonRunStyle(key);
+    },
+    undo,
+    updateTextBlock,
+  });
+  const canvasHitLayerInert = previewMode || Boolean(activeCustomGeometryTool);
+  const canvasBlockShared = useMemo<PresentationCanvasBlockShared>(
+    () => ({
+      t,
+      activeSlide,
+      activeSlideBounds,
+      activeSlideVisibleBlocks,
+      theme,
+      masters,
+      fontDisplay,
+      previewMode,
+      hitLayerInert: canvasHitLayerInert,
+      viewColorMode,
+      liveTransformSurface,
+      selectionChromeHost,
+      slideScreenScale,
+      deckThemeGridColors,
+      showProofingErrors,
+      editingHostHandover,
+      readOnly: Boolean(autosave.readOnly),
+      readOnlyReason: autosave.readOnlyReason,
+      notebookId: autosave.page?.notebook_id ?? (guestModeProp ? "local" : undefined),
+      pictureReplaceBusy,
+      smartArtEditIn2dVersion,
+      heldBlockWords,
+      pendingImportedPreviewCaret,
+      runStyleAtBodySelection,
+      blockAriaName,
+      refs: {
+        animationPainterRef,
+        autofitSmartMenuTriggerRef,
+        composingImportedPreviewRef,
+        composingTextRef,
+        deckContentGenerationRef,
+        findRevealRef,
+        formatPainterRef,
+        gestureEndClickRef,
+        groupMemberPressRef,
+        pictureSizeCommandRef,
+        selectedBlockIdRef,
+        selectedBlockIdsRef,
+        shapeLastPressRef,
+        shapeWordPressRef,
+        tabKeyAtRef,
+        textSelectionIntentRef,
+        textSelectionRef,
+        textTapClickRef,
+        touchPressRef,
+        wordsPressBlockRef,
+      },
+      handlers: canvasBlockHandlers,
+    }),
+    // The refs are the same on every render, and so are the handlers.
+    [
+      t,
+      activeSlide,
+      activeSlideBounds,
+      activeSlideVisibleBlocks,
+      theme,
+      masters,
+      fontDisplay,
+      previewMode,
+      canvasHitLayerInert,
+      viewColorMode,
+      liveTransformSurface,
+      selectionChromeHost,
+      slideScreenScale,
+      deckThemeGridColors,
+      showProofingErrors,
+      editingHostHandover,
+      autosave.readOnly,
+      autosave.readOnlyReason,
+      autosave.page?.notebook_id,
+      guestModeProp,
+      pictureReplaceBusy,
+      smartArtEditIn2dVersion,
+      heldBlockWords,
+      pendingImportedPreviewCaret,
+      runStyleAtBodySelection,
+      blockAriaName,
+      canvasBlockHandlers,
+    ],
+  );
+  const smartArtBorderMemberIds = useMemo(
+    () =>
+      smartArtGroupFrame !== null && selectedSmartArtGroup
+        ? new Set(selectedSmartArtGroup.members.map((member) => member.id))
+        : null,
+    [selectedSmartArtGroup, smartArtGroupFrame],
+  );
+
   if (!guestMode && presentationLoadIdentity === null) {
     return (
       <EditorLoadingState
@@ -47868,10 +49160,16 @@ export default function PresentationWindow({
         }
         if (words !== null) return block;
         // The object selected, its characters alike (or none yet): the box's
-        // own paint, as before.
+        // own paint, as before -- unless the paint is only the words' colour
+        // seen through (Text Fill > Transparency, readings row 1052), which
+        // is each run's own colour: it goes on the runs, beside their colour.
+        const boxPaint = wholeBlock ? null : transform(presentationTextPaintAt(block, null) ?? null, undefined);
+        const perRunFlat = !wholeBlock && officeTextPaintFlatFill(boxPaint)
+          ? presentationBlockWithTextPaintIn(block, null, transform, runPatch)
+          : null;
         const whole = wholeBlock
           ? wholeBlock(block)
-          : presentationBlockWithTextPaint(block, transform(presentationTextPaintAt(block, null) ?? null, undefined));
+          : perRunFlat ?? presentationBlockWithTextPaint(block, boxPaint);
         if (whole !== block) committed = true;
         return whole;
       });
@@ -48152,7 +49450,7 @@ export default function PresentationWindow({
     serverExportTriggerRef,
     runServerExport,
     handoutExportLayout,
-    exportSlideAsImage,
+    exportSlideAsImage: openPictureExport,
     exportDeckAsHtml,
     openVideoExport: setVideoExportFormat,
     openPdfOptions: () => setPdfOptionsOpen(true),
@@ -49593,12 +50891,12 @@ export default function PresentationWindow({
           { id: "delete", label: t("pages.recoveredCopy.delete"), run: (copy) => deckResilience.forgetCopy(copy) },
         ]}
       />
-      {deckPartIssues.length > 0 ? (
+      {deckIssues.length > 0 ? (
         <DocumentIssueNotice
           scopeKey={`${pageId}:deck-parts`}
           testId="presentation-deck-parts-issue"
           triggerTestId="presentation-deck-parts-toggle"
-          issues={deckPartIssues}
+          issues={deckIssues}
         />
       ) : null}
       <DocumentIssueNotice
@@ -50303,6 +51601,18 @@ export default function PresentationWindow({
         }}
         onCancel={() => setShapeArrowsDialogOpen(false)}
         testIdPrefix="presentation-shape"
+      />
+      <OfficeDialogShell
+        open={keepShowInkOffer !== null && !autosave.readOnly}
+        // The application's name, as PowerPoint titles this prompt "Microsoft PowerPoint" (truth
+        // show-keep-ink): the brand word each surface shows (MR Note, or MR Office on its host).
+        title={<SurfaceWords note={commonT("brand.short")} />}
+        description={t("presentation.keepShowInk.message")}
+        defaultActionLabel={t("presentation.keepShowInk.keep")}
+        cancelActionLabel={t("presentation.keepShowInk.discard")}
+        onDefaultAction={keepShowInk}
+        onCancel={() => setKeepShowInkOffer(null)}
+        testIdPrefix="presentation-keep-show-ink"
       />
       <OfficeDialogShell
         open={recordAudioDialogOpen}
@@ -51884,13 +53194,13 @@ export default function PresentationWindow({
               testId="presentation-peer-ink"
             />
             {null}
-            {null?.slideModelId === activeSlide.id ? (
+            {animationPreview?.slideModelId === activeSlide.id ? (
               <div
-                key={`animation-preview-backdrop-${null.token}`}
+                key={`animation-preview-backdrop-${animationPreview.token}`}
                 aria-hidden="true"
                 data-testid="presentation-animation-preview-backdrop"
-                data-animation-preview-slide-id={null.slideModelId}
-                data-animation-preview-token={null.token}
+                data-animation-preview-slide-id={animationPreview.slideModelId}
+                data-animation-preview-token={animationPreview.token}
                 data-animation-preview-underlay="masked"
                 style={{
                   ...(activeSlideStyle ?? {}),
@@ -51903,16 +53213,16 @@ export default function PresentationWindow({
                 }}
               />
             ) : null}
-            {null?.slideModelId === activeSlide.id ? (
+            {animationPreview?.slideModelId === activeSlide.id ? (
               <div
-                key={`${null.token}-${null.frameIndex}`}
+                key={`${animationPreview.token}-${animationPreview.frameIndex}`}
                 aria-hidden="true"
                 data-testid="presentation-animation-preview-layer"
-                data-animation-preview-slide-id={null.slideModelId}
-                data-animation-preview-token={null.token}
-                data-animation-preview-frame={null.frameIndex}
+                data-animation-preview-slide-id={animationPreview.slideModelId}
+                data-animation-preview-token={animationPreview.token}
+                data-animation-preview-frame={animationPreview.frameIndex}
                 data-animation-preview-revealed-groups={
-                  null.frames[null.frameIndex]
+                  animationPreview.frames[animationPreview.frameIndex]
                     .revealedGroups
                 }
                 style={{
@@ -51928,7 +53238,7 @@ export default function PresentationWindow({
                   theme={theme}
                   masters={masters}
                   revealedGroups={
-                    null.frames[null.frameIndex]
+                    animationPreview.frames[animationPreview.frameIndex]
                       .revealedGroups
                   }
                   staticMedia
@@ -52027,6 +53337,8 @@ export default function PresentationWindow({
                 />
               </div>
             ) : null}
+            {renderSelectedAnimationMotionPathLayer()}
+            {renderMotionPathDrawLayer()}
             {freeformActive ? (
               <PresentationFreeformDrawLayer
                 ctl={{
@@ -52137,1581 +53449,233 @@ export default function PresentationWindow({
                   });
                 })()
               : null}
-            {presentationInPaintOrder(
-              // A file's SmartArt drawn from its cached drawing wears its
-              // graphic's own fill, line and effect across its frame
-              // (`smartart-graphic-plate`): drawn, never taken.
-              withNativeSmartArtGraphicPlates([
-                ...(activeSlideUsesCanvas
-                  ? withAbsentSmartArtScenes(activeSlideVisibleBlocks).map((block, index) =>
-                      hasLayoutGeometry(block)
-                        ? block
-                        : ({
-                            ...block,
-                            // An imported slide's empty-slide stub stands where its
-                            // first words will be written (lib/presentation/empty-slide-stub).
-                            ...(isFramelessImportedText(activeSlide, block)
-                              ? emptySlideStubFrame(activeSlide, activeSlideBounds, masters)
-                              : canvasFallbackGeometry(
-                                  block,
-                                  index,
-                                  activeSlideBounds,
-                                )),
-                          } as PresentationBlock),
-                    )
-                  : activeSlide.blocks),
-                // Until a prepared diagram is touched, the file's own drawing
-                // stays what is seen; the conversion lies over it, unseen,
-                // taking the presses.
-                ...preparedSmartArtDrawnOriginals,
-              ]),
-              { reordered: presentationSlideReordersNativeObjects(activeSlide) },
-            ).map(({ block, index: blockIndex }) => {
-              // Selection Pane hide: a hidden block is not painted on the edit
-              // canvas (still in the deck + listed in the pane). Mirrors the
-              // present-mode + marquee gating so a hidden object disappears
-              // consistently everywhere.
-              if (isBlockNotDrawn(block)) return null;
-              if (activeSlideBlankFillerIds?.has(block.id)) return null;
-              // A cache-absent SmartArt's laid-out shapes, and a file's
-              // SmartArt graphic's own plate: drawn, never taken.
-              if (absentSmartArtSceneIds.has(block.id) || isSmartArtGraphicPlate(block)) {
-                return (
-                  <div
-                    key={`${block.id}:${blockIndex}`}
-                    aria-hidden="true"
-                    data-testid="presentation-smartart-absent-scene"
-                    data-scene-block-id={block.id}
-                    style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
-                  >
-                    <PresentationBlockView
-                      block={block}
-                      bounds={activeSlideBounds}
-                      theme={theme}
-                      // The slide WITH its laid-out scenes: a member's place in
-                      // its diagram is read off it, and 3d6's balanced light
-                      // falls across the whole diagram by that place (the
-                      
-                      // p3); off the bare slide every member drew unlit.
-                      slide={activeSlideDrawnWithAbsentScenes}
-                      masters={masters}
-                      // A 3-D quick style's camera (3d5-3d9) tilts the laid-out
-                      // diagram as one object, as the slide's other views and the
-                      // print draw it: without it the canvas drew a cache-less
-                      
-                      smartArtCamera={presentationSmartArtCameraStyle(activeSlideWithAbsentScenes, block)}
-                      // The editing canvas: an empty picture slot shows its
-                      // "insert picture" icon, as PowerPoint's edit view does.
-                      editingSlots
-                    />
-                  </div>
-                );
-              }
-              const isGeometryBlock = hasLayoutGeometry(block);
-              const isSelected = selectionAuthority.primary?.id === block.id;
-              const isMultiSelected =
-                isGeometryBlock && selectedBlockIds.has(block.id);
-              // The object chrome (frame, handles) of the selection: the
-              // primary block's own, except a SmartArt label being typed in,
-              // whose chrome is drawn on its shape (`smartArtLabelShapeId`).
-              const ownsSelectionChrome =
-                smartArtLabelShapeId !== null
-                  ? smartArtLabelShapeId === block.id
-                  : isSelected;
-              // A SmartArt label lets a press through to its shape until its
-              // words are being typed in: one click selects the shape, a
-              // double click (or Enter / F2 / a key typed on the shape) puts
-              // the caret in its words.
-              const smartArtLabelYieldsToShape =
-                !isSelected &&
-                block.type === "text" &&
-                presentationSmartArtLabelShape(activeSlide.blocks, block) !== null;
-              const importedPptxBlock = isImportedPptxBlock(block);
-              // A SmartArt member is drawn by its diagram, never by the
-              // authoring plate the canvas puts under a free text box: the
-              // members overlap (rings, bands, labels over nodes), so the
-              // translucent plate of each block would band across the
-              // others. After a reopen the members carry a native source and
-              // take the transparent path anyway; a freshly inserted diagram
-              // must look the same.
-              const smartArtMember =
-                typeof (block as { smartArtRole?: unknown }).smartArtRole === "string";
-              // Every object that shows a selection frame wears the one
-              // Office drawing frame (1px #686868 outline): the primary through
-              // `data-selected`, every other member of a multi-selection
-              // through `data-multiselected`. Legacy flow blocks without slide
-              // geometry stay bare, and a SmartArt diagram's other members sit
-              // inside the diagram border instead of each wearing a frame, as
-              // PowerPoint frames only the member that was clicked.
-              const framedBySmartArtBorder =
-                !ownsSelectionChrome &&
-                smartArtGroupFrame !== null &&
-                Boolean(
-                  selectedSmartArtGroup?.members.some(
-                    (member) => member.id === block.id,
-                  ),
-                );
-              // A member of a whole selected group wears no frame of its own:
-              // the group's one frame stands for it (`selectedGroupView`), and
-              // the primary's chrome is drawn on the group's box -- except the
-              // shape being typed in, which keeps its own text-edit frame.
-              const groupChromeOnBox =
-                selectedGroupView !== null &&
-                ownsSelectionChrome &&
-                selectedGroupView.primaryId === block.id &&
-                !selectedGroupView.memberSelected;
-              const framedByGroup =
-                selectedGroupView !== null &&
-                selectedGroupView.ids.has(block.id) &&
-                !(selectedGroupView.memberSelected && selectedGroupView.primaryId === block.id);
-              const wearsDrawingSelection =
-                !framedBySmartArtBorder &&
-                (isGeometryBlock ||
-                  importedPptxBlock ||
-                  block.type === "image" ||
-                  smartArtMember ||
-                  block.type === "shape" ||
-                  block.type === "chart");
-              // PowerPoint's text-edit mode on a text box, a shape or a SmartArt
-              // shape: the same outline and handles, the outline dashed
-              // (lib/office-text-edit-mode). A table keeps its cell selection.
-              const textEditing =
-                (block.type === "text" || block.type === "shape") &&
-                (textEditingBlockId === block.id || editingShapeTextId === block.id);
-              const fontSizeUnit: PresentationFontSizeUnit = presentationTextUsesPoints(block)
-                ? "point"
-                : "design-px";
-              const importedPptxText =
-                importedPptxBlock && block.type === "text";
-              // Positioned rich text uses one visible body regardless of origin;
-              // the legacy textarea remains only as a selection/input bridge.
-              // Every text box on the slide is typed in the body that draws it
-              // at rest: a plain placeholder's rows (the master's bullet, its
-              // 90% line spacing, the hanging indent) were drawn at rest and
-              // swapped for the bare textarea on the first click, so its words
-              // changed size, spacing and wrap on entering editing and again
-              // on leaving it. PowerPoint types in the words as they are drawn.
-              const importedTextHasPreview =
-                block.type === "text" &&
-                (isGeometryBlock || (importedPptxText && importedPptxTextHasPreview(block)));
-              const importedTextInsets =
-                importedPptxText ||
-                (block.type === "text" && textBlockDrawsInsets(block))
-                  ? textBlockInsetsCss(block)
-                  : {};
-              const nativeGroupExactHandleMembers = ownsSelectionChrome
-                ? exactNativeGroupMembers(activeSlide.blocks, block)
-                : null;
-              // A group that carries one move authority moves whole and only
-              // moves: it wears the move handle, never resize or rotate.
-              const nativeGroupMoveOnlyMembers =
-                ownsSelectionChrome && !nativeGroupExactHandleMembers
-                  ? nativeGroupMoveMembers(activeSlide.blocks, block)
-                  : null;
-              const nativeGroupMoveOnly = nativeGroupMoveOnlyMembers !== null;
-              const nativeGroupHandleMembers =
-                nativeGroupExactHandleMembers ?? nativeGroupMoveOnlyMembers;
-              const nativeGroupHandleBlocked =
-                ownsSelectionChrome &&
-                blockClaimsImportedGroup(block) &&
-                (!nativeGroupHandleMembers ||
-                  nativeGroupHandleMembers.some((member) =>
-                    isBlockLocked(member),
-                  ));
-              // While this block is being dragged/resized, render the live
-              // (uncommitted) rect; otherwise use the persisted geometry.
-              // Every member of a turn swings about the selection's centre,
-              // the block under the hand too, as the commit lands them
-              // (commitBlockRotation): it turned in place and jumped there.
-              const rotateMemberPreview = rotatePreview?.members?.get(block.id);
-              const rawPreviewGeom =
-                dragPreview && dragPreview.blockId === block.id
-                  ? dragPreview.geom
-                  : dragPreview?.members?.get(block.id) ??
-                    (rotateMemberPreview
-                      ? {
-                          left: rotateMemberPreview.left,
-                          top: rotateMemberPreview.top,
-                          width: rotateMemberPreview.width,
-                          height: rotateMemberPreview.height,
-                        }
-                      : undefined);
-              const tableGesturePreview =
-                block.type === "table" && rawPreviewGeom
-                  ? tableWithScaledGestureGeometry(block, rawPreviewGeom)
-                  : null;
-              const previewGeom = tableGesturePreview
-                ? {
-                    left:
-                      geometryNumber(tableGesturePreview, "left") ??
-                      rawPreviewGeom!.left,
-                    top:
-                      geometryNumber(tableGesturePreview, "top") ??
-                      rawPreviewGeom!.top,
-                    width:
-                      geometryNumber(tableGesturePreview, "width") ??
-                      rawPreviewGeom!.width,
-                    height:
-                      geometryNumber(tableGesturePreview, "height") ??
-                      rawPreviewGeom!.height,
-                  }
-                : rawPreviewGeom;
-              // While the rotate handle is dragged, render the live rotation so
-              // the block visibly turns without mutating slide state.
-              const previewRotation = rotateMemberPreview
-                ? Math.round(normalizeRotationDegrees(rotateMemberPreview.rotation))
-                : rotatePreview && rotatePreview.blockId === block.id
-                  ? rotatePreview.rotation
-                  : undefined;
-              // A handle dragged through the pinned edge previews the mirror.
-              const previewFlip =
-                dragPreview && dragPreview.blockId === block.id
-                  ? dragPreview.flip
-                  : undefined;
-              // The diagram camera of styles 3d5-3d9: ONE transform, identical
-              // on every member, about the bounding box of the whole group, so
-              // the diagram tilts as a single object instead of each node
-              // spinning about its own centre. Approximate (§5): the selection
-              // overlay and the hit areas stay axis-aligned.
-              // Edit in 2-D: the graphic is drawn flat (no camera, no solid),
-              // and until then its shapes take no move, size or turn of
-              // their own (lib/office-smartart/edit-in-2d).
-              const smartArtMarkerOfBlock = readSmartArtBlockMarker(block);
-              const smartArtFlat2d =
-                smartArtMarkerOfBlock !== null &&
-                smartArtMemberHasScene(block) &&
-                smartArtEditingIn2d(smartArtEditIn2dKey("presentation", smartArtMarkerOfBlock.groupId));
-              const smartArtSceneLocked =
-                ownsSelectionChrome &&
-                smartArtMarkerOfBlock !== null &&
-                !smartArtGraphicOnly &&
-                presentationSmartArtShapesLockedIn3d(activeSlide.blocks, block);
-              const smartArtScene3d = smartArtFlat2d
-                ? undefined
-                : (block as { scene3d?: SmartArtScene3d }).scene3d;
-              const smartArtMemberBox = smartArtScene3d
-                ? (() => {
-                    const geom = blockGeometry(block);
-                    return typeof geom.left === "number" &&
-                      typeof geom.top === "number" &&
-                      typeof geom.width === "number" &&
-                      typeof geom.height === "number"
-                      ? {
-                          left: geom.left,
-                          top: geom.top,
-                          width: geom.width,
-                          height: geom.height,
-                        }
-                      : null;
-                  })()
-                : null;
-              const smartArtCamera =
-                smartArtScene3d && smartArtMemberBox
-                  ? smartArtCameraCss(
-                      smartArtScene3d,
-                      presentationSmartArtGroupBox(
-                        activeSlideVisibleBlocks,
-                        blockGroupId(block) ?? null,
-                      ) ?? smartArtMemberBox,
-                      smartArtMemberBox,
-                    )
-                  : null;
-              // The member's own flip/rotate must survive, so the camera
-              // multiplies IN FRONT of it rather than replacing it. The origin
-              // is the diagram's centre for the tilt to be shared; the member's
-              // own rotation still turns about the member's centre
-              // (smartArtCameraWithOwnTransform: Basic Cycle's arrows).
-              const smartArtCameraStyle = smartArtCamera
-                ? (() => {
-                    const own = blockGeometryStyle(
-                      block,
-                      activeSlideBounds,
-                      previewGeom,
-                      previewRotation,
-                      previewFlip,
-                    )?.transform;
-                    return {
-                      transform: smartArtCameraWithOwnTransform(
-                        smartArtCamera,
-                        typeof own === "string" ? own : null,
-                      ),
-                      transformOrigin: smartArtCamera.transformOrigin,
-                      transformStyle: smartArtCamera.transformStyle,
-                    };
-                  })()
-                : null;
-              // Direct-manipulation handles are shown only for the selected
-              // positioned block in the editor (never present mode). They give a
-              // non-text affordance to start a gesture so text editing inside a
-              // text block is never disturbed. A LOCKED block shows NO handles
-              // (it can't be moved/resized/rotated) — the gesture starters are
-              // also guarded, this just removes the affordance.
-              const showHandles =
-                isGeometryBlock &&
-                ownsSelectionChrome &&
-                !(smartArtGraphicOnly && readSmartArtBlockMarker(block)) &&
-                !isBlockLocked(block) &&
-                !nativeGroupHandleBlocked &&
-                canChangePresentationChartFrame(block, "move");
-              // A selection that holds a picture is not resized by hand
-              // (beginBlockGesture: a picture's size goes through its own Size
-              // transaction): its grips are not offered, rather than drawn
-              
-              // shape's grips, which did nothing).
-              // A member selected inside its group wears its own grips: it is
-              // sized alone, a picture by its own frame in the group's space.
-              const memberAloneChrome = groupMemberAloneId === block.id;
-              // The file's frame locks: the group's on its frame, the
-              // object's own otherwise.
-              const frameLockScope = Boolean(blockGroupId(block)) && !memberAloneChrome;
-              const showResizeHandles =
-                !isFrameLockedByFile(block, "resize", frameLockScope) &&
-                showHandles && (!nativeGroupMoveOnly || groupChromeOnBox || memberAloneChrome) && (groupChromeOnBox && nativeGroupHandleMembers ? true : memberAloneChrome ? true : block.type !== "image" ? (
-                  !activeSlide.blocks.some((candidate) => candidate.type === "image" && selectedBlockIds.has(candidate.id))
-                ) : (
-                  cropEditingId !== block.id && pictureSizeCommand.canExecute("width")
-                ));
-              // The grips are painted in design pixels inside the scaled slide
-              // surface, so the frame is measured in the same unit: a side too
-              // short for its middle grip to clear the corners drops it, as
-              // PowerPoint does (a thin bar's middles sat on its corners).
-              // A line or connector shows its two end points, as PowerPoint
-              
-              // of the frame, which the wrapper mirrors with the flips, so
-              // the ends are the frame's nw/se corners (ne/sw for a legacy
-              // "trbl" line, mirrored inside the box).
-              const connectorLine =
-                block.type === "shape" &&
-                isPresentationConnectorShapeKind(normalizeShapeKind(block.shape));
-              // On the group's box the grips scale every member. A group the
-              // file holds is sized by its own frame, pictures and all; a group
-              // made here has each picture sized through its own Size
-              // transaction, so it offers none (as `showResizeHandles` does for
-              // a selection holding a picture).
-              const visibleResizeHandles = groupChromeOnBox && selectedGroupView
-                ? showResizeHandles &&
-                  (nativeGroupHandleMembers !== null ||
-                    !selectedGeometryBlocks.some((member) => member.type === "image"))
-                  ? officeDrawingVisibleResizeHandles(
-                      selectedGroupView.box.width / AUTOFIT_EMU_PER_PX,
-                      selectedGroupView.box.height / AUTOFIT_EMU_PER_PX,
-                    )
-                  : []
-                : showResizeHandles && connectorLine
-                ? legacyLineSlopeFlipsHorizontally(
-                    (block as Record<string, unknown>).lineSlope,
-                  )
-                  ? (["ne", "sw"] as const)
-                  : (["nw", "se"] as const)
-                : showResizeHandles
-                ? officeDrawingVisibleResizeHandles(
-                    (previewGeom?.width ?? geometryNumber(block, "width") ?? Number.NaN) / AUTOFIT_EMU_PER_PX,
-                    (previewGeom?.height ?? geometryNumber(block, "height") ?? Number.NaN) / AUTOFIT_EMU_PER_PX,
-                  )
-                : [];
-              const tableFrameAlignedBlock =
-                block.type === "table"
-                  ? tableWithFrameAlignedGrid(block)
-                  : null;
-              const tableInteractionBlock =
-                (tableDrawBoundaryPreview?.id === block.id ? tableDrawBoundaryPreview : null) ?? tableGesturePreview ?? tableFrameAlignedBlock;
-              const tableBlockWithStylePreview =
-                tableInteractionBlock &&
-                null?.blockId === block.id
-                  ? applyPresentationTableStyleSelection(
-                      tableInteractionBlock,
-                      null.selection,
-                    )
-                  : tableInteractionBlock;
-              const displayedTableBlock =
-                tableBlockWithStylePreview &&
-                tableAxisPreview?.blockId === block.id
-                  ? ({
-                      ...tableBlockWithStylePreview,
-                      [tableAxisPreview.axis === "col"
-                        ? "colWidths"
-                        : "rowHeights"]: setAxisSize(
-                          tableAxisPreview.axis === "col"
-                          ? tableBlockWithStylePreview.colWidths
-                          : tableBlockWithStylePreview.rowHeights,
-                        tableAxisPreview.index,
-                        tableAxisPreview.size,
-                      ),
-                    } as PresentationTableBlock)
-                  : tableBlockWithStylePreview;
-              const pictureFramePreviewBlock =
-                block.type === "image" &&
-                pictureStylePreview?.blockId === block.id
-                  ? applyPresentationPictureFrameStyle(
-                      block,
-                      pictureStylePreview.style,
-                    )
-                  : block.type === "image"
-                    ? block
-                    : null;
-              const displayedImageBlock = pictureFramePreviewBlock && previewGeom
-                ? { ...pictureFramePreviewBlock, width: previewGeom.width, height: previewGeom.height }
-                : pictureFramePreviewBlock;
-              const pictureSmartArtMemberId =
-                block.type === "image"
-                  ? smartArtPictureReplaceTargetId(
-                      activeSlide.blocks,
-                      selectedBlockIds,
-                      block.id,
-                    )
-                  : null;
-              const pictureSmartArtReplaceDisabledReason = (() => {
-                if (!pictureSmartArtMemberId) return null;
-                if (autosave.readOnly) {
-                  return autosave.readOnlyReason ?? t("ai.readOnlyLock");
+            {(() => {
+              // What the selection and the previews make of each block, read
+              // once for the slide (`presentationCanvasBlockView`).
+              const canvasSelection: PresentationCanvasSelectionState = {
+                slideBlocks: activeSlide.blocks,
+                primaryId: selectionAuthority.primary?.id ?? null,
+                selectedBlockId,
+                selectedBlockIds,
+                smartArtLabelShapeId,
+                smartArtBorderMemberIds,
+                selectedGroupView,
+                groupMemberAloneId,
+                textEditingBlockId,
+                editingShapeTextId,
+                rovingBlockId,
+                inkLassoIds: inkLassoView?.ids ?? null,
+                formatPainterArmed: Boolean(formatPainter),
+                formatPainterSourceId: formatPainter?.sourceId ?? null,
+                smartArtHitAreas: canvasHitLayerInert
+                  ? NO_SMARTART_HIT_AREAS
+                  : presentationSmartArtGraphicHitAreas(activeSlideVisibleBlocks),
+                picturesNotDrawn,
+                copilotPreviewBlockIds: embeddedPresentation?.previewBlockIds,
+                copilotPreviewBlockId: embeddedPresentation?.previewBlockId,
+                preparedOriginals: preparedSmartArtDrawnOriginals,
+                preparedHidden: preparedSmartArtHidden,
+                cropEditingId,
+                cropPreview,
+                dragPreview,
+                rotatePreview,
+                shapeTextBlankDraft,
+                shapeAdjustPreview,
+                pictureStylePreview,
+                equationSlot: presentationEquations.equationSlot,
+                autofitSmartMenuBlockId,
+              };
+              // The selection itself, for the block wearing its frame and grips.
+              const canvasChrome: PresentationCanvasBlockChrome = {
+                smartArtGraphicOnly,
+                selectedBlockIds,
+                selectedGeometryBlocks,
+                selectedGroupView,
+                pictureCanResize: () => pictureSizeCommand.canExecute("width"),
+                selectedChartElementArea,
+                smartArtFrameRotateGrip,
+                presentationShapeDrawingOverlay,
+              };
+              // A chart's, a table's and a media object's own bindings: built
+              // for the slide's first one, and drawn with every render, as
+              // before.
+              let chartKind: PresentationCanvasBlockKindCtl | null = null;
+              let tableKind: PresentationCanvasBlockKindCtl | null = null;
+              let embedKind: PresentationCanvasBlockKindCtl | null = null;
+              const kindCtlOf = (block: PresentationBlock): PresentationCanvasBlockKindCtl | null => {
+                if (block.type === "chart") {
+                  return (chartKind ??= {
+                    kind: "chart",
+                    selectedGroupView,
+                    ctl: {
+                      t,
+                      locale,
+                      setChartFormatFocus,
+                      chartFormatFocusTokenRef,
+                      chartTitleEdit,
+                      setChartTitleEdit,
+                      chartDesktopPreview,
+                      setChartDesktopPreview,
+                      autosave,
+                      themeAccentColors,
+                      contextualChartBlock,
+                      chartDesktopAttrs,
+                      linkedChartDataReason,
+                      literalChartDataShapeReason,
+                      chartTypeLockReason,
+                      chartLockNotice,
+                      chartReadOnlyReason,
+                      chartRibbonIdentity,
+                      chartTitleLockReason,
+                      commitChartDesktop,
+                      openChartAreaFormat,
+                      openChartWorkbook,
+                      selectPresentationRibbonTab,
+                    },
+                  });
                 }
-                if (isBlockKeptReadOnly(block)) {
-                  return t("presentation.contextMenu.lock");
+                if (block.type === "table") {
+                  return (tableKind ??= {
+                    kind: "table",
+                    tableDrawBoundaryPreview,
+                    tableStylePreview: null,
+                    ctl: {
+                      pageId,
+                      guestMode,
+                      t,
+                      tableCellFocus,
+                      setTableCellFocus,
+                      tableSelectionAnchor,
+                      setTableSelectionAnchor,
+                      tableSelectionScope,
+                      setTableSelectionScope,
+                      tableGridlinesVisible: false,
+                      tableCellInputRefs,
+                      editingHostHandover,
+                      setTableCharacterSelectionVersion,
+                      restoringTableScopeFocusRef,
+                      pendingTableKeyboardFocusRef,
+                      tableBorderPenMode,
+                      tableBorderPenHover,
+                      setTableBorderPenHover,
+                      tableBorderPenStroke,
+                      setTableBorderPenStroke,
+                      tableBorderPenStrokeRef,
+                      tableBorderPenOverlayRef,
+                      tableBorderPenSplitOriginRef,
+                      tableBorderPenSplitRef,
+                      tableBorderPenSplit,
+                      setTableBorderPenSplit,
+                      tableShiftSelectRef,
+                      textSelectionIntentRef,
+                      tableHomeFormatRef,
+                      tableAxisPreview,
+                      autosave,
+                      activeSlide,
+                      contextualTableBlock,
+                      tableFormattingSelection,
+                      replaceBlock,
+                      deleteBlock,
+                      beginBlockGesture,
+                      updateTableCell,
+                      copyTableSelectionToClipboard,
+                      cutTableSelectionToClipboard,
+                      clearSelectedTableContents,
+                      pasteTableClipboard,
+                      appendTableRowToBlock,
+                      appendTableColumnToBlock,
+                      deleteLastTableRowFromBlock,
+                      deleteLastTableColumnFromBlock,
+                      insertTableRowAtBoundary,
+                      insertTableColumnAtBoundary,
+                      selectTableScope,
+                      mergeTableSelection,
+                      splitTableCell,
+                      tableSelectionCanMerge,
+                      tableFocusCanSplit,
+                      beginTableBorderPenStroke,
+                      extendTableBorderPenStroke,
+                      commitTableBorderPenStroke,
+                      beginTableAxisResize,
+                    },
+                  });
                 }
-                if (
-                  block.source?.pictureSourceDisposition === "preserve-only"
-                ) {
-                  return t("presentation.image.sourcePreserveOnly");
+                if (block.type === "embed") {
+                  return (embedKind ??= {
+                    kind: "embed",
+                    ctl: {
+                      t,
+                      videoStylePreview: null,
+                      mediaControlBarInside,
+                      deckThemeGridColors,
+                      contextualMediaBlock,
+                      contextualMediaKind,
+                      contextualMediaPlaybackSettings,
+                      deleteBlock,
+                      updateEmbedBlock,
+                      selectedMediaBookmark,
+                      setSelectedMediaBookmark,
+                      canvasMediaElement,
+                    },
+                  });
                 }
-                if (!autosave.page?.notebook_id && !guestModeProp) return t("common.noNotebook");
-                return pictureReplaceBusy ? t("common.loading") : null;
-              })();
-              const pictureSmartArtReplaceLabel = `${t("presentation.image.replace")}${
-                pictureSmartArtReplaceDisabledReason
-                  ? `: ${pictureSmartArtReplaceDisabledReason}`
-                  : ""
-              }`;
-              const autofitSmartTagVisible =
-                isSelected &&
-                block.type === "text" &&
-                autofitSmartTagVisibleForBlock(
-                  block,
-                  activeSlideBounds,
-                  textBlockStyleCss(
-                    block.style,
-                    resolvePresentationTextStyle(activeSlide, block, masters, theme),
-                    fontSizeUnit, fontDisplay.aliases,
-                  ).fontSize as number | undefined,
-                );
-              const tableCellPositions =
-                block.type === "table"
-                  ? logicalCellPositions(block.rows)
-                  : null;
-              const tableColumnCount =
-                block.type === "table" ? tableLogicalWidth(block.rows) : 0;
-              // The block's frame style at a geometry: the persisted one, this
-              // desk's own gesture preview, or another member's live frame
-              // (PresentationLiveBlockFrame re-renders only this block for it).
-              const blockFrameStyleAt = (
-                frameGeom: BlockGeometry | undefined,
-                frameRotation: number | undefined,
-              ): CSSProperties | undefined =>
-                ((placed) => {
-                  // A stroke of ink draws from the slide's corner, as the
-                  // wet layer does (presentationInkBlockPlacement).
-                  const style = (block as { shape?: unknown }).shape === "ink"
-                    ? presentationInkBlockPlacement(placed)
-                    : placed;
-                  const blend = presentationShapeBlendCss(block as { type?: unknown; blendMode?: unknown });
-                  const blended = withFooterFieldStacking(
-                    blend && style ? { ...style, ...blend } : style,
-                    activeSlide,
-                    block,
+                return null;
+              };
+              return paintedCanvasBlocks.map(({ block, index: blockIndex }) => {
+                // Selection Pane hide: a hidden block is not painted on the edit
+                // canvas (still in the deck + listed in the pane). Mirrors the
+                // present-mode + marquee gating so a hidden object disappears
+                // consistently everywhere.
+                if (isBlockNotDrawn(block)) return null;
+                if (activeSlideBlankFillerIds?.has(block.id)) return null;
+                // A cache-absent SmartArt's laid-out shapes, and a file's
+                // SmartArt graphic's own plate: drawn, never taken.
+                if (absentSmartArtSceneIds.has(block.id) || isSmartArtGraphicPlate(block)) {
+                  return (
+                    <div
+                      key={`${block.id}:${blockIndex}`}
+                      aria-hidden="true"
+                      data-testid="presentation-smartart-absent-scene"
+                      data-scene-block-id={block.id}
+                      style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
+                    >
+                      <PresentationBlockView
+                        block={block}
+                        bounds={activeSlideBounds}
+                        theme={theme}
+                        // The slide WITH its laid-out scenes: a member's place in
+                        // its diagram is read off it, and 3d6's balanced light
+                        // falls across the whole diagram by that place (the
+                        
+                        // p3); off the bare slide every member drew unlit.
+                        slide={activeSlideDrawnWithAbsentScenes}
+                        masters={masters}
+                        // A 3-D quick style's camera (3d5-3d9) tilts the laid-out
+                        // diagram as one object, as the slide's other views and the
+                        // print draw it: without it the canvas drew a cache-less
+                        
+                        smartArtCamera={presentationSmartArtCameraStyle(activeSlideWithAbsentScenes, block)}
+                        // The editing canvas: an empty picture slot shows its
+                        // "insert picture" icon, as PowerPoint's edit view does.
+                        editingSlots
+                      />
+                    </div>
                   );
-                  return smartArtLabelYieldsToShape && blended
-                    ? { ...blended, pointerEvents: "none" as const }
-                    : blended;
-                })(withPresentationBlackWhiteStyle(
-                  viewColorMode,
-                  block as { blackWhiteMode?: unknown },
-                  importedPptxBlock || block.type === "image" || smartArtMember
-                    ? {
-                        ...(blockGeometryStyle(
-                          block,
-                          activeSlideBounds,
-                          frameGeom,
-                          frameRotation,
-                          previewFlip,
-                        ) ?? {}),
-                        ...(smartArtCameraStyle ?? {}),
-                        background: "transparent",
-                        border: "0 solid transparent",
-                        borderRadius: 0,
-                        boxShadow: "none",
-                        // At rest nothing may paint a ring around the
-                        // object; once selected the shared drawing frame
-                        // class paints it, like every other block.
-                        outline: wearsDrawingSelection && (isSelected || isMultiSelected) ? undefined : "none",
-                        outlineOffset: 0,
-                        // At rest the frame cuts what the slide show cuts
-                        // (`presentationBlockFrameOverflow`, one rule for
-                        // both); the slide canvas remains the clip edge.
-                        // Explicit clip/ellipsis is enforced again on the
-                        // inner text surface so selected handles stay visible.
-                        overflow:
-                          presentationBlockFrameOverflow(block) === "visible"
-                            ? "visible"
-                            : isSelected
-                              ? "visible"
-                              : "hidden",
-                      }
-                    : // A text box's words past its frame show at rest as
-                      // they do in the show and the file (Do not Autofit;
-                      // only a stated clip cuts them), as imported text's
-                      
-                      presentationBlockFrameOverflow(block) === "visible"
-                      ? {
-                          // The outline is centred on the geometry path, so
-                          // half of `a:ln@w` is drawn OUTSIDE this frame. The
-                          // frame is the geometry box the file states and is
-                          // untouched; it just stops cutting the shape's own
-                          // ink, exactly as the imported branch above and the
-                          // Docs shape stage already do.
-                          ...(blockGeometryStyle(
-                            block,
-                            activeSlideBounds,
-                            frameGeom,
-                            frameRotation,
-                            previewFlip,
-                          ) ?? {}),
-                          overflow: "visible",
-                        }
-                      : blockGeometryStyle(
-                          block,
-                          activeSlideBounds,
-                          frameGeom,
-                          frameRotation,
-                          previewFlip,
-                        ),
-                ));
-              return (
-                <PresentationSmartArtGraphicHitLayer key={`${block.id}:${blockIndex}`} ctl={{ blocks: activeSlideVisibleBlocks, block, activeSlideBounds, primaryId: selectionAuthority.primary?.id ?? null, inert: previewMode || Boolean(activeCustomGeometryTool), selectBlockFromClick, setSmartArtGraphicOnly, beginBlockGesture, setBlockContextMenu, editSmartArtShapeText, zIndex: presentationBlockOverFooterFieldsZIndex(activeSlide, block) }}>
-                <PresentationLiveBlockFrame
-                  key={`${block.id}:${blockIndex}`}
-                  className={
-                    (isGeometryBlock
-                      ? "presentation-window__block presentation-window__block--geometry"
-                      : "presentation-window__block") + (block.type === "table" ? ` ${presentationChrome.tableGeometryFrame}` : "") +
-                      (wearsDrawingSelection ? ` ${officeDrawingSelectionStyles.selectedHost}` : "")
-                      + presentationShapeGeometryHitClassName(block, previewMode)
-                  }
-                  style={blockFrameStyleAt(previewGeom, previewRotation)}
-                  styleAt={blockFrameStyleAt}
-                  liveSurface={previewMode ? null : liveTransformSurface}
-                  liveBlockId={block.id}
-                  committedFrame={presentationLiveFrameOf(block, activeSlideBounds)}
-                  ownPreview={previewGeom !== undefined || previewRotation !== undefined}
-                  data-block-id={block.id}
-                  // A layout's graphic is drawn here and taken in Slide Master
-                  // view: no press on it selects it (native-page-window.css).
-                  data-layout-graphic={isLayoutGraphicOnSlide(block) ? "true" : undefined}
-                  data-smartart-prepared={
-                    preparedSmartArtDrawnOriginals.includes(block)
-                      ? "original"
-                      : preparedSmartArtHidden?.has(block.id)
-                        ? "converted"
-                        : undefined
-                  }
-                  data-connector-line={connectorLine ? "true" : undefined}
-                  data-copilot-object-hidden={embeddedPresentation?.previewBlockIds ? (!embeddedPresentation.previewBlockIds.includes(block.id) ? "true" : undefined) : embeddedPresentation?.previewBlockId && embeddedPresentation.previewBlockId !== block.id ? "true" : undefined}
-                  data-table-block={
-                    block.type === "table" ? "true" : undefined
-                  }
-                  data-placeholder-role={
-                    typeof (block as Record<string, unknown>).role === "string"
-                      ? String((block as Record<string, unknown>).role)
-                      : undefined
-                  }
-                  data-placeholder-empty={
-                    // An empty SmartArt shape draws its `[Text]` prompt inside
-                    // the shape, with no placeholder frame (PowerPoint).
-                    block.type === "text" &&
-                    block.text.trim() === "" &&
-                    (block as Record<string, unknown>).smartArtRole !== "label"
-                      ? "true"
-                      : undefined
-                  }
-                  data-smartart-role={
-                    typeof (block as Record<string, unknown>).smartArtRole === "string"
-                      ? String((block as Record<string, unknown>).smartArtRole)
-                      : undefined
-                  }
-                  // A SmartArt member is pressed where it is drawn: drawn turned
-                  // in 3-D, by its turned layer, not by its flat box, which
-                  // stood over the next item's words (native-page-window.css).
-                  // Not a label letting its presses through to its shape, nor
-                  // a shape already hit by its painted geometry.
-                  data-hit-where-drawn={
-                    !previewMode &&
-                    (isNativeSmartArtMember(block) || (smartArtMember && block.type === "text" && !smartArtLabelYieldsToShape))
-                      ? ""
-                      : undefined
-                  }
-                  // A11y: each block is a labelled group item with an accessible
-                  // name (text → its text, shape → its kind, image → its alt). It
-                  // owns the single roving tab stop when it is the roving block
-                  // (tabIndex 0), else it is removed from the tab order (-1), so
-                  // exactly one block is Tab-reachable at a time — Tab/arrows in
-                  // `handleBlockKeyDown` move between blocks / nudge geometry.
-                  role="group"
-                  aria-label={blockAriaName(block)}
-                  aria-roledescription={t(
-                    `presentation.block.${block.type}` as "presentation.block.text",
-                  )}
-                  tabIndex={block.id === rovingBlockId ? 0 : -1}
-                  onKeyDown={(event) => handleBlockKeyDown(event, block.id)}
-                  data-roving={block.id === rovingBlockId ? "true" : undefined}
-                  data-selected={isSelected ? "true" : "false"}
-                  data-text-editing={textEditing ? "true" : undefined}
-                  data-multiselected={
-                    isMultiSelected || (ownsSelectionChrome && !isSelected)
-                      ? "true"
-                      : undefined
-                  }
-                  {...(inkLassoView?.ids.has(block.id)
-                    ? { [INK_LASSO_MEMBER_ATTRIBUTE]: "true" }
-                    : {})}
-                  data-group-frame-member={framedByGroup ? "true" : undefined}
-                  data-dragging={previewGeom ? "true" : undefined}
-                  // Armed-painter affordance: a paint cursor + the source-block cue.
-                  data-format-painter={
-                    formatPainter
-                      ? formatPainter.sourceId === block.id
-                        ? "source"
-                        : "target"
-                      : undefined
-                  }
-                  // Seen in capture: the rich body stops its press from
-                  // bubbling here.
-                  onPointerDownCapture={(event) => {
-                    wordsPressBlockRef.current =
-                      block.type === "text" &&
-                      event.target instanceof Element &&
-                      event.target.closest(
-                        "textarea,[data-selection-owner='rich-preview']",
-                      )
-                        ? block.id
-                        : null;
-                  }}
-                  onPointerDown={(event) => {
-                    noteBlockTouchPress(event, block.id);
-                    if (block.type === "shape" && event.button === 0) {
-                      // Windows' double click: the second press within 500 ms
-                      // and 4 px of the first (SM_CXDOUBLECLK).
-                      const now = performance.now();
-                      const last = shapeLastPressRef.current;
-                      const second =
-                        event.detail >= 2 ||
-                        (last !== null &&
-                          last.blockId === block.id &&
-                          now - last.at <= 500 &&
-                          Math.abs(event.clientX - last.x) <= 4 &&
-                          Math.abs(event.clientY - last.y) <= 4);
-                      shapeWordPressRef.current = second ? { blockId: block.id, at: now } : null;
-                      shapeLastPressRef.current = second ? null : { blockId: block.id, at: now, x: event.clientX, y: event.clientY };
-                    }
-                    // A press on a member of the group selected whole: its
-                    // click selects that member inside the group.
-                    groupMemberPressRef.current =
-                      event.button === 0 &&
-                      !event.shiftKey && !event.ctrlKey && !event.metaKey &&
-                      selectedGroupView !== null &&
-                      !selectedGroupView.memberSelected &&
-                      selectedGroupView.ids.has(block.id)
-                        ? block.id
-                        : null;
-                    // A finger on a text box nobody is typing in holds the
-                    
-                    // selects it and the next tap types (onMouseDown below).
-                    // A press on an EMPTY text box or placeholder nobody is
-                    // typing in is a press on the object too (PowerPoint drags
-                    // "Click to add text" by its middle); its click types
-                    // there (`editsTextOnTap`).
-                    const restingEmptyText =
-                      block.type === "text" &&
-                      event.target instanceof HTMLTextAreaElement &&
-                      document.activeElement !== event.target &&
-                      !(block as PresentationTextBlock).text;
-                    const touchOnRestingText =
-                      (block.type === "text" &&
-                        isTouchLikePointer(event) &&
-                        event.target instanceof HTMLTextAreaElement &&
-                        document.activeElement !== event.target) ||
-                      restingEmptyText;
-                    if (!touchOnRestingText && isTextEditTarget(event.target)) {
-                      textSelectionIntentRef.current += 1;
-                      return;
-                    }
-                    
-                    // NEXT_PUBLIC_PRESENTATION_PRESS_DRAG_V1): the guard below
-                    // admits an unselected manipulable block when the flag is
-                    // on. The four earlier failures were verification, not the
-                    // change — jsdom dispatch to the exact wrapper (the
-                    // multi-transform harness) sidesteps every trap this note
-                    // records; the notes stay for whoever drives it in a real
-                    // browser:
-                    //
-                    // PowerPoint and WPS move a shape from a press on it, selected
-                    // or not. Here the block must already be selected, so moving
-                    // something takes two presses, and the second has to land in
-                    // the middle because the eight resize grips cover the edges
-                    // and corners.
-                    //
-                    // The change is two lines: drop `showHandles` from this guard
-                    // and call `selectBlockFromClick` before `beginBlockGesture`.
-                    // Written and reverted four times for want of a way to VERIFY
-                    // it. What that verification actually needs, established since
-                    // and worth having written down:
-                    //
-                    //   - Drive it from `/dev/presentation-solo`, not the gallery.
-                    //     The gallery frames the editor in a fixed box, which makes
-                    //     screen coordinates unusable. That was the first three
-                    //     failures.
-                    //   - Judge "did it move" from the block's own inline left/top,
-                    //     NEVER from a screen boundingBox: the canvas shifts under
-                    //     the blocks whenever the toolbar changes height, and a
-                    //     `.last()` locator silently retargets. Measuring screen
-                    //     positions produced a convincing 335px "move" that never
-                    //     happened.
-                    //   - Judge "is it selected" from `data-selected`, not from a
-                    //     handle count.
-                    //   - Selection must come from the typed selection authority;
-                    //     Esc clears it completely, so a one-shape slide can still
-                    //     represent a genuine no-selection state.
-                    //   - With two, the second covers the whole grabbable area of
-                    //     the first — the insert cascade steps 4% of the slide
-                    //     while a default shape is 34% wide. A press aimed at the
-                    //     lower one lands on the upper one. Not obviously wrong
-                    //     (PowerPoint overlaps too), but it means the test has to
-                    //     hit-test for a point the lower shape actually owns
-                    //     instead of computing one.
-                    // PRESS-DRAG v1 (flag-gated): PowerPoint/WPS move a
-                    // shape from a press on it, selected or not — the press
-                    // both selects (beginBlockGesture sets the id) and starts
-                    // the move. Text editing survives untouched because a text
-                    // block's body is a textarea and the interactive-target
-                    // guard below bails before any gesture starts.
-                    // A finger always may: it lifts an unselected object only
-                    // after a hold, so a swipe across it still scrolls.
-                    const pressDragUnselected =
-                      !showHandles &&
-                      (presentationPressDragEnabled() || isTouchLikePointer(event)) &&
-                      hasLayoutGeometry(block) &&
-                      canManipulateBlock(block);
-                    if (
-                      (!showHandles && !pressDragUnselected) ||
-                      event.button !== 0
-                    ) {
-                      return;
-                    }
-                    const target = event.target;
-                    if (
-                      !touchOnRestingText &&
-                      target instanceof Element &&
-                      target.closest(
-                        "textarea,input,select,button,a,[role='button'],[contenteditable='true']",
-                      )
-                    ) {
-                      return;
-                    }
-                    beginBlockGesture(block.id, "move", event);
-                  }}
-                  onMouseDown={(event) => {
-                    // A double click on the words of a SmartArt shape being
-                    // typed in selects the word under it, as PowerPoint does,
-                    // where the label's move band straddles a frame as tight
-                    // as its words: the band took the second press, and the
-                    
-                    if (
-                      event.button === 0 &&
-                      event.detail === 2 &&
-                      block.type === "text" &&
-                      event.target instanceof Element &&
-                      event.target.closest(".presentation-window__text-move-band") &&
-                      // (A converted diagram's label, or the words of a file's own
-                      // drawing opened before it converts: the band straddles both.)
-                      (presentationSmartArtLabelShape(activeSlide.blocks, block) !== null ||
-                        readNativeSmartArtView(activeSlide.blocks, block) !== null)
-                    ) {
-                      const rich = event.currentTarget.querySelector<HTMLElement>(
-                        '[data-selection-owner="rich-preview"][contenteditable="true"]',
-                      );
-                      const words = rich ? presentationPreviewPlainText(rich) : "";
-                      const hit = rich && words
-                        ? presentationPreviewOffsetAtPoint(
-                            rich,
-                            event.clientX,
-                            event.clientY,
-                            words.length,
-                            undefined,
-                            [...event.currentTarget.querySelectorAll<HTMLElement>(
-                              "textarea, .presentation-window__text-move-band",
-                            )],
-                          )
-                        : null;
-                      if (rich && hit !== null) {
-                        const [start, end] = presentationDoubleClickWord(words, hit);
-                        event.preventDefault();
-                        event.stopPropagation();
-                        if (rich.ownerDocument.activeElement !== rich) rich.focus({ preventScroll: true });
-                        setPresentationPreviewSelection(rich, start, end);
-                        return;
-                      }
-                    }
-                    // A finger's first tap on a text box selects the box, not
-                    // its text: no caret, no keyboard (the tap's compatibility
-                    // mousedown would focus the field). The next tap types.
-                    const press = touchPressRef.current;
-                    // The press on an empty box moves it or (a click) opens
-                    // it: the field takes no caret from the press itself.
-                    if (
-                      block.type === "text" &&
-                      !isCompatMouseFromTouch(event.nativeEvent) &&
-                      event.button === 0 &&
-                      event.target instanceof HTMLTextAreaElement &&
-                      document.activeElement !== event.target &&
-                      !(block as PresentationTextBlock).text &&
-                      canManipulateBlock(block)
-                    ) {
-                      event.preventDefault();
-                    }
-                    if (
-                      block.type === "text" &&
-                      press?.blockId === block.id &&
-                      !press.wasSelected &&
-                      isCompatMouseFromTouch(event.nativeEvent) &&
-                      event.target instanceof HTMLTextAreaElement &&
-                      document.activeElement !== event.target
-                    ) {
-                      event.preventDefault();
-                    }
-                    // PowerPoint for iPad: "tap anywhere on the table to
-                    // select the table". The first tap selects the table
-                    // object; a tap on a cell of the selected table puts the
-                    // caret there (and the cell's selection handles).
-                    const pressedCell =
-                      block.type === "table" && event.target instanceof Element
-                        ? event.target.closest('[data-testid="presentation-table-cell"]')
-                        : null;
-                    if (
-                      pressedCell &&
-                      press?.blockId === block.id &&
-                      !press.wasSelected &&
-                      isCompatMouseFromTouch(event.nativeEvent) &&
-                      !pressedCell.contains(document.activeElement)
-                    ) {
-                      event.preventDefault();
-                    }
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    const pressBeganInWords =
-                      wordsPressBlockRef.current === block.id;
-                    wordsPressBlockRef.current = null;
-                    // The click that ends a press which moved or sized this
-                    // object: the selection it moved stays as it is.
-                    const gestureEnd = gestureEndClickRef.current;
-                    gestureEndClickRef.current = null;
-                    const pressedGroupMember = groupMemberPressRef.current === block.id;
-                    groupMemberPressRef.current = null;
-                    if (
-                      gestureEnd?.blockId === block.id &&
-                      performance.now() - gestureEnd.at < 1000
-                    ) {
-                      event.currentTarget.focus({ preventScroll: true });
-                      return;
-                    }
-                    // The second click on a selected group selects the object
-                    // clicked in it (its own frame and grips; the group's box
-                    // dashed): the group stays the selection its commands take.
-                    // A text box or a shape being typed in takes the caret
-                    // instead, as PowerPoint types in a grouped box's words.
-                    if (
-                      pressedGroupMember &&
-                      block.type !== "text" &&
-                      editingShapeTextId !== block.id
-                    ) {
-                      if (selectedBlockIdRef.current !== block.id) {
-                        selectedBlockIdRef.current = block.id;
-                        setSelectedBlockId(block.id);
-                      }
-                      setGroupMemberFocusId(block.id);
-                      event.currentTarget.focus({ preventScroll: true });
-                      return;
-                    }
-                    // The click that ends the press which just opened this
-                    // shape's text editor (the move gesture captured the
-                    // pointer, so it lands on the block): the caret stays in
-                    // the words -- focusing the block here blurred the editor
-                    // and closed it the moment it opened.
-                    if (block.type === "shape" && editingShapeTextId === block.id) {
-                      return;
-                    }
-                    // The same for a text box whose words took the caret --
-                    // the click ending the tap that opened them, or a click
-                    // in the words themselves -- unless a painter is armed:
-                    // its click paints (below). A click on the box's border
-                    // selects the box as an object.
-                    const endsTextTap = textTapClickRef.current === block.id;
-                    if (endsTextTap) textTapClickRef.current = null;
-                    if (
-                      block.type === "text" &&
-                      !formatPainterRef.current &&
-                      !animationPainterRef.current &&
-                      document.activeElement instanceof HTMLTextAreaElement &&
-                      event.currentTarget.contains(document.activeElement) &&
-                      (endsTextTap ||
-                        (event.target instanceof Element &&
-                          Boolean(
-                            // the words' own box (a press in the field
-                            // and its release on the drawn row click there)
-                            event.target.closest(".presentation-window__text-block"),
-                          )))
-                    ) {
-                      // The box being typed in is the selected one, as in
-                      // PowerPoint (its tools, Delete of the box after Esc).
-                      if (
-                        selectedBlockIdRef.current !== block.id ||
-                        !selectedBlockIdsRef.current.has(block.id)
-                      ) {
-                        selectBlockFromClick(block.id, false, true);
-                      }
-                      return;
-                    }
-                    const eventTargetOwnsTextSelection =
-                      (block.type === "text" || block.type === "table") &&
-                      (pressBeganInWords ||
-                        (event.target instanceof Element &&
-                          Boolean(
-                            event.target.closest(
-                              "textarea,[data-selection-owner='rich-preview'],[data-selection-owner='cell-rich-editor']",
-                            ),
-                          )));
-                    // Canvas/object focus supersedes any cached run range,
-                    // including a range from this SAME text block. A click in
-                    // the real textarea/rich editor retains its live range so
-                    // an armed painter can apply to the highlighted target.
-                    if (!eventTargetOwnsTextSelection) {
-                      clearTextSelectionAuthority();
-                    }
-                    // FORMAT PAINTER: when armed, a click PAINTS the captured style
-                    // onto this block (one undo step) instead of selecting. Single
-                    // mode disarms after; sticky stays armed (handled inside).
-                    if (formatPainterRef.current) {
-                      paintBlockFormat(block.id);
-                      return;
-                    }
-                    // ANIMATION PAINTER: when armed, a click applies the captured
-                    // animation to this block (one undo step) instead of selecting.
-                    if (animationPainterRef.current) {
-                      applyAnimationToBlock(block.id);
-                      return;
-                    }
-                    // A click in a table's cell beside or under its words puts
-                    // the caret in that cell, on its nearest line, as in
-                    // PowerPoint ("click in a cell to type in it"): the cell's
-                    // words fill only their own lines, and a click on the rest
-                    // of the cell selected the table as an object and kept the
-                    // keys on the table, so typed letters went nowhere and Tab
-                    
-                    // first tap on a table still selects the table (iPad).
-                    // (The press that began on a selected table captured the
-                    // pointer for a move, so its click lands on the block: the
-                    // cell is the one under the pointer.)
-                    const cellSelector = "td[data-table-cell-row], th[data-table-cell-row]";
-                    const blockBox = event.currentTarget;
-                    const pressedCellBox =
-                      block.type === "table" &&
-                      !eventTargetOwnsTextSelection &&
-                      !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey &&
-                      event.target instanceof Element &&
-                      !event.target.closest("button,a,[role='button'],input,select,textarea")
-                        ? event.target.closest<HTMLElement>(cellSelector) ??
-                          ((blockBox.ownerDocument.elementsFromPoint?.(event.clientX, event.clientY) ?? [])
-                            .find((element): element is HTMLElement =>
-                              element instanceof HTMLElement && element.matches(cellSelector) &&
-                              blockBox.contains(element)) ?? null)
-                        : null;
-                    const cellWords = pressedCellBox?.querySelector<HTMLElement>(
-                      '[data-testid="presentation-table-cell"]',
-                    );
-                    if (
-                      cellWords &&
-                      !isTextEditLocked(block) &&
-                      (!isCompatMouseFromTouch(event.nativeEvent) || showHandles) &&
-                      officePressIntoTextHost(cellWords, event.clientX, event.clientY)
-                    ) {
-                      selectBlockFromClick(block.id, false, true);
-                      return;
-                    }
-                    if (
-                      eventTargetOwnsTextSelection ||
-                      isTextEditTarget(event.target)
-                    ) {
-                      // Cell, shape and other nested editors own their native
-                      // caret/range. Selecting their object must not focus its
-                      // border (or turn Shift text/cell selection into an
-                      // object multi-select). Only text blocks retain run authority.
-                      selectBlockFromClick(
-                        block.id,
-                        false,
-                        eventTargetOwnsTextSelection,
-                      );
-                      return;
-                    }
-                    // Safari can retain toolbar/body focus because the drag
-                    // pointerdown is prevented. Keep keys on the clicked object.
-                    event.currentTarget.focus({ preventScroll: true });
-                    const wantsMultiSelect =
-                      event.shiftKey || event.ctrlKey || event.metaKey;
-                    // The geometry multi-select set (align/distribute) only accepts
-                    // positioned blocks. A shift/ctrl/cmd-click on a NON-geometry
-                    // block must NOT touch that set — adding the id corrupts it with
-                    // a block that has no rect, and clearing it would silently drop
-                    // an in-progress multi-selection. So such a click only updates
-                    // the legacy single-selection pointer (the inspector follows it)
-                    // and leaves the geometry multi-select set untouched.
-                    if (wantsMultiSelect && !isGeometryBlock) {
-                      setSelectedBlockId(block.id);
-                      return;
-                    }
-                    // shift / ctrl / cmd click on a geometry block toggles
-                    // multi-select; a plain click selects only this block.
-                    selectBlockFromClick(
-                      block.id,
-                      isGeometryBlock && wantsMultiSelect,
-                    );
-                  }}
-                  onFocus={(event) => {
-                    // The editor gives its text back the focus after every
-                    // keystroke; re-selecting the selected object then would
-                    // re-render the whole editor for nothing.
-                    if (
-                      selectedBlockId !== block.id ||
-                      selectedBlockIdRef.current !== block.id
-                    ) {
-                      // Focus going into a box's words selects the box as
-                      // the click ending that press does (below), so the
-                      // press draws the window once, not once per event.
-                      if (
-                        block.type === "text" &&
-                        event.target instanceof HTMLTextAreaElement &&
-                        !formatPainterRef.current &&
-                        !animationPainterRef.current
-                      ) {
-                        selectBlockFromClick(block.id, false, true);
-                      } else {
-                        setSelectedBlockId(block.id);
-                      }
-                    }
-                    // Tab bringing focus onto an object from outside the
-                    // selection selects it whole: a grouped object as its
-                    // group, as a click and the next Tab do.
-                    const focusGroupId = (block as { groupId?: unknown }).groupId;
-                    if (
-                      event.target === event.currentTarget &&
-                      performance.now() - tabKeyAtRef.current < 400 &&
-                      typeof focusGroupId === "string" &&
-                      focusGroupId !== "" &&
-                      !selectedBlockIdsRef.current.has(block.id)
-                    ) {
-                      const members = new Set(
-                        activeSlide.blocks
-                          .filter(
-                            (candidate) =>
-                              (candidate as { groupId?: unknown }).groupId === focusGroupId,
-                          )
-                          .map((candidate) => candidate.id),
-                      );
-                      selectedBlockIdRef.current = block.id;
-                      selectedBlockIdsRef.current = members;
-                      setSelectedBlockIds(members);
-                    }
-                    // Focus coming back to the words being typed -- a text
-                    // box's, a shape's label, a table cell's -- keeps the
-                    // range they hold: a ribbon tab, a closing menu or a
-                    // dialog gives it back, and a shape's selected word then
-                    // lost its range and Bold made the whole shape bold
-                    
-                    if (
-                      !(
-                        event.target instanceof Element &&
-                        event.target !== event.currentTarget &&
-                        event.target.closest(
-                          "textarea,[data-selection-owner='rich-preview'],[data-selection-owner='cell-rich-editor'],[data-shape-rich-editor='true']",
-                        )
-                      )
-                    ) {
-                      clearTextSelectionAuthority();
-                    }
-                  }}
-                  // Right-click a positioned block → its context menu (Copy / Paste
-                  // / z-order / Group / Ungroup / Delete). Only geometry blocks get
-                  // it; a plain body block falls through to the native menu.
-                  onContextMenu={
-                    isGeometryBlock
-                      ? (event) => openBlockContextMenu(event, block.id)
-                      : undefined
-                  }
-                  // The move gesture captures the pointer on this block, so
-                  // the browser delivers a double click here, not to the
-                  // chart body whose handler edits the title under the
-                  // pointer (PowerPoint: double-click a chart title to type
-                  // in it). The chart body gets the double click where it
-                  // happened; its own handler stops the bubble.
-                  onDoubleClick={
-                    block.type === "chart"
-                      ? (event) => {
-                          if (event.target !== event.currentTarget) return;
-                          const body = event.currentTarget.querySelector<HTMLElement>(
-                            ".presentation-window__chart-block",
-                          );
-                          if (!body) return;
-                          const hit =
-                            typeof document.elementFromPoint === "function"
-                              ? document.elementFromPoint(event.clientX, event.clientY)
-                              : null;
-                          (hit && body.contains(hit) ? hit : body).dispatchEvent(
-                            new MouseEvent("dblclick", {
-                              bubbles: true,
-                              cancelable: true,
-                              composed: true,
-                              clientX: event.clientX,
-                              clientY: event.clientY,
-                              screenX: event.screenX,
-                              screenY: event.screenY,
-                              detail: 2,
-                            }),
-                          );
-                        }
-                      : undefined
-                  }
-                >
-                  {autofitSmartTagVisible ? (
-                    <PresentationBlockAutofitSmartTag
-                      ctl={{
-                        t,
-                        autofitSmartMenuBlockId,
-                        setAutofitSmartMenuBlockId,
-                        autofitSmartMenuTriggerRef,
-                        setTextBlockAutofit,
-                        block,
-                      }}
-                    />
-                  ) : null}
-                  {
-
-
-
-
-
-
-
-
-}
-                  {(block.type === "text" || presentationShapeIsNativeTextBox(block)) &&
-                  isGeometryBlock &&
-                  !smartArtLabelYieldsToShape && // its shape takes the press
-                  !isBlockLocked(block) &&
-                  !nativeGroupHandleBlocked &&
-                  canManipulateBlock(block)
-                    ? (["n", "e", "s", "w"] as const).map((edge) => (
-                        <div
-                          key={edge}
-                          className="presentation-window__text-move-band"
-                          data-edge={edge}
-                          data-testid={`presentation-text-move-band-${edge}`}
-                          aria-hidden="true"
-                        />
-                      ))
-                    : null}
-                  {showHandles
-                    ? ((handles) =>
-                        selectionChromeHost
-                          ? createPortal(
-                              // The block's own frame and transform, mirrored,
-                              // so the chrome sits where the block does (a
-                              // drag preview included) while painting above
-                              // every block.
-                              <div
-                                key={`chrome:${block.id}`}
-                                className="presentation-window__selection-chrome"
-                                data-testid="presentation-selection-chrome"
-                                data-chrome-for={block.id}
-                                // A stroke the lasso took: the one shared
-                                // frame stands for its own frame and grips.
-                                {...(inkLassoView?.ids.has(block.id)
-                                  ? { [INK_LASSO_MEMBER_ATTRIBUTE]: "true" }
-                                  : {})}
-                                // One of the chart's elements selected: the
-                                // chart's own frame and grips step back.
-                                data-chart-element-selected={
-                                  block.type === "chart" && block.id === selectedBlockId && selectedChartElementArea
-                                    ? "true"
-                                    : undefined
-                                }
-                                data-group-frame={groupChromeOnBox ? "true" : undefined}
-                                style={{
-                                  ...(groupChromeOnBox && selectedGroupView
-                                    ? {
-                                        position: "absolute",
-                                        left: `${(selectedGroupView.box.left / activeSlideBounds.width) * 100}%`,
-                                        top: `${(selectedGroupView.box.top / activeSlideBounds.height) * 100}%`,
-                                        width: `${(selectedGroupView.box.width / activeSlideBounds.width) * 100}%`,
-                                        height: `${(selectedGroupView.box.height / activeSlideBounds.height) * 100}%`,
-                                        transform: selectedGroupView.rotation
-                                          ? `rotate(${selectedGroupView.rotation}deg)`
-                                          : undefined,
-                                        transformOrigin: "center center",
-                                      }
-                                    : {
-                                        ...(blockGeometryStyle(
-                                          block,
-                                          activeSlideBounds,
-                                          previewGeom,
-                                          previewRotation,
-                                          previewFlip,
-                                        ) ?? {}),
-                                        ...(smartArtCameraStyle ?? {}),
-                                      }),
-                                  zIndex: undefined,
-                                  pointerEvents: "none",
-                                  overflow: "visible",
-                                }}
-                              >
-                                {wearsDrawingSelection || groupChromeOnBox ? (
-                                  <div
-                                    className={officeDrawingSelectionStyles.frame}
-                                    data-text-editing={textEditing ? "true" : undefined}
-                                    aria-hidden="true"
-                                    // The object's own frame is its outline (the
-                                    // block's `selectedHost`); a group's is this
-                                    // line, drawn the size of the group's box.
-                                    style={groupChromeOnBox ? { inset: 0 } : undefined}
-                                  />
-                                ) : null}
-                                {handles}
-                              </div>,
-                              selectionChromeHost,
-                            )
-                          : handles)(
-                        <PresentationBlockHandles
-                          ctl={{
-                            t,
-                            // the grip's glyph keeps its size on screen
-                            slideDesignScale: slideScreenScale,
-                            smartArtFrameRotateGrip,
-                            activeSlideBounds,
-                            pictureSizeCommandRef,
-                            beginBlockGesture,
-                            beginRotateGesture,
-                            presentationShapeDrawingOverlay,
-                            block,
-                            // More than this one object selected: a lone selected shape shows its
-                            
-                            // selection too, so Edit Points drew nothing).
-                            isMultiSelected: isMultiSelected && selectedBlockIds.size > 1,
-                            // On the group's own frame a group the file
-                            // nests turns whole (its `rot`); a member of it
-                            // does not turn alone.
-                            nativeGroupMoveOnly: nativeGroupMoveOnly && !groupChromeOnBox && !memberAloneChrome,
-                            showResizeHandles,
-                            visibleResizeHandles,
-                            sceneLocked: smartArtSceneLocked,
-                            // On the group's frame the grips are the group's.
-                            lineEnds: connectorLine && !groupChromeOnBox,
-                            rotateLocked: isFrameLockedByFile(block, "rotate", frameLockScope),
-                          }}
-                        />,
-                      )
-                    : null}
-                  <div
-                    className="presentation-window__block-order"
-                    style={{
-                      display: importedPptxBlock ? "none" : "flex",
-                      gap: 2,
-                      justifyContent: "flex-end",
-                      marginBottom: 2,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        moveBlock(block.id, "up");
-                      }}
-                      disabled={blockIndex === 0}
-                      title={t("presentation.moveBlockUp")}
-                      aria-label={t("presentation.moveBlockUp")}
-                      data-testid="presentation-move-block-up"
-                      style={blockOrderButtonStyle}
-                    >
-                      <ChevronUp size={12} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        moveBlock(block.id, "down");
-                      }}
-                      disabled={blockIndex === activeSlide.blocks.length - 1}
-                      title={t("presentation.moveBlockDown")}
-                      aria-label={t("presentation.moveBlockDown")}
-                      data-testid="presentation-move-block-down"
-                      style={blockOrderButtonStyle}
-                    >
-                      <ChevronDown size={12} />
-                    </button>
-                  </div>
-                  {block.type === "image" ? (
-                    <PresentationCanvasImageBlock
-                      ctl={{
-                        t,
-                        cropEditingId,
-                        cropPreview,
-                        replaceBlock,
-                        deleteBlock,
-                        selectBlockFromClick,
-                        beginReplaceImage,
-                        nudgeCropHandle,
-                        beginCropGesture,
-                        block,
-                        displayedImageBlock,
-                        pictureSmartArtMemberId,
-                        pictureSmartArtReplaceDisabledReason,
-                        pictureSmartArtReplaceLabel,
-                        deckThemeGridColors,
-                        pictureNotDrawn: selectedBlockIds.has(block.id) && picturesNotDrawn.has(
-                          pictureObjectTokenSha(block.src) ?? pictureObjectUrlSha(block.src) ?? "",
-                        ),
-                        model3dFailureNotice: selectedBlockIds.has(block.id)
-                          ? t("presentation.preservedObject.model3d")
-                          : null,
-                      }}
-                    />
-                  ) : block.type === "chart" ? (
-                    <PresentationCanvasChartBlock
-                      ctl={{
-                        t,
-                        locale,
-                        setChartFormatFocus,
-                        chartFormatFocusTokenRef,
-                        chartTitleEdit,
-                        setChartTitleEdit,
-                        chartDesktopPreview,
-                        setChartDesktopPreview,
-                        autosave,
-                        themeAccentColors,
-                        contextualChartBlock,
-                        chartDesktopAttrs,
-                        linkedChartDataReason,
-                        literalChartDataShapeReason,
-                        chartTypeLockReason,
-                        chartLockNotice,
-                        chartReadOnlyReason,
-                        chartRibbonIdentity,
-                        chartTitleLockReason,
-                        commitChartDesktop,
-                        openChartAreaFormat,
-                        openChartWorkbook,
-                        selectPresentationRibbonTab,
-                        block,
-                        // A chart of a group selected whole is not selected
-                        // itself: its elements are picked once the chart is
-                        // (the next click), as PowerPoint goes group, chart,
-                        // element.
-                        isSelected:
-                          isSelected &&
-                          !(selectedGroupView?.ids.has(block.id) && !selectedGroupView.memberSelected),
-                        importedPptxBlock,
-                        previewGeom,
-                      }}
-                    />
-                  ) : block.type === "table" ? (
-                    <PresentationCanvasTableBlock
-                      ctl={{
-                        pageId,
-                        guestMode,
-                        t,
-                        tableCellFocus,
-                        setTableCellFocus,
-                        tableSelectionAnchor,
-                        setTableSelectionAnchor,
-                        tableSelectionScope,
-                        setTableSelectionScope,
-                        tableGridlinesVisible: false,
-                        tableCellInputRefs,
-                        editingHostHandover,
-                        setTableCharacterSelectionVersion,
-                        restoringTableScopeFocusRef,
-                        pendingTableKeyboardFocusRef,
-                        tableBorderPenMode,
-                        tableBorderPenHover,
-                        setTableBorderPenHover,
-                        tableBorderPenStroke,
-                        setTableBorderPenStroke,
-                        tableBorderPenStrokeRef,
-                        tableBorderPenOverlayRef,
-                        tableBorderPenSplitOriginRef,
-                        tableBorderPenSplitRef,
-                        tableBorderPenSplit,
-                        setTableBorderPenSplit,
-                        tableShiftSelectRef,
-                        textSelectionIntentRef,
-                        tableHomeFormatRef,
-                        tableAxisPreview,
-                        autosave,
-                        activeSlide,
-                        contextualTableBlock,
-                        tableFormattingSelection,
-                        replaceBlock,
-                        deleteBlock,
-                        beginBlockGesture,
-                        updateTableCell,
-                        copyTableSelectionToClipboard,
-                        cutTableSelectionToClipboard,
-                        clearSelectedTableContents,
-                        pasteTableClipboard,
-                        appendTableRowToBlock,
-                        appendTableColumnToBlock,
-                        deleteLastTableRowFromBlock,
-                        deleteLastTableColumnFromBlock,
-                        insertTableRowAtBoundary,
-                        insertTableColumnAtBoundary,
-                        selectTableScope,
-                        mergeTableSelection,
-                        splitTableCell,
-                        tableSelectionCanMerge,
-                        tableFocusCanSplit,
-                        beginTableBorderPenStroke,
-                        extendTableBorderPenStroke,
-                        commitTableBorderPenStroke,
-                        beginTableAxisResize,
-                        block,
-                        showHandles,
-                        displayedTableBlock,
-                        tableCellPositions,
-                        tableColumnCount,
-                      }}
-                    />
-                  ) : block.type === "shape" ? (
-                    <PresentationCanvasShapeBlock
-                      ctl={{
-                        t,
-                        setSelectedBlockId,
-                        editingShapeTextId,
-                        setEditingShapeTextId,
-                        shapeTextBlankDraft,
-                        setShapeTextBlankDraft,
-                        shapeAdjustPreview,
-                        textSelectionIntentRef,
-                        cropEditingId,
-                        cropPreview,
-                        fontDisplay,
-                        activeSlide,
-                        editSmartArtShapeText,
-                        handleShapeTextChange,
-                        nudgeCropHandle,
-                        beginCropGesture,
-                        recordShapeTextSelection,
-                        commitShapeRichText,
-                        recordShapeTextRange,
-                        takeShapeRichSelection,
-                        placeShapeTextCaret,
-                        heldBlockWords,
-                        editingHostHandover,
-                        toggleShapeWordsRunStyle: (key) => {
-                          toggleLiveRibbonRunStyle(key);
-                        },
-                        copyShapeText,
-                        pasteShapeTextRuns,
-                        undo,
-                        redo,
-                        block,
-                        isSelected,
-                        fontSizeUnit,
-                        previewGeom,
-                        smartArtFlat2d,
-                      }}
-                    />
-                  ) : block.type === "embed" ? (
-                    <PresentationCanvasEmbedBlock
-                      ctl={{
-                        t,
-                        videoStylePreview: null,
-                        mediaControlBarInside,
-                        deckThemeGridColors,
-                        contextualMediaBlock,
-                        contextualMediaKind,
-                        contextualMediaPlaybackSettings,
-                        deleteBlock,
-                        updateEmbedBlock,
-                        selectedMediaBookmark,
-                        setSelectedMediaBookmark,
-                        canvasMediaElement,
-                        block,
-                      }}
-                    />
-                  ) : (
-                    <PresentationCanvasTextBlock
-                      ctl={{
-                        t,
-                        theme,
-                        masters,
-                        findRevealRef,
-                        textSelectionRef,
-                        setTextSelectionSnapshot: keepTextSelectionSnapshot,
-                        textSelectionIntentRef,
-                        deckContentGenerationRef,
-                        fontDisplay,
-                        activeSlide,
-                        activeSlideBounds,
-                        undo,
-                        redo,
-                        showProofingErrors,
-                        deleteBlock,
-                        captureTextEditSelection,
-                        consumeTextEditSelection,
-                        updateTextBlock,
-                        composingTextRef,
-                        composingImportedPreviewRef,
-                        handleTextBlockBodyChange,
-                        captureImportedRichTextSelection,
-                        followImportedRichTextSelection,
-                        restoreImportedPreviewSelectionAfterCommit,
-                        pendingImportedPreviewCaret,
-                        heldBlockWords,
-                        editingHostHandover,
-                        commitImportedPreviewText,
-                        replaceImportedPreviewSelection,
-                        clearLiveRibbonList,
-                        pasteIntoImportedPreview,
-                        copyFromImportedPreview,
-                        adjustParagraphCaretLevel,
-                        applyTextBlockRunToggle,
-                        runStyleAtBodySelection,
-                        blockAriaName,
-                        handleFindRevealedKey,
-                        fillContentPlaceholder,
-                        block,
-                        // The equation being written in this box, drawn in
-                        // its line (only drawn: the box's words are its own).
-                        previewBlock:
-                          presentationEquations.equationSlot?.blockId === block.id
-                            ? presentationEquations.equationSlot.block
-                            : undefined,
-                        isSelected,
-                        fontSizeUnit,
-                        importedPptxText,
-                        importedTextHasPreview,
-                        importedTextInsets,
-                      }}
-                    />
-                  )}
-                </PresentationLiveBlockFrame>
-                </PresentationSmartArtGraphicHitLayer>
-              );
-            })}
+                }
+                const view = presentationCanvasBlockView(block, canvasSelection);
+                return (
+                  <PresentationCanvasBlockSlot
+                    key={`${block.id}:${blockIndex}`}
+                    block={block}
+                    blockIndex={blockIndex}
+                    view={view}
+                    shared={canvasBlockShared}
+                    chrome={presentationCanvasBlockTakesChrome(view) ? canvasChrome : null}
+                    kindCtl={kindCtlOf(block)}
+                  />
+                );
+              });
+            })()}
             {/* SmartArt diagram frame: drawn around every member while one of
                 them is selected (PowerPoint's SmartArt border). Its edges drag
                 the whole diagram and its handles resize every member together;
@@ -53812,24 +53776,11 @@ export default function PresentationWindow({
                 the empty canvas. Positioned as a percentage of the slide bounds
                 (EMU → %) exactly like the blocks, so it tracks the zoomed canvas;
                 non-interactive so it never intercepts the pointer mid-drag. */}
-            {marqueePreview ? (
-              <div
-                className="presentation-window__marquee"
-                data-testid="presentation-marquee"
-                aria-hidden="true"
-                style={{
-                  position: "absolute",
-                  left: `${(marqueePreview.left / activeSlideBounds.width) * 100}%`,
-                  top: `${(marqueePreview.top / activeSlideBounds.height) * 100}%`,
-                  width: `${(marqueePreview.width / activeSlideBounds.width) * 100}%`,
-                  height: `${(marqueePreview.height / activeSlideBounds.height) * 100}%`,
-                  border: "1px solid rgba(45, 127, 116, 0.9)",
-                  background: "color-mix(in srgb, var(--console-accent, var(--console-accent, #2d7f74)) 12%, transparent)",
-                  pointerEvents: "none",
-                  zIndex: 9998,
-                }}
-              />
-            ) : null}
+            <PresentationMarqueeBox
+              register={registerMarqueeBox}
+              slideWidth={activeSlideBounds.width}
+              slideHeight={activeSlideBounds.height}
+            />
             {/* DECK-LEVEL HEADER & FOOTER overlay (view-only): the footer text
                 (bottom-left) and the active slide's 1-based number (bottom-right),
                 shown only when configured so the user SEES on the canvas what the
@@ -55729,6 +55680,25 @@ export default function PresentationWindow({
           }}
         />,
       ) : null}
+      {pictureExportFormat !== null ? (
+        <PresentationExportPicturesDialog
+          open
+          formatLabel={pictureExportFormat === "jpeg" ? "JPEG" : pictureExportFormat.toUpperCase()}
+          slideWidthEmu={slideDimension(slides[activeIndex] ?? slides[0], "widthEmu")}
+          slideHeightEmu={slideDimension(slides[activeIndex] ?? slides[0], "heightEmu")}
+          onAllSlides={(dpi) => {
+            const format = pictureExportFormat;
+            setPictureExportFormat(null);
+            void exportAllSlidesAsImages(format, dpi);
+          }}
+          onJustThisOne={(dpi) => {
+            const format = pictureExportFormat;
+            setPictureExportFormat(null);
+            void exportSlideAsImage(format, dpi);
+          }}
+          onCancel={() => setPictureExportFormat(null)}
+        />
+      ) : null}
       {videoExportFormat !== null ? (
         <Suspense fallback={null}><PresentationVideoExportDialog
           open
@@ -55746,7 +55716,13 @@ export default function PresentationWindow({
         /></Suspense>
       ) : null}
       {presentMode && presentSlides.length > 0 ? (
+        <div
+          ref={presentHostRef}
+          className="presentation-present-host"
+          data-testid="presentation-present-host"
+        >
         <PresentationPresentOverlay
+          randomEffectSeed={randomEffectSeedRef.current}
           slides={absentScenePresentSlides(presentSlides)}
           presentIndex={presentIndex}
           peekSlideTexture={peekSlideTexture}
@@ -55786,6 +55762,24 @@ export default function PresentationWindow({
               : retreatPresent
           }
           onJumpToSlide={jumpPresent}
+          showLayer={renderShowLayer()}
+          showLayerCovers={presentMode && showAllSlidesAvailable && showAllSlidesOpen}
+          magnify={presentMode ? showMagnify : null}
+          magnifyArmed={presentMode && showMagnifyArmed}
+          onToggleMagnify={toggleShowMagnify}
+          onMagnifyAt={magnifyShowAt}
+          onMagnifyPan={panShowMagnifyBy}
+          onMagnifyPinch={pinchShowMagnify}
+          onStageContextMenu={
+            showAllSlidesAvailable
+              ? (x, y) => {
+                  // A right click on a magnified slide ends the magnification, no menu (show-magnify v3, D).
+                  if (showMagnifyRef.current || showMagnifyArmedRef.current) endShowMagnify();
+                  else setShowMenuAt({ x, y });
+                }
+              : undefined
+          }
+          onSeeAllSlides={showAllSlidesAvailable ? openShowAllSlides : undefined}
           onClickAction={dispatchPresentationClickAction}
           overlayRef={presentOverlayRef}
           onExit={requestExitPresentMode}
@@ -55845,10 +55839,33 @@ export default function PresentationWindow({
           onAnnotationErase={eraseAnnotation}
           onClearAnnotations={clearAnnotations}
         />
+        {/* BLACK / WHITE screen overlay (PowerPoint `B`/`W`): an opaque sheet
+            over the slideshow. Clicking it (like pressing a key) returns to
+            the slide. In the show's host, above the present overlay, so it
+            covers the stage in full screen and in the page's top layer. */}
+        {blankScreen !== null ? (
+          <div
+            data-testid="presentation-blank-screen"
+            data-blank={blankScreen}
+            role="button"
+            tabIndex={0}
+            aria-label={t(
+              blankScreen === "black"
+                ? "presentation.blankScreen.blackLabel"
+                : "presentation.blankScreen.whiteLabel",
+            )}
+            onClick={() => setBlankScreen(null)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 2147483647,
+              background: blankScreen === "black" ? "#000000" : "#ffffff",
+              cursor: "pointer",
+            }}
+          />
+        ) : null}
+        </div>
       ) : null}
-      {/* BLACK / WHITE screen overlay (PowerPoint `B`/`W`): an opaque sheet over
-          the slideshow. Clicking it (like pressing a key) returns to the slide.
-          Rendered above the present overlay so it fully covers the stage. */}
       <PresentationBulletsNumberingDialog
         open={bulletsDialogOpen && ribbonListSelection !== null}
         source={bulletsNumberingSource(
@@ -55980,27 +55997,6 @@ export default function PresentationWindow({
             block.id === linkSession.blockId && canEditBlockContent(block) && JSON.stringify(block) === linkSession.signature)}
         onInsert={insertSelectedTextLink} onCancel={() => setLinkSession(null)}
       /></Suspense> : null}
-      {presentMode && blankScreen !== null ? (
-        <div
-          data-testid="presentation-blank-screen"
-          data-blank={blankScreen}
-          role="button"
-          tabIndex={0}
-          aria-label={t(
-            blankScreen === "black"
-              ? "presentation.blankScreen.blackLabel"
-              : "presentation.blankScreen.whiteLabel",
-          )}
-          onClick={() => setBlankScreen(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 2147483647,
-            background: blankScreen === "black" ? "#000000" : "#ffffff",
-            cursor: "pointer",
-          }}
-        />
-      ) : null}
       {slidePictures.stage}
       </div>
       {presentationFirstPaintPending ? (

@@ -71,7 +71,9 @@ import { PresentationTypingTextarea } from "./PresentationTypingTextarea";
 import { inputIsLetterInPlace, usePresentationRichTypingKey } from "./usePresentationRichTypingKey";
 import { browserReplacement } from "../../../../lib/presentation/collab-caret";
 import { isTextEditLocked, isTextKeptReadOnly, isTextKeptReadOnlyTruncated } from "@mrnote/core/web/lib/presentation-text-case.ts";
-import { useCallback, useId, useLayoutEffect, useRef } from "react";
+import { degradedObjectOf } from "@mrnote/core/web/lib/presentation-object-degraded.ts";
+import { memo, useCallback, useId, useLayoutEffect, useRef } from "react";
+import { shallowEqualRecords } from "@mrnote/core/web/lib/shallow-equal.ts";
 import type {
   PointerEvent as ReactPointerEvent,
   KeyboardEvent as ReactKeyboardEvent,
@@ -124,6 +126,10 @@ function escapeTextToObject(event: ReactKeyboardEvent<HTMLElement>): boolean {
   return true;
 }
 
+/** Where a composition began in a rich body: the words it showed and the
+ * selection the marked letters replace (`onCompositionStart`). */
+const compositionBegan = new WeakMap<HTMLElement, { text: string; start: number; end: number }>();
+
 /** The window bindings this tab reads, passed through unchanged. */
 export interface PresentationCanvasTextBlockCtl {
   t: ReturnType<typeof useTranslations<"console-notebooks">>;
@@ -141,7 +147,9 @@ export interface PresentationCanvasTextBlockCtl {
   redo: () => void;
   showProofingErrors: boolean;
   deleteBlock: (blockId: string) => void;
-  captureTextEditSelection: (blockId: string, start: number, end: number) => void;
+  captureTextEditSelection: (
+    blockId: string, start: number, end: number, shown?: string, shownRange?: { start: number; end: number },
+  ) => void;
   consumeTextEditSelection: (blockId: string) => TextEditSelection | undefined;
   updateTextBlock: (blockId: string, text: string, editSelection?: TextEditSelection, insertedLineBreaksAreSoft?: boolean) => void;
   composingTextRef: RefObject<boolean>;
@@ -377,7 +385,7 @@ function smartArtPromptFitted(block: PresentationTextBlock, words: string): Pres
   } as unknown as PresentationTextBlock;
 }
 
-export function PresentationCanvasTextBlock({ ctl }: { ctl: PresentationCanvasTextBlockCtl }) {
+function PresentationCanvasTextBlockBody({ ctl }: { ctl: PresentationCanvasTextBlockCtl }) {
   // Shrink text on overflow measured on the slide's drawing: draw again when it lands.
   useAutofitMeasureVersion();
   const {
@@ -593,10 +601,13 @@ export function PresentationCanvasTextBlock({ ctl }: { ctl: PresentationCanvasTe
                         }
                         onBeforeInput={(event) => {
                           const el = event.currentTarget;
+                          // With the words the field shows before the key
+                          // (a typing burst's letters may be there only).
                           captureTextEditSelection(
                             block.id,
                             el.selectionStart ?? 0,
                             el.selectionEnd ?? 0,
+                            el.value,
                           );
                         }}
                         onKeyDown={(event) => {
@@ -1123,10 +1134,20 @@ export function PresentationCanvasTextBlock({ ctl }: { ctl: PresentationCanvasTe
                                     paragraphs,
                                   );
                                   if (range) {
+                                    // With the words the body shows now: a
+                                    // typing burst's letters may be shown
+                                    // here before the drawn words hold them.
+                                    // Under a composition, the words it
+                                    // began in and where (its marked letters
+                                    // are in the body already).
+                                    const began = composingImportedPreviewRef.current
+                                      ? compositionBegan.get(event.currentTarget) : undefined;
                                     captureTextEditSelection(
                                       block.id,
                                       range.start,
                                       range.end,
+                                      began ? began.text : composingImportedPreviewRef.current ? undefined : text,
+                                      began ? { start: began.start, end: began.end } : undefined,
                                     );
                                   }
                                 },
@@ -1145,8 +1166,14 @@ export function PresentationCanvasTextBlock({ ctl }: { ctl: PresentationCanvasTe
                                     browserReplacement(event.nativeEvent),
                                   );
                                 },
-                                onCompositionStart: () => {
+                                onCompositionStart: (
+                                  event: ReactCompositionEvent<HTMLDivElement>,
+                                ) => {
                                   composingImportedPreviewRef.current = true;
+                                  const began = presentationPreviewPlainText(event.currentTarget);
+                                  const at = presentationPreviewSelection(event.currentTarget, began.length, paragraphs);
+                                  if (at) compositionBegan.set(event.currentTarget, { text: began, start: at.start, end: at.end });
+                                  else compositionBegan.delete(event.currentTarget);
                                 },
                                 onCompositionEnd: (
                                   event: ReactCompositionEvent<HTMLDivElement>,
@@ -1717,7 +1744,7 @@ export function PresentationCanvasTextBlock({ ctl }: { ctl: PresentationCanvasTe
                           {t("presentation.deleteBlock")}
                         </button>
                       ) : null}
-                      {isSelected && isTextKeptReadOnly(block) ? (
+                      {isSelected && isTextKeptReadOnly(block) && !degradedObjectOf(block) ? (
                         // Words the import could not make editable (PPTX
                         // reading row 814): drawn as the file has them and
                         // kept unchanged; selecting them says so.
@@ -1751,3 +1778,18 @@ export function PresentationCanvasTextBlock({ ctl }: { ctl: PresentationCanvasTe
                     </PresentationTextEngineSurfaceContext.Provider>
   );
 }
+
+/**
+ * A text box on the editing canvas, drawn again only when a value of its `ctl`
+ * changes (TRIAGE 155): the canvas slot gives it the window's stable
+ * handlers and the values filtered to this block, so a change of selection
+ * elsewhere on the slide does not draw it again.
+ */
+export const PresentationCanvasTextBlock = memo(
+  PresentationCanvasTextBlockBody,
+  (previous, next) =>
+    shallowEqualRecords(
+      previous.ctl as unknown as Record<string, unknown>,
+      next.ctl as unknown as Record<string, unknown>,
+    ),
+);

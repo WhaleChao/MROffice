@@ -29,6 +29,7 @@ import type { PageItem } from "@mrnote/core/web/lib/notebook-sdk.ts";
 import type { ResourceRead, ResourceVersionRead } from "@mrnote/core/web/lib/resources-sdk.ts";
 import type { UseWorkspaceMeResult, WorkspaceMe } from "@mrnote/core/web/lib/use-workspace-me.ts";
 import type { PdfWorkingRecovery } from "../../../../../lib/pdf/native-working-session";
+import { GUEST_PDF_SIGN_UP_SENTENCE } from "../../../../../lib/pdf/reader-refusal-text";
 import { rememberPdfSourceBytes } from "../../../../../lib/pdf/source-bytes-memo";
 import type { createPdfWorkingRecoveryStore } from "../../../../../lib/pdf/working-recovery-store";
 
@@ -214,7 +215,7 @@ export function guestPdfDownloadUrl(source: PdfGuestSource): string {
 export const GUEST_PDF_REFUSAL_CODE = "guest_sign_up_required";
 
 function guestRefusal(): ApiRequestError {
-  return new ApiRequestError("Sign up to use this with your own files.", {
+  return new ApiRequestError(GUEST_PDF_SIGN_UP_SENTENCE, {
     status: 403,
     code: GUEST_PDF_REFUSAL_CODE,
   });

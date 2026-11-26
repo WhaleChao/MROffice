@@ -2494,7 +2494,7 @@ export function reflowPlaceholders<
   return changed ? next : (slides as S[]);
 }
 
-function nativePlaceholderRole(type: string): {
+export function nativePlaceholderRole(type: string): {
   role: PlaceholderRole;
   placeholder: string;
 } | null {

@@ -138,6 +138,11 @@ export function clearRangeContents<T extends BlockClearCell>(
       // (style/comment/span/lock) preserved.
       const cleared = { ...existing, value: "", kind: "text" } as T;
       delete (cleared as Record<string, unknown>).formula;
+      // The file's "stored as text" mark is the text's: on the blank it made
+      // the save write an empty string where Excel leaves no value
+      
+      // read as text, cleared and read back as "").
+      delete (cleared as Record<string, unknown>).stringValue;
       // A legacy array formula goes whole with its formula (part of one is
       // refused before this runs): left on the blank, the page still held an
       // array there that the save did not write (xlsx-rounds R480-X22 WALK2).
@@ -151,6 +156,7 @@ export function clearRangeContents<T extends BlockClearCell>(
       delete (cleared as Record<string, unknown>).hyperlink;
       delete (cleared as Record<string, unknown>).hyperlinkTooltip;
       delete (cleared as Record<string, unknown>).hyperlinkDisplay;
+      delete (cleared as Record<string, unknown>).inertHyperlink;
       // A picture placed in the cell is its content (Place in Cell).
       delete (cleared as Record<string, unknown>).picture;
       delete (cleared as Record<string, unknown>).display;
@@ -319,6 +325,8 @@ function applyClearVariantToCell<T extends BlockClearCell>(
     // The imported ScreenTip/display extras describe the link — clear together.
     delete next.hyperlinkTooltip;
     delete next.hyperlinkDisplay;
+    // A link held inert (reading 1046) is a link all the same.
+    delete next.inertHyperlink;
   }
   return next as T;
 }
@@ -372,6 +380,8 @@ export function clearRangeBy<T extends BlockClearCell>(
           (existing as Record<string, unknown>).hyperlinkTooltip &&
         (cleared as Record<string, unknown>).hyperlinkDisplay ===
           (existing as Record<string, unknown>).hyperlinkDisplay &&
+        (cleared as Record<string, unknown>).inertHyperlink ===
+          (existing as Record<string, unknown>).inertHyperlink &&
         // The in-cell formats (a bold word inside the text) and the phonetic
         // guide are facets too: a cell formatted only inside its text was
         // taken as unchanged and kept its bold (live audit S-036).

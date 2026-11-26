@@ -362,6 +362,7 @@ export function clearMovedSourceCell(
   delete cleared.hyperlink;
   delete cleared.hyperlinkTooltip;
   delete cleared.hyperlinkDisplay;
+  delete cleared.inertHyperlink;
   delete cleared.comment;
   if (dropLocked) {
     delete cleared.locked;
@@ -1232,6 +1233,7 @@ export function pastedGridSheet<S extends PasteButtonSheet>(
           delete replaced.hyperlink;
           delete replaced.hyperlinkTooltip;
           delete replaced.hyperlinkDisplay;
+          delete replaced.inertHyperlink;
           delete replaced.comment;
         }
         // The copied cell's identity, not its characters: a literal
@@ -1306,6 +1308,10 @@ export function pastedGridSheet<S extends PasteButtonSheet>(
           if (pastedLink.hyperlinkDisplay) {
             replaced.hyperlinkDisplay = pastedLink.hyperlinkDisplay;
           }
+        } else if (source?.inertHyperlink && !source.hyperlink && !keepNotesAndLinks) {
+          // A link the page holds inert (a relative path) comes along as
+          
+          replaced.inertHyperlink = source.inertHyperlink;
         }
         if (source?.comment && !keepNotesAndLinks) {
           replaced.comment = cloneCellCommentForPaste(source.comment);

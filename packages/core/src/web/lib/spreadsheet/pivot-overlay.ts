@@ -23,6 +23,7 @@ import {
   type PivotMatrix,
   type PivotRange,
 } from "./pivot";
+import { asLoadedSpelling } from "./loaded-spelling";
 import { resolvePivotChartPivot } from "./pivot-chart";
 import {
   nativePivotPageBlock,
@@ -200,7 +201,11 @@ function* plannedPivots(sheets: readonly PivotOverlaySheet[], boundPivotPlanKeys
     // source on 'Analysis-2012 and 2015'). Dropped, it read as a PivotTable
     // of its own sheet: a report of five rows of its own cells, and its
     // PivotChart printed "no visible chart data" where Excel plots the cache.
-    const rawNative = (rawPivot as { native?: unknown }).native;
+    // The window's own sheets carry the recipe it normalized, which drops an
+    // authority it cannot model (R480-X04's 136 cache fields): the file's
+    // reading of it, kept for the save, still says so.
+    const rawNative = (rawPivot as { native?: unknown }).native
+      ?? (asLoadedSpelling(rawPivot) as { native?: unknown } | null | undefined)?.native;
     if (rawNative && typeof rawNative === "object" &&
       (rawNative as { disposition?: unknown }).disposition === "preserve-only") continue;
     const sourceRange = normalizePivotRange(rawPivot.source);

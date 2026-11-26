@@ -576,14 +576,19 @@ export function presentationChartAreaOutline(value: unknown): PresentationChartA
  * `presentationChartAreaStyleCss` without the frame's line, for a host that
  * draws it as `presentationChartAreaOutline` (`OfficeChartAreaOutline`).
  */
-export function presentationChartAreaStyleCssWithoutLine(value: unknown): CSSProperties {
-  const css = { ...presentationChartAreaStyleCss(value) } as Record<string, unknown>;
+export function presentationChartAreaStyleCssWithoutLine(
+  value: unknown,
+  options: { readonly shadowBlurDeviation?: number } = {},
+): CSSProperties {
+  const css = { ...presentationChartAreaStyleCss(value, options) } as Record<string, unknown>;
   for (const key of Object.keys(css)) if (/^border(?!Radius)/.test(key)) delete css[key];
   return css as CSSProperties;
 }
 
 export function presentationChartAreaStyleCss(
   value: unknown,
+  /** The Gaussian deviation its outer shadow's blur radius draws, per unit of it (a slide's chart: `POWERPOINT_SHADOW_BLUR_DEVIATION`). */
+  options: { readonly shadowBlurDeviation?: number } = {},
 ): CSSProperties {
   const style = normalizePresentationChartAreaStyle(value);
   if (!style) return {};
@@ -606,7 +611,7 @@ export function presentationChartAreaStyleCss(
       Object.entries(shapePaint ?? {}).filter(([key]) => ["shadow", "glow", "innerShadow", "bevel", "format3d"].includes(key)),
     );
     return {
-      ...presentationChartAreaStyleCss({ ...rest, ...(Object.keys(effects).length ? { shapePaint: effects } : {}) }),
+      ...presentationChartAreaStyleCss({ ...rest, ...(Object.keys(effects).length ? { shapePaint: effects } : {}) }, options),
       backgroundColor: "transparent",
       border: "none",
     };
@@ -630,7 +635,7 @@ export function presentationChartAreaStyleCss(
           }),
     ...presentationChartEffectCss(style.effect),
     ...presentationChartTextStyleCss({ ...style, textPaint: undefined }),
-    ...(paint ? officeChartShapePaintCss(paint) : {}),
+    ...(paint ? officeChartShapePaintCss(paint, options) : {}),
     // A compound or dashed frame, once the frame is drawn at all.
     ...(borderStyle && style.outline !== "none" ? { borderStyle } : {}),
   };

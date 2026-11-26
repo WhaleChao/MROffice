@@ -170,6 +170,12 @@ export interface OfficeParagraphInput {
    * the mark (`eastAsianMarkLine`).
    */
   readonly endsInLineBreak?: boolean;
+  /**
+   * The Latin face of the line break a row that `endsInLineBreak` ends at, as
+   * a font: under `windowsLineBox` with `breakLineFaces`, its last line is
+   * laid by it beside its runs' faces (readings row 1042).
+   */
+  readonly breakLatinFont?: OfficeTextFont;
   readonly align: OfficeTextAlign;
   readonly marginLeftPt: number;
   readonly marginRightPt: number;
@@ -271,7 +277,22 @@ export interface OfficeTextBodyInput {
 
 
 
+
+
+
+
+
   readonly windowsLineBox?: boolean;
+  /**
+   * Under `windowsLineBox` (readings row 1042): a line that ends at a line
+   * break inside its paragraph is laid with the break's face beside its
+   * words', as the line that holds the mark is with the mark's -- the face of
+   * the break glyph's run (tp-markface: a break stating only its size, under
+   * a Calibri theme, set Arial words' line 0.9425 em under its top; stating
+   * Arial, 0.972). A paragraph that ends at a break says its face as
+   * `breakLatinFont`.
+   */
+  readonly breakLineFaces?: boolean;
 }
 
 /** A stretch of one run on one line. */
@@ -673,8 +694,9 @@ function lineVerticals(
   windows?: { readonly markFont?: OfficeTextFont },
 ): LineVerticals | { status: "pending" } {
   // Windows' line box (`windowsLineBox`, row 1013): a text box's Latin line
-  // and the faces that set it, its mark's among them.
-  const windowsLine = windows !== undefined && !cell && !natural;
+  // and the faces that set it, its mark's (or its break's: row 1042) among
+  // them; a table cell's under row 1042.
+  const windowsLine = windows !== undefined && !natural;
   if (windowsLine && windows.markFont && !eastAsian.some(Boolean)) {
     fonts = [...fonts, { ...windows.markFont, sizePt: Math.max(...fonts.map((font) => font.sizePt)) }];
     eastAsian = [...eastAsian, false];
@@ -746,7 +768,9 @@ function lineVerticals(
     // the line as its Latin text, no floor and no measured place; a measured
     // other mark moves it; any other leaves it.
     const markLine = ideographic && markFace !== undefined ? eastAsianMarkLine(primaryFamily(font.stack), markFace) : null;
-    const share = cell && a + d <= line
+    // A cell's line on a page read before readings row 1042: the face's box
+    // centred in the line (P2-cell's Calibri breaks and marks set it so).
+    const share = cell && !windowsLine && a + d <= line
       ? (line - (a + d)) / 2 + a
       : a + d > 0 && markLine !== null && "latin" in markLine
         ? line * ascentShare
@@ -799,11 +823,16 @@ function lineVerticals(
   // the pitch less the face's own descent put Arial 32 pt a point low; and
   
   // stands 9.52 under its top, so its lines step 12, 12, 13, 12 as there).
+  // Windows' line box (row 1013, a cell's under row 1042): above single, three quarters of the pitch alone, even where
+  // that is short of the single line's share (office-truth/probes/tp-spcfirst: Arial, Times New Roman and Calibri at
+  // 101 / 103 / 105 / 107 / 110 / 115 %, 12 and 20 pt, cells and text boxes alike, 0.75 of the pitch within 0.07 pt --
+  
+  const threeQuarters = windowsLine && !ideographicLine;
   const above = cell
     ? multiple > 1 + EPSILON
       // Above single, three quarters of the pitch over the baseline (tp-cellspc: 21.60 / 24.85 / 27.01 / 36.01 pt at
       // 120 / 138 / 150 / 200 % of 20 pt, 0.7500-0.7503 of the pitch, in Arial, Calibri and Times New Roman alike).
-      ? Math.max(single, CELL_ABOVE_SINGLE_BASELINE_SHARE * pitch)
+      ? threeQuarters ? CELL_ABOVE_SINGLE_BASELINE_SHARE * pitch : Math.max(single, CELL_ABOVE_SINGLE_BASELINE_SHARE * pitch)
       : multiple >= 1 - EPSILON
       ? Math.max(single, CELL_BASELINE_SHARE * pitch)
       : Math.max(pitch - descent, CELL_BASELINE_SHARE * pitch)
@@ -814,7 +843,7 @@ function lineVerticals(
     : multiple <= 1 + EPSILON && multiple >= 1 - EPSILON
       ? single
       : multiple > 1
-        ? Math.max(single, OFFICE_BASELINE_SHARE * pitch)
+        ? threeQuarters ? OFFICE_BASELINE_SHARE * pitch : Math.max(single, OFFICE_BASELINE_SHARE * pitch)
         : Math.max(pitch - singleBelow, OFFICE_BASELINE_SHARE * pitch);
   // Below single spacing the cell keeps its line's own bottom (not measured).
   return { above, below: pitch - above, descent, sizePt: size, ...(restBelow !== undefined && multiple >= 1 - EPSILON ? { restBelow } : {}) };
@@ -922,8 +951,19 @@ function layoutBody(input: OfficeTextBodyInput, measurer: OfficeTextMeasurer): O
       const cellRule = input.cellLines === true && paragraph.fontAlign === undefined;
       // The paragraph's last line holds its mark, set in the mark's face.
       const holdsMark = lineIndex === lineRanges.length - 1 && paragraph.endsInLineBreak !== true;
+      // A line that ends at a line break is laid with the break's face (readings row 1042): a break inside the
+      // paragraph is a glyph of its run; a row that ends at one says it.
+      const endsAtBreak = input.breakLineFaces === true && range !== null && range.end > range.start && list[range.end - 1]?.kind === "break";
+      // (A row said to end at a break holds no mark, whether or not it is said to end at one.)
+      const lineEndFont = endsAtBreak
+        ? paragraph.runs[list[range!.end - 1]!.run]?.font
+        : input.breakLineFaces === true && lineIndex === lineRanges.length - 1 && paragraph.breakLatinFont !== undefined
+          ? paragraph.breakLatinFont
+          : holdsMark
+            ? paragraph.markLatinFont
+            : undefined;
       const verticals = lineVerticals(fonts, paragraph.lineSpacing, reduction, measurer, cellRule, input.naturalLines === true, eastAsian, holdsMark ? paragraph.endFont : undefined, holdsMark ? paragraph.markLatinFace : undefined,
-        input.windowsLineBox === true ? { markFont: holdsMark ? paragraph.markLatinFont : undefined } : undefined);
+        input.windowsLineBox === true ? { markFont: lineEndFont } : undefined);
       if ("status" in verticals) {
         pending = true;
         return;

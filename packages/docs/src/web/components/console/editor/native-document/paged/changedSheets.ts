@@ -10,6 +10,7 @@
  * every step of the page ledger, the last twenty of which moved a page each.
  */
 import { SHEET_STAMPS } from "@mrnote/core/web/components/console/editor/native-document/paged/sheetMeasureMemo.ts";
+import { tabMeasureMutation } from "@mrnote/core/web/components/console/editor/native-document/paged/tabMeasureMark.ts";
 
 /** On unless `window.__docsExactLineStamps = true` (development A/B): the
  * stamps on a sheet element mark no sheet changed. */
@@ -55,6 +56,7 @@ export class ChangedSheets {
 
   private note(records: readonly MutationRecord[]): void {
     for (const record of records) {
+      if (tabMeasureMutation(record)) continue;
       if (record.target === this.root) {
         // The root's own attributes are what its owner keys its context by.
         if (record.type !== "childList") continue;

@@ -31,8 +31,10 @@ import ConfirmDialog from "@mrnote/core/web/components/ui/ConfirmDialog.tsx";
 import {
   MAX_REPLY_TEXT,
   type PdfAnnotationAuthor,
+  pdfReplyDisplayText,
   type PdfAnnotationReply,
 } from "@mrnote/core/web/lib/pdf/annotation-replies.ts";
+import { usePdfReviewStateLabel } from "./pdfReviewStateLabel";
 import {
   HIGHLIGHT_MARKUP_STYLES,
   type HighlightMarkupStyle,
@@ -141,6 +143,7 @@ export default function HighlightEditDialog({
   mentions = null,
 }: HighlightEditDialogProps) {
   const t = useTranslations("console-notebooks");
+  const reviewStateLabel = usePdfReviewStateLabel(t);
   const [note, setNote] = useState("");
   const [color, setColor] = useState(HIGHLIGHT_COLORS[0].value);
   const [markupStyle, setMarkupStyle] =
@@ -526,7 +529,11 @@ export default function HighlightEditDialog({
                 ) : null}
                 {/* Plain text node — never HTML. */}
                 <span className="highlight-edit-dialog__reply-text">
-                  <MentionText text={reply.text} mentions={mentions} />
+                  {reply.reviewState ? (
+                    pdfReplyDisplayText(reply, reviewStateLabel)
+                  ) : (
+                    <MentionText text={reply.text} mentions={mentions} />
+                  )}
                 </span>
               </div>
             ))}

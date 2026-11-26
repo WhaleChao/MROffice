@@ -72,6 +72,7 @@ import {
   applyTransitionToAllSlides,
   canAuthorSlideTransitionKind,
   defaultSlideTransitionDirection,
+  gallerySlideTransitionDirection,
   defaultAuthoringTransitionDuration,
   hasEditableSlideTransitionDirectionSource,
   hasEditableSlideTransitionAdvanceSource,
@@ -123,6 +124,12 @@ import {
   type PresentationAnimationEffectSettings,
 } from "./presentation-anim-effect-settings";
 import { effectSettingsDefaults } from "./presentation-anim-effect-defaults";
+import {
+  drawnMotionPathStep,
+  editedMotionPathStep,
+  lockedMotionPathStep,
+  reversedMotionPathStep,
+} from "./presentation-motion-path-step";
 import { presentationClipDurationMs } from "./presentation-video-file";
 import { PRESENTATION_OBJECT_GEOMETRY_MAX_EMU } from "./presentation-geometry-limit";
 
@@ -460,6 +467,11 @@ export interface PresentationSlideTransitionCommandAdapter {
 }
 
 /** One live-target, one-commit transition-gallery command. */
+/** Fade and Cut keep their default option (Smoothly, the plain cut) as no option at all. */
+function directionlessByDefault(kind: unknown, direction: unknown): boolean {
+  return (kind === "fade" || kind === "cut") && direction === defaultSlideTransitionDirection(kind);
+}
+
 export function createPresentationSlideTransitionCommandAdapter<
   T extends PresentationSlideTransitionSlide,
 >(
@@ -526,6 +538,11 @@ export function createPresentationSlideTransitionCommandAdapter<
         ...resolved.slide,
         transitionDirection: payload.direction,
       } as T;
+      if (directionlessByDefault(currentKind, payload.direction)) {
+        // Fade Smoothly / the plain Cut are what a Fade or a Cut with no
+        // option has always meant: stated by saying nothing (GAP 23).
+        delete (nextSlide as { transitionDirection?: unknown }).transitionDirection;
+      }
       const nextSlides = resolved.slides.map((slide, index) =>
         index === resolved.slideIndex ? nextSlide : slide,
       ) as T[];
@@ -535,7 +552,7 @@ export function createPresentationSlideTransitionCommandAdapter<
 
     const currentDuration = resolved.slide.transitionDurationMs;
     const desiredDuration = defaultAuthoringTransitionDuration(payload.kind);
-    const desiredDirection = defaultSlideTransitionDirection(payload.kind);
+    const desiredDirection = gallerySlideTransitionDirection(payload.kind);
     const currentDirection = normalizeSlideTransitionDirection(
       currentKind,
       resolved.slide.transitionDirection,
@@ -579,7 +596,7 @@ export function createPresentationSlideTransitionCommandAdapter<
       (nextSlide as { transition?: unknown }).transition = payload.kind;
       (nextSlide as { transitionDurationMs?: unknown }).transitionDurationMs =
         desiredDuration;
-      if (desiredDirection === null) {
+      if (desiredDirection === null || directionlessByDefault(payload.kind, desiredDirection)) {
         delete (nextSlide as { transitionDirection?: unknown })
           .transitionDirection;
       } else {
@@ -1019,8 +1036,37 @@ export interface PresentationAnimationEffectSettingsCommandPayload {
   readonly effectOption?: PresentationAnimationEffectOption;
 }
 
+/**
+ * Effect Options of a motion path (GAP #10): Reverse Path Direction, and
+ * Path: Locked / Unlocked (`locked`). The slide's size turns the path into
+ * the editor's polyline of it.
+ */
+export interface PresentationAnimationMotionPathCommandPayload {
+  readonly operation: "reverse-motion-path" | "set-motion-path-lock" | "edit-motion-path";
+  readonly slideModelId: string;
+  readonly index: number;
+  readonly expectedStep: TimelineStep;
+  readonly locked?: boolean;
+  /** Edit Points: the path as edited. */
+  readonly edited?: { readonly path: string; readonly ptsTypes: string };
+  readonly slideWidthEmu: number;
+  readonly slideHeightEmu: number;
+}
+
+/** Motion Paths > Custom Path: a new path step on the object, as drawn (GAP #10). */
+export interface PresentationAnimationDrawnMotionPathCommandPayload {
+  readonly operation: "append-drawn-motion-path";
+  readonly slideModelId: string;
+  readonly blockModelId: string;
+  readonly drawn: { readonly path: string; readonly ptsTypes: string };
+  readonly slideWidthEmu: number;
+  readonly slideHeightEmu: number;
+}
+
 export type PresentationAnimationEffectCommandPayload =
   | PresentationAnimationEffectAppendCommandPayload
+  | PresentationAnimationDrawnMotionPathCommandPayload
+  | PresentationAnimationMotionPathCommandPayload
   | PresentationAnimationEffectOptionCommandPayload
   | PresentationAnimationEffectColorCommandPayload
   | PresentationAnimationObjectTriggerCommandPayload
@@ -1032,14 +1078,40 @@ function isOccurrenceEdit(
   payload: PresentationAnimationEffectCommandPayload | undefined,
 ): payload is Exclude<
   PresentationAnimationEffectCommandPayload,
-  PresentationAnimationEffectAppendCommandPayload
+  PresentationAnimationEffectAppendCommandPayload | PresentationAnimationDrawnMotionPathCommandPayload
 > {
   return (
     payload?.operation === "set-effect-option" ||
     payload?.operation === "set-effect-color" ||
     payload?.operation === "set-object-trigger" ||
     payload?.operation === "set-text-sequence" ||
-    payload?.operation === "set-effect-settings"
+    payload?.operation === "set-effect-settings" ||
+    payload?.operation === "reverse-motion-path" ||
+    payload?.operation === "set-motion-path-lock" ||
+    payload?.operation === "edit-motion-path"
+  );
+}
+
+function isMotionPathEdit(
+  payload: PresentationAnimationEffectCommandPayload,
+): payload is PresentationAnimationMotionPathCommandPayload {
+  return (
+    payload.operation === "reverse-motion-path" ||
+    payload.operation === "set-motion-path-lock" ||
+    payload.operation === "edit-motion-path"
+  );
+}
+
+/**
+ * An edit a path step takes whatever its effect: the path's own Effect
+ * Options, and the Effect Options dialog's settings and timing on a path as
+ * the file states it (row 1078; a drawn Custom Path is one) -- the reader
+ * reads them back on such a path (smooth start / end, auto-reverse, repeat).
+ */
+function pathStepEdit(payload: PresentationAnimationEffectCommandPayload, current: TimelineStep): boolean {
+  return (
+    isMotionPathEdit(payload) ||
+    (payload.operation === "set-effect-settings" && current.animation === "none" && current.motionPathNative !== undefined)
   );
 }
 
@@ -1050,7 +1122,7 @@ function editedAnimationOccurrence(
   blockIds: ReadonlySet<string>,
   payload: Exclude<
     PresentationAnimationEffectCommandPayload,
-    PresentationAnimationEffectAppendCommandPayload
+    PresentationAnimationEffectAppendCommandPayload | PresentationAnimationDrawnMotionPathCommandPayload
   >,
 ): TimelineStep[] | null {
   switch (payload.operation) {
@@ -1143,6 +1215,23 @@ function editedAnimationOccurrence(
       }
       return changed ? [...next] : null;
     }
+    case "reverse-motion-path":
+    case "set-motion-path-lock":
+    case "edit-motion-path": {
+      const original = sequence[payload.index];
+      if (!original || !timelineStepsEqual(original, payload.expectedStep)) return null;
+      const next =
+        payload.operation === "reverse-motion-path"
+          ? reversedMotionPathStep(original, payload.slideWidthEmu, payload.slideHeightEmu)
+          : payload.operation === "edit-motion-path"
+            ? payload.edited
+              ? editedMotionPathStep(original, payload.edited, payload.slideWidthEmu, payload.slideHeightEmu)
+              : null
+            : typeof payload.locked === "boolean"
+              ? lockedMotionPathStep(original, payload.locked, payload.slideWidthEmu, payload.slideHeightEmu)
+              : null;
+      return next ? sequence.map((step, index) => (index === payload.index ? next : step)) : null;
+    }
     case "set-text-sequence":
       return block.type === "text"
         ? editTimelineStepTextSequence(
@@ -1217,6 +1306,32 @@ export function createPresentationAnimationEffectCommandAdapter<
     return { blockModelId, sequence, slide, slideIndex, slides };
   };
 
+  /** The new sequence a drawn Custom Path makes, or null when the object takes none. */
+  const withDrawnPath = (payload: PresentationAnimationDrawnMotionPathCommandPayload) => {
+    // An object that takes a gallery path takes a drawn one -- the object
+    // the drawing began for, whatever is selected when it ends.
+    const slides = accessors.getSlides();
+    const slideIndex = accessors.getActiveIndex();
+    const slide = slides[slideIndex];
+    const block = slide?.blocks.find((item) => item.id === payload.blockModelId);
+    const sequence = slide?.animationSequence ?? [];
+    if (
+      !slide ||
+      slide.id !== payload.slideModelId ||
+      !block ||
+      !presentationAnimationEffectTargetEligible("path-right", block) ||
+      !timelineAnimationAuthoringCapability({ slideSource: slide.source, blockSource: block.source, animation: "path-right" })
+        .enabled ||
+      !Array.isArray(sequence) ||
+      sequence.length >= MAX_TIMELINE_STEPS
+    ) {
+      return null;
+    }
+    const resolved = { blockModelId: block.id, sequence, slide, slideIndex, slides };
+    const step = drawnMotionPathStep(resolved.blockModelId, payload.drawn, payload.slideWidthEmu, payload.slideHeightEmu);
+    return step ? { resolved, sequence: [...resolved.sequence, step] } : null;
+  };
+
   const objectTriggerEligible = (
     slide: T,
     current: TimelineStep,
@@ -1243,6 +1358,15 @@ export function createPresentationAnimationEffectCommandAdapter<
   const execute = (
     payload: PresentationAnimationEffectCommandPayload,
   ): boolean => {
+    if (payload.operation === "append-drawn-motion-path") {
+      const drawn = withDrawnPath(payload);
+      if (!drawn) return false;
+      const nextSlide = { ...drawn.resolved.slide, animationSequence: drawn.sequence } as T;
+      accessors.commitSlides(
+        drawn.resolved.slides.map((slide, index) => (index === drawn.resolved.slideIndex ? nextSlide : slide)) as T[],
+      );
+      return true;
+    }
     if (isOccurrenceEdit(payload)) {
       const slides = accessors.getSlides();
       const slideIndex = accessors.getActiveIndex();
@@ -1275,6 +1399,7 @@ export function createPresentationAnimationEffectCommandAdapter<
           slideSource: slide.source,
           blockSource: block.source,
           animation: current.animation,
+          ...(pathStepEdit(payload, current) ? { editsMotionPath: true as const } : {}),
         }).enabled
       ) {
         return false;
@@ -1333,6 +1458,7 @@ export function createPresentationAnimationEffectCommandAdapter<
       effectOption: EDIT_ANIMATION_EFFECT_OPTION_FEATURE_ID,
     }),
     canExecute: (payload?: PresentationAnimationEffectCommandPayload) => {
+      if (payload?.operation === "append-drawn-motion-path") return withDrawnPath(payload) !== null;
       if (!isOccurrenceEdit(payload)) {
         return target(payload?.kind) !== null;
       }
@@ -1367,6 +1493,7 @@ export function createPresentationAnimationEffectCommandAdapter<
             slideSource: slide.source,
             blockSource: block.source,
             animation: current.animation,
+            ...(pathStepEdit(payload, current) ? { editsMotionPath: true as const } : {}),
           }).enabled &&
           editedAnimationOccurrence(
             sequence,
@@ -3468,6 +3595,12 @@ function nativeShapeProjectionGroups<
   /** Pass over the objects the author added (they keep their own places in
    * the list) rather than refuse the slide. */
   withAuthored = false,
+  /** Admit places in the file's order no block holds (TRIAGE 146: an object
+   * the slide does not project -- a slide number field, a shape of no size,
+   * one left to the package). For the Selection Pane's show / hide / rename,
+   * which address one object by its id; an order step must not cross such a
+   * place (`nativeSelectionPaneStepCrossesGap`). */
+  allowGaps = false,
 ): readonly NativeShapeProjectionGroup<TBlock>[] | null {
   const slideId = slide.source?.slideId;
   if (typeof slideId !== "string" || !/^sld[1-9][0-9]*$/.test(slideId)) {
@@ -3533,6 +3666,7 @@ function nativeShapeProjectionGroups<
   }
   const sourceOrders = [...orderToShape.keys()].sort((a, b) => a - b);
   if (
+    !allowGaps &&
     sourceOrders.some(
       (sourceOrder, index) =>
         index > 0 && sourceOrder !== sourceOrders[index - 1] + 1,
@@ -3761,6 +3895,96 @@ interface PresentationNativeSelectionPaneTarget<
   }>[];
   readonly group: NativeShapeProjectionGroup<TBlock>;
   readonly groupIndex: number;
+  /** The file's places the slide's objects hold, ascending: the i-th object
+   * of the order stands in the i-th (`slotOrder` on the server). */
+  readonly slots: readonly number[];
+  /** Some place between the first and the last holds no block (TRIAGE 146). */
+  readonly gapped: boolean;
+}
+
+interface NativeSelectionPaneOrder<TBlock extends ArrangeablePresentationBlock> {
+  readonly slots: readonly number[];
+  readonly gapped: boolean;
+  readonly authorized: AuthorizedNativeShapeOrder<TBlock>;
+  /** Each block's group in `authorized.groups`, by block id. */
+  readonly groupIndexOf: ReadonlyMap<string, number>;
+}
+
+interface NativeSelectionPaneOrderMemo {
+  readonly blocks: unknown;
+  readonly slideId: unknown;
+  readonly target: unknown;
+  readonly orders: Map<string, NativeSelectionPaneOrder<ArrangeablePresentationBlock> | null>;
+  /** The first block of each id (`Array.prototype.find`'s answer), made on first use. */
+  firstById?: Map<string, unknown>;
+}
+
+
+
+
+
+
+
+
+
+
+
+const nativeSelectionPaneOrders = new WeakMap<object, NativeSelectionPaneOrderMemo>();
+
+function nativeSelectionPaneMemo(slide: PresentationPictureArrangeSlide<ArrangeablePresentationBlock>): NativeSelectionPaneOrderMemo {
+  const slideId = slide.source?.slideId;
+  let memo = nativeSelectionPaneOrders.get(slide);
+  if (
+    !memo ||
+    memo.blocks !== slide.blocks ||
+    memo.slideId !== slideId ||
+    memo.target !== slide.nativeShapeOrderTarget
+  ) {
+    memo = { blocks: slide.blocks, slideId, target: slide.nativeShapeOrderTarget, orders: new Map() };
+    nativeSelectionPaneOrders.set(slide, memo);
+  }
+  return memo;
+}
+
+/** `slide.blocks.find((block) => block.id === blockId)`, by the slide's memo. */
+function nativeSelectionPaneBlock<TBlock extends ArrangeablePresentationBlock>(
+  slide: PresentationPictureArrangeSlide<TBlock>,
+  blockId: string,
+): TBlock | undefined {
+  const memo = nativeSelectionPaneMemo(slide as unknown as PresentationPictureArrangeSlide<ArrangeablePresentationBlock>);
+  if (!memo.firstById) {
+    const firstById = new Map<string, unknown>();
+    for (const block of slide.blocks) if (!firstById.has(block.id)) firstById.set(block.id, block);
+    memo.firstById = firstById;
+  }
+  return memo.firstById.get(blockId) as TBlock | undefined;
+}
+
+function nativeSelectionPaneOrder<
+  TBlock extends ArrangeablePresentationBlock,
+  TSlide extends PresentationPictureArrangeSlide<TBlock>,
+>(slide: TSlide, withAuthored: boolean, allowGaps = false): NativeSelectionPaneOrder<TBlock> | null {
+  const memo = nativeSelectionPaneMemo(slide as unknown as PresentationPictureArrangeSlide<ArrangeablePresentationBlock>);
+  const key = `${withAuthored ? 1 : 0}${allowGaps ? 1 : 0}`;
+  if (memo.orders.has(key)) {
+    return memo.orders.get(key) as NativeSelectionPaneOrder<TBlock> | null;
+  }
+  const groups = nativeShapeProjectionGroups<TBlock, TSlide>(slide, withAuthored, allowGaps);
+  const authorized = groups ? authorizedNativeShapeOrder<TBlock, TSlide>(slide, groups) : null;
+  let order: NativeSelectionPaneOrder<TBlock> | null = null;
+  if (authorized) {
+    const groupIndexOf = new Map<string, number>();
+    authorized.groups.forEach((candidate, index) => {
+      for (const member of candidate.blocks) {
+        if (!groupIndexOf.has(member.id)) groupIndexOf.set(member.id, index);
+      }
+    });
+    const slots = [...new Set(authorized.groups.map((candidate) => candidate.sourceOrder))].sort((a, b) => a - b);
+    const gapped = slots.some((slot, index) => index > 0 && slot !== slots[index - 1] + 1);
+    order = { authorized, groupIndexOf, slots, gapped };
+  }
+  memo.orders.set(key, order as NativeSelectionPaneOrder<ArrangeablePresentationBlock> | null);
+  return order;
 }
 
 function presentationNativeSelectionPaneTarget<
@@ -3770,8 +3994,12 @@ function presentationNativeSelectionPaneTarget<
   slide: TSlide,
   blockId: string,
   withAuthored = false,
+  /** Admit a slide whose file order has places no block holds (TRIAGE 146):
+   * the target is then one object to show, hide or rename, and an order step
+   * on it must not cross such a place. Off for every order command. */
+  allowGaps = false,
 ): PresentationNativeSelectionPaneTarget<TBlock, TSlide> | null {
-  const block = slide.blocks.find((candidate) => candidate.id === blockId);
+  const block = nativeSelectionPaneBlock<TBlock>(slide, blockId);
   if (
     !block ||
     isBlockKeptReadOnly(block) ||
@@ -3788,13 +4016,10 @@ function presentationNativeSelectionPaneTarget<
   ) {
     return null;
   }
-  const groups = nativeShapeProjectionGroups<TBlock, TSlide>(slide, withAuthored);
-  if (!groups) return null;
-  const authorized = authorizedNativeShapeOrder<TBlock, TSlide>(slide, groups);
-  if (!authorized) return null;
-  const groupIndex = authorized.groups.findIndex((candidate) =>
-    candidate.blocks.some((member) => member.id === blockId),
-  );
+  const order = nativeSelectionPaneOrder<TBlock, TSlide>(slide, withAuthored, allowGaps);
+  if (!order) return null;
+  const { authorized } = order;
+  const groupIndex = order.groupIndexOf.get(blockId) ?? -1;
   const group = authorized.groups[groupIndex];
   if (!group || group.blocks.length !== 1 || group.blocks[0] !== block) {
     return null;
@@ -3806,7 +4031,29 @@ function presentationNativeSelectionPaneTarget<
     steps: authorized.steps,
     group,
     groupIndex,
+    slots: order.slots,
+    gapped: order.gapped,
   };
+}
+
+/**
+ * Whether swapping the objects at `from` and `to` (neighbours in the slide's
+ * order) crosses a place of the file's order no block holds (TRIAGE 146).
+ * The save fills the slide's places in its new order and leaves every other
+ * object of the file where it stands (`slot_order`), so two neighbours whose
+ * places are not next to each other in the file would trade places across an
+ * object the slide does not show -- in PowerPoint the moved one would pass it
+ * too. Such a step is refused; every other step is the step it always was.
+ */
+function nativeSelectionPaneStepCrossesGap(
+  slots: readonly number[],
+  from: number,
+  to: number,
+): boolean {
+  const low = Math.min(from, to);
+  const high = Math.max(from, to);
+  if (low < 0 || high >= slots.length) return true;
+  return slots[high] - slots[low] !== high - low;
 }
 
 /**
@@ -3821,7 +4068,11 @@ export function presentationNativeSelectionPaneObjectIsWritable<
   TBlock extends ArrangeablePresentationBlock,
   TSlide extends PresentationPictureArrangeSlide<TBlock>,
 >(slide: TSlide, blockId: string): boolean {
-  return presentationNativeSelectionPaneTarget(slide, blockId) !== null;
+  // Show / hide / rename address the one object by its id: a place of the
+  // file's order no block holds elsewhere on the slide does not make this one
+  // read-only (TRIAGE 146; PowerPoint lists every object it can read). Its
+  // order steps are judged step by step (`applyPresentationNativeSelectionPaneOrderStep`).
+  return presentationNativeSelectionPaneTarget(slide, blockId, false, true) !== null;
 }
 
 /** One adjacent native Selection Pane order step, on the existing v2 journal. */
@@ -3830,13 +4081,16 @@ export function applyPresentationNativeSelectionPaneOrderStep<
   TSlide extends PresentationPictureArrangeSlide<TBlock>,
 >(slide: TSlide, blockId: string, direction: ZOrderStep): TSlide | null {
   if (!isZOrderStep(direction)) return null;
-  const resolved = presentationNativeSelectionPaneTarget(slide, blockId);
+  const resolved = presentationNativeSelectionPaneTarget(slide, blockId, false, true);
   if (!resolved) return null;
   const neighborIndex =
     direction === "forward"
       ? resolved.groupIndex + 1
       : resolved.groupIndex - 1;
   if (!resolved.groups[neighborIndex]) return null;
+  if (resolved.gapped && nativeSelectionPaneStepCrossesGap(resolved.slots, resolved.groupIndex, neighborIndex)) {
+    return null;
+  }
   const nextGroups = moveItemOneStep(
     resolved.groups,
     resolved.group.id,

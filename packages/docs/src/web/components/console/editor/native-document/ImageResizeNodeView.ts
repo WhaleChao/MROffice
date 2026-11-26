@@ -129,6 +129,7 @@ import { startFloatingDrawingDrag } from "./floatDrawingDrag";
 import { moveLiveDocumentDrawingBy } from "@mrnote/core/web/components/console/editor/native-document/chartPlacement.ts";
 import { officeFrameAxesDelta } from "@mrnote/core/web/lib/office-object-frame.ts";
 import { contentSkipped, whenContentShown } from "./paged/sheetSkipState";
+import { afterCanvasGesture, canvasGestureActive } from "@mrnote/core/web/lib/canvas-gesture.ts";
 
 /** EMU per CSS pixel at 96 dpi (Word's 9525). */
 export { EMU_PER_PX };
@@ -1774,7 +1775,20 @@ export function createImageResizeNodeView(
   // one sheet per picture, for every page nudge (the 296-page book: ~44
   // forced layouts a key typed, its 55 pictures on as many sheets).
   let stopWaitingForSheet: (() => void) | null = null;
-  const onPageGeometryChange = () => {
+  // While a canvas window is dragged or sized or the desk zoomed (any
+  // window's: these nudges reach every document), the picture is fitted once
+  // the gesture ends: each fit reads its sheet's boxes, 40-50 ms of layout in
+  // WebKit for every picture of every open document (lib/canvas-gesture).
+  let stopWaitingForGesture: (() => void) | null = null;
+  const onPageGeometryChange = (): boolean => {
+    if (canvasGestureActive()) {
+      stopWaitingForGesture ??= afterCanvasGesture(() => {
+        stopWaitingForGesture = null;
+        // As the nudge would have: the passes it woke run after the gesture too.
+        if (wrapper.isConnected) onPageGeometryChange();
+      });
+      return false;
+    }
     // A new picture whose size could not be stored when it loaded (the room
     // was not taking edits yet) is asked again when the page is laid out.
     storeNewPictureSize();
@@ -2627,6 +2641,8 @@ export function createImageResizeNodeView(
       img.removeEventListener("error", onImageError);
       pictureBoxObserver?.disconnect();
       window.removeEventListener("mrn-page-rebalance", onPageGeometryChange);
+      stopWaitingForGesture?.();
+      stopWaitingForGesture = null;
       stopWaitingForSheet?.();
       stopWaitingForSheet = null;
       window.removeEventListener("resize", onPageGeometryChange);

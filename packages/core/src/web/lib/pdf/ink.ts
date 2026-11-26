@@ -38,6 +38,12 @@
 import { inkStrokePathData } from "../office-ink-smooth";
 import { isSafeHexColor } from "./safe-color";
 import { normalizeXfdfSourceId } from "./xfdf-import";
+import {
+  isInsertedReaderPage,
+  sanitizeInsertedPageId,
+  storedPageOfReaderPage,
+  type PdfInsertedReaderPages,
+} from "./inserted-page-identity";
 
 /** Default stroke color used when a payload omits / supplies an unknown color. */
 export const DEFAULT_INK_COLOR = "#ef4444";
@@ -139,6 +145,9 @@ export interface InkAnnotation {
   /** Polyline points in page-relative percent [0..100]. */
   points: InkPoint[];
   xfdfSourceId?: string;
+  /** The page inserted in MR Office it is drawn on (`page` is then the page
+   * before it): lib/pdf/inserted-page-identity. */
+  insertedPageId?: string;
 }
 
 function isFinitePercent(value: unknown): value is number {
@@ -282,6 +291,9 @@ export function sanitizeInkPayload(
   const xfdfSourceId = normalizeXfdfSourceId(
     (payload as Record<string, unknown>).xfdfSourceId,
   );
+  const insertedPageId = sanitizeInsertedPageId(
+    (payload as Record<string, unknown>).insertedPageId,
+  );
   return {
     id,
     page,
@@ -289,6 +301,7 @@ export function sanitizeInkPayload(
     width,
     points,
     ...(xfdfSourceId ? { xfdfSourceId } : {}),
+    ...(insertedPageId ? { insertedPageId } : {}),
   };
 }
 
@@ -303,21 +316,41 @@ export function buildInkPayload(input: {
   width?: number;
   points: ReadonlyArray<{ x: number; y: number; p?: number }>;
   xfdfSourceId?: string;
+  insertedPageId?: string;
 }): {
   page: number;
   color: string;
   width: number;
   points: InkPoint[];
   xfdfSourceId?: string;
+  insertedPageId?: string;
 } {
   const xfdfSourceId = normalizeXfdfSourceId(input.xfdfSourceId);
+  const insertedPageId = sanitizeInsertedPageId(input.insertedPageId);
   return {
     page: input.page,
     color: isInkColor(input.color) ? input.color : DEFAULT_INK_COLOR,
     width: clampInkWidth(input.width),
     points: clampPoints(input.points),
     ...(xfdfSourceId ? { xfdfSourceId } : {}),
+    ...(insertedPageId ? { insertedPageId } : {}),
   };
+}
+
+/**
+ * {@link buildInkPayload} for a stroke the reader drew or holds: drawn on an
+ * inserted page (its reader number, lib/pdf/inserted-page-identity), it is
+ * stored as the page before it and that page's id; a stroke already stored
+ * so keeps both.
+ */
+export function buildReaderInkPayload(
+  pages: PdfInsertedReaderPages,
+  input: Parameters<typeof buildInkPayload>[0],
+): ReturnType<typeof buildInkPayload> {
+  if (!isInsertedReaderPage(input.page)) return buildInkPayload(input);
+  const stored = storedPageOfReaderPage(input.page, pages);
+  // A page no longer shown keeps its reader number, which no write takes.
+  return buildInkPayload(stored ? { ...input, ...stored } : input);
 }
 
 /**

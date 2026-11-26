@@ -111,6 +111,12 @@ export interface SpreadsheetCell {
   // them whenever the hyperlink itself is changed or cleared.
   hyperlinkTooltip?: string;
   hyperlinkDisplay?: string;
+  // A link the editor cannot follow (a path relative to the workbook, file:,
+  // a UNC or drive path), held inert as the file states it (reading 1046,
+  // xlsxHyperlinkInert; Docs' `inertHref`): never an anchor, never opened,
+  // but copy, cut and fill take it along as Excel does, and a save writes it
+  // back as the file's own link. Absent whenever `hyperlink` is set.
+  inertHyperlink?: string;
   style?: {
     bold?: boolean;
     italic?: boolean;
@@ -272,6 +278,7 @@ export function hasCellMetadata(cell: Partial<SpreadsheetCell> | undefined): boo
   return Boolean(
     cell?.formula ||
     cell?.hyperlink ||
+    cell?.inertHyperlink ||
     Object.keys(cell?.style || {}).length > 0 ||
     hasComment(cell?.comment) ||
     Boolean(

@@ -207,26 +207,59 @@ export interface PrintedEdge {
 }
 
 /**
+ * A printed line's whole printer dots across, and how many of them stand
+ * before its grid line (above a horizontal one, left of a vertical one).
+ * Windows Excel's printer pens are whole dots on the grid's own dot: an even
+ * line is centred on it, an odd one keeps its middle dot after it, as a
+ * one-dot pen covers the dot the grid line starts (lookwin p11-win: a
+ * column's right border at 35 % prints hair [E, E+1] dots, thin 3 dots
+ * [E-1, E+2], medium 6 and thick 8 centred; at 100 % hair [E, E+1], thin 8,
+ * medium 16, thick 24 centred). In a right-to-left sheet a vertical line's
+ * odd dot goes the other way, as its gridlines do. A double line is its
+ * whole width in dots (24 at the page's scale) less its two strokes: at
+ * 35 % two 3-dot strokes 2 dots apart, 8 in all.
+ */
+export function printedLineDots(line: PrintedBorderLine, scale: number): {
+  readonly strokes: readonly number[]; readonly gap: number; readonly total: number; readonly before: number;
+} {
+  const strokeScale = line.fixedWidth ? 1 : scale;
+  const strokes = line.strokes.map((dots) => Math.max(1, Math.round(dots * strokeScale)));
+  const strokeDots = strokes.reduce((sum, value) => sum + value, 0);
+  const gaps = strokes.length - 1;
+  const gap = line.gap && gaps > 0
+    ? Math.max(1, Math.round((Math.round((line.strokes.reduce((sum, value) => sum + value, 0) + line.gap * gaps) * scale) - strokeDots) / gaps))
+    : 0;
+  const total = strokeDots + gap * gaps;
+  return { strokes, gap, total, before: Math.floor(total / 2) };
+}
+
+/**
  * The strokes of one printed edge as rectangles (solid) or dashed lines, in
- * page CSS px: centred on the grid line, each end running on by half its own
- * width so two edges that meet at a corner close it.
+ * page CSS px: on the grid line in whole printer dots (printedLineDots), each
+ * end running on by the line's width before and after it so two edges that
+ * meet at a corner close it.
  * `scale` is the page's content scale, `pxPerPt` its CSS px per point.
  */
-export function printedEdgeStrokes(edge: PrintedEdge, scale: number, pxPerPt: number): {
+export function printedEdgeStrokes(edge: PrintedEdge, scale: number, pxPerPt: number, rightToLeft = false): {
   readonly x: number; readonly y: number; readonly width: number; readonly height: number;
   readonly dash: string | null; readonly color: string;
 }[] {
   const horizontal = edge.y1 === edge.y2;
-  const widths = edge.line.strokes.map((dots) => printedDotsPt(dots, edge.line.fixedWidth ? 1 : scale) * pxPerPt);
-  const gap = edge.line.gap ? printedDotsPt(edge.line.gap, scale) * pxPerPt : 0;
-  const total = widths.reduce((sum, value) => sum + value, 0) + gap * (widths.length - 1);
-  const dash = edge.line.dash ? edge.line.dash.map((dots) => printedDotsPt(dots, scale) * pxPerPt).join(" ") : null;
+  const dot = PRINT_DOT_PT * pxPerPt;
+  const dots = printedLineDots(edge.line, scale);
+  const widths = dots.strokes.map((value) => value * dot);
+  const gap = dots.gap * dot;
+  const total = dots.total * dot;
+  // Along the line its ends run on by what stands before and after the grid
+  // line across; a vertical line in a right-to-left sheet is mirrored.
+  const before = (!horizontal && rightToLeft ? dots.total - dots.before : dots.before) * dot;
+  const dash = edge.line.dash ? edge.line.dash.map((value) => printedDotsPt(value, scale) * pxPerPt).join(" ") : null;
   const out: { x: number; y: number; width: number; height: number; dash: string | null; color: string }[] = [];
-  let offset = -total / 2;
+  let offset = -before;
   for (const width of widths) {
     const run = horizontal
-      ? { x: Math.min(edge.x1, edge.x2) - total / 2, y: edge.y1 + offset, width: Math.abs(edge.x2 - edge.x1) + total, height: width }
-      : { x: edge.x1 + offset, y: Math.min(edge.y1, edge.y2) - total / 2, width, height: Math.abs(edge.y2 - edge.y1) + total };
+      ? { x: Math.min(edge.x1, edge.x2) - (rightToLeft ? total - before : before), y: edge.y1 + offset, width: Math.abs(edge.x2 - edge.x1) + total, height: width }
+      : { x: edge.x1 + offset, y: Math.min(edge.y1, edge.y2) - dots.before * dot, width, height: Math.abs(edge.y2 - edge.y1) + total };
     out.push({ ...run, dash, color: edge.line.color });
     offset += width + gap;
   }

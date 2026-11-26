@@ -180,6 +180,9 @@ export function fillCellFrom(
       carried.hyperlinkTooltip = source.hyperlinkTooltip;
     if (source.hyperlinkDisplay)
       carried.hyperlinkDisplay = source.hyperlinkDisplay;
+  } else if (source?.inertHyperlink) {
+    // A link held inert (a relative path) is filled as Excel fills a link.
+    carried.inertHyperlink = source.inertHyperlink;
   }
   if (formula) {
     // A formula has no runs: the source's record font is the cell's.

@@ -60,12 +60,14 @@ import {
   type ListDefinition,
   type ListLevelDefinition,
 } from "./listLevelDefinition";
-import { normalizeListStart, normalizeListStyleType } from "./listNumbering";
+import { MAX_LIST_START, normalizeListStart, normalizeListStyleType } from "./listNumbering";
 import { readNativeListIndent } from "./preciseIndent";
 import { numberingSuffixTabStopTwips } from "./documentNumberingLayout";
 import { wordDefaultTabStopTwips } from "./wordDocumentSettings";
 import { editsStayInsideTextblocks, plainTextEdits } from "./textblockOnlyEdits";
 import { fragmentCarries } from "./paged/fragmentRoles";
+import { headingListNumbers, headingsCountBodyRestartsOff } from "./headingListNumbers";
+import { sourceContinuationListItems } from "./sourceHardBreakTail";
 
 export type HeadingListKind = "bullet" | "ordered";
 
@@ -154,8 +156,17 @@ interface WalkContext {
   lastRoot: ChainEntry | null;
   /** Whether that root fragment was painted by this walk. */
   lastRootLive: boolean;
+  /** Where that root fragment stands. */
+  lastRootPos: number;
+  /** Later pieces of split source paragraphs standing as list items: item
+   *  position -> the outermost list of the paragraph's first piece. */
+  sourceContinuations: ReadonlyMap<number, number>;
   /** Word's default tab stop interval (Tabs > Default tab stops). */
   defaultTabStopTwips: number;
+  /** Chains a list started its own count in (Restart Numbering). */
+  restartedChains: Set<string>;
+  /** The document walked, for its headings' live numbers. */
+  doc: PmNode;
 }
 
 function pt(value: number): string {
@@ -652,7 +663,7 @@ function walkDefinedList(
   list.forEach((item, offset) => {
     const itemPos = listPos + 1 + offset;
     if (item.type.name !== "listItem") return;
-    const continuation = item.attrs.pageSplitItemContinuation === true;
+    const continuation = item.attrs.pageSplitItemContinuation === true || ctx.sourceContinuations.has(itemPos);
     const first = item.firstChild;
     let childContainer = containerPt;
     if (first && first.isTextblock) {
@@ -753,7 +764,12 @@ function walkDefinedList(
       // level, as w:lvlOverride/w:startOverride does. It was ignored, so
       
       const childStart = normalizeListStart(child.attrs.start);
-      if (childStart !== null && child.attrs.start !== child.type.spec.attrs?.start?.default)
+      const childRestart = listRestartValue(child);
+      // A nested list restarted (Restart Numbering on an item of a list in a
+      // list item: corpus R480-D39 / R490-D01 E62 drew "3.3" for the "3.1"
+      // Word draws) starts its level again under the item's count.
+      if (childRestart !== null) state.seedLevel(childLevel, childRestart);
+      else if (childStart !== null && child.attrs.start !== child.type.spec.attrs?.start?.default)
         state.seedLevel(childLevel, childStart);
       walkDefinedList(ctx, child, childPos, childLevel, definition, state, childContainer);
     });
@@ -761,12 +777,30 @@ function walkDefinedList(
 }
 
 /** Level-0 items of a gallery list, the ones its numbering instance counts. */
-function countTopItems(list: PmNode): number {
+function countTopItems(list: PmNode, listPos = -1, sourceContinuations?: ReadonlyMap<number, number>): number {
   let count = 0;
-  list.forEach((item) => {
-    if (item.attrs.pageSplitItemContinuation !== true) count += 1;
+  list.forEach((item, offset) => {
+    if (item.attrs.pageSplitItemContinuation !== true && !sourceContinuations?.has(listPos + 1 + offset)) count += 1;
   });
   return count;
+}
+
+/** `globalThis.__docsDeeperRestartKeepsChainOff = true`: a chained list that
+ *  restarts a deeper level starts a count of its own at every level (A/B). */
+function deeperRestartKeepsChainOff(): boolean {
+  return (globalThis as { __docsDeeperRestartKeepsChainOff?: boolean }).__docsDeeperRestartKeepsChainOff === true;
+}
+
+/**
+ * The number a list was restarted at (`listRestart`, the Restart Numbering
+ * command's: Word's startOverride), even 1 on a level defined to start at 0
+ * or 11, or null. `globalThis.__docsListRestartValueOff = true`: ignored, the
+ * list draws `start` / its definition's start as before (A/B).
+ */
+function listRestartValue(list: PmNode): number | null {
+  if ((globalThis as { __docsListRestartValueOff?: boolean }).__docsListRestartValueOff === true) return null;
+  const value = list.attrs.listRestart;
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= MAX_LIST_START ? value : null;
 }
 
 function sourceFor(
@@ -792,7 +826,13 @@ function visitOrderedRoot(
 ): void {
   const definition = normalizeListDefinition(list.attrs.listDefinition);
   const chain = normalizeListChain(list.attrs.listChain);
-  const splitContinuation = !fragmentCarries("listLabel", list.attrs);
+  // A list whose first item is the rest of a split source paragraph whose
+  // first piece ends the list before: that list's count goes on, as for a
+  // page-split fragment (the piece's own stated start is the stale number of
+  // the paragraph, R506-D27).
+  const sourceContinuation =
+    !nested && ctx.lastRoot !== null && ctx.sourceContinuations.get(pos + 1) === ctx.lastRootPos;
+  const splitContinuation = !fragmentCarries("listLabel", list.attrs) || sourceContinuation;
   const wantsContinue = list.attrs.listContinue === true;
   const baseLevel = explicitOrderedListLevel(list) ?? nested?.level ?? 0;
   if (ctx.probe && !splitContinuation) {
@@ -822,8 +862,30 @@ function visitOrderedRoot(
     if (stated !== null) state.seedLevel(baseLevel, stated);
   } else {
     state = new ListCounterState();
+    // A chained list that starts its own count at a deeper level (Restart
+    // Numbering on a "%2." item, a w:num whose startOverride restarts level
+    // 1): only that level starts again. The levels above go on in the chain's
+    // count -- the restarted list's "%1" and every later list of the chain,
+    // level 0 included (Windows Word, work-I/out47/truth H: "1.1." after
+    // "1.2.", then "2" for the next level-0 item; corpus R493-D43 E62 drew
+    // the level-0 list after the restart from 1).
+    // Only a list that starts the level from its beginning: one stating a
+    // number of its own (an imported list broken in mid-count, "1.16.") keeps
+    // the count it drew (R514-D74).
     const start = normalizeListStart(list.attrs.start);
-    if (start !== null) state.seedLevel(baseLevel, start);
+    const shared =
+      chain && definition && baseLevel > 0 && (start === null || listRestartValue(list) !== null) && !deeperRestartKeepsChainOff()
+        ? ctx.byChain.get(chain)
+        : undefined;
+    if (shared) state.adoptLevelsAbove(shared.state, baseLevel);
+    // A list of a chain that starts the count from its level's beginning
+    // (Restart Numbering): the chain's numbered headings after it count on
+    // from it (visitImportedHeadingCount). One stating a number of its own is
+    // an imported list the headings' stated counts already hold (R514-D74).
+    if (chain && !nested && (start === null || listRestartValue(list) !== null)) ctx.restartedChains.add(chain);
+    const restart = listRestartValue(list);
+    if (restart !== null) state.seedLevel(baseLevel, restart);
+    else if (start !== null) state.seedLevel(baseLevel, start);
     else if (!definition) state.seedTop(1);
   }
   const entry: ChainEntry = { state, definition };
@@ -844,7 +906,7 @@ function visitOrderedRoot(
         }),
       );
     }
-    const count = countTopItems(list);
+    const count = countTopItems(list, pos, ctx.sourceContinuations);
     if (count > 0) state.seedTop(first + count);
     // seedTop leaves the counter one below the next item.
     // Its levels are the browser's; a numbering nested in it is not.
@@ -853,6 +915,7 @@ function visitOrderedRoot(
   if (!nested) {
     ctx.lastRoot = entry;
     ctx.lastRootLive = live;
+    ctx.lastRootPos = pos;
     ctx.lastList = entry;
   }
   if (chain) ctx.byChain.set(chain, entry);
@@ -915,7 +978,7 @@ function visitListsBelow(
  * import states the chain and the heading's counts (`listNumbering.listChain`
  * / `levelValues`); the chain's counters take them here, nothing is drawn.
  */
-function visitImportedHeadingCount(ctx: WalkContext, heading: PmNode): void {
+function visitImportedHeadingCount(ctx: WalkContext, heading: PmNode, pos: number): void {
   const source = heading.attrs.source as { listNumbering?: unknown } | null | undefined;
   const numbering = source?.listNumbering as
     | { listChain?: unknown; levelValues?: unknown; level?: unknown }
@@ -926,7 +989,18 @@ function visitImportedHeadingCount(ctx: WalkContext, heading: PmNode): void {
   if (!chain || !Array.isArray(values) || values.length < 1 || values.length > 9) return;
   if (!values.every((value) => Number.isInteger(value))) return;
   const entry = ctx.byChain.get(chain) ?? { state: new ListCounterState(), definition: null };
-  values.forEach((value: number, level: number) => entry.state.seedLevel(level, value + 1));
+  // After a list of the chain started its own count (Restart Numbering in
+  // the editor), the counts the import stated for the headings are stale:
+  // they take the numbers the headings draw now (headingListNumbers counts
+  // the restart in), as Word counts one list (corpus R489-D55 E62: the lists
+  // after the headings drew on from 26, 94... where Word draws 12, 80...).
+  const live =
+    ctx.restartedChains.has(chain) && !headingsCountBodyRestartsOff()
+      ? headingListNumbers(ctx.doc).get(pos)?.values
+      : undefined;
+  (live && live.length === values.length ? live : values).forEach(
+    (value: number, level: number) => entry.state.seedLevel(level, value + 1),
+  );
   ctx.byChain.set(chain, entry);
 }
 
@@ -934,7 +1008,7 @@ function visitHeading(ctx: WalkContext, heading: PmNode, pos: number): void {
   const kind = normalizeHeadingListKind(heading.attrs.listKind);
   const definition = headingListDefinition(heading.attrs);
   if (!kind || !definition) {
-    visitImportedHeadingCount(ctx, heading);
+    visitImportedHeadingCount(ctx, heading, pos);
     return;
   }
   const level = normalizeListLevel(heading.attrs.listLevel);
@@ -1013,9 +1087,13 @@ export function buildListDefinitionDecorations(
     probe,
     decorations: [],
     byChain: new Map(),
+    restartedChains: new Set(),
+    doc,
     lastList: null,
     lastRoot: null,
     lastRootLive: false,
+    lastRootPos: -1,
+    sourceContinuations: sourceContinuationListItems(doc),
     defaultTabStopTwips: wordDefaultTabStopTwips(doc.attrs?.wordSettings),
   };
   const headingNumberingOn = doc.attrs?.headingNumbering === true;

@@ -431,6 +431,30 @@ export function lineEditOutcome<S extends StructuralSheet>(
   return { kind: "done", sheet: deleted.sheet, count: deleted.count, followOthers: deleted.followOthers };
 }
 
+
+
+
+
+
+
+
+
+
+
+export function activeCellAfterLineDelete<C extends { row: number; col: number }>(
+  prev: C,
+  next: { rowCount: number; columnCount: number; rowsHiddenByDefault?: boolean },
+  axis: "row" | "col",
+  normalView: boolean,
+): C {
+  if (axis === "row") {
+    const last = normalView && next.rowsHiddenByDefault !== true ? MAX_GRID_ROWS - 1 : next.rowCount - 1;
+    return { ...prev, row: Math.min(prev.row, last) };
+  }
+  const last = normalView ? MAX_GRID_COLUMNS - 1 : next.columnCount - 1;
+  return { ...prev, col: Math.min(prev.col, last) };
+}
+
 // ── Insert / Delete cells (the shift dialog) ────────────────────────────
 
 /** The control each Insert / Delete Cells choice answers to. */

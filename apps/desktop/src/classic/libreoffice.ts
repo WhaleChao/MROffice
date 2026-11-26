@@ -46,8 +46,9 @@ import {
 import { loadBundledPage } from "../bundled-page";
 import { productDisplayName } from "./product";
 import { layout } from "./services";
+import { appSpeaksChinese } from "../app-locale";
 
-const zh = () => app.getLocale().toLowerCase().startsWith("zh");
+const zh = appSpeaksChinese;
 const say = (zhText: string, enText: string) => (zh() ? zhText : enText);
 
 /**

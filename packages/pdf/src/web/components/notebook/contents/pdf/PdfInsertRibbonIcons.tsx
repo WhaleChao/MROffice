@@ -104,6 +104,8 @@ export type PdfInsertRibbonIconName =
 const SHARED_SEMANTIC_ICONS = {
   blankPage: "page.blank.insert",
   comment: "comment.add",
+  // 随意画: the pen the comment tab and the other editors' Draw commands show.
+  draw: "draw.pen",
   image: "image.insert",
   link: "link.insert",
   moreComments: "overflow.more",
@@ -316,15 +318,6 @@ function customGlyph(name: Exclude<
           <path className="docs-home-icon__ink-soft" d="M6.2 7.4h6.5M6.2 10.1h4.2M6.2 17.9h11.6" />
           <path className="docs-home-icon__accent" d="M6.1 16.2c1.8-4.7 3.2-5.8 4.1-4.9.7.7-.7 2.8.2 3.2.8.3 1.8-1.8 2.7-1.5.7.3.2 1.5 1 1.8.8.3 1.6-.5 2.5-1.5" />
           <circle className="docs-home-icon__accent-fill" cx="17.8" cy="13.4" r="1" />
-        </>
-      );
-    case "draw":
-      return (
-        <>
-          <path className="docs-home-icon__paper" d="M3.5 18.3 6 12.7 16.3 2.4l5.3 5.3L11.3 18z" />
-          <path className="docs-home-icon__ink-soft" d="m14.7 4 5.3 5.3M6 12.7l5.3 5.3M4.2 20.7h15.6" />
-          <path className="docs-home-icon__accent-soft-fill" d="m3.5 18.3 2.5-5.6 5.3 5.3z" />
-          <path className="docs-home-icon__accent" d="m4.2 19.8 2.4-2.4" />
         </>
       );
     case "stamp":
